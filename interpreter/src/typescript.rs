@@ -396,8 +396,8 @@ impl<S> TypeScriptCompiler<S> {
   name: '{}',
   views: {{
     {}: {{
-      state: createStateView<{}>('{}State/state'),
-      list: createListView<{}>('{}State/list')
+      state: createStateView<{}>('{}/state'),
+      list: createListView<{}>('{}/list')
     }}
   }}{}
 }});"#,
