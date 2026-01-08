@@ -10,8 +10,9 @@ use std::collections::{HashMap, HashSet};
 use quote::quote;
 use syn::{Fields, ItemStruct, Type};
 
-use crate::ast::{BaseType, EntitySection, FieldTypeInfo};
+use crate::ast::{BaseType, EntitySection, FieldTypeInfo, ResolvedStructType, ResolvedField};
 use crate::parse;
+use crate::parse::idl::{IdlSpec, IdlType, IdlTypeDefKind};
 use crate::utils::path_to_string;
 
 use super::handlers::{determine_event_instruction, extract_account_type_from_field};
@@ -26,6 +27,16 @@ pub fn extract_section_from_struct(
     item_struct: &ItemStruct,
     parent_field: Option<String>,
 ) -> EntitySection {
+    extract_section_from_struct_with_idl(section_name, item_struct, parent_field, None)
+}
+
+/// Extract section information from a struct definition with optional IDL for type resolution.
+pub fn extract_section_from_struct_with_idl(
+    section_name: &str,
+    item_struct: &ItemStruct,
+    parent_field: Option<String>,
+    idl: Option<&IdlSpec>,
+) -> EntitySection {
     let mut fields = Vec::new();
 
     if let Fields::Named(struct_fields) = &item_struct.fields {
@@ -34,7 +45,7 @@ pub fn extract_section_from_struct(
                 let field_name = field_ident.to_string();
                 let field_ty = &field.ty;
                 let rust_type_name = quote::quote!(#field_ty).to_string();
-                let field_type_info = analyze_field_type(&field_name, &rust_type_name);
+                let field_type_info = analyze_field_type_with_idl(&field_name, &rust_type_name, idl);
                 fields.push(field_type_info);
             }
         }
@@ -54,38 +65,63 @@ pub fn extract_section_from_struct(
 
 /// Analyze a Rust type string and extract field type information.
 pub fn analyze_field_type(field_name: &str, rust_type: &str) -> FieldTypeInfo {
+    analyze_field_type_with_idl(field_name, rust_type, None)
+}
+
+/// Analyze a Rust type string with IDL support for resolving complex types.
+pub fn analyze_field_type_with_idl(field_name: &str, rust_type: &str, idl: Option<&IdlSpec>) -> FieldTypeInfo {
     let type_str = rust_type.trim();
 
     // Handle Option<T>
     if let Some(inner) = extract_generic_inner_type(type_str, "Option") {
         let inner_info = analyze_inner_type(&inner);
+        let resolved_type = if inner_info.0 == BaseType::Object {
+            resolve_complex_type(&inner, idl)
+        } else {
+            None
+        };
+        
         return FieldTypeInfo {
             field_name: field_name.to_string(),
             rust_type_name: rust_type.to_string(),
             base_type: infer_semantic_type(field_name, inner_info.0),
             is_optional: true,
             is_array: inner_info.1,
-            inner_type: Some(inner),
+            inner_type: Some(inner.clone()),
             source_path: None,
+            resolved_type,
         };
     }
 
     // Handle Vec<T>
     if let Some(inner) = extract_generic_inner_type(type_str, "Vec") {
-        let _inner_base_type = analyze_simple_type(&inner);
+        let inner_base_type = analyze_simple_type(&inner);
+        let resolved_type = if inner_base_type == BaseType::Object {
+            resolve_complex_type(&inner, idl)
+        } else {
+            None
+        };
+        
         return FieldTypeInfo {
             field_name: field_name.to_string(),
             rust_type_name: rust_type.to_string(),
             base_type: BaseType::Array,
             is_optional: false,
             is_array: true,
-            inner_type: Some(inner),
+            inner_type: Some(inner.clone()),
             source_path: None,
+            resolved_type,
         };
     }
 
     // Handle primitive types
     let base_type = analyze_simple_type(type_str);
+    let resolved_type = if base_type == BaseType::Object {
+        resolve_complex_type(type_str, idl)
+    } else {
+        None
+    };
+    
     FieldTypeInfo {
         field_name: field_name.to_string(),
         rust_type_name: rust_type.to_string(),
@@ -94,6 +130,7 @@ pub fn analyze_field_type(field_name: &str, rust_type: &str) -> FieldTypeInfo {
         is_array: false,
         inner_type: None,
         source_path: None,
+        resolved_type,
     }
 }
 
@@ -115,10 +152,13 @@ fn analyze_simple_type(type_str: &str) -> BaseType {
         "f32" | "f64" => BaseType::Float,
         "bool" => BaseType::Boolean,
         "String" | "&str" | "str" => BaseType::String,
-        "Value" | "serde_json::Value" => BaseType::Any,
+        "Value" | "serde_json::Value" | "serde_json :: Value" => BaseType::Any,
+        "Pubkey" | "solana_pubkey::Pubkey" | ":: solana_pubkey :: Pubkey" => BaseType::Pubkey,
         _ => {
             if type_str.contains("Bytes") || type_str.contains("bytes") {
                 BaseType::Binary
+            } else if type_str.contains("Pubkey") {
+                BaseType::Pubkey
             } else {
                 BaseType::Object
             }
@@ -467,4 +507,259 @@ pub fn process_nested_struct(
     state_fields.push(quote! {
         pub #section_field_name: #section_field_type
     });
+}
+
+// ============================================================================
+// IDL Type Resolution
+// ============================================================================
+
+/// Resolve a complex type (instruction, account, or custom type) from the IDL
+fn resolve_complex_type(type_str: &str, idl: Option<&IdlSpec>) -> Option<ResolvedStructType> {
+    let idl_ref = idl?;
+    
+    // Extract the simple type name from patterns like "generated_sdk :: instructions :: Buy"
+    let type_name = extract_type_name(type_str);
+    let type_name_lower = type_name.to_lowercase();
+    
+    // Check if it's an instruction (case-insensitive match)
+    for instruction in &idl_ref.instructions {
+        if instruction.name.to_lowercase() == type_name_lower {
+            return Some(resolve_instruction_type(instruction, idl));
+        }
+    }
+    
+    // Check if it's an account (case-insensitive match)
+    // First check if the account has an embedded type definition
+    for account in &idl_ref.accounts {
+        if account.name.to_lowercase() == type_name_lower {
+            let resolved = resolve_account_type(account, idl);
+            // If the account had fields or is an enum, return it
+            if !resolved.fields.is_empty() || resolved.is_enum {
+                return Some(resolved);
+            }
+            // Otherwise, fall through to check types array
+            break;
+        }
+    }
+    
+    // Check if it's a custom type (case-insensitive match)
+    // This also handles accounts that don't have embedded type definitions
+    for type_def in &idl_ref.types {
+        if type_def.name.to_lowercase() == type_name_lower {
+            return Some(resolve_custom_type(type_def, idl));
+        }
+    }
+    
+    None
+}
+
+/// Extract simple type name from a qualified path like "generated_sdk :: instructions :: Buy" -> "Buy"
+fn extract_type_name(type_str: &str) -> String {
+    type_str
+        .split("::")
+        .last()
+        .unwrap_or(type_str)
+        .trim()
+        .to_string()
+}
+
+/// Resolve an instruction type from IDL
+fn resolve_instruction_type(instruction: &crate::parse::idl::IdlInstruction, idl: Option<&IdlSpec>) -> ResolvedStructType {
+    let mut fields = Vec::new();
+    
+    // Add account fields
+    for account in &instruction.accounts {
+        fields.push(ResolvedField {
+            field_name: account.name.clone(),
+            field_type: "Pubkey".to_string(),
+            base_type: BaseType::Pubkey,
+            is_optional: account.optional,
+            is_array: false,
+        });
+    }
+    
+    // Add data/arg fields
+    for arg in &instruction.args {
+        let (field_type, base_type, is_optional, is_array, _) = analyze_idl_type_with_resolution(&arg.type_, idl);
+        fields.push(ResolvedField {
+            field_name: arg.name.clone(),
+            field_type,
+            base_type,
+            is_optional,
+            is_array,
+        });
+    }
+    
+    ResolvedStructType {
+        type_name: instruction.name.clone(),
+        fields,
+        is_instruction: true,
+        is_account: false,
+        is_event: false,
+        is_enum: false,
+        enum_variants: Vec::new(),
+    }
+}
+
+/// Resolve an account type from IDL
+fn resolve_account_type(account: &crate::parse::idl::IdlAccount, idl: Option<&IdlSpec>) -> ResolvedStructType {
+    let mut fields = Vec::new();
+    
+    // Extract fields from embedded type definition (Steel format)
+    if let Some(type_def) = &account.type_def {
+        match type_def {
+            IdlTypeDefKind::Struct { fields: struct_fields, .. } => {
+                for field in struct_fields {
+                    let (field_type, base_type, is_optional, is_array, _) = analyze_idl_type_with_resolution(&field.type_, idl);
+                    fields.push(ResolvedField {
+                        field_name: field.name.clone(),
+                        field_type,
+                        base_type,
+                        is_optional,
+                        is_array,
+                    });
+                }
+            }
+            IdlTypeDefKind::Enum { variants, .. } => {
+                // Enums: extract variant names
+                let variant_names: Vec<String> = variants.iter().map(|v| v.name.clone()).collect();
+                return ResolvedStructType {
+                    type_name: account.name.clone(),
+                    fields: Vec::new(),
+                    is_instruction: false,
+                    is_account: true,
+                    is_event: false,
+                    is_enum: true,
+                    enum_variants: variant_names,
+                };
+            }
+        }
+    }
+    
+    ResolvedStructType {
+        type_name: account.name.clone(),
+        fields,
+        is_instruction: false,
+        is_account: true,
+        is_event: false,
+        is_enum: false,
+        enum_variants: Vec::new(),
+    }
+}
+
+/// Resolve a custom type definition from IDL
+fn resolve_custom_type(type_def: &crate::parse::idl::IdlTypeDef, idl: Option<&IdlSpec>) -> ResolvedStructType {
+    let mut fields = Vec::new();
+    
+    match &type_def.type_def {
+        IdlTypeDefKind::Struct { fields: struct_fields, .. } => {
+            for field in struct_fields {
+                let (field_type, base_type, is_optional, is_array, _) = analyze_idl_type_with_resolution(&field.type_, idl);
+                fields.push(ResolvedField {
+                    field_name: field.name.clone(),
+                    field_type,
+                    base_type,
+                    is_optional,
+                    is_array,
+                });
+            }
+            
+            ResolvedStructType {
+                type_name: type_def.name.clone(),
+                fields,
+                is_instruction: false,
+                is_account: false,
+                is_event: false,
+                is_enum: false,
+                enum_variants: Vec::new(),
+            }
+        }
+        IdlTypeDefKind::Enum { variants, .. } => {
+            // Enums: extract variant names
+            let variant_names: Vec<String> = variants.iter().map(|v| v.name.clone()).collect();
+            
+            ResolvedStructType {
+                type_name: type_def.name.clone(),
+                fields: Vec::new(),
+                is_instruction: false,
+                is_account: false,
+                is_event: false,
+                is_enum: true,
+                enum_variants: variant_names,
+            }
+        }
+    }
+}
+
+/// Analyze an IDL type and return (type_string, base_type, is_optional, is_array)
+/// Analyze IDL type with optional resolution and return (type_name, base_type, is_optional, is_array, resolved_type)
+fn analyze_idl_type_with_resolution(idl_type: &IdlType, idl: Option<&IdlSpec>) -> (String, BaseType, bool, bool, Option<ResolvedStructType>) {
+    match idl_type {
+        IdlType::Simple(s) => {
+            let base_type = match s.as_str() {
+                "u8" | "u16" | "u32" | "u64" | "u128" | "i8" | "i16" | "i32" | "i64" | "i128" => BaseType::Integer,
+                "f32" | "f64" => BaseType::Float,
+                "bool" => BaseType::Boolean,
+                "string" => BaseType::String,
+                "publicKey" | "pubkey" => BaseType::Pubkey,
+                "bytes" => BaseType::Binary,
+                _ => BaseType::Object,
+            };
+            (s.clone(), base_type, false, false, None)
+        }
+        IdlType::Option(opt) => {
+            let (inner_type, base_type, _, is_array, resolved_type) = analyze_idl_type_with_resolution(&opt.option, idl);
+            (format!("Option<{}>", inner_type), base_type, true, is_array, resolved_type)
+        }
+        IdlType::Vec(vec) => {
+            let (inner_type, base_type, is_optional, _, resolved_type) = analyze_idl_type_with_resolution(&vec.vec, idl);
+            (format!("Vec<{}>", inner_type), base_type, is_optional, true, resolved_type)
+        }
+        IdlType::Array(arr) => {
+            // Fixed-size arrays like [u64; 25] or [u8; 32]
+            if arr.array.len() >= 2 {
+                // First element is the type, second is the size
+                match &arr.array[0] {
+                    crate::parse::idl::IdlTypeArrayElement::Type(ty) => {
+                        // Map the element type to base type
+                        let element_base_type = match ty.as_str() {
+                            "u8" | "u16" | "u32" | "u64" | "u128" | "i8" | "i16" | "i32" | "i64" | "i128" => BaseType::Integer,
+                            "f32" | "f64" => BaseType::Float,
+                            "bool" => BaseType::Boolean,
+                            "string" => BaseType::String,
+                            "publicKey" | "pubkey" => BaseType::Pubkey,
+                            "bytes" => BaseType::Binary,
+                            _ => BaseType::Object,
+                        };
+                        // Return as array with the element's base type
+                        (format!("[{}]", ty), element_base_type, false, true, None)
+                    }
+                    crate::parse::idl::IdlTypeArrayElement::Nested(nested_type) => {
+                        // Handle nested types in arrays
+                        let (inner_type, base_type, is_optional, _, resolved_type) = analyze_idl_type_with_resolution(nested_type, idl);
+                        (format!("[{}]", inner_type), base_type, is_optional, true, resolved_type)
+                    }
+                    _ => ("Array".to_string(), BaseType::Array, false, true, None)
+                }
+            } else {
+                ("Array".to_string(), BaseType::Array, false, true, None)
+            }
+        }
+        IdlType::Defined(def) => {
+            let type_name = match &def.defined {
+                crate::parse::idl::IdlTypeDefinedInner::Named { name } => name.clone(),
+                crate::parse::idl::IdlTypeDefinedInner::Simple(s) => s.clone(),
+            };
+            
+            // Try to resolve this defined type from IDL (including enums)
+            let resolved_type = resolve_complex_type(&type_name, idl);
+            
+            (type_name, BaseType::Object, false, false, resolved_type)
+        }
+    }
+}
+
+fn analyze_idl_type(idl_type: &IdlType) -> (String, BaseType, bool, bool) {
+    let (type_name, base_type, is_optional, is_array, _) = analyze_idl_type_with_resolution(idl_type, None);
+    (type_name, base_type, is_optional, is_array)
 }

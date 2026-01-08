@@ -123,6 +123,20 @@ pub fn build_ast(
         })
         .collect();
 
+    // Build field_mappings from sections - this provides type information for ALL fields
+    let mut field_mappings = BTreeMap::new();
+    for section in section_specs {
+        for field_info in &section.fields {
+            // Handle root-level fields (no section prefix)
+            let field_path = if section.name == "root" {
+                field_info.field_name.clone()
+            } else {
+                format!("{}.{}", section.name, field_info.field_name)
+            };
+            field_mappings.insert(field_path, field_info.clone());
+        }
+    }
+
     let mut spec = SerializableStreamSpec {
         state_name: entity_name.to_string(),
         program_id,
@@ -139,7 +153,7 @@ pub fn build_ast(
         },
         handlers,
         sections: section_specs.to_vec(),
-        field_mappings: BTreeMap::new(),
+        field_mappings,
         resolver_hooks: resolver_hooks_ast,
         instruction_hooks: instruction_hooks_ast,
         computed_fields: computed_field_paths,

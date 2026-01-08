@@ -895,6 +895,35 @@ pub struct FieldTypeInfo {
     pub is_array: bool,             // true for Vec<T>
     pub inner_type: Option<String>, // For Option<T> or Vec<T>, store the inner type
     pub source_path: Option<String>, // Path to source field if this is mapped
+    /// Resolved type information for complex types (instructions, accounts, custom types)
+    #[serde(default)]
+    pub resolved_type: Option<ResolvedStructType>,
+}
+
+/// Resolved structure type with field information from IDL
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolvedStructType {
+    pub type_name: String,
+    pub fields: Vec<ResolvedField>,
+    pub is_instruction: bool,
+    pub is_account: bool,
+    pub is_event: bool,
+    /// If true, this is an enum type and enum_variants should be used instead of fields
+    #[serde(default)]
+    pub is_enum: bool,
+    /// For enum types, list of variant names
+    #[serde(default)]
+    pub enum_variants: Vec<String>,
+}
+
+/// A resolved field within a complex type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolvedField {
+    pub field_name: String,
+    pub field_type: String,
+    pub base_type: BaseType,
+    pub is_optional: bool,
+    pub is_array: bool,
 }
 
 /// Language-agnostic base type classification
@@ -913,6 +942,7 @@ pub enum BaseType {
     Binary,     // Bytes, binary data
     // Special types
     Timestamp,  // Detected from field names ending in _at, _time, etc.
+    Pubkey,     // Solana public key (Base58 encoded)
     Any,        // serde_json::Value, unknown types
 }
 
@@ -939,6 +969,7 @@ impl FieldTypeInfo {
             is_array,
             inner_type,
             source_path: None,
+            resolved_type: None,
         }
     }
 
@@ -970,10 +1001,13 @@ impl FieldTypeInfo {
             "bool" => BaseType::Boolean,
             "String" | "&str" | "str" => BaseType::String,
             "Value" | "serde_json::Value" => BaseType::Any,
+            "Pubkey" | "solana_pubkey::Pubkey" => BaseType::Pubkey,
             _ => {
                 // Check for binary types
                 if type_str.contains("Bytes") || type_str.contains("bytes") {
                     BaseType::Binary
+                } else if type_str.contains("Pubkey") {
+                    BaseType::Pubkey
                 } else {
                     BaseType::Object
                 }

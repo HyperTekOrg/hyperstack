@@ -426,6 +426,35 @@ pub struct FieldTypeInfo {
     pub inner_type: Option<String>,
     #[serde(default)]
     pub source_path: Option<String>,
+    /// Resolved type information for complex types (instructions, accounts, custom types)
+    #[serde(default)]
+    pub resolved_type: Option<ResolvedStructType>,
+}
+
+/// Resolved structure type with field information from IDL
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolvedStructType {
+    pub type_name: String,
+    pub fields: Vec<ResolvedField>,
+    pub is_instruction: bool,
+    pub is_account: bool,
+    pub is_event: bool,
+    /// If true, this is an enum type and enum_variants should be used instead of fields
+    #[serde(default)]
+    pub is_enum: bool,
+    /// For enum types, list of variant names
+    #[serde(default)]
+    pub enum_variants: Vec<String>,
+}
+
+/// A resolved field within a complex type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolvedField {
+    pub field_name: String,
+    pub field_type: String,
+    pub base_type: BaseType,
+    pub is_optional: bool,
+    pub is_array: bool,
 }
 
 /// Language-agnostic base type classification
@@ -439,6 +468,7 @@ pub enum BaseType {
     Array,
     Binary,
     Timestamp,
+    Pubkey,  // Solana public key (Base58 encoded)
     Any,
 }
 

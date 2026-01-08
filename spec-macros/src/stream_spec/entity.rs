@@ -18,7 +18,7 @@ use std::collections::{HashMap, HashSet};
 use quote::{format_ident, quote};
 use syn::{Fields, ItemStruct, Type};
 
-use crate::ast::EntitySection;
+use crate::ast::{EntitySection, FieldTypeInfo};
 use crate::codegen;
 use crate::parse;
 use crate::parse::idl as idl_parser;
@@ -33,7 +33,7 @@ use super::handlers::{
     convert_event_to_map_attributes, determine_event_instruction, extract_account_type_from_field,
     generate_pda_registration_functions, generate_resolver_functions,
 };
-use super::sections::{extract_section_from_struct, is_primitive_or_wrapper, process_nested_struct};
+use super::sections::{self as sections, extract_section_from_struct_with_idl, is_primitive_or_wrapper, process_nested_struct};
 
 // ============================================================================
 // Entity Processing
@@ -116,10 +116,13 @@ pub fn process_entity_struct_with_idl(
 
     // Task 3: Collect section definitions for AST
     let mut section_specs: Vec<EntitySection> = Vec::new();
+    let mut root_fields: Vec<FieldTypeInfo> = Vec::new();
+    
     if let Fields::Named(entity_fields) = &input.fields {
         for field in &entity_fields.named {
             let field_name = field.ident.as_ref().unwrap().to_string();
             let field_type = &field.ty;
+            let rust_type_name = quote::quote!(#field_type).to_string();
 
             // Check if this field references a section struct
             if !is_primitive_or_wrapper(field_type) {
@@ -128,17 +131,40 @@ pub fn process_entity_struct_with_idl(
                         let type_name = type_ident.ident.to_string();
                         // Look up the section struct definition
                         if let Some(section_struct) = section_structs.get(&type_name) {
-                            let section = extract_section_from_struct(
+                            let section = extract_section_from_struct_with_idl(
                                 &field_name,
                                 section_struct,
                                 None, // Top-level section, no parent
+                                idl,
                             );
                             section_specs.push(section);
+                        } else {
+                            // It's a non-section field (like capture fields) - add to root
+                            let field_type_info = sections::analyze_field_type_with_idl(&field_name, &rust_type_name, idl);
+                            root_fields.push(field_type_info);
                         }
                     }
                 }
+            } else {
+                // Even if it's a "wrapper", we might want its type info if it's not truly primitive
+                // For example, Option<ComplexType> should be included
+                let field_type_info = sections::analyze_field_type_with_idl(&field_name, &rust_type_name, idl);
+                // Only add if it has a resolved_type (meaning it's a complex type from IDL)
+                if field_type_info.resolved_type.is_some() || field_type_info.base_type == crate::ast::BaseType::Object {
+                    root_fields.push(field_type_info);
+                }
             }
         }
+    }
+    
+    // Add root fields as a pseudo-section if there are any
+    if !root_fields.is_empty() {
+        section_specs.push(EntitySection {
+            name: "root".to_string(),
+            fields: root_fields,
+            is_nested_struct: false,
+            parent_field: None,
+        });
     }
 
     if let Fields::Named(fields) = &input.fields {
