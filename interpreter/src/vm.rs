@@ -159,6 +159,12 @@ pub struct LookupIndex {
     index: DashMap<Value, Value>,
 }
 
+impl Default for LookupIndex {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LookupIndex {
     pub fn new() -> Self {
         LookupIndex {
@@ -177,11 +183,21 @@ impl LookupIndex {
     pub fn len(&self) -> usize {
         self.index.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.index.is_empty()
+    }
 }
 
 #[derive(Debug)]
 pub struct TemporalIndex {
     index: DashMap<Value, Vec<(Value, i64)>>,
+}
+
+impl Default for TemporalIndex {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TemporalIndex {
@@ -217,7 +233,7 @@ impl TemporalIndex {
         let lookup_key = lookup_value.clone();
         self.index
             .entry(lookup_value)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push((primary_key, timestamp));
 
         if let Some(mut entries) = self.index.get_mut(&lookup_key) {
@@ -516,6 +532,7 @@ impl VmContext {
             handler_opcodes = handler.len(),
         )
     ))]
+    #[allow(clippy::type_complexity)]
     fn execute_handler(
         &mut self,
         handler: &[OpCode],
@@ -626,7 +643,7 @@ impl VmContext {
                     pc += 1;
                 }
                 OpCode::ReadOrInitState {
-                    state_id,
+                    state_id: _,
                     key,
                     default,
                     dest,
@@ -673,7 +690,7 @@ impl VmContext {
                     pc += 1;
                 }
                 OpCode::UpdateState {
-                    state_id,
+                    state_id: _,
                     key,
                     value,
                 } => {
@@ -876,7 +893,7 @@ impl VmContext {
                     pc += 1;
                 }
                 OpCode::UpdateTemporalIndex {
-                    state_id,
+                    state_id: _,
                     index_name,
                     lookup_value,
                     primary_key,
@@ -910,7 +927,7 @@ impl VmContext {
                     pc += 1;
                 }
                 OpCode::LookupTemporalIndex {
-                    state_id,
+                    state_id: _,
                     index_name,
                     lookup_value,
                     timestamp,
@@ -953,7 +970,7 @@ impl VmContext {
                     pc += 1;
                 }
                 OpCode::UpdateLookupIndex {
-                    state_id,
+                    state_id: _,
                     index_name,
                     lookup_value,
                     primary_key,
@@ -980,7 +997,7 @@ impl VmContext {
                     pc += 1;
                 }
                 OpCode::LookupIndex {
-                    state_id,
+                    state_id: _,
                     index_name,
                     lookup_value,
                     dest,
@@ -1080,7 +1097,7 @@ impl VmContext {
                     pc += 1;
                 }
                 OpCode::AddToUniqueSet {
-                    state_id,
+                    state_id: _,
                     set_name,
                     value,
                     count_object,
@@ -1206,7 +1223,7 @@ impl VmContext {
                     pc += 1;
                 }
                 OpCode::UpdatePdaReverseLookup {
-                    state_id,
+                    state_id: _,
                     lookup_name,
                     pda_address,
                     primary_key,
@@ -1711,7 +1728,7 @@ impl VmContext {
                         .iter()
                         .filter_map(|v| v.as_u64().map(|n| n as u8))
                         .collect();
-                    let hex = format!("{}", hex::encode(&bytes));
+                    let hex = hex::encode(&bytes);
                     Ok(json!(hex))
                 } else {
                     Err("HexEncode requires an array of numbers".into())
@@ -1907,7 +1924,7 @@ impl VmContext {
         let mut removed_count = 0;
 
         // Iterate through all pending updates and remove expired ones
-        state.pending_updates.retain(|pda_address, updates| {
+        state.pending_updates.retain(|_pda_address, updates| {
             let original_len = updates.len();
 
             updates.retain(|update| {

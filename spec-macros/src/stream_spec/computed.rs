@@ -192,7 +192,7 @@ fn extract_field_references_recursive(
     while i < tokens.len() {
         match &tokens[i] {
             TokenTree::Ident(ident) => {
-                if ident.to_string() == section_name {
+                if *ident == section_name {
                     // Check if next token is a dot
                     if i + 1 < tokens.len() {
                         if let TokenTree::Punct(punct) = &tokens[i + 1] {
@@ -249,10 +249,10 @@ fn parse_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (ComputedExpr,
     // Check for let binding: let name = value; body
     if start < tokens.len() {
         if let proc_macro2::TokenTree::Ident(ident) = &tokens[start] {
-            if ident.to_string() == "let" {
+            if *ident == "let" {
                 return parse_let_expr(tokens, start);
             }
-            if ident.to_string() == "if" {
+            if *ident == "if" {
                 return parse_if_expr(tokens, start);
             }
         }
@@ -499,7 +499,7 @@ fn parse_if_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (ComputedEx
     // Skip "else"
     if pos < tokens.len() {
         if let proc_macro2::TokenTree::Ident(ident) = &tokens[pos] {
-            if ident.to_string() == "else" {
+            if *ident == "else" {
                 pos += 1;
             }
         }
@@ -817,7 +817,7 @@ fn parse_postfix_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
 
         // Check for 'as' type cast
         if let proc_macro2::TokenTree::Ident(ident) = &tokens[pos] {
-            if ident.to_string() == "as" {
+            if *ident == "as" {
                 pos += 1;
                 if pos < tokens.len() {
                     if let proc_macro2::TokenTree::Ident(type_ident) = &tokens[pos] {
@@ -903,17 +903,17 @@ fn parse_primary_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
             }
             
             // Check for Some(expr)
-            if name == "Some" {
-                if start + 1 < tokens.len() {
-                    if let proc_macro2::TokenTree::Group(group) = &tokens[start + 1] {
-                        if group.delimiter() == proc_macro2::Delimiter::Parenthesis {
-                            let inner_tokens: Vec<_> = group.stream().into_iter().collect();
-                            let (inner_expr, _) = parse_expr(&inner_tokens, 0);
-                            return (
-                                ComputedExpr::Some { value: Box::new(inner_expr) },
-                                start + 2,
-                            );
-                        }
+            if name == "Some"
+                && start + 1 < tokens.len()
+            {
+                if let proc_macro2::TokenTree::Group(group) = &tokens[start + 1] {
+                    if group.delimiter() == proc_macro2::Delimiter::Parenthesis {
+                        let inner_tokens: Vec<_> = group.stream().into_iter().collect();
+                        let (inner_expr, _) = parse_expr(&inner_tokens, 0);
+                        return (
+                            ComputedExpr::Some { value: Box::new(inner_expr) },
+                            start + 2,
+                        );
                     }
                 }
             }
@@ -979,7 +979,7 @@ fn parse_primary_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
                 // Float
                 lit_str
                     .parse::<f64>()
-                    .map(|f| serde_json::Value::from(f))
+                    .map(serde_json::Value::from)
                     .unwrap_or(serde_json::Value::String(lit_str))
             } else {
                 // Integer - handle underscore separators and type suffixes (0u8, etc.)
@@ -989,7 +989,7 @@ fn parse_primary_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
                     .to_string();
                 clean
                     .parse::<i64>()
-                    .map(|i| serde_json::Value::from(i))
+                    .map(serde_json::Value::from)
                     .unwrap_or(serde_json::Value::String(lit_str))
             };
             (ComputedExpr::Literal { value }, start + 1)
@@ -1113,7 +1113,7 @@ fn parse_byte_value(tokens: &[proc_macro2::TokenTree]) -> u8 {
             // For hex literals, strip the 0x prefix and any type suffix (u8, u16, etc.)
             let hex_str = lower.trim_start_matches("0x");
             // Type suffix starts with non-hex letter (u, i)
-            let hex_part = if let Some(pos) = hex_str.find(|c: char| c == 'u' || c == 'i') {
+            let hex_part = if let Some(pos) = hex_str.find(['u', 'i']) {
                 &hex_str[..pos]
             } else {
                 hex_str

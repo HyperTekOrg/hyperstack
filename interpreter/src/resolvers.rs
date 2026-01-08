@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 /// Context provided to primary key resolver functions
 pub struct ResolveContext<'a> {
+    #[allow(dead_code)]
     pub(crate) state_id: u32,
     pub(crate) slot: u64,
     pub(crate) signature: String,
@@ -69,12 +70,14 @@ pub enum KeyResolution {
 /// Context provided to instruction hook functions
 pub struct InstructionContext<'a> {
     pub(crate) accounts: HashMap<String, String>,
+    #[allow(dead_code)]
     pub(crate) state_id: u32,
     pub(crate) reverse_lookup_tx: &'a mut dyn ReverseLookupUpdater,
     pub(crate) pending_updates: Vec<crate::vm::PendingAccountUpdate>,
     // Fields for metrics context integration
     pub(crate) registers: Option<&'a mut Vec<crate::vm::RegisterValue>>,
     pub(crate) state_reg: Option<crate::vm::Register>,
+    #[allow(dead_code)]
     pub(crate) compiled_paths: Option<&'a HashMap<String, crate::metrics_context::CompiledPath>>,
     pub(crate) instruction_data: Option<&'a serde_json::Value>,
     pub(crate) slot: Option<u64>,

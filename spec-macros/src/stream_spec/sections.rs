@@ -22,6 +22,7 @@ use super::handlers::{determine_event_instruction, extract_account_type_from_fie
 // ============================================================================
 
 /// Extract section information from a struct definition.
+#[allow(dead_code)]
 pub fn extract_section_from_struct(
     section_name: &str,
     item_struct: &ItemStruct,
@@ -64,6 +65,7 @@ pub fn extract_section_from_struct_with_idl(
 // ============================================================================
 
 /// Analyze a Rust type string and extract field type information.
+#[allow(dead_code)]
 pub fn analyze_field_type(field_name: &str, rust_type: &str) -> FieldTypeInfo {
     analyze_field_type_with_idl(field_name, rust_type, None)
 }
@@ -197,16 +199,15 @@ fn infer_semantic_type(field_name: &str, base_type: BaseType) -> BaseType {
     let lower_name = field_name.to_lowercase();
 
     // If already classified as integer, check if it should be timestamp
-    if base_type == BaseType::Integer {
-        if lower_name.ends_with("_at")
+    if base_type == BaseType::Integer
+        && (lower_name.ends_with("_at")
             || lower_name.ends_with("_time")
             || lower_name.contains("timestamp")
             || lower_name.contains("created")
             || lower_name.contains("settled")
-            || lower_name.contains("activated")
-        {
-            return BaseType::Timestamp;
-        }
+            || lower_name.contains("activated"))
+    {
+        return BaseType::Timestamp;
     }
 
     base_type
@@ -348,7 +349,7 @@ pub fn process_nested_struct(
                     {
                         events_by_instruction
                             .entry(instruction_str)
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push((
                                 event_attr.target_field_name.clone(),
                                 event_attr,
@@ -358,7 +359,7 @@ pub fn process_nested_struct(
                         // Fallback to legacy instruction string
                         events_by_instruction
                             .entry(event_attr.instruction.clone())
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push((
                                 event_attr.target_field_name.clone(),
                                 event_attr,
@@ -419,7 +420,7 @@ pub fn process_nested_struct(
 
                         sources_by_type
                             .entry(source_type_str)
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(map_attr);
                     }
                 } else if let Ok(Some(mut aggr_attr)) =
@@ -464,7 +465,7 @@ pub fn process_nested_struct(
                         let source_type_str = path_to_string(instr_path);
                         sources_by_type
                             .entry(source_type_str)
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(map_attr);
                     }
                 } else if let Ok(Some(mut track_attr)) =
@@ -481,7 +482,7 @@ pub fn process_nested_struct(
                         let source_type_str = path_to_string(instr_path);
                         track_from_mappings
                             .entry(source_type_str)
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(track_attr.clone());
                     }
                 } else if let Ok(Some(mut computed_attr)) =
@@ -759,6 +760,7 @@ fn analyze_idl_type_with_resolution(idl_type: &IdlType, idl: Option<&IdlSpec>) -
     }
 }
 
+#[allow(dead_code)]
 fn analyze_idl_type(idl_type: &IdlType) -> (String, BaseType, bool, bool) {
     let (type_name, base_type, is_optional, is_array, _) = analyze_idl_type_with_resolution(idl_type, None);
     (type_name, base_type, is_optional, is_array)

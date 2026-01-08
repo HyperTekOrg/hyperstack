@@ -14,6 +14,7 @@ pub struct BusMessage {
 /// Manager for all event buses in the system
 /// Supports multiple bus types for different streaming semantics
 #[derive(Clone)]
+#[allow(clippy::type_complexity)]
 pub struct BusManager {
     state_buses: Arc<RwLock<HashMap<(String, String), watch::Sender<Arc<Bytes>>>>>,
     kv_buses: Arc<RwLock<HashMap<String, broadcast::Sender<Arc<BusMessage>>>>>,

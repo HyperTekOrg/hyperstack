@@ -379,7 +379,7 @@ pub enum MappingSource {
         path: String,
     },
     AsEvent {
-        fields: Vec<Box<MappingSource>>,
+        fields: Vec<MappingSource>,
     },
     WholeSource,
     AsCapture {
@@ -586,6 +586,7 @@ impl SerializableStreamSpec {
     
     /// Verify that the content_hash matches the computed hash.
     /// Returns true if hash is valid or not set.
+    #[allow(dead_code)]
     pub fn verify_content_hash(&self) -> bool {
         match &self.content_hash {
             Some(hash) => {
@@ -597,6 +598,7 @@ impl SerializableStreamSpec {
     }
     
     /// Set the content_hash field to the computed hash.
+    #[allow(dead_code)]
     pub fn with_content_hash(mut self) -> Self {
         self.content_hash = Some(self.compute_content_hash());
         self

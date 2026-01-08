@@ -273,7 +273,7 @@ pub fn build_handlers_from_sources(
             let key = (source_type.clone(), mapping.join_on.clone());
             sources_by_type_and_join
                 .entry(key)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(mapping.clone());
         }
     }
@@ -343,12 +343,10 @@ pub fn build_handlers_from_sources(
                             .unwrap_or("data");
                         FieldPath::new(&[prefix, &mapping.source_field_name])
                     }
+                } else if mapping.source_field_name.is_empty() {
+                    FieldPath::new(&[])
                 } else {
-                    if mapping.source_field_name.is_empty() {
-                        FieldPath::new(&[])
-                    } else {
-                        FieldPath::new(&[&mapping.source_field_name])
-                    }
+                    FieldPath::new(&[&mapping.source_field_name])
                 };
 
                 MappingSource::FromSource {
@@ -608,36 +606,37 @@ pub fn build_instruction_hooks(
     for (field_path, condition_str) in aggregate_conditions {
         for (source_type, mappings) in sources_by_type {
             for mapping in mappings {
-                if &mapping.target_field_name == field_path && mapping.is_instruction {
-                    if matches!(
+                if &mapping.target_field_name == field_path
+                    && mapping.is_instruction
+                    && matches!(
                         mapping.strategy.as_str(),
                         "Sum" | "Count" | "Min" | "Max" | "UniqueCount"
-                    ) {
-                        let instr_type_state =
-                            format!("{}IxState", source_type.split("::").last().unwrap());
+                    )
+                {
+                    let instr_type_state =
+                        format!("{}IxState", source_type.split("::").last().unwrap());
 
-                        let condition = ConditionExpr {
-                            expression: condition_str.clone(),
-                            parsed: condition_parser::parse_condition_expression(condition_str),
+                    let condition = ConditionExpr {
+                        expression: condition_str.clone(),
+                        parsed: condition_parser::parse_condition_expression(condition_str),
+                    };
+
+                    if mapping.strategy == "Count" {
+                        let action = HookAction::IncrementField {
+                            target_field: field_path.clone(),
+                            increment_by: 1,
+                            condition: Some(condition),
                         };
 
-                        if mapping.strategy == "Count" {
-                            let action = HookAction::IncrementField {
-                                target_field: field_path.clone(),
-                                increment_by: 1,
-                                condition: Some(condition),
-                            };
-
-                            instruction_hooks_map
-                                .entry(instr_type_state.clone())
-                                .or_insert_with(|| InstructionHook {
-                                    instruction_type: instr_type_state,
-                                    actions: Vec::new(),
-                                    lookup_by: None,
-                                })
-                                .actions
-                                .push(action);
-                        }
+                        instruction_hooks_map
+                            .entry(instr_type_state.clone())
+                            .or_insert_with(|| InstructionHook {
+                                instruction_type: instr_type_state,
+                                actions: Vec::new(),
+                                lookup_by: None,
+                            })
+                            .actions
+                            .push(action);
                     }
                 }
             }

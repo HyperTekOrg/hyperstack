@@ -1,5 +1,5 @@
 use crate::ast::*;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 /// Output structure for TypeScript generation
 #[derive(Debug, Clone)]
@@ -119,7 +119,7 @@ impl<S> TypeScriptCompiler<S> {
             for (section_name, mut fields) in interface_sections {
                 all_sections
                     .entry(section_name)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .append(&mut fields);
             }
         }
@@ -189,7 +189,7 @@ impl<S> TypeScriptCompiler<S> {
 
                 sections
                     .entry(section_name.to_string())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(ts_field);
             } else {
                 // Top-level field
@@ -202,7 +202,7 @@ impl<S> TypeScriptCompiler<S> {
 
                 sections
                     .entry("Root".to_string())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(ts_field);
             }
         }
@@ -219,7 +219,7 @@ impl<S> TypeScriptCompiler<S> {
         if !self.spec.sections.is_empty() {
             // Use type information from the enhanced AST
             for section in &self.spec.sections {
-                let section_fields = sections.entry(section.name.clone()).or_insert_with(Vec::new);
+                let section_fields = sections.entry(section.name.clone()).or_default();
                 
                 for field_info in &section.fields {
                     // Check if field is already mapped
@@ -246,7 +246,7 @@ impl<S> TypeScriptCompiler<S> {
                     let section_name = parts[0];
                     let field_name = parts[1];
                     
-                    let section_fields = sections.entry(section_name.to_string()).or_insert_with(Vec::new);
+                    let section_fields = sections.entry(section_name.to_string()).or_default();
                     
                     let already_exists = section_fields.iter().any(|f| 
                         f.name == field_name || 
@@ -378,7 +378,7 @@ impl<S> TypeScriptCompiler<S> {
             self.config.export_const_name
         );
 
-        let views = self.generate_view_definitions();
+        let _views = self.generate_view_definitions();
         let helpers = if self.config.generate_helpers {
             self.generate_helper_functions()
         } else {
@@ -559,8 +559,7 @@ impl<S> TypeScriptCompiler<S> {
         }
         
         // Use base type mapping
-        let base_ts = self.base_type_to_typescript(&field_info.base_type, field_info.is_array);
-        base_ts
+        self.base_type_to_typescript(&field_info.base_type, field_info.is_array)
     }
     
     /// Find the generated event interface name for a given field
@@ -691,7 +690,7 @@ impl<S> TypeScriptCompiler<S> {
                                     if let Some(handler_source) = handler.get("source") {
                                         if let Some(instruction_name) = self.extract_instruction_name(handler_source) {
                                             // Generate interface name from target path (e.g., "events.created" -> "CreatedEvent")
-                                            let event_field_name = target_path.split('.').last().unwrap_or("");
+                                            let event_field_name = target_path.split('.').next_back().unwrap_or("");
                                             let interface_name = format!("{}Event", to_pascal_case(event_field_name));
                                             
                                             // Only generate once
@@ -744,8 +743,7 @@ impl<S> TypeScriptCompiler<S> {
         if let Some(source_obj) = source.get("Source") {
             if let Some(type_name) = source_obj.get("type_name").and_then(|t| t.as_str()) {
                 // Convert "CreateGameIxState" -> "create_game"
-                if type_name.ends_with("IxState") {
-                    let instruction_part = &type_name[..type_name.len() - 7]; // Remove "IxState"
+                if let Some(instruction_part) = type_name.strip_suffix("IxState") {
                     return Some(to_snake_case(instruction_part));
                 }
             }
@@ -810,6 +808,7 @@ impl<S> TypeScriptCompiler<S> {
     
     /// Convert an IDL type (from JSON) to TypeScript, considering transforms
     fn idl_type_to_typescript(&self, idl_type: &serde_json::Value, transform: Option<&str>) -> String {
+        #![allow(clippy::only_used_in_recursion)]
         // If there's a HexEncode transform, the result is always a string
         if transform == Some("HexEncode") {
             return "string".to_string();
@@ -933,14 +932,10 @@ export interface EventWrapper<T> {
         if lower_name.contains("id")
             || lower_name.contains("count")
             || lower_name.contains("number")
-        {
-            "number".to_string()
-        } else if lower_name.contains("timestamp")
+            || lower_name.contains("timestamp")
             || lower_name.contains("time")
             || lower_name.contains("at")
-        {
-            "number".to_string()
-        } else if lower_name.contains("volume")
+            || lower_name.contains("volume")
             || lower_name.contains("amount")
             || lower_name.contains("ev")
             || lower_name.contains("fee")
@@ -948,15 +943,14 @@ export interface EventWrapper<T> {
             || lower_name.contains("distributed")
             || lower_name.contains("claimable")
             || lower_name.contains("total")
+            || lower_name.contains("rate")
+            || lower_name.contains("ratio")
+            || lower_name.contains("current")
+            || lower_name.contains("state")
         {
             "number".to_string()
-        } else if lower_name.contains("rate") || lower_name.contains("ratio") {
-            "number".to_string()
-        } else if lower_name.contains("current") || lower_name.contains("state") {
-            "number".to_string()
-        } else if lower_name.contains("status") {
-            "string".to_string()
-        } else if lower_name.contains("hash")
+        } else if lower_name.contains("status")
+            || lower_name.contains("hash")
             || lower_name.contains("address")
             || lower_name.contains("key")
         {
@@ -1009,19 +1003,14 @@ struct TypeScriptField {
     name: String,
     ts_type: String,
     optional: bool,
+    #[allow(dead_code)]
     description: Option<String>,
 }
 
 /// Convert serde_json::Value to TypeScript type string
 fn value_to_typescript_type(value: &serde_json::Value) -> String {
     match value {
-        serde_json::Value::Number(n) => {
-            if n.is_i64() || n.is_u64() {
-                "number".to_string()
-            } else {
-                "number".to_string()
-            }
-        }
+        serde_json::Value::Number(_) => "number".to_string(),
         serde_json::Value::String(_) => "string".to_string(),
         serde_json::Value::Bool(_) => "boolean".to_string(),
         serde_json::Value::Array(_) => "any[]".to_string(),
@@ -1032,7 +1021,7 @@ fn value_to_typescript_type(value: &serde_json::Value) -> String {
 
 /// Convert snake_case to PascalCase
 fn to_pascal_case(s: &str) -> String {
-    s.split(|c| c == '_' || c == '-' || c == '.')
+    s.split(['_', '-', '.'])
         .map(|word| {
             let mut chars = word.chars();
             match chars.next() {
@@ -1056,9 +1045,8 @@ fn to_camel_case(s: &str) -> String {
 /// Convert PascalCase/camelCase to snake_case
 fn to_snake_case(s: &str) -> String {
     let mut result = String::new();
-    let mut chars = s.chars().peekable();
     
-    while let Some(ch) = chars.next() {
+    for ch in s.chars() {
         if ch.is_uppercase() {
             if !result.is_empty() {
                 result.push('_');
@@ -1075,9 +1063,8 @@ fn to_snake_case(s: &str) -> String {
 /// Convert PascalCase/camelCase to kebab-case
 fn to_kebab_case(s: &str) -> String {
     let mut result = String::new();
-    let mut chars = s.chars().peekable();
 
-    while let Some(ch) = chars.next() {
+    for ch in s.chars() {
         if ch.is_uppercase() && !result.is_empty() {
             result.push('-');
         }

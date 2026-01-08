@@ -143,7 +143,7 @@ pub fn generate_parsed_condition_code(condition: &ParsedCondition) -> TokenStrea
         }
         ParsedCondition::Logical { op, conditions } => {
             let condition_codes: Vec<TokenStream> = conditions.iter()
-                .map(|c| generate_parsed_condition_code(c))
+                .map(generate_parsed_condition_code)
                 .collect();
             match op {
                 LogicalOp::And => quote! { #(#condition_codes)&&* },

@@ -118,7 +118,7 @@ fn deploy_single_spec(client: &ApiClient, ast: &crate::config::DiscoveredAst, br
     // Step 3: Watch build
     println!("\n{} Building & deploying...\n", "3".blue().bold());
     
-    watch_build_progress(&client, build_response.build_id)?;
+    watch_build_progress(client, build_response.build_id)?;
     
     Ok(())
 }

@@ -990,7 +990,7 @@ impl FieldTypeInfo {
         
         // Handle Vec<T>
         if let Some(inner) = Self::extract_generic_inner(type_str, "Vec") {
-            let (inner_base_type, inner_is_optional, _, inner_inner_type) = Self::analyze_rust_type(&inner);
+            let (_inner_base_type, inner_is_optional, _, inner_inner_type) = Self::analyze_rust_type(&inner);
             return (BaseType::Array, inner_is_optional, true, inner_inner_type.or(Some(inner)));
         }
         
@@ -1035,12 +1035,15 @@ impl FieldTypeInfo {
         let lower_name = field_name.to_lowercase();
         
         // If already classified as integer, check if it should be timestamp
-        if base_type == BaseType::Integer {
-            if lower_name.ends_with("_at") || lower_name.ends_with("_time") || 
-               lower_name.contains("timestamp") || lower_name.contains("created") || 
-               lower_name.contains("settled") || lower_name.contains("activated") {
-                return BaseType::Timestamp;
-            }
+        if base_type == BaseType::Integer
+            && (lower_name.ends_with("_at")
+                || lower_name.ends_with("_time")
+                || lower_name.contains("timestamp")
+                || lower_name.contains("created")
+                || lower_name.contains("settled")
+                || lower_name.contains("activated"))
+        {
+            return BaseType::Timestamp;
         }
         
         base_type

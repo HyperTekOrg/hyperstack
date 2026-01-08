@@ -65,7 +65,7 @@ pub fn to_pascal_case(s: &str) -> String {
 /// assert_eq!(to_camel_case("section.field_name"), "SectionFieldName");
 /// ```
 pub fn to_camel_case(s: &str) -> String {
-    s.split(|c| c == '_' || c == '.')
+    s.split(['_', '.'])
         .map(|word| {
             let mut c = word.chars();
             match c.next() {

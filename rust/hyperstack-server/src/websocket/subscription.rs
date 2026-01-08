@@ -16,7 +16,7 @@ impl Subscription {
     }
 
     pub fn matches_key(&self, key: &str) -> bool {
-        self.key.as_ref().map_or(true, |k| k == key)
+        self.key.as_ref().is_none_or(|k| k == key)
     }
 
     pub fn matches(&self, view_id: &str, key: &str) -> bool {

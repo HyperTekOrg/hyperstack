@@ -1,11 +1,10 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use colored::Colorize;
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
 
 use crate::api_client::{ApiClient, CreateSpecRequest, Spec as ApiSpec};
-use crate::config::{discover_ast_files, find_ast_file, resolve_specs_to_push, DiscoveredAst, HyperstackConfig, SpecConfig};
+use crate::config::{resolve_specs_to_push, DiscoveredAst, HyperstackConfig, SpecConfig};
 
 /// Push specs with their AST content to remote
 /// 
@@ -52,7 +51,7 @@ pub fn push(config_path: &str, spec_name: Option<&str>) -> Result<()> {
 
     for ast in specs_to_push {
         // Create spec config from discovered AST
-        let spec_config = SpecConfig {
+        let _spec_config = SpecConfig {
             name: Some(ast.spec_name.clone()),
             ast: ast.entity_name.clone(),
             description: None,
@@ -179,7 +178,7 @@ pub fn pull(config_path: &str) -> Result<()> {
     println!("{} Syncing {} remote spec(s)...\n", "→".blue().bold(), remote_specs.len());
 
     let mut added = 0;
-    let mut updated = 0;
+    let updated = 0;
     let mut skipped = 0;
 
     for remote_spec in &remote_specs {
@@ -194,7 +193,7 @@ pub fn pull(config_path: &str) -> Result<()> {
         } else {
             // Spec doesn't exist locally - add it
             print!("  {} Adding {}... ", "↓".green(), remote_spec.name);
-            add_local_spec(&mut config, &remote_spec);
+            add_local_spec(&mut config, remote_spec);
             println!("{}", "✓".green());
             added += 1;
         }

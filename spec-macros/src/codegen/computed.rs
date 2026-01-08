@@ -93,7 +93,7 @@ fn sort_by_dependencies<'a>(fields: &[&'a ComputedFieldSpec], section: &str) -> 
     let mut field_deps: HashMap<String, HashSet<String>> = HashMap::new();
     
     for spec in fields {
-        let field_name = spec.target_path.split('.').last().unwrap_or(&spec.target_path).to_string();
+        let field_name = spec.target_path.split('.').next_back().unwrap_or(&spec.target_path).to_string();
         name_to_spec.insert(field_name.clone(), *spec);
         let deps = extract_field_dependencies(&spec.expression, section);
         field_deps.insert(field_name, deps);
@@ -175,7 +175,7 @@ pub fn generate_computed_evaluator(computed_field_specs: &[ComputedFieldSpec]) -
         // Generate compute-and-write statements for each field in dependency order
         // Each field is computed and immediately written, so dependent fields can read the updated value
         let field_evals: Vec<TokenStream> = sorted_fields.iter().map(|spec| {
-            let field_name = spec.target_path.split('.').last().unwrap_or(&spec.target_path).to_string();
+            let field_name = spec.target_path.split('.').next_back().unwrap_or(&spec.target_path).to_string();
             let expr_code = generate_computed_expr_code(&spec.expression);
             
             quote! {
@@ -305,7 +305,7 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
         ComputedExpr::MethodCall { expr, method, args } => {
             let inner = generate_computed_expr_code(expr);
             let method_ident = format_ident!("{}", method);
-            let arg_codes: Vec<TokenStream> = args.iter().map(|a| generate_computed_expr_code(a)).collect();
+            let arg_codes: Vec<TokenStream> = args.iter().map(generate_computed_expr_code).collect();
             
             // Special handling for .map() on Option<serde_json::Value> - need to extract the numeric value
             if method == "map" && args.len() == 1 {

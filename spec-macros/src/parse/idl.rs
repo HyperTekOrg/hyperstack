@@ -325,9 +325,8 @@ fn map_simple_type(idl_type: &str) -> String {
 
 pub fn to_snake_case(s: &str) -> String {
     let mut result = String::new();
-    let mut chars = s.chars().peekable();
     
-    while let Some(c) = chars.next() {
+    for c in s.chars() {
         if c.is_uppercase() {
             if !result.is_empty() {
                 result.push('_');

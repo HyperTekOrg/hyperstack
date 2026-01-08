@@ -15,7 +15,7 @@ fn snake_case_to_pascal_case(s: &str) -> String {
 }
 
 fn package_to_module_name(package: &str) -> String {
-    let last_segment = package.split('.').last().unwrap_or(package);
+    let last_segment = package.split('.').next_back().unwrap_or(package);
     format!("{}_proto", last_segment)
 }
 

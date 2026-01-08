@@ -110,10 +110,8 @@ fn find_top_level_operator(expr: &str, op: &str) -> Option<usize> {
             } else if depth == 0 && expr[i..].starts_with(op) {
                 return Some(i);
             }
-        } else {
-            if c == quote_char && (i == 0 || chars[i - 1] != '\\') {
-                in_quotes = false;
-            }
+        } else if c == quote_char && (i == 0 || chars[i - 1] != '\\') {
+            in_quotes = false;
         }
     }
     
@@ -135,9 +133,9 @@ fn parse_value(value: &str) -> Option<serde_json::Value> {
         Some(Value::Number(num.into()))
     } else if let Ok(num) = value_clean.parse::<f64>() {
         serde_json::Number::from_f64(num).map(Value::Number)
-    } else if value.starts_with('"') && value.ends_with('"') {
-        Some(Value::String(value[1..value.len() - 1].to_string()))
-    } else if value.starts_with('\'') && value.ends_with('\'') {
+    } else if (value.starts_with('"') && value.ends_with('"'))
+        || (value.starts_with('\'') && value.ends_with('\''))
+    {
         Some(Value::String(value[1..value.len() - 1].to_string()))
     } else {
         // Could be a field reference - for now, treat as string

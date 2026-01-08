@@ -70,15 +70,7 @@ impl Filters {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Delivery {
     pub coalesce_ms: Option<u64>,
-}
-
-impl Default for Delivery {
-    fn default() -> Self {
-        Self {
-            coalesce_ms: None,
-        }
-    }
 }

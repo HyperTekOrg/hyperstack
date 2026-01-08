@@ -430,7 +430,7 @@ impl Parse for EventAttributeArgs {
                         explicit_location: None,
                     });
                 } else {
-                    join_on = Some(parse_field_spec(&input)?);
+                    join_on = Some(parse_field_spec(input)?);
                 }
             } else if ident_str == "lookup_by" {
                 // Try identifier first, fall back to string
@@ -442,7 +442,7 @@ impl Parse for EventAttributeArgs {
                         explicit_location: None,
                     });
                 } else {
-                    lookup_by = Some(parse_field_spec(&input)?);
+                    lookup_by = Some(parse_field_spec(input)?);
                 }
             } else {
                 return Err(syn::Error::new(
@@ -599,7 +599,7 @@ impl Parse for CaptureAttributeArgs {
                         explicit_location: None,
                     });
                 } else {
-                    join_on = Some(parse_field_spec(&input)?);
+                    join_on = Some(parse_field_spec(input)?);
                 }
             } else if ident_str == "lookup_by" {
                 if input.peek(syn::LitStr) {
@@ -610,7 +610,7 @@ impl Parse for CaptureAttributeArgs {
                         explicit_location: None,
                     });
                 } else {
-                    lookup_by = Some(parse_field_spec(&input)?);
+                    lookup_by = Some(parse_field_spec(input)?);
                 }
             } else if ident_str == "transforms" {
                 // Parse transforms = [(field1, Transform1), (field2, Transform2)]
@@ -759,7 +759,7 @@ impl Parse for AggregateAttributeArgs {
                     from.push(input.parse()?);
                 }
             } else if ident_str == "field" {
-                field = Some(parse_field_spec(&input)?);
+                field = Some(parse_field_spec(input)?);
             } else if ident_str == "strategy" {
                 strategy = Some(input.parse()?);
             } else if ident_str == "transform" {
@@ -776,7 +776,7 @@ impl Parse for AggregateAttributeArgs {
                         explicit_location: None,
                     });
                 } else {
-                    join_on = Some(parse_field_spec(&input)?);
+                    join_on = Some(parse_field_spec(input)?);
                 }
             } else if ident_str == "lookup_by" {
                 if input.peek(syn::LitStr) {
@@ -787,7 +787,7 @@ impl Parse for AggregateAttributeArgs {
                         explicit_location: None,
                     });
                 } else {
-                    lookup_by = Some(parse_field_spec(&input)?);
+                    lookup_by = Some(parse_field_spec(input)?);
                 }
             } else if ident_str == "condition" {
                 let condition_lit: syn::LitStr = input.parse()?;
@@ -1047,7 +1047,7 @@ pub fn parse_after_instruction_attribute(attr: &Attribute) -> syn::Result<Option
     }
     
     // Reject all user-written #[after_instruction] attributes
-    return Err(syn::Error::new_spanned(
+    Err(syn::Error::new_spanned(
         attr,
         "Direct use of #[after_instruction] is not allowed.\n\
          \n\
@@ -1062,9 +1062,9 @@ pub fn parse_after_instruction_attribute(attr: &Attribute) -> syn::Result<Option
          • Use #[aggregate(from = [...], field = ..., strategy = ..., condition = \"...\")] \
          for conditional aggregations\n\
          \n\
-         These declarative macros are captured in the AST and enable secure cloud deployment.\n\
+          These declarative macros are captured in the AST and enable secure cloud deployment.\n\
          See documentation for examples."
-    ));
+    ))
 }
 
 #[derive(Debug, Clone)]
@@ -1199,7 +1199,7 @@ impl Parse for TrackFromAttributeArgs {
                     from.push(input.parse()?);
                 }
             } else if ident_str == "field" {
-                field = Some(parse_field_spec(&input)?);
+                field = Some(parse_field_spec(input)?);
             } else if ident_str == "strategy" {
                 strategy = Some(input.parse()?);
             } else if ident_str == "lookup_by" {
@@ -1211,7 +1211,7 @@ impl Parse for TrackFromAttributeArgs {
                         explicit_location: None,
                     });
                 } else {
-                    lookup_by = Some(parse_field_spec(&input)?);
+                    lookup_by = Some(parse_field_spec(input)?);
                 }
             } else if ident_str == "condition" {
                 let condition_lit: syn::LitStr = input.parse()?;
@@ -1405,9 +1405,9 @@ impl Parse for RegisterPdaAttributeArgs {
             if ident_str == "instruction" {
                 instruction = Some(input.parse()?);
             } else if ident_str == "pda_field" {
-                pda_field = Some(parse_field_spec(&input)?);
+                pda_field = Some(parse_field_spec(input)?);
             } else if ident_str == "primary_key" {
-                primary_key = Some(parse_field_spec(&input)?);
+                primary_key = Some(parse_field_spec(input)?);
             } else if ident_str == "lookup_name" {
                 let lookup_name_lit: syn::LitStr = input.parse()?;
                 lookup_name = Some(lookup_name_lit.value());

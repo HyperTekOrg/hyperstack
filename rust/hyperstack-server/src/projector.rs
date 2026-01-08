@@ -53,7 +53,7 @@ impl Projector {
 
         while let Some(mutations) = self.mutations_rx.recv().await {
             for mutation in mutations.iter() {
-                let start = Instant::now();
+                let _start = Instant::now();
                 
                 if let Err(e) = self.process_mutation(mutation).await {
                     error!("Failed to process mutation: {}", e);

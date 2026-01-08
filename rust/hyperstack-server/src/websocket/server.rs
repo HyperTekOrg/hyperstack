@@ -7,7 +7,7 @@ use anyhow::Result;
 use futures_util::StreamExt;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Instant;
+
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::accept_async;
 use tracing::{debug, error, info, warn};
@@ -462,14 +462,13 @@ async fn attach_client_to_bus(
             tokio::spawn(async move {
                 while let Ok(envelope) = rx.recv().await {
                     // Filter messages based on subscription
-                    if sub.matches(&envelope.entity, &envelope.key) {
-                        if client_mgr
+                    if sub.matches(&envelope.entity, &envelope.key)
+                        && client_mgr
                             .send_to_client(client_id, envelope.payload.clone())
                             .await
                             .is_err()
-                        {
-                            break; // Client disconnected
-                        }
+                    {
+                        break; // Client disconnected
                     }
                 }
             });
@@ -482,14 +481,13 @@ async fn attach_client_to_bus(
             tokio::spawn(async move {
                 while let Ok(envelope) = rx.recv().await {
                     // Filter messages based on subscription
-                    if sub.matches(&envelope.entity, &envelope.key) {
-                        if client_mgr
+                    if sub.matches(&envelope.entity, &envelope.key)
+                        && client_mgr
                             .send_to_client(client_id, envelope.payload.clone())
                             .await
                             .is_err()
-                        {
-                            break; // Client disconnected
-                        }
+                    {
+                        break; // Client disconnected
                     }
                 }
             });

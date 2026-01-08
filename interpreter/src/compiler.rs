@@ -182,6 +182,7 @@ pub struct EntityBytecode {
     pub handlers: HashMap<String, Vec<OpCode>>,
     pub entity_name: String,
     /// Optional callback for evaluating computed fields
+    #[allow(clippy::type_complexity)]
     pub computed_fields_evaluator: Option<
         Box<
             dyn Fn(&mut Value) -> std::result::Result<(), Box<dyn std::error::Error>> + Send + Sync,
@@ -245,10 +246,10 @@ impl MultiEntityBytecode {
     }
 
     pub fn from_entities(entities_vec: Vec<(String, Box<dyn std::any::Any>, u32)>) -> Self {
-        let mut entities = HashMap::new();
-        let mut event_routing = HashMap::new();
+        let entities = HashMap::new();
+        let event_routing = HashMap::new();
 
-        for (entity_name, spec_any, state_id) in entities_vec {
+        if let Some((_entity_name, _spec_any, _state_id)) = entities_vec.into_iter().next() {
             panic!("from_entities requires type information - use builder pattern instead");
         }
 
@@ -259,6 +260,7 @@ impl MultiEntityBytecode {
         }
     }
 
+    #[allow(clippy::new_ret_no_self)]
     pub fn new() -> MultiEntityBytecodeBuilder {
         MultiEntityBytecodeBuilder {
             entities: HashMap::new(),
@@ -313,7 +315,7 @@ impl MultiEntityBytecodeBuilder {
         for event_type in entity_bytecode.handlers.keys() {
             self.event_routing
                 .entry(event_type.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(entity_name.clone());
         }
 
@@ -1131,7 +1133,7 @@ impl<S> TypedCompiler<S> {
     /// Extract the field name from a primary key path (e.g., "id.authority" -> "authority")
     fn extract_primary_field_name(&self, primary_key: &str) -> Option<String> {
         // Split by '.' and take the last segment
-        primary_key.split('.').last().map(|s| s.to_string())
+        primary_key.split('.').next_back().map(|s| s.to_string())
     }
 
     /// Auto-detect primary field from account schema when no explicit mapping exists
@@ -1174,6 +1176,7 @@ impl<S> TypedCompiler<S> {
     }
 
     /// Check if handler has access to a specific field in its source account
+    #[allow(dead_code)]
     fn handler_has_field(&self, field_name: &str, mappings: &[TypedFieldMapping<S>]) -> bool {
         for mapping in mappings {
             if let MappingSource::FromSource { path, .. } = &mapping.source {
@@ -1187,6 +1190,7 @@ impl<S> TypedCompiler<S> {
 
     /// Check if field exists by looking at mappings (IDL-agnostic approach)
     /// This avoids hardcoding account schemas and uses actual mapping evidence
+    #[allow(dead_code)]
     fn field_exists_in_mappings(
         &self,
         field_name: &str,
@@ -1220,7 +1224,7 @@ impl<S> TypedCompiler<S> {
             let index_field_name = lookup_index
                 .field_name
                 .split('.')
-                .last()
+                .next_back()
                 .unwrap_or(&lookup_index.field_name);
             if index_field_name == lookup_field_name {
                 return Some(format!("{}_lookup_index", index_field_name));
@@ -1252,7 +1256,7 @@ impl<S> TypedCompiler<S> {
                             let index_field_name = lookup_index
                                 .field_name
                                 .split('.')
-                                .last()
+                                .next_back()
                                 .unwrap_or(&lookup_index.field_name);
                             return Some(format!("{}_lookup_index", index_field_name));
                         }
@@ -1296,7 +1300,7 @@ impl<S> TypedCompiler<S> {
             let source_field = lookup_index
                 .field_name
                 .split('.')
-                .last()
+                .next_back()
                 .unwrap_or(&lookup_index.field_name);
 
             match resolution {
@@ -1331,7 +1335,7 @@ impl<S> TypedCompiler<S> {
                         ops.push(OpCode::UpdateTemporalIndex {
                             state_id: self.state_id,
                             index_name,
-                            lookup_value: lookup_reg.clone(),
+                            lookup_value: lookup_reg,
                             primary_key: key_reg,
                             timestamp: timestamp_reg,
                         });
@@ -1427,14 +1431,12 @@ impl<S> TypedCompiler<S> {
                     ops.extend(load_ops);
 
                     // Apply transformation if specified in source
-                    if let MappingSource::FromSource { transform, .. } = source {
-                        if let Some(transform_type) = transform {
-                            ops.push(OpCode::Transform {
-                                source: temp_reg,
-                                dest: temp_reg,
-                                transformation: transform_type.clone(),
-                            });
-                        }
+                    if let MappingSource::FromSource { transform: Some(transform_type), .. } = source {
+                        ops.push(OpCode::Transform {
+                            source: temp_reg,
+                            dest: temp_reg,
+                            transformation: transform_type.clone(),
+                        });
                     }
 
                     // Conditionally set the field based on parsed condition

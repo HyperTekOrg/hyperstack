@@ -335,6 +335,7 @@ pub struct MetricsContext<'a> {
     /// All VM registers (mutable access for updates)
     registers: &'a mut Vec<RegisterValue>,
     /// Compiled field paths for efficient access
+    #[allow(dead_code)]
     compiled_paths: &'a HashMap<String, CompiledPath>,
     /// Blockchain slot number
     slot: Option<u64>,
@@ -623,7 +624,7 @@ impl<'a> MetricsContext<'a> {
             
             // Navigate to the parent object
             for segment in &segments[..segments.len() - 1] {
-                if !current.get(segment).is_some() {
+                if current.get(segment).is_none() {
                     current[segment] = Value::Object(serde_json::Map::new());
                 }
                 current = current.get_mut(segment).unwrap();

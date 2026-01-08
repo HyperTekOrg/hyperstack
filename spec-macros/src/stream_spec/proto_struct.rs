@@ -108,7 +108,7 @@ pub fn process_struct_with_context(
                     {
                         events_by_instruction
                             .entry(instruction_str)
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push((
                                 event_attr.target_field_name.clone(),
                                 event_attr,
@@ -118,7 +118,7 @@ pub fn process_struct_with_context(
                         // Fallback to legacy instruction string
                         events_by_instruction
                             .entry(event_attr.instruction.clone())
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push((
                                 event_attr.target_field_name.clone(),
                                 event_attr,
@@ -162,7 +162,7 @@ pub fn process_struct_with_context(
 
     // === HANDLER MERGING: Merge event mappings into sources_by_type ===
     // Convert events to map attributes and merge with sources_by_type (no IDL for proto-based specs)
-    for (_instruction, event_mappings) in &events_by_instruction {
+    for event_mappings in events_by_instruction.values() {
         for (target_field, event_attr, _field_type) in event_mappings {
             // Get instruction path from event attribute
             let instruction_path = event_attr
@@ -185,7 +185,7 @@ pub fn process_struct_with_context(
                 // Merge into sources_by_type
                 sources_by_type
                     .entry(source_type_str)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .extend(map_attrs);
             }
         }
@@ -198,7 +198,7 @@ pub fn process_struct_with_context(
             let key = (source_type.clone(), mapping.join_on.clone());
             sources_by_type_and_join
                 .entry(key)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(mapping.clone());
         }
     }
@@ -207,11 +207,11 @@ pub fn process_struct_with_context(
         let handler_suffix = if let Some(ref join_field) = join_key {
             format!(
                 "{}_{}",
-                to_snake_case(&source_type),
+                to_snake_case(source_type),
                 to_snake_case(join_field)
             )
         } else {
-            to_snake_case(&source_type)
+            to_snake_case(source_type)
         };
         let handler_name = format_ident!("create_{}_handler", handler_suffix);
         let account_type = source_type.split("::").last().unwrap_or(source_type);
@@ -314,7 +314,7 @@ pub fn process_struct_with_context(
                                 };
                             }
                         }
-                        let event_field = pk.split('.').last().unwrap_or(pk);
+                        let event_field = pk.split('.').next_back().unwrap_or(pk);
                         return quote! {
                             hyperstack_interpreter::ast::FieldPath::new(&[#event_field])
                         };

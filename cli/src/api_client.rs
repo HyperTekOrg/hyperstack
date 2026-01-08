@@ -113,12 +113,14 @@ pub struct CreateSpecVersionResponse {
     pub content_is_new: bool,
     /// True if this spec version is new (same spec didn't have this content before)
     pub version_is_new: bool,
+    #[allow(dead_code)]
     pub message: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct SpecWithVersion {
     #[serde(flatten)]
+    #[allow(dead_code)]
     pub spec: Spec,
     pub latest_version: Option<SpecVersionWithContent>,
 }
@@ -216,6 +218,7 @@ pub struct CreateBuildRequest {
 pub struct CreateBuildResponse {
     pub build_id: i32,
     pub status: BuildStatus,
+    #[allow(dead_code)]
     pub message: String,
 }
 
@@ -266,6 +269,7 @@ pub struct DeploymentResponse {
     pub last_deployed_at: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct StopDeploymentResponse {
     pub message: String,
@@ -287,6 +291,7 @@ impl ApiClient {
         })
     }
 
+    #[allow(dead_code)]
     pub fn with_api_key(mut self, api_key: String) -> Self {
         self.api_key = Some(api_key);
         self
@@ -302,7 +307,7 @@ impl ApiClient {
 
         let response = self
             .client
-            .post(&format!("{}/api/auth/register", self.base_url))
+            .post(format!("{}/api/auth/register", self.base_url))
             .json(&req)
             .send()
             .context("Failed to send register request")?;
@@ -318,7 +323,7 @@ impl ApiClient {
 
         let response = self
             .client
-            .post(&format!("{}/api/auth/login", self.base_url))
+            .post(format!("{}/api/auth/login", self.base_url))
             .json(&req)
             .send()
             .context("Failed to send login request")?;
@@ -333,7 +338,7 @@ impl ApiClient {
 
         let response = self
             .client
-            .get(&format!("{}/api/specs", self.base_url))
+            .get(format!("{}/api/specs", self.base_url))
             .bearer_auth(api_key)
             .send()
             .context("Failed to send list specs request")?;
@@ -341,12 +346,13 @@ impl ApiClient {
         Self::handle_response(response)
     }
 
+    #[allow(dead_code)]
     pub fn get_spec(&self, spec_id: i32) -> Result<Spec> {
         let api_key = self.require_api_key()?;
 
         let response = self
             .client
-            .get(&format!("{}/api/specs/{}", self.base_url, spec_id))
+            .get(format!("{}/api/specs/{}", self.base_url, spec_id))
             .bearer_auth(api_key)
             .send()
             .context("Failed to send get spec request")?;
@@ -359,7 +365,7 @@ impl ApiClient {
 
         let response = self
             .client
-            .post(&format!("{}/api/specs", self.base_url))
+            .post(format!("{}/api/specs", self.base_url))
             .bearer_auth(api_key)
             .json(&req)
             .send()
@@ -373,7 +379,7 @@ impl ApiClient {
 
         let response = self
             .client
-            .put(&format!("{}/api/specs/{}", self.base_url, spec_id))
+            .put(format!("{}/api/specs/{}", self.base_url, spec_id))
             .bearer_auth(api_key)
             .json(&req)
             .send()
@@ -387,7 +393,7 @@ impl ApiClient {
 
         let response = self
             .client
-            .delete(&format!("{}/api/specs/{}", self.base_url, spec_id))
+            .delete(format!("{}/api/specs/{}", self.base_url, spec_id))
             .bearer_auth(api_key)
             .send()
             .context("Failed to send delete spec request")?;
@@ -414,7 +420,7 @@ impl ApiClient {
 
         let response = self
             .client
-            .post(&format!("{}/api/specs/{}/versions", self.base_url, spec_id))
+            .post(format!("{}/api/specs/{}/versions", self.base_url, spec_id))
             .bearer_auth(api_key)
             .json(&req)
             .send()
@@ -429,7 +435,7 @@ impl ApiClient {
 
         let response = self
             .client
-            .get(&format!(
+            .get(format!(
                 "{}/api/specs/{}/versions/latest",
                 self.base_url, spec_id
             ))
@@ -446,7 +452,7 @@ impl ApiClient {
 
         let response = self
             .client
-            .get(&format!("{}/api/specs/{}/versions", self.base_url, spec_id))
+            .get(format!("{}/api/specs/{}/versions", self.base_url, spec_id))
             .bearer_auth(api_key)
             .send()
             .context("Failed to send list spec versions request")?;
@@ -501,7 +507,7 @@ impl ApiClient {
 
         let response = self
             .client
-            .post(&format!("{}/api/builds", self.base_url))
+            .post(format!("{}/api/builds", self.base_url))
             .bearer_auth(api_key)
             .json(&req)
             .send()
@@ -550,7 +556,7 @@ impl ApiClient {
 
         let response = self
             .client
-            .get(&format!("{}/api/builds/{}", self.base_url, build_id))
+            .get(format!("{}/api/builds/{}", self.base_url, build_id))
             .bearer_auth(api_key)
             .send()
             .context("Failed to send get build request")?;
@@ -579,12 +585,13 @@ impl ApiClient {
     }
 
     /// Get deployment by ID
+    #[allow(dead_code)]
     pub fn get_deployment(&self, deployment_id: i32) -> Result<DeploymentResponse> {
         let api_key = self.require_api_key()?;
 
         let response = self
             .client
-            .get(&format!("{}/api/deployments/{}", self.base_url, deployment_id))
+            .get(format!("{}/api/deployments/{}", self.base_url, deployment_id))
             .bearer_auth(api_key)
             .send()
             .context("Failed to send get deployment request")?;
@@ -593,12 +600,13 @@ impl ApiClient {
     }
 
     /// Stop a deployment
+    #[allow(dead_code)]
     pub fn stop_deployment(&self, deployment_id: i32) -> Result<StopDeploymentResponse> {
         let api_key = self.require_api_key()?;
 
         let response = self
             .client
-            .delete(&format!("{}/api/deployments/{}", self.base_url, deployment_id))
+            .delete(format!("{}/api/deployments/{}", self.base_url, deployment_id))
             .bearer_auth(api_key)
             .send()
             .context("Failed to send stop deployment request")?;

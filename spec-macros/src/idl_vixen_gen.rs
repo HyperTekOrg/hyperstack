@@ -109,7 +109,7 @@ fn generate_instruction_hook_registry(resolver_hooks: &[ResolverHookSpec]) -> To
         let event_type = path_to_event_type(&hook.account_type_path, true);
         hooks_by_instruction
             .entry(event_type)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(&hook.fn_name);
     }
 

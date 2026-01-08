@@ -298,7 +298,7 @@ fn build_handlers(
             let key = (source_type.clone(), mapping.join_on.clone());
             sources_by_type_and_join
                 .entry(key)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(mapping.clone());
         }
     }
@@ -313,6 +313,7 @@ fn build_handlers(
     }
 
     // Group events by instruction and join key
+    #[allow(clippy::type_complexity)]
     let mut events_by_instruction_and_join: BTreeMap<
         (String, Option<String>),
         Vec<(String, parse::EventAttribute, syn::Type)>,
@@ -323,7 +324,7 @@ fn build_handlers(
             let key = (instruction.clone(), join_on_str);
             events_by_instruction_and_join
                 .entry(key)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(event_mapping.clone());
         }
     }
@@ -408,12 +409,10 @@ fn build_source_handler(
                         .unwrap_or("data");
                     FieldPath::new(&[prefix, &mapping.source_field_name])
                 }
+            } else if mapping.source_field_name.is_empty() {
+                FieldPath::new(&[])
             } else {
-                if mapping.source_field_name.is_empty() {
-                    FieldPath::new(&[])
-                } else {
-                    FieldPath::new(&[&mapping.source_field_name])
-                }
+                FieldPath::new(&[&mapping.source_field_name])
             };
 
             MappingSource::FromSource {
@@ -480,12 +479,12 @@ fn build_source_handler(
             //
             // If it doesn't match the primary key, we need a Lookup resolution to do a
             // reverse lookup (e.g., accounts.bonding_curve -> mint via PDA lookup).
-            let lookup_field_name = lookup_field.split('.').last().unwrap_or(lookup_field);
+            let lookup_field_name = lookup_field.split('.').next_back().unwrap_or(lookup_field);
             
             // Check if any primary key field name matches the lookup_by field name
             // Primary keys are like "id.mint", so we compare the last segment
             let is_primary_key_field = primary_keys.iter().any(|pk| {
-                pk.split('.').last().unwrap_or(pk) == lookup_field_name
+                pk.split('.').next_back().unwrap_or(pk) == lookup_field_name
             });
 
             if is_primary_key_field {
@@ -522,7 +521,7 @@ fn build_source_handler(
         let account_has_lookup_index = lookup_indexes.iter().any(|(field_name, _)| {
             // Extract the account type from the lookup index field name
             // For example, "id.bonding_curve" -> check if this is "BondingCurve" account
-            field_name.split('.').last()
+            field_name.split('.').next_back()
                 .map(|last_part| {
                     // Convert to account type name (e.g., "bonding_curve" -> "BondingCurve")
                     let account_name = last_part.split('_')
@@ -592,7 +591,7 @@ fn build_event_handler(
         let source = if !has_fields {
             MappingSource::AsEvent { fields: vec![] }
         } else if !event_attr.capture_fields.is_empty() {
-            let captured_fields: Vec<Box<MappingSource>> = event_attr
+            let captured_fields: Vec<MappingSource> = event_attr
                 .capture_fields
                 .iter()
                 .map(|field_spec| {
@@ -625,11 +624,11 @@ fn build_event_handler(
                         }
                     };
 
-                    Box::new(MappingSource::FromSource {
+                    MappingSource::FromSource {
                         path: field_path,
                         default: None,
                         transform,
-                    })
+                    }
                 })
                 .collect();
 
@@ -637,7 +636,7 @@ fn build_event_handler(
                 fields: captured_fields,
             }
         } else {
-            let captured_fields: Vec<Box<MappingSource>> = event_attr
+            let captured_fields: Vec<MappingSource> = event_attr
                 .capture_fields_legacy
                 .iter()
                 .map(|field| {
@@ -645,11 +644,11 @@ fn build_event_handler(
                         .field_transforms_legacy
                         .get(field)
                         .and_then(|t| parse_transformation(t));
-                    Box::new(MappingSource::FromSource {
+                    MappingSource::FromSource {
                         path: FieldPath::new(&["data", field]),
                         default: None,
                         transform,
-                    })
+                    }
                 })
                 .collect();
 
@@ -728,7 +727,7 @@ fn build_event_handler(
         // Check if any primary key field name matches the lookup_by field name
         // Primary keys are like "id.mint", so we compare the last segment
         let is_primary_key_field = primary_keys.iter().any(|pk| {
-            pk.split('.').last().unwrap_or(pk) == lookup_field_name
+            pk.split('.').next_back().unwrap_or(pk) == lookup_field_name
         });
 
         if is_primary_key_field {
@@ -916,36 +915,37 @@ fn build_instruction_hooks_ast(
     for (field_path, condition_str) in aggregate_conditions {
         for (source_type, mappings) in sources_by_type {
             for mapping in mappings {
-                if &mapping.target_field_name == field_path && mapping.is_instruction {
-                    if matches!(
+                if &mapping.target_field_name == field_path
+                    && mapping.is_instruction
+                    && matches!(
                         mapping.strategy.as_str(),
                         "Sum" | "Count" | "Min" | "Max" | "UniqueCount"
-                    ) {
-                        let instr_type_state =
-                            format!("{}IxState", source_type.split("::").last().unwrap());
+                    )
+                {
+                    let instr_type_state =
+                        format!("{}IxState", source_type.split("::").last().unwrap());
 
-                        let condition = ConditionExpr {
-                            expression: condition_str.clone(),
-                            parsed: condition_parser::parse_condition_expression(condition_str),
+                    let condition = ConditionExpr {
+                        expression: condition_str.clone(),
+                        parsed: condition_parser::parse_condition_expression(condition_str),
+                    };
+
+                    if mapping.strategy == "Count" {
+                        let action = HookAction::IncrementField {
+                            target_field: field_path.clone(),
+                            increment_by: 1,
+                            condition: Some(condition),
                         };
 
-                        if mapping.strategy == "Count" {
-                            let action = HookAction::IncrementField {
-                                target_field: field_path.clone(),
-                                increment_by: 1,
-                                condition: Some(condition),
-                            };
-
-                            instruction_hooks_map
-                                .entry(instr_type_state.clone())
-                                .or_insert_with(|| InstructionHook {
-                                    instruction_type: instr_type_state,
-                                    actions: Vec::new(),
-                                    lookup_by: None,
-                                })
-                                .actions
-                                .push(action);
-                        }
+                        instruction_hooks_map
+                            .entry(instr_type_state.clone())
+                            .or_insert_with(|| InstructionHook {
+                                instruction_type: instr_type_state,
+                                actions: Vec::new(),
+                                lookup_by: None,
+                            })
+                            .actions
+                            .push(action);
                     }
                 }
             }

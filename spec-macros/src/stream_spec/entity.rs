@@ -226,7 +226,7 @@ pub fn process_entity_struct_with_idl(
                     {
                         events_by_instruction
                             .entry(instruction_str)
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push((
                                 event_attr.target_field_name.clone(),
                                 event_attr,
@@ -236,7 +236,7 @@ pub fn process_entity_struct_with_idl(
                         // Fallback to legacy instruction string
                         events_by_instruction
                             .entry(event_attr.instruction.clone())
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push((
                                 event_attr.target_field_name.clone(),
                                 event_attr,
@@ -298,7 +298,7 @@ pub fn process_entity_struct_with_idl(
 
                         sources_by_type
                             .entry(source_type_str)
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(map_attr);
                     }
                 } else if let Ok(Some(aggr_attr)) =
@@ -343,7 +343,7 @@ pub fn process_entity_struct_with_idl(
                         let source_type_str = path_to_string(instr_path);
                         sources_by_type
                             .entry(source_type_str)
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(map_attr);
                     }
                 } else if let Ok(Some(track_attr)) =
@@ -360,7 +360,7 @@ pub fn process_entity_struct_with_idl(
                         let source_type_str = path_to_string(instr_path);
                         track_from_mappings
                             .entry(source_type_str)
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(track_attr.clone());
                     }
                 } else if let Ok(Some(computed_attr)) =
@@ -414,7 +414,7 @@ pub fn process_entity_struct_with_idl(
     // Convert events to map attributes and merge with sources_by_type
     // Events with lookup_by are kept separate for special handling in AST building
 
-    for (_instruction, event_mappings) in &events_by_instruction {
+    for event_mappings in events_by_instruction.values() {
         for (target_field, event_attr, _field_type) in event_mappings {
             // Skip events with lookup_by - they need separate handler generation
             // (They stay in events_by_instruction for AST building)
@@ -439,7 +439,7 @@ pub fn process_entity_struct_with_idl(
                 // Merge into sources_by_type
                 sources_by_type
                     .entry(source_type_str)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .extend(map_attrs);
             }
         }
@@ -630,7 +630,7 @@ pub fn process_map_attribute(
     let source_type = path_to_string(&map_attr.source_type_path);
     sources_by_type
         .entry(source_type.clone())
-        .or_insert_with(Vec::new)
+        .or_default()
         .push(map_attr.clone());
 
     field_mappings.push(map_attr.clone());
@@ -657,7 +657,7 @@ fn generate_computed_fields_hook(
             let field = parts[1].to_string();
             fields_by_section
                 .entry(section.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push((field.clone(), expression.clone(), field_type.clone()));
         }
     }
@@ -843,7 +843,7 @@ fn generate_computed_fields_hook(
     // Generate the main hook function that applies to state after handlers execute
     // We need to extract cross-section data BEFORE getting mutable borrow of target section
     // to avoid borrow checker issues
-    let eval_calls: Vec<_> = fields_by_section.iter().map(|(section, _fields)| {
+    let eval_calls: Vec<_> = fields_by_section.keys().map(|section| {
         let section_str = section.as_str();
         let eval_fn_name = format_ident!("evaluate_computed_fields_{}", section);
         let deps = section_dependencies.get(section).cloned().unwrap_or_default();
