@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "include-component-in-tag": true,
+  "tag-separator": "-",
+  "packages": {
+    "hyperstack": {
+      "release-type": "rust",
+      "component": "hyperstack"
+    },
+    "interpreter": {
+      "release-type": "rust",
+      "component": "hyperstack-interpreter"
+    },
+    "spec-macros": {
+      "release-type": "rust",
+      "component": "hyperstack-spec-macros"
+    },
+    "cli": {
+      "release-type": "rust",
+      "component": "hyperstack-cli"
+    },
+    "rust/hyperstack-server": {
+      "release-type": "rust",
+      "component": "hyperstack-server"
+    },
+    "typescript": {
+      "release-type": "node",
+      "component": "hyperstack-react"
+    },
+  },
+  "plugins": [
+    {
+      "type": "cargo-workspace",
+      "merge": false
+    }
+  ]
+}

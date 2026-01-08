@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = [
+    "hyperstack",
+    "interpreter",
+    "spec-macros",
+    "cli",
+    "rust/hyperstack-server",
+    "rust/hyperstack-sdk",
+]
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/HyperTekOrg/hyperstack.git"
+authors = ["Hypertek"]
+
+[workspace.dependencies]
+# Yellowstone Vixen ecosystem
+yellowstone-vixen = "0.6.0-alpha.0"
+yellowstone-vixen-core = "0.6.0-alpha.0"
+yellowstone-vixen-proto = "0.6.0-alpha.0"
+yellowstone-vixen-yellowstone-grpc-source = "0.6.0-alpha.0"

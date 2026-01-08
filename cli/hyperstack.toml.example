@@ -1,0 +1,34 @@
+# Hyperstack Configuration File
+#
+# This file is OPTIONAL for single-spec projects.
+# The CLI can auto-discover AST files in .hyperstack/ directories.
+#
+# Run `hyperstack init` to auto-generate this file.
+
+[project]
+name = "my-project"
+
+# SDK generation settings (optional)
+[sdk]
+output_dir = "./generated"
+# typescript_package = "@myorg/my-sdk"
+
+# Build preferences (optional)
+# [build]
+# watch_by_default = true
+
+# Specs - only needed for multi-spec projects or custom naming
+# The CLI auto-discovers .hyperstack/*.ast.json files if no specs are defined.
+
+# Example spec:
+# [[specs]]
+# name = "my-game"              # Custom name (optional - defaults to kebab-case of entity)
+# ast = "SettlementGame"        # Entity name from AST OR path to .ast.json file
+# description = "My game spec"  # Optional description
+
+# Commands:
+#   hyperstack init                        # Initialize project (auto-detects ASTs)
+#   hyperstack config validate             # Check configuration
+#   hyperstack spec push                   # Push specs to remote (auto-discovers ASTs)
+#   hyperstack sdk list                    # List all specs
+#   hyperstack sdk create typescript my-spec  # Generate TypeScript SDK

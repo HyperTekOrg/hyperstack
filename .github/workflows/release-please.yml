@@ -1,0 +1,43 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      # Aggregate outputs
+      releases_created: ${{ steps.release.outputs.releases_created }}
+      paths_released: ${{ steps.release.outputs.paths_released }}
+      
+      # Rust crates
+      hyperstack--release_created: ${{ steps.release.outputs['hyperstack--release_created'] }}
+      hyperstack--tag_name: ${{ steps.release.outputs['hyperstack--tag_name'] }}
+      hyperstack-interpreter--release_created: ${{ steps.release.outputs['interpreter--release_created'] }}
+      hyperstack-spec-macros--release_created: ${{ steps.release.outputs['spec-macros--release_created'] }}
+      hyperstack-cli--release_created: ${{ steps.release.outputs['cli--release_created'] }}
+      hyperstack-server--release_created: ${{ steps.release.outputs['rust/hyperstack-server--release_created'] }}
+      hyperstack-sdk-rust--release_created: ${{ steps.release.outputs['rust/hyperstack-sdk--release_created'] }}
+      
+      # TypeScript
+      hyperstack-react--release_created: ${{ steps.release.outputs['typescript--release_created'] }}
+      hyperstack-react--tag_name: ${{ steps.release.outputs['typescript--tag_name'] }}
+      
+      # Python
+      hyperstack-sdk-python--release_created: ${{ steps.release.outputs['python/hyperstack-sdk--release_created'] }}
+      hyperstack-sdk-python--tag_name: ${{ steps.release.outputs['python/hyperstack-sdk--tag_name'] }}
+
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

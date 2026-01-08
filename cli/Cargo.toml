@@ -1,0 +1,35 @@
+[package]
+name = "hyperstack-cli"
+version = "0.1.0"
+edition.workspace = true
+license-file = "LICENSE"
+repository.workspace = true
+authors.workspace = true
+description = "CLI tool for generating TypeScript SDKs from HyperStack stream specifications"
+readme = "README.md"
+documentation = "https://docs.rs/hyperstack-cli"
+keywords = ["hyperstack", "cli", "codegen", "typescript"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "hs"
+path = "src/main.rs"
+
+[features]
+default = []
+# Enable local development mode (uses http://localhost:3000 instead of production API)
+local = []
+
+[dependencies]
+clap = { version = "4.5", features = ["derive", "cargo"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+anyhow = "1.0"
+colored = "2.1"
+chrono = "0.4"
+hyperstack-interpreter = { version = "0.1.0", path = "../interpreter" }
+reqwest = { version = "0.11", features = ["json", "blocking"] }
+dirs = "5.0"
+rpassword = "7.3"
+

@@ -1,0 +1,657 @@
+//! AST JSON file serialization and writing.
+//!
+//! This module provides functions to serialize and write AST specifications
+//! to JSON files during macro expansion.
+//!
+//! Note: Some functions in this module are currently unused but are kept for
+//! future use when AST file generation is needed.
+
+#![allow(dead_code)]
+
+use std::collections::{BTreeMap, HashMap};
+
+use super::types::*;
+use crate::parse::conditions as condition_parser;
+use crate::parse::idl as idl_parser;
+use crate::parse;
+
+/// Write a SerializableStreamSpec to a JSON file.
+///
+/// The file is written to `.hyperstack/{entity_name}.ast.json` relative to
+/// `CARGO_MANIFEST_DIR`.
+pub fn write_ast_to_file(spec: &SerializableStreamSpec, entity_name: &str) -> std::io::Result<()> {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e.to_string()))?;
+
+    let ast_dir = std::path::Path::new(&manifest_dir).join(".hyperstack");
+    std::fs::create_dir_all(&ast_dir)?;
+
+    let ast_file = ast_dir.join(format!("{}.ast.json", entity_name));
+    let json = serde_json::to_string_pretty(spec)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+
+    std::fs::write(&ast_file, json)?;
+    eprintln!("Generated AST: {}", ast_file.display());
+
+    Ok(())
+}
+
+/// Helper function to parse transformation string to enum
+pub fn parse_transformation(transform_str: &str) -> Option<Transformation> {
+    match transform_str {
+        "HexEncode" => Some(Transformation::HexEncode),
+        "HexDecode" => Some(Transformation::HexDecode),
+        "Base58Encode" => Some(Transformation::Base58Encode),
+        "Base58Decode" => Some(Transformation::Base58Decode),
+        "ToString" => Some(Transformation::ToString),
+        "ToNumber" => Some(Transformation::ToNumber),
+        _ => None,
+    }
+}
+
+/// Helper function to parse population strategy string to enum
+pub fn parse_population_strategy(strategy_str: &str) -> PopulationStrategy {
+    match strategy_str {
+        "SetOnce" => PopulationStrategy::SetOnce,
+        "LastWrite" => PopulationStrategy::LastWrite,
+        "Append" => PopulationStrategy::Append,
+        "Merge" => PopulationStrategy::Merge,
+        "Max" => PopulationStrategy::Max,
+        "Sum" => PopulationStrategy::Sum,
+        "Count" => PopulationStrategy::Count,
+        "Min" => PopulationStrategy::Min,
+        "UniqueCount" => PopulationStrategy::UniqueCount,
+        _ => PopulationStrategy::LastWrite, // Default fallback
+    }
+}
+
+/// Convert idl_parser::IdlSpec to ast::IdlSnapshot for embedding in AST
+pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
+    // Build types list: start with explicit types from idl.types
+    let mut types: Vec<IdlTypeDefSnapshot> = idl
+        .types
+        .iter()
+        .map(|typedef| IdlTypeDefSnapshot {
+            name: typedef.name.clone(),
+            docs: typedef.docs.clone(),
+            type_def: match &typedef.type_def {
+                idl_parser::IdlTypeDefKind::Struct { kind, fields } => {
+                    IdlTypeDefKindSnapshot::Struct {
+                        kind: kind.clone(),
+                        fields: fields
+                            .iter()
+                            .map(|f| IdlFieldSnapshot {
+                                name: f.name.clone(),
+                                type_: convert_idl_type(&f.type_),
+                            })
+                            .collect(),
+                    }
+                }
+                idl_parser::IdlTypeDefKind::Enum { kind, variants } => {
+                    IdlTypeDefKindSnapshot::Enum {
+                        kind: kind.clone(),
+                        variants: variants
+                            .iter()
+                            .map(|v| IdlEnumVariantSnapshot {
+                                name: v.name.clone(),
+                            })
+                            .collect(),
+                    }
+                }
+            },
+        })
+        .collect();
+
+    // Also include account type definitions (embedded in accounts with steel format)
+    // These are needed for the ast-compiler-macros to generate proper account struct fields
+    for account in &idl.accounts {
+        // Skip if type already exists in types (avoid duplicates)
+        if types.iter().any(|t| t.name == account.name) {
+            continue;
+        }
+
+        // If account has an embedded type definition, add it to types
+        if let Some(type_def) = &account.type_def {
+            match type_def {
+                idl_parser::IdlTypeDefKind::Struct { kind, fields } => {
+                    types.push(IdlTypeDefSnapshot {
+                        name: account.name.clone(),
+                        docs: account.docs.clone(),
+                        type_def: IdlTypeDefKindSnapshot::Struct {
+                            kind: kind.clone(),
+                            fields: fields
+                                .iter()
+                                .map(|f| IdlFieldSnapshot {
+                                    name: f.name.clone(),
+                                    type_: convert_idl_type(&f.type_),
+                                })
+                                .collect(),
+                        },
+                    });
+                }
+                idl_parser::IdlTypeDefKind::Enum { kind, variants } => {
+                    types.push(IdlTypeDefSnapshot {
+                        name: account.name.clone(),
+                        docs: account.docs.clone(),
+                        type_def: IdlTypeDefKindSnapshot::Enum {
+                            kind: kind.clone(),
+                            variants: variants
+                                .iter()
+                                .map(|v| IdlEnumVariantSnapshot {
+                                    name: v.name.clone(),
+                                })
+                                .collect(),
+                        },
+                    });
+                }
+            }
+        }
+    }
+
+    // Determine if this IDL uses Steel-style discriminants (1 byte) or Anchor-style (8 bytes)
+    // Steel IDLs have a `discriminant` field with {"type": "u8", "value": N}
+    // Anchor IDLs have a `discriminator` array with 8 bytes
+    let uses_steel_discriminant = idl.instructions.iter()
+        .any(|ix| ix.discriminant.is_some() && ix.discriminator.is_empty());
+    let discriminant_size: usize = if uses_steel_discriminant { 1 } else { 8 };
+
+    IdlSnapshot {
+        name: idl.get_name().to_string(),
+        version: idl.get_version().to_string(),
+        accounts: idl
+            .accounts
+            .iter()
+            .map(|acc| IdlAccountSnapshot {
+                name: acc.name.clone(),
+                discriminator: acc.discriminator.clone(),
+                docs: acc.docs.clone(),
+            })
+            .collect(),
+        instructions: idl
+            .instructions
+            .iter()
+            .map(|instr| IdlInstructionSnapshot {
+                name: instr.name.clone(),
+                discriminator: instr.get_discriminator(),
+                docs: instr.docs.clone(),
+                accounts: instr
+                    .accounts
+                    .iter()
+                    .map(|acc| IdlInstructionAccountSnapshot {
+                        name: acc.name.clone(),
+                        writable: acc.is_mut,
+                        signer: acc.is_signer,
+                        optional: acc.optional,
+                        address: acc.address.clone(),
+                        docs: acc.docs.clone(),
+                    })
+                    .collect(),
+                args: instr
+                    .args
+                    .iter()
+                    .map(|arg| IdlFieldSnapshot {
+                        name: arg.name.clone(),
+                        type_: convert_idl_type(&arg.type_),
+                    })
+                    .collect(),
+            })
+            .collect(),
+        types,
+        events: idl
+            .events
+            .iter()
+            .map(|event| IdlEventSnapshot {
+                name: event.name.clone(),
+                discriminator: event.discriminator.clone(),
+                docs: event.docs.clone(),
+            })
+            .collect(),
+        errors: idl
+            .errors
+            .iter()
+            .map(|err| IdlErrorSnapshot {
+                code: err.code,
+                name: err.name.clone(),
+                msg: err.msg.clone(),
+            })
+            .collect(),
+        discriminant_size,
+    }
+}
+
+/// Convert idl_parser::IdlType to ast::IdlTypeSnapshot
+pub fn convert_idl_type(idl_type: &idl_parser::IdlType) -> IdlTypeSnapshot {
+    match idl_type {
+        idl_parser::IdlType::Simple(s) => IdlTypeSnapshot::Simple(s.clone()),
+        idl_parser::IdlType::Array(arr) => IdlTypeSnapshot::Array(IdlArrayTypeSnapshot {
+            array: arr
+                .array
+                .iter()
+                .map(|elem| match elem {
+                    idl_parser::IdlTypeArrayElement::Nested(t) => {
+                        IdlArrayElementSnapshot::Type(convert_idl_type(t))
+                    }
+                    idl_parser::IdlTypeArrayElement::Type(s) => {
+                        IdlArrayElementSnapshot::TypeName(s.clone())
+                    }
+                    idl_parser::IdlTypeArrayElement::Size(n) => IdlArrayElementSnapshot::Size(*n),
+                })
+                .collect(),
+        }),
+        idl_parser::IdlType::Option(opt) => IdlTypeSnapshot::Option(IdlOptionTypeSnapshot {
+            option: Box::new(convert_idl_type(&opt.option)),
+        }),
+        idl_parser::IdlType::Vec(vec) => IdlTypeSnapshot::Vec(IdlVecTypeSnapshot {
+            vec: Box::new(convert_idl_type(&vec.vec)),
+        }),
+        idl_parser::IdlType::Defined(def) => IdlTypeSnapshot::Defined(IdlDefinedTypeSnapshot {
+            defined: match &def.defined {
+                idl_parser::IdlTypeDefinedInner::Named { name } => {
+                    IdlDefinedInnerSnapshot::Named { name: name.clone() }
+                }
+                idl_parser::IdlTypeDefinedInner::Simple(s) => IdlDefinedInnerSnapshot::Simple(s.clone()),
+            },
+        }),
+    }
+}
+
+/// Build handlers from source mappings.
+pub fn build_handlers_from_sources(
+    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    _events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
+    aggregate_conditions: &HashMap<String, String>,
+    idl: Option<&idl_parser::IdlSpec>,
+) -> Vec<SerializableHandlerSpec> {
+    let mut handlers = Vec::new();
+
+    // Group sources by type and join key (same logic as handler generation)
+    // Use BTreeMap for deterministic ordering
+    let mut sources_by_type_and_join: BTreeMap<(String, Option<String>), Vec<parse::MapAttribute>> =
+        BTreeMap::new();
+    for (source_type, mappings) in sources_by_type {
+        for mapping in mappings {
+            let key = (source_type.clone(), mapping.join_on.clone());
+            sources_by_type_and_join
+                .entry(key)
+                .or_insert_with(Vec::new)
+                .push(mapping.clone());
+        }
+    }
+
+    // Process account sources with full detail (now in sorted order)
+    for ((source_type, join_key), mappings) in &sources_by_type_and_join {
+        let account_type = source_type.split("::").last().unwrap_or(source_type);
+        let is_instruction = mappings.iter().any(|m| m.is_instruction);
+
+        // Skip if this is an event-derived mapping
+        if is_instruction
+            && mappings
+                .iter()
+                .any(|m| m.target_field_name.starts_with("events."))
+        {
+            continue;
+        }
+
+        let mut serializable_mappings = Vec::new();
+
+        let mut has_primary_key = false;
+        let mut primary_field = None;
+
+        for mapping in mappings {
+            // Skip conditional aggregates
+            if aggregate_conditions.contains_key(&mapping.target_field_name) {
+                continue;
+            }
+
+            let source = if mapping.is_whole_source {
+                let field_transforms = if mapping
+                    .source_field_name
+                    .starts_with("__capture_with_transforms:")
+                {
+                    let transforms_str = mapping
+                        .source_field_name
+                        .strip_prefix("__capture_with_transforms:")
+                        .unwrap_or("");
+                    transforms_str
+                        .split(',')
+                        .filter_map(|pair| {
+                            let parts: Vec<&str> = pair.split('=').collect();
+                            if parts.len() == 2 {
+                                parse_transformation(parts[1]).map(|t| (parts[0].to_string(), t))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                } else {
+                    BTreeMap::new()
+                };
+
+                MappingSource::AsCapture { field_transforms }
+            } else {
+                let field_path = if is_instruction {
+                    if mapping.source_field_name.is_empty() {
+                        FieldPath::new(&["data"])
+                    } else {
+                        let prefix = idl
+                            .and_then(|idl| {
+                                idl.get_instruction_field_prefix(
+                                    account_type,
+                                    &mapping.source_field_name,
+                                )
+                            })
+                            .unwrap_or("data");
+                        FieldPath::new(&[prefix, &mapping.source_field_name])
+                    }
+                } else {
+                    if mapping.source_field_name.is_empty() {
+                        FieldPath::new(&[])
+                    } else {
+                        FieldPath::new(&[&mapping.source_field_name])
+                    }
+                };
+
+                MappingSource::FromSource {
+                    path: field_path,
+                    default: None,
+                    transform: mapping
+                        .transform
+                        .as_ref()
+                        .and_then(|t| parse_transformation(t)),
+                }
+            };
+
+            let population = parse_population_strategy(&mapping.strategy);
+
+            serializable_mappings.push(SerializableFieldMapping {
+                target_path: mapping.target_field_name.clone(),
+                source,
+                transform: None,
+                population,
+            });
+
+            if mapping.is_primary_key {
+                has_primary_key = true;
+                if is_instruction {
+                    let prefix = idl
+                        .and_then(|idl| {
+                            idl.get_instruction_field_prefix(account_type, &mapping.source_field_name)
+                        })
+                        .unwrap_or("data");
+                    primary_field = Some(format!("{}.{}", prefix, mapping.source_field_name));
+                } else {
+                    primary_field = Some(mapping.source_field_name.clone());
+                }
+            }
+        }
+
+        let is_aggregation = mappings.iter().any(|m| {
+            matches!(
+                m.strategy.as_str(),
+                "Sum" | "Count" | "Min" | "Max" | "UniqueCount"
+            )
+        });
+
+        // Try to find lookup_by from the first mapping that has it
+        let lookup_by_field = mappings.iter()
+            .find_map(|m| m.lookup_by.as_ref())
+            .map(|fs| {
+                // FieldSpec has explicit_location which tells us if it's accounts:: or data::
+                let prefix = match &fs.explicit_location {
+                    Some(parse::FieldLocation::Account) => "accounts",
+                    Some(parse::FieldLocation::InstructionArg) => "data",
+                    None => "accounts",  // Default to accounts for compatibility
+                };
+                format!("{}.{}", prefix, fs.ident)
+            });
+
+        let key_resolution = if has_primary_key {
+            let primary_field_str = primary_field.as_deref().unwrap_or("");
+            let segments: Vec<&str> = primary_field_str.split('.').collect();
+            KeyResolutionStrategy::Embedded {
+                primary_field: FieldPath::new(&segments),
+            }
+        } else if is_aggregation && is_instruction {
+            // Use lookup_by if available, otherwise fall back to join_key or a sensible default
+            if let Some(ref lookup_field) = lookup_by_field {
+                let segments: Vec<&str> = lookup_field.split('.').collect();
+                KeyResolutionStrategy::Lookup {
+                    primary_field: FieldPath::new(&segments),
+                }
+            } else if let Some(ref join_field) = join_key {
+                KeyResolutionStrategy::Lookup {
+                    primary_field: FieldPath::new(&[join_field]),
+                }
+            } else {
+                // No lookup_by specified - use embedded with empty path
+                KeyResolutionStrategy::Embedded {
+                    primary_field: FieldPath::new(&[]),
+                }
+            }
+        } else if let Some(ref join_field) = join_key {
+            KeyResolutionStrategy::Lookup {
+                primary_field: FieldPath::new(&[join_field]),
+            }
+        } else {
+            KeyResolutionStrategy::Embedded {
+                primary_field: FieldPath::new(&[]),
+            }
+        };
+
+        let type_suffix = if is_instruction { "IxState" } else { "State" };
+        handlers.push(SerializableHandlerSpec {
+            source: SourceSpec::Source {
+                program_id: None,
+                discriminator: None,
+                type_name: format!("{}{}", account_type, type_suffix),
+            },
+            key_resolution,
+            mappings: serializable_mappings,
+            conditions: Vec::new(),
+            emit: true,
+        });
+    }
+
+    handlers
+}
+
+/// Build resolver hooks from #[resolve_key] attributes
+pub fn build_resolver_hooks(
+    resolver_hooks: &[parse::ResolveKeyAttribute],
+    idl: Option<&idl_parser::IdlSpec>,
+) -> Vec<ResolverHook> {
+    resolver_hooks
+        .iter()
+        .map(|hook| {
+            let account_type = path_to_string(&hook.account_path);
+            let account_type_state = format!("{}State", account_type.split("::").last().unwrap());
+
+            let strategy = match hook.strategy.as_str() {
+                "pda_reverse_lookup" => {
+                    let discriminators = hook
+                        .queue_until
+                        .iter()
+                        .filter_map(|instr_path| {
+                            idl.and_then(|idl| {
+                                let instr_name = instr_path.segments.last()?.ident.to_string();
+                                idl.instructions
+                                    .iter()
+                                    .find(|instr| instr.name.eq_ignore_ascii_case(&instr_name))
+                                    .map(|instr| instr.get_discriminator())
+                            })
+                        })
+                        .collect();
+
+                    ResolverStrategy::PdaReverseLookup {
+                        lookup_name: hook
+                            .lookup_name
+                            .clone()
+                            .unwrap_or_else(|| "default_pda_lookup".to_string()),
+                        queue_discriminators: discriminators,
+                    }
+                }
+                _ => ResolverStrategy::PdaReverseLookup {
+                    lookup_name: "default_pda_lookup".to_string(),
+                    queue_discriminators: Vec::new(),
+                },
+            };
+
+            ResolverHook {
+                account_type: account_type_state,
+                strategy,
+            }
+        })
+        .collect()
+}
+
+/// Build instruction hooks from PDA registrations and track_from mappings
+pub fn build_instruction_hooks(
+    pda_registrations: &[parse::RegisterPdaAttribute],
+    track_from_mappings: &HashMap<String, Vec<parse::TrackFromAttribute>>,
+    aggregate_conditions: &HashMap<String, String>,
+    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+) -> Vec<InstructionHook> {
+    let mut instruction_hooks_map: HashMap<String, InstructionHook> = HashMap::new();
+
+    // Process PDA registrations
+    for registration in pda_registrations {
+        let instr_type = path_to_string(&registration.instruction_path);
+        let instr_type_state = format!("{}IxState", instr_type.split("::").last().unwrap());
+
+        let action = HookAction::RegisterPdaMapping {
+            pda_field: FieldPath::new(&["accounts", &registration.pda_field.ident.to_string()]),
+            seed_field: FieldPath::new(&[
+                "accounts",
+                &registration.primary_key_field.ident.to_string(),
+            ]),
+            lookup_name: registration.lookup_name.clone(),
+        };
+
+        instruction_hooks_map
+            .entry(instr_type_state.clone())
+            .or_insert_with(|| InstructionHook {
+                instruction_type: instr_type_state,
+                actions: Vec::new(),
+                lookup_by: None,
+            })
+            .actions
+            .push(action);
+    }
+
+    // Process track_from mappings
+    for (instruction_type, track_attrs) in track_from_mappings {
+        let instr_type_state = format!("{}IxState", instruction_type.split("::").last().unwrap());
+
+        for track_attr in track_attrs {
+            let source = if track_attr.field.ident.to_string().starts_with("__") {
+                match track_attr.field.ident.to_string().as_str() {
+                    "__timestamp" => MappingSource::FromContext {
+                        field: "timestamp".to_string(),
+                    },
+                    "__slot" => MappingSource::FromContext {
+                        field: "slot".to_string(),
+                    },
+                    "__signature" => MappingSource::FromContext {
+                        field: "signature".to_string(),
+                    },
+                    _ => continue,
+                }
+            } else {
+                let path_prefix = match &track_attr.field.explicit_location {
+                    Some(parse::FieldLocation::Account) => "accounts",
+                    Some(parse::FieldLocation::InstructionArg) | None => "data",
+                };
+
+                MappingSource::FromSource {
+                    path: FieldPath::new(&[path_prefix, &track_attr.field.ident.to_string()]),
+                    default: None,
+                    transform: track_attr
+                        .transform
+                        .as_ref()
+                        .and_then(|t| parse_transformation(&t.to_string())),
+                }
+            };
+
+            let condition = track_attr.condition.as_ref().map(|cond| ConditionExpr {
+                expression: cond.clone(),
+                parsed: condition_parser::parse_condition_expression(cond),
+            });
+
+            let action = HookAction::SetField {
+                target_field: track_attr.target_field_name.clone(),
+                source,
+                condition,
+            };
+
+            let lookup_by = track_attr
+                .lookup_by
+                .as_ref()
+                .map(|field_spec| FieldPath::new(&["accounts", &field_spec.ident.to_string()]));
+
+            let hook = instruction_hooks_map
+                .entry(instr_type_state.clone())
+                .or_insert_with(|| InstructionHook {
+                    instruction_type: instr_type_state.clone(),
+                    actions: Vec::new(),
+                    lookup_by: lookup_by.clone(),
+                });
+
+            hook.actions.push(action);
+
+            if hook.lookup_by.is_none() {
+                hook.lookup_by = lookup_by;
+            }
+        }
+    }
+
+    // Process aggregate conditions
+    for (field_path, condition_str) in aggregate_conditions {
+        for (source_type, mappings) in sources_by_type {
+            for mapping in mappings {
+                if &mapping.target_field_name == field_path && mapping.is_instruction {
+                    if matches!(
+                        mapping.strategy.as_str(),
+                        "Sum" | "Count" | "Min" | "Max" | "UniqueCount"
+                    ) {
+                        let instr_type_state =
+                            format!("{}IxState", source_type.split("::").last().unwrap());
+
+                        let condition = ConditionExpr {
+                            expression: condition_str.clone(),
+                            parsed: condition_parser::parse_condition_expression(condition_str),
+                        };
+
+                        if mapping.strategy == "Count" {
+                            let action = HookAction::IncrementField {
+                                target_field: field_path.clone(),
+                                increment_by: 1,
+                                condition: Some(condition),
+                            };
+
+                            instruction_hooks_map
+                                .entry(instr_type_state.clone())
+                                .or_insert_with(|| InstructionHook {
+                                    instruction_type: instr_type_state,
+                                    actions: Vec::new(),
+                                    lookup_by: None,
+                                })
+                                .actions
+                                .push(action);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    instruction_hooks_map.into_values().collect()
+}
+
+/// Helper to convert syn::Path to string
+fn path_to_string(path: &syn::Path) -> String {
+    path.segments
+        .iter()
+        .map(|seg| seg.ident.to_string())
+        .collect::<Vec<_>>()
+        .join("::")
+}

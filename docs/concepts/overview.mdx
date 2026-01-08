@@ -1,0 +1,248 @@
+# How Hyperstack Works
+
+Hyperstack is a declarative data layer for Solana. You define the data shape you need, and Hyperstack handles all the infrastructure to stream it to your app in real-time.
+
+---
+
+## The Problem
+
+Building data pipelines for Solana apps is painful:
+
+1. **Manual parsing** - You write custom code to decode accounts and instructions
+2. **ETL complexity** - You build pipelines to transform, aggregate, and store data
+3. **RPC overhead** - You manage websocket connections, retries, and state sync
+4. **Type mismatches** - On-chain types don't match your app types
+
+Most teams spend weeks on infrastructure before shipping features.
+
+---
+
+## The Hyperstack Solution
+
+Instead of building infrastructure, you **declare what data you need**:
+
+```rust
+#[entity(name = "Token")]
+pub struct Token {
+    #[map_instruction(Create::mint, primary_key)]
+    pub mint: String,
+    
+    #[map(BondingCurve::virtual_sol_reserves)]
+    pub sol_reserves: u64,
+    
+    #[aggregate(from = Buy, field = amount, strategy = Sum)]
+    pub total_volume: u64,
+}
+```
+
+Hyperstack then:
+- Subscribes to the relevant on-chain events
+- Transforms raw data into your entity shape
+- Streams updates to your app in real-time
+- Generates type-safe SDKs for your frontend
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    YOUR SPEC                            │
+│  (Rust macros defining entities, mappings, aggregates)  │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│                   HYPERSTACK CLOUD                       │
+│                                                          │
+│   ┌────────────┐    ┌────────────┐    ┌────────────┐    │
+│   │  Compiler  │ →  │     VM     │ →  │  Streamer  │    │
+│   └────────────┘    └────────────┘    └────────────┘    │
+│         ↑                 ↑                  ↓          │
+│    AST Bytecode     State Tables      WebSocket         │
+│                                                          │
+│   ┌──────────────────────────────────────────────────┐  │
+│   │              Yellowstone gRPC                     │  │
+│   │         (Real-time Solana data feed)             │  │
+│   └──────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│                     YOUR APP                            │
+│                                                          │
+│   const { data } = stack.views.tokens.list.use()        │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Key Concepts
+
+### 1. Specs
+
+A **spec** is a declarative definition of your data model. Written in Rust using macros:
+
+```rust
+#[stream_spec(idl = "parser/idl.json")]
+pub mod my_spec {
+    #[entity(name = "Token")]
+    pub struct Token {
+        // Entity fields with mappings...
+    }
+}
+```
+
+The spec defines:
+- **Entities** - The data structures you want
+- **Mappings** - How on-chain data maps to fields
+- **Aggregations** - How to compute derived values
+- **Events** - Which instructions to capture
+
+### 2. Entities
+
+An **entity** is a structured object representing on-chain state. Each entity has:
+
+- **Primary key** - Unique identifier (usually a pubkey)
+- **Fields** - Data attributes with population strategies
+- **Sections** - Logical groupings of fields
+
+```rust
+#[entity(name = "Token")]
+pub struct Token {
+    pub id: TokenId,       // Primary key section
+    pub info: TokenInfo,   // Metadata section
+    pub trading: Trading,  // Metrics section
+}
+```
+
+### 3. Mappings
+
+**Mappings** define how on-chain data flows into entity fields:
+
+| Mapping Type | Source | Example |
+|--------------|--------|---------|
+| `#[map]` | Account field | `#[map(BondingCurve::reserves)]` |
+| `#[map_instruction]` | Instruction arg/account | `#[map_instruction(Create::mint)]` |
+| `#[aggregate]` | Computed from events | `#[aggregate(from = Buy, strategy = Sum)]` |
+| `#[event]` | Captured instruction | `#[event(strategy = Append)]` |
+| `#[computed]` | Derived from fields | `#[computed(field_a + field_b)]` |
+
+### 4. Population Strategies
+
+**Strategies** control how field values are updated:
+
+| Strategy | Behavior |
+|----------|----------|
+| `SetOnce` | Set once, never overwrite |
+| `LastWrite` | Always use latest value |
+| `Append` | Collect into array |
+| `Sum` | Running total |
+| `Count` | Event counter |
+| `UniqueCount` | Count unique values |
+| `Max` / `Min` | Track extremes |
+
+### 5. Stacks
+
+A **stack** is the client-side interface to your spec. It provides:
+
+- **Views** - Real-time data subscriptions
+- **Transactions** - Instruction builders
+- **Helpers** - Utility functions
+
+```typescript
+const TokenStack = defineStack({
+  name: 'my-tokens',
+  views: {
+    tokens: {
+      list: createListView<Token>('Token/list'),
+      state: createStateView<Token>('Token/state'),
+    }
+  }
+});
+```
+
+---
+
+## Data Flow
+
+### Specification Time
+
+1. Write spec using Rust macros
+2. Build generates AST (`.hyperstack/*.ast.json`)
+3. Deploy with `hyperstack up`
+4. Cloud compiles AST to bytecode
+
+### Runtime
+
+1. Solana events arrive via Yellowstone gRPC
+2. VM routes events to handlers
+3. Handlers execute bytecode:
+   - Extract fields from events
+   - Resolve primary keys
+   - Apply mappings and transforms
+   - Update state tables
+4. Changes stream to connected clients
+
+### Client
+
+1. Connect to WebSocket
+2. Subscribe to views
+3. Receive real-time updates
+4. React components re-render automatically
+
+---
+
+## View Modes
+
+Views define how you access entity data:
+
+| Mode | Path | Returns | Use Case |
+|------|------|---------|----------|
+| `state` | `Entity/state` | Single entity | Get by key |
+| `list` | `Entity/list` | Array of entities | All entities |
+| `kv` | `Entity/kv` | Key-value map | Lookup by key |
+
+```typescript
+// List - all tokens as array
+const { data: tokens } = stack.views.tokens.list.use()
+
+// State - single token by key
+const { data: token } = stack.views.tokens.state.use({ key: mintAddress })
+```
+
+---
+
+## Type Safety
+
+Hyperstack provides end-to-end type safety:
+
+1. **Spec types** - Rust ensures valid mappings at compile time
+2. **Generated types** - SDK types match your entity definitions
+3. **Runtime types** - Data arrives pre-shaped, no parsing needed
+
+```typescript
+// TypeScript knows token.mint is string, token.volume is bigint
+const { data: token } = stack.views.tokens.state.use({ key })
+console.log(token.mint)    // string
+console.log(token.volume)  // bigint
+```
+
+---
+
+## Self-Hosting vs Managed
+
+| Aspect | Self-Hosted | Managed (Hyperstack Cloud) |
+|--------|-------------|---------------------------|
+| Setup | Bring your own Geyser gRPC | Zero config |
+| Scaling | You manage | We handle |
+| Cost | Infrastructure only | Subscription + bandwidth |
+| Best for | Single stream, experimentation | Production apps |
+
+---
+
+## Next Steps
+
+- [React Quickstart](/quickstart/react) - Build your first app
+- [Stack API](/concepts/stack-api) - Client-side API reference
+- [Spec DSL](/spec-dsl/macros) - Full macro reference
+- [CLI Commands](/cli/commands) - Deployment and management

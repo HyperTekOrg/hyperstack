@@ -1,0 +1,33 @@
+[package]
+name = "hyperstack"
+version = "0.1.0"
+edition.workspace = true
+license-file = "LICENSE"
+repository.workspace = true
+authors.workspace = true
+description = "Real-time streaming data pipelines for Solana - transform on-chain events into typed state projections"
+keywords = ["hyperstack", "solana", "streaming", "blockchain", "realtime"]
+categories = ["web-programming", "development-tools"]
+documentation = "https://docs.rs/hyperstack"
+readme = "README.md"
+
+[dependencies]
+# Core interpreter - AST transformation runtime and VM
+hyperstack-interpreter = { version = "0.1.0", path = "../interpreter", optional = true }
+
+# Spec macros - proc-macros for defining stream specifications
+hyperstack-spec-macros = { version = "0.1.0", path = "../spec-macros", optional = true }
+
+# Server - WebSocket server and projection handlers
+hyperstack-server = { version = "0.1.0", path = "../rust/hyperstack-server", optional = true }
+
+# SDK - Rust client for connecting to HyperStack servers
+hyperstack-sdk = { version = "0.1.0", path = "../rust/hyperstack-sdk", optional = true }
+
+[features]
+default = ["interpreter", "spec-macros", "server"]
+full = ["interpreter", "spec-macros", "server", "sdk"]
+interpreter = ["dep:hyperstack-interpreter"]
+spec-macros = ["dep:hyperstack-spec-macros"]
+server = ["dep:hyperstack-server"]
+sdk = ["dep:hyperstack-sdk"]

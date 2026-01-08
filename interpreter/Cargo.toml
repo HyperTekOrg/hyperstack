@@ -1,0 +1,46 @@
+[package]
+name = "hyperstack-interpreter"
+version = "0.1.0"
+edition.workspace = true
+license-file = "LICENSE"
+repository.workspace = true
+authors.workspace = true
+description = "AST transformation runtime and VM for HyperStack streaming pipelines"
+readme = "README.md"
+documentation = "https://docs.rs/hyperstack-interpreter"
+keywords = ["hyperstack", "streaming", "interpreter", "vm"]
+categories = ["development-tools"]
+
+[dependencies]
+tonic = "0.12"
+prost = "0.13"
+prost-types = "0.13"
+dashmap = "6.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+solana-pubkey = "2.3"
+prost-reflect = "0.16.2"
+hex = "0.4"
+bs58 = "0.5"
+lru = "0.12"
+sha2 = "0.10"
+tracing = "0.1"
+hyperstack-spec-macros = { version = "0.1.0", path = "../spec-macros" }
+
+# OpenTelemetry for distributed tracing (optional, behind 'otel' feature)
+opentelemetry = { version = "0.22", optional = true }
+opentelemetry_sdk = { version = "0.22", features = ["rt-tokio"], optional = true }
+opentelemetry-otlp = { version = "0.15", features = ["tonic"], optional = true }
+tracing-opentelemetry = { version = "0.23", optional = true }
+
+[build-dependencies]
+tonic-build = "0.12"
+
+[features]
+default = []
+otel = [
+    "opentelemetry",
+    "opentelemetry_sdk",
+    "opentelemetry-otlp",
+    "tracing-opentelemetry",
+]

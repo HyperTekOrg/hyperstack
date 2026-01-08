@@ -1,0 +1,61 @@
+[package]
+name = "hyperstack-server"
+version = "0.1.0"
+edition.workspace = true
+license-file = "LICENSE"
+repository.workspace = true
+authors.workspace = true
+description = "WebSocket server and projection handlers for HyperStack streaming pipelines"
+readme = "README.md"
+documentation = "https://docs.rs/hyperstack-server"
+keywords = ["hyperstack", "streaming", "websocket", "server"]
+categories = ["web-programming::websocket"]
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+tokio-tungstenite = "0.28"
+futures-util = "0.3"
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+bytes = "1.0"
+
+# Yellowstone Vixen dependencies
+yellowstone-vixen = { workspace = true }
+yellowstone-vixen-core = { workspace = true }
+yellowstone-vixen-proto = { workspace = true, features = ["stream"] }
+yellowstone-vixen-yellowstone-grpc-source = { workspace = true }
+
+# Interpreter library
+hyperstack-interpreter = { version = "0.1.0", path = "../../interpreter" }
+
+# Async utilities
+smallvec = "1.15"
+hex = "0.4"
+
+# HTTP server for health endpoint
+hyper = { version = "1.6", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+
+# OpenTelemetry for distributed tracing and metrics (optional, behind 'otel' feature)
+opentelemetry = { version = "0.22", optional = true }
+opentelemetry_sdk = { version = "0.22", features = ["rt-tokio", "metrics"], optional = true }
+opentelemetry-otlp = { version = "0.15", features = ["tonic", "metrics"], optional = true }
+tracing-opentelemetry = { version = "0.23", optional = true }
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[features]
+default = []
+otel = [
+    "opentelemetry",
+    "opentelemetry_sdk",
+    "opentelemetry-otlp",
+    "tracing-opentelemetry",
+    "hyperstack-interpreter/otel",
+]

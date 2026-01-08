@@ -1,0 +1,17 @@
+src/
+node_modules/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+.gitkeep
+tsconfig.json
+rollup.config.js
+.vite/
+*.md
+!README.md
+stack_execution_plan.md
+stackimplementation.sonnet.md
+STACKS_CONCEPT.md
+example-test-component.tsx
+pumpfun-stack.ts

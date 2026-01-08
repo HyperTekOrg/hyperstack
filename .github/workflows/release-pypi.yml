@@ -1,0 +1,35 @@
+# TODO: Uncomment when Python SDK is ready for PyPI publishing
+#
+# name: Release PyPI Package
+#
+# on:
+#   push:
+#     tags:
+#       - 'hyperstack-sdk-python-v*'
+#
+# jobs:
+#   publish:
+#     name: Publish to PyPI
+#     runs-on: ubuntu-latest
+#     defaults:
+#       run:
+#         working-directory: python/hyperstack-sdk
+#     steps:
+#       - uses: actions/checkout@v4
+#
+#       - name: Setup Python
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: '3.11'
+#
+#       - name: Install build dependencies
+#         run: pip install build twine
+#
+#       - name: Build package
+#         run: python -m build
+#
+#       - name: Publish to PyPI
+#         run: twine upload dist/*
+#         env:
+#           TWINE_USERNAME: __token__
+#           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}

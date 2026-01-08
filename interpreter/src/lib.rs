@@ -1,0 +1,111 @@
+//! # hyperstack-interpreter
+//!
+//! AST transformation runtime and VM for HyperStack streaming pipelines.
+//!
+//! This crate provides the core components for processing Solana blockchain
+//! events into typed state projections:
+//!
+//! - **AST Definition** - Type-safe schemas for state and event handlers
+//! - **Bytecode Compiler** - Compiles specs into optimized bytecode  
+//! - **Virtual Machine** - Executes bytecode to process events
+//! - **TypeScript Generation** - Generate client SDKs automatically
+//!
+//! ## Example
+//!
+//! ```rust,ignore
+//! use hyperstack_interpreter::{TypeScriptCompiler, TypeScriptConfig};
+//!
+//! let config = TypeScriptConfig::default();
+//! let compiler = TypeScriptCompiler::new(config);
+//! let typescript = compiler.compile(&spec)?;
+//! ```
+//!
+//! ## Feature Flags
+//!
+//! - `otel` - OpenTelemetry integration for distributed tracing and metrics
+
+pub mod ast;
+pub mod compiler;
+pub mod metrics_context;
+pub mod proto_router;
+pub mod resolvers;
+pub mod spec_trait;
+pub mod typescript;
+pub mod vm;
+
+// Re-export commonly used items
+pub use typescript::{TypeScriptCompiler, TypeScriptConfig, write_typescript_to_file};
+pub use resolvers::{ResolveContext, InstructionContext, KeyResolution, ReverseLookupUpdater};
+pub use vm::{PendingAccountUpdate, PendingQueueStats, UpdateContext};
+pub use metrics_context::{MetricsContext, FieldAccessor, FieldRef};
+
+// Re-export macros for convenient use
+// The field! macro is the new recommended way to create field references
+// The field_accessor! macro is kept for backward compatibility
+
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Mutation {
+    pub export: String,
+    pub key: Value,
+    pub patch: Value,
+}
+
+/// Generic wrapper for event data that includes context metadata
+/// This ensures type safety for events captured in entity specs
+/// 
+/// # Runtime Structure
+/// Events captured with `#[event]` are automatically wrapped in this structure:
+/// ```json
+/// {
+///   "timestamp": 1234567890,
+///   "data": { /* event-specific data */ },
+///   "slot": 381471241,
+///   "signature": "4xNEYTVL8DB28W87..."
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventWrapper<T = Value> {
+    /// Unix timestamp when the event was processed
+    pub timestamp: i64,
+    /// The event-specific data
+    pub data: T,
+    /// Optional slot number from UpdateContext
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slot: Option<u64>,
+    /// Optional transaction signature from UpdateContext
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+}
+
+/// Generic wrapper for account capture data that includes context metadata
+/// This ensures type safety for accounts captured with `#[capture]` in entity specs
+/// 
+/// # Runtime Structure
+/// Accounts captured with `#[capture]` are automatically wrapped in this structure:
+/// ```json
+/// {
+///   "timestamp": 1234567890,
+///   "account_address": "C6P5CpJnYHgpGvCGuXYAWL6guKH5LApn3QwTAZmNUPCj",
+///   "data": { /* account-specific data (filtered, no __ fields) */ },
+///   "slot": 381471241,
+///   "signature": "4xNEYTVL8DB28W87..."
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaptureWrapper<T = Value> {
+    /// Unix timestamp when the account was captured
+    pub timestamp: i64,
+    /// The account address (base58 encoded public key)
+    pub account_address: String,
+    /// The account data (already filtered to remove internal __ fields)
+    pub data: T,
+    /// Optional slot number from UpdateContext
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slot: Option<u64>,
+    /// Optional transaction signature from UpdateContext
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+}

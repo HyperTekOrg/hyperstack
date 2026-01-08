@@ -1,0 +1,502 @@
+# CLI Command Reference
+
+Complete reference for the Hyperstack CLI (`hs`).
+
+---
+
+## Global Options
+
+| Option | Description |
+|--------|-------------|
+| `--config, -c <path>` | Path to hyperstack.toml (default: `hyperstack.toml`) |
+| `--json, -j` | Output as JSON |
+| `--help, -h` | Show help |
+| `--version, -V` | Show version |
+
+---
+
+## Quick Reference
+
+| Command | Description |
+|---------|-------------|
+| `hs init` | Initialize project |
+| `hs up [spec]` | Deploy spec (push + build + deploy) |
+| `hs status` | Show project overview |
+| `hs logs [build-id]` | View build logs |
+| `hs auth login` | Authenticate |
+
+---
+
+## Project Setup
+
+### hs init
+
+Initialize a new Hyperstack project.
+
+```bash
+hs init
+```
+
+Creates `hyperstack.toml` with auto-discovered specs from `.hyperstack/*.ast.json`.
+
+### hs config init
+
+Create a fresh configuration file.
+
+```bash
+hs config init
+```
+
+### hs config validate
+
+Validate your configuration.
+
+```bash
+hs config validate
+```
+
+---
+
+## Authentication
+
+### hs auth register
+
+Create a new account.
+
+```bash
+hs auth register
+```
+
+Prompts for username and password (min 8 characters).
+
+### hs auth login
+
+Login to your account.
+
+```bash
+hs auth login
+```
+
+### hs auth logout
+
+Remove stored credentials.
+
+```bash
+hs auth logout
+```
+
+### hs auth status
+
+Check local authentication status.
+
+```bash
+hs auth status
+```
+
+### hs auth whoami
+
+Verify authentication with server.
+
+```bash
+hs auth whoami
+```
+
+**Credentials location:** `~/.hyperstack/credentials.toml`
+
+---
+
+## Deployment
+
+### hs up [spec-name]
+
+Deploy a spec: push, build, and deploy in one command.
+
+```bash
+# Deploy all specs
+hs up
+
+# Deploy specific spec
+hs up my-spec
+
+# Deploy to branch
+hs up my-spec --branch staging
+# Creates: my-spec-staging.stack.hypertek.app
+
+# Preview deployment
+hs up my-spec --preview
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--branch, -b <name>` | Deploy to named branch |
+| `--preview` | Create preview deployment |
+
+### hs status
+
+Show overview of all specs, builds, and deployments.
+
+```bash
+hs status
+hs status --json
+```
+
+### hs logs [build-id]
+
+View build logs.
+
+```bash
+# Most recent build
+hs logs
+
+# Specific build
+hs logs 123
+```
+
+---
+
+## Spec Management
+
+### hs spec push [spec-name]
+
+Push local specs to remote.
+
+```bash
+# Push all specs
+hs spec push
+
+# Push specific spec
+hs spec push my-spec
+```
+
+### hs spec pull
+
+Pull remote specs to local config.
+
+```bash
+hs spec pull
+```
+
+### hs spec list
+
+List all remote specs.
+
+```bash
+hs spec list
+hs spec list --json
+```
+
+### hs spec show <spec-name>
+
+Show detailed spec information.
+
+```bash
+hs spec show my-spec
+hs spec show my-spec --version 3
+```
+
+### hs spec versions <spec-name>
+
+Show version history.
+
+```bash
+hs spec versions my-spec
+hs spec versions my-spec --limit 10
+```
+
+### hs spec delete <spec-name>
+
+Delete a spec from remote.
+
+```bash
+hs spec delete my-spec
+hs spec delete my-spec --force  # Skip confirmation
+```
+
+---
+
+## Build Commands
+
+### hs build create <spec-name>
+
+Create a new build from a spec.
+
+```bash
+hs build create my-spec
+hs build create my-spec --version 2
+hs build create my-spec --ast-file ./my-spec.ast.json
+hs build create my-spec --no-wait
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--version, -v <n>` | Use specific version (default: latest) |
+| `--ast-file <path>` | Use local AST file directly |
+| `--no-wait, -n` | Don't wait for completion |
+
+### hs build list
+
+List all builds.
+
+```bash
+hs build list
+hs build list --status completed
+hs build list --limit 10
+```
+
+### hs build status <build-id>
+
+Get detailed build status.
+
+```bash
+hs build status 123
+hs build status 123 --watch
+hs build status 123 --json
+```
+
+### hs build logs <build-id>
+
+View build logs.
+
+```bash
+hs build logs 123
+```
+
+---
+
+## Deployment Commands
+
+### hs deploy info <build-id>
+
+Show deployment information for a build.
+
+```bash
+hs deploy info 123
+hs deploy info 123 --json
+```
+
+**Output includes:**
+- WebSocket URL: `wss://my-spec.stack.hypertek.app`
+- Status, uptime, resource usage
+
+### hs deploy list
+
+List all active deployments.
+
+```bash
+hs deploy list
+hs deploy list --limit 20
+```
+
+### hs deploy stop <deployment-id>
+
+Stop a deployment.
+
+```bash
+hs deploy stop 123
+```
+
+### hs deploy rollback <spec-name>
+
+Rollback to a previous deployment.
+
+```bash
+# Rollback to previous version
+hs deploy rollback my-spec
+
+# Rollback to specific version
+hs deploy rollback my-spec --to 2
+
+# Rollback to specific build
+hs deploy rollback my-spec --build 123
+
+# Rollback branch deployment
+hs deploy rollback my-spec --branch staging
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--to <version>` | Target version |
+| `--build <id>` | Target build ID |
+| `--branch <name>` | Branch to rollback |
+| `--rebuild, -r` | Force full rebuild |
+| `--no-wait, -n` | Don't watch progress |
+
+---
+
+## SDK Generation
+
+### hs sdk list
+
+List specs available for SDK generation.
+
+```bash
+hs sdk list
+```
+
+### hs sdk create typescript <spec-name>
+
+Generate TypeScript SDK.
+
+```bash
+hs sdk create typescript my-spec
+hs sdk create typescript my-spec --output ./src/generated/
+hs sdk create typescript my-spec --package-name @myorg/my-sdk
+```
+
+---
+
+## Configuration File
+
+**File:** `hyperstack.toml`
+
+```toml
+[project]
+name = "my-project"
+
+# SDK generation settings
+[sdk]
+output_dir = "./generated"
+typescript_package = "@myorg/my-sdk"
+
+# Build preferences
+[build]
+watch_by_default = true
+
+# Spec definitions
+# Auto-discovered from .hyperstack/*.ast.json
+# Define explicitly for custom naming:
+[[specs]]
+name = "my-game"
+ast = "SettlementGame"  # Entity name or path to .ast.json
+description = "Settlement game tracking"
+
+[[specs]]
+name = "token-tracker"
+ast = ".hyperstack/Token.ast.json"
+```
+
+---
+
+## Build Process
+
+### Status Flow
+
+```
+pending → uploading → queued → building → pushing → deploying → completed
+                                                              ↘ failed
+```
+
+### Build Phases
+
+| Phase | Description |
+|-------|-------------|
+| SUBMITTED | Queued for processing |
+| PROVISIONING | Starting build environment |
+| DOWNLOAD_SOURCE | Preparing source |
+| INSTALL | Installing dependencies |
+| PRE_BUILD | Preparing build |
+| BUILD | Compiling |
+| POST_BUILD | Finalizing |
+| UPLOAD_ARTIFACTS | Publishing image |
+| FINALIZING | Deploying to runtime |
+
+---
+
+## Typical Workflows
+
+### First-Time Setup
+
+```bash
+# Initialize project
+hs init
+
+# Create account and login
+hs auth register
+
+# Validate configuration
+hs config validate
+```
+
+### Development Cycle
+
+```bash
+# Make changes to spec, rebuild Rust crate
+cargo build
+
+# Deploy
+hs up my-spec
+
+# Check status
+hs status
+
+# View logs if issues
+hs logs
+```
+
+### Branch Deploys
+
+```bash
+# Deploy feature branch
+hs up my-spec --branch feature-x
+# URL: my-spec-feature-x.stack.hypertek.app
+
+# Check deployment
+hs deploy list
+
+# Clean up when done
+hs deploy stop <deployment-id>
+```
+
+### Rollback
+
+```bash
+# Quick rollback to previous version
+hs deploy rollback my-spec
+
+# Rollback to specific version
+hs deploy rollback my-spec --to 2
+```
+
+---
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `HYPERSTACK_API_URL` | Override API endpoint |
+
+---
+
+## Error Reference
+
+| Error | Solution |
+|-------|----------|
+| `Not authenticated` | Run `hs auth login` |
+| `Spec not found` | Check `hs spec list` for available specs |
+| `AST file not found` | Run `cargo build` to generate AST |
+| `Build failed` | Check `hs build logs <id>` for details |
+| `Config invalid` | Run `hs config validate` |
+
+---
+
+## WebSocket URL Patterns
+
+After successful deployment:
+
+| Type | Pattern |
+|------|---------|
+| Production | `wss://{spec-name}.stack.hypertek.app` |
+| Branch | `wss://{spec-name}-{branch}.stack.hypertek.app` |
+| Local | `ws://localhost:8080` |
+
+Get the URL with:
+
+```bash
+hs deploy info <build-id>
+```
