@@ -1,6 +1,6 @@
-//! Module processing for stream specs.
+//! Module processing for hyperstack streams.
 //!
-//! This module handles processing of `#[stream_spec]` attributes applied to modules,
+//! This module handles processing of `#[hyperstack]` attributes applied to modules,
 //! coordinating the processing of multiple entity structs within a module.
 
 use std::collections::HashMap;
@@ -21,11 +21,11 @@ use super::proto_struct::process_struct_with_context;
 // Module Processing
 // ============================================================================
 
-/// Process a module annotated with `#[stream_spec(...)]`.
+/// Process a module annotated with `#[hyperstack(...)]`.
 ///
 /// This handles:
-/// - Proto-based specs with `proto = ["file.proto"]` attribute
-/// - IDL-based specs with `idl = "file.json"` attribute
+/// - Proto-based streams with `proto = ["file.proto"]` attribute
+/// - IDL-based streams with `idl = "file.json"` attribute
 /// - Multi-entity modules with multiple `#[entity]` structs
 pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
     let mut section_structs = HashMap::new();
@@ -47,27 +47,27 @@ pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
                     has_game_event = true;
                 }
 
-                let has_stream_section = item_struct.attrs.iter().any(|attr| {
+                let has_stream = item_struct.attrs.iter().any(|attr| {
                     if attr.path().is_ident("derive") {
                         if let syn::Meta::List(meta_list) = &attr.meta {
-                            return meta_list.tokens.to_string().contains("StreamSection");
+                            return meta_list.tokens.to_string().contains("Stream");
                         }
                     }
                     false
                 });
 
-                let has_stream_spec = item_struct
+                let has_hyperstack = item_struct
                     .attrs
                     .iter()
-                    .any(|attr| attr.path().is_ident("stream_spec"));
+                    .any(|attr| attr.path().is_ident("hyperstack"));
 
                 let has_entity = parse::has_entity_attribute(&item_struct.attrs);
 
                 if has_entity {
                     entity_structs.push(item_struct.clone());
-                } else if has_stream_spec {
+                } else if has_hyperstack {
                     main_struct = Some(item_struct.clone());
-                } else if has_stream_section {
+                } else if has_stream {
                     section_structs.insert(item_struct.ident.to_string(), item_struct.clone());
                 } else if main_struct.is_none() && entity_structs.is_empty() {
                     main_struct = Some(item_struct.clone());
@@ -139,7 +139,7 @@ pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
                 if let Item::Struct(s) = item {
                     !s.attrs
                         .iter()
-                        .any(|attr| attr.path().is_ident("stream_spec"))
+                        .any(|attr| attr.path().is_ident("hyperstack"))
                 } else {
                     true
                 }
@@ -162,7 +162,7 @@ pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
 // Attribute Parsing
 // ============================================================================
 
-/// Parse proto files and other options from the `#[stream_spec(...)]` attribute.
+/// Parse proto files and other options from the `#[hyperstack(...)]` attribute.
 ///
 /// Returns:
 /// - Vec of (path, ProtoAnalysis) tuples
@@ -171,22 +171,22 @@ pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
 pub fn parse_proto_files_from_attr(
     attr: TokenStream,
 ) -> (Vec<(String, proto_parser::ProtoAnalysis)>, bool, String) {
-    let stream_spec_attr = match parse::parse_stream_spec_attribute(attr) {
+    let hyperstack_attr = match parse::parse_stream_spec_attribute(attr) {
         Ok(attr) => attr,
         Err(_) => return (Vec::new(), false, String::new()),
     };
 
-    let idl_file = stream_spec_attr.idl_file.clone();
+    let idl_file = hyperstack_attr.idl_file.clone();
 
-    if stream_spec_attr.proto_files.is_empty() {
-        return (Vec::new(), stream_spec_attr.skip_decoders, idl_file);
+    if hyperstack_attr.proto_files.is_empty() {
+        return (Vec::new(), hyperstack_attr.skip_decoders, idl_file);
     }
 
     let mut analyses = Vec::new();
 
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
 
-    for proto_path in &stream_spec_attr.proto_files {
+    for proto_path in &hyperstack_attr.proto_files {
         let full_path = std::path::Path::new(&manifest_dir).join(proto_path);
 
         match proto_parser::parse_proto_file(&full_path) {
@@ -202,5 +202,5 @@ pub fn parse_proto_files_from_attr(
         }
     }
 
-    (analyses, stream_spec_attr.skip_decoders, idl_file)
+    (analyses, hyperstack_attr.skip_decoders, idl_file)
 }

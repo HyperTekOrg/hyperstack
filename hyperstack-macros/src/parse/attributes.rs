@@ -1,6 +1,6 @@
-//! Attribute parsing for stream_spec macros.
+//! Attribute parsing for hyperstack macros.
 //!
-//! This module parses macro attributes like #[map], #[event], #[capture], etc.
+//! This module parses macro attributes like #[map], #[event], #[snapshot], etc.
 
 #![allow(dead_code)]
 
@@ -221,11 +221,11 @@ pub fn parse_map_attribute(
     Ok(Some(results))
 }
 
-pub fn parse_map_instruction_attribute(
+pub fn parse_from_instruction_attribute(
     attr: &Attribute,
     target_field_name: &str,
 ) -> syn::Result<Option<Vec<MapAttribute>>> {
-    if !attr.path().is_ident("map_instruction") {
+    if !attr.path().is_ident("from_instruction") {
         return Ok(None);
     }
 
@@ -234,7 +234,7 @@ pub fn parse_map_instruction_attribute(
     if args.source_paths.is_empty() {
         return Err(syn::Error::new_spanned(
             attr,
-            "#[map_instruction] requires at least one source path",
+            "#[from_instruction] requires at least one source path",
         ));
     }
 
@@ -558,8 +558,8 @@ pub fn parse_event_attribute(
     }))
 }
 
-// Parse args for #[capture] attribute
-struct CaptureAttributeArgs {
+// Parse args for #[snapshot] attribute
+struct SnapshotAttributeArgs {
     from: Option<Path>,
     strategy: Option<syn::Ident>,
     rename: Option<String>,
@@ -568,7 +568,7 @@ struct CaptureAttributeArgs {
     transforms: Vec<(String, syn::Ident)>,  // Field transformations: (field_name, transform)
 }
 
-impl Parse for CaptureAttributeArgs {
+impl Parse for SnapshotAttributeArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut from = None;
         let mut strategy = None;
@@ -634,7 +634,7 @@ impl Parse for CaptureAttributeArgs {
             } else {
                 return Err(syn::Error::new(
                     ident.span(),
-                    format!("Unknown capture attribute argument: {}", ident_str),
+                    format!("Unknown snapshot attribute argument: {}", ident_str),
                 ));
             }
 
@@ -643,7 +643,7 @@ impl Parse for CaptureAttributeArgs {
             }
         }
 
-        Ok(CaptureAttributeArgs {
+        Ok(SnapshotAttributeArgs {
             from,
             strategy,
             rename,
@@ -654,15 +654,15 @@ impl Parse for CaptureAttributeArgs {
     }
 }
 
-pub fn parse_capture_attribute(
+pub fn parse_snapshot_attribute(
     attr: &Attribute,
     target_field_name: &str,
 ) -> syn::Result<Option<CaptureAttribute>> {
-    if !attr.path().is_ident("capture") {
+    if !attr.path().is_ident("snapshot") {
         return Ok(None);
     }
 
-    let args: CaptureAttributeArgs = attr.parse_args()?;
+    let args: SnapshotAttributeArgs = attr.parse_args()?;
 
     let target_name = args.rename.unwrap_or_else(|| target_field_name.to_string());
 
@@ -676,7 +676,7 @@ pub fn parse_capture_attribute(
         if let Some(ref strategy_ident) = args.strategy {
             return Err(syn::Error::new_spanned(
                 strategy_ident,
-                format!("Invalid strategy '{}' for #[capture]. Only 'SetOnce' or 'LastWrite' are allowed. Account captures cannot use 'Append'.", strategy)
+                format!("Invalid strategy '{}' for #[snapshot]. Only 'SetOnce' or 'LastWrite' are allowed. Account snapshots cannot use 'Append'.", strategy)
             ));
         }
     }
@@ -1039,7 +1039,7 @@ pub struct ResolverKeyForAttr {
 /// NOTE: This attribute is no longer supported for direct use by users.
 /// All instruction hooks must be defined using declarative macros:
 /// - Use #[register_pda] to register PDA mappings
-/// - Use #[track_from] to track instruction fields
+/// - Use #[derive_from] to derive fields from instructions
 /// - Use #[aggregate] for aggregations with optional conditions
 pub fn parse_after_instruction_attribute(attr: &Attribute) -> syn::Result<Option<AfterInstructionAttr>> {
     if !attr.path().is_ident("after_instruction") {
@@ -1056,8 +1056,8 @@ pub fn parse_after_instruction_attribute(attr: &Attribute) -> syn::Result<Option
          • Use #[register_pda(instruction = ..., pda_field = ..., primary_key = ...)] \
          to register PDA mappings\n\
          \n\
-         • Use #[track_from(from = [...], field = ..., strategy = ...)] \
-         to track fields from instructions\n\
+         • Use #[derive_from(from = [...], field = ..., strategy = ...)] \
+         to derive fields from instructions\n\
          \n\
          • Use #[aggregate(from = [...], field = ..., strategy = ..., condition = \"...\")] \
          for conditional aggregations\n\
@@ -1148,9 +1148,9 @@ pub enum ResolverHookKind {
 // Level 1: New Declarative Macros
 // ============================================================================
 
-// #[track_from] Attribute Parser
+// #[derive_from] Attribute Parser
 #[derive(Debug, Clone)]
-pub struct TrackFromAttribute {
+pub struct DeriveFromAttribute {
     pub from_instructions: Vec<Path>,
     pub field: FieldSpec,  // Can be special: __timestamp, __slot, __signature
     pub strategy: String,  // LastWrite, SetOnce
@@ -1160,7 +1160,7 @@ pub struct TrackFromAttribute {
     pub target_field_name: String,
 }
 
-struct TrackFromAttributeArgs {
+struct DeriveFromAttributeArgs {
     from: Vec<Path>,
     field: Option<FieldSpec>,
     strategy: Option<syn::Ident>,
@@ -1169,7 +1169,7 @@ struct TrackFromAttributeArgs {
     transform: Option<syn::Ident>,
 }
 
-impl Parse for TrackFromAttributeArgs {
+impl Parse for DeriveFromAttributeArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut from = Vec::new();
         let mut field = None;
@@ -1221,7 +1221,7 @@ impl Parse for TrackFromAttributeArgs {
             } else {
                 return Err(syn::Error::new(
                     ident.span(),
-                    format!("Unknown track_from attribute argument: {}", ident_str),
+                    format!("Unknown derive_from attribute argument: {}", ident_str),
                 ));
             }
 
@@ -1230,7 +1230,7 @@ impl Parse for TrackFromAttributeArgs {
             }
         }
 
-        Ok(TrackFromAttributeArgs {
+        Ok(DeriveFromAttributeArgs {
             from,
             field,
             strategy,
@@ -1241,32 +1241,32 @@ impl Parse for TrackFromAttributeArgs {
     }
 }
 
-pub fn parse_track_from_attribute(
+pub fn parse_derive_from_attribute(
     attr: &Attribute,
     target_field_name: &str,
-) -> syn::Result<Option<TrackFromAttribute>> {
-    if !attr.path().is_ident("track_from") {
+) -> syn::Result<Option<DeriveFromAttribute>> {
+    if !attr.path().is_ident("derive_from") {
         return Ok(None);
     }
 
-    let args: TrackFromAttributeArgs = attr.parse_args()?;
+    let args: DeriveFromAttributeArgs = attr.parse_args()?;
 
     if args.from.is_empty() {
         return Err(syn::Error::new_spanned(
             attr,
-            "#[track_from] requires 'from' parameter specifying instruction type(s)",
+            "#[derive_from] requires 'from' parameter specifying instruction type(s)",
         ));
     }
 
     let field = args.field.ok_or_else(|| {
-        syn::Error::new_spanned(attr, "#[track_from] requires 'field' parameter")
+        syn::Error::new_spanned(attr, "#[derive_from] requires 'field' parameter")
     })?;
 
     let strategy = args.strategy
         .map(|s| s.to_string())
         .unwrap_or_else(|| "LastWrite".to_string());
 
-    Ok(Some(TrackFromAttribute {
+    Ok(Some(DeriveFromAttribute {
         from_instructions: args.from,
         field,
         strategy,

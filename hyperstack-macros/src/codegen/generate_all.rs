@@ -68,7 +68,7 @@ pub struct GenerateContext<'a> {
 
 /// Generate all code from a SerializableStreamSpec.
 ///
-/// This is the main entry point for unified code generation. Both `#[stream_spec]`
+/// This is the main entry point for unified code generation. Both `#[hyperstack]`
 /// and `#[ast_spec]` macros use this function to ensure identical output.
 ///
 /// # Arguments
@@ -173,7 +173,7 @@ pub fn generate_all_from_spec(
 /// Generate code from AST without wrapping in a module.
 ///
 /// This variant is useful when you want to embed the generated code
-/// into an existing module structure (like stream_spec does).
+/// into an existing module structure (like hyperstack does).
 ///
 /// # Arguments
 ///

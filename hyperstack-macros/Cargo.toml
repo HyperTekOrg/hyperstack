@@ -1,13 +1,13 @@
 [package]
-name = "hyperstack-spec-macros"
+name = "hyperstack-macros"
 version = "0.1.1"
 edition.workspace = true
 license-file = "LICENSE"
 repository.workspace = true
 authors.workspace = true
-description = "Proc-macros for defining HyperStack stream specifications"
+description = "Proc-macros for defining HyperStack streams"
 readme = "README.md"
-documentation = "https://docs.rs/hyperstack-spec-macros"
+documentation = "https://docs.rs/hyperstack-macros"
 keywords = ["hyperstack", "streaming", "macros", "proc-macro"]
 categories = ["development-tools::procedural-macro-helpers"]
 

@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "hyperstack",
     "interpreter",
-    "spec-macros",
+    "hyperstack-macros",
     "cli",
     "rust/hyperstack-server",
     "rust/hyperstack-sdk",

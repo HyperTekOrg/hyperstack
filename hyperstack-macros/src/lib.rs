@@ -1,8 +1,8 @@
-//! # hyperstack-spec-macros
+//! # hyperstack-macros
 //!
-//! Procedural macros for defining HyperStack stream specifications.
+//! Procedural macros for defining HyperStack streams.
 //!
-//! This crate provides the `#[stream_spec]` attribute macro that transforms
+//! This crate provides the `#[hyperstack]` attribute macro that transforms
 //! annotated Rust structs into full streaming pipeline specifications, including:
 //!
 //! - State struct generation with field accessors
@@ -13,12 +13,12 @@
 //! ## Module Usage (IDL-based)
 //!
 //! ```rust,ignore
-//! use hyperstack_spec_macros::{stream_spec, StreamSection};
+//! use hyperstack_macros::{hyperstack, Stream};
 //!
-//! #[stream_spec(idl = "idl.json")]
-//! pub mod my_pipeline {
+//! #[hyperstack(idl = "idl.json")]
+//! pub mod my_stream {
 //!     #[entity(name = "MyEntity")]
-//!     #[derive(StreamSection)]
+//!     #[derive(Stream)]
 //!     struct Entity {
 //!         #[map(from = "MyAccount", field = "value")]
 //!         pub value: u64,
@@ -29,12 +29,12 @@
 //! ## Supported Attributes
 //!
 //! - `#[map(...)]` - Map from account fields
-//! - `#[map_instruction(...)]` - Map from instruction fields  
+//! - `#[from_instruction(...)]` - Map from instruction fields
 //! - `#[event(...)]` - Capture instruction events
-//! - `#[capture(...)]` - Capture entire source data
+//! - `#[snapshot(...)]` - Capture entire source data
 //! - `#[aggregate(...)]` - Aggregate field values
 //! - `#[computed(...)]` - Computed fields from other fields
-//! - `#[track_from(...)]` - Track values from instructions
+//! - `#[derive_from(...)]` - Derive values from instructions
 
 // Public modules - AST types needed for SDK generation
 pub(crate) mod ast;
@@ -56,7 +56,7 @@ use syn::{parse_macro_input, ItemMod, ItemStruct};
 // Use the stream_spec module functions
 use stream_spec::{process_module, process_struct_with_context};
 
-/// Process a `#[stream_spec(...)]` attribute.
+/// Process a `#[hyperstack(...)]` attribute.
 ///
 /// This macro can be applied to:
 /// - A module containing entity structs
@@ -65,8 +65,8 @@ use stream_spec::{process_module, process_struct_with_context};
 /// ## Module Usage (IDL-based)
 ///
 /// ```rust,ignore
-/// #[stream_spec(idl = "idl.json")]
-/// pub mod my_pipeline {
+/// #[hyperstack(idl = "idl.json")]
+/// pub mod my_stream {
 ///     #[entity(name = "MyEntity")]
 ///     struct Entity {
 ///         // fields with mapping attributes
@@ -77,13 +77,13 @@ use stream_spec::{process_module, process_struct_with_context};
 /// ## Proto-based Usage
 ///
 /// ```rust,ignore
-/// #[stream_spec(proto = ["events.proto"])]
-/// pub mod my_pipeline {
+/// #[hyperstack(proto = ["events.proto"])]
+/// pub mod my_stream {
 ///     // entity structs
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn stream_spec(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn hyperstack(attr: TokenStream, item: TokenStream) -> TokenStream {
     if let Ok(module) = syn::parse::<ItemMod>(item.clone()) {
         return process_module(module, attr);
     }
@@ -92,20 +92,20 @@ pub fn stream_spec(attr: TokenStream, item: TokenStream) -> TokenStream {
     process_struct_with_context(input, HashMap::new(), false)
 }
 
-/// Derive macro for `StreamSection`.
+/// Derive macro for `Stream`.
 ///
 /// This is a marker derive that enables the following attributes on struct fields:
 /// - `#[map(...)]` - Map from account fields
-/// - `#[map_instruction(...)]` - Map from instruction fields
+/// - `#[from_instruction(...)]` - Map from instruction fields
 /// - `#[event(...)]` - Capture instruction events
-/// - `#[capture(...)]` - Capture entire source
+/// - `#[snapshot(...)]` - Capture entire source
 /// - `#[aggregate(...)]` - Aggregate field values
 /// - `#[computed(...)]` - Computed fields from other fields
-/// - `#[track_from(...)]` - Track values from instructions
+/// - `#[derive_from(...)]` - Derive values from instructions
 #[proc_macro_derive(
-    StreamSection,
-    attributes(map, map_instruction, event, capture, aggregate, computed, track_from)
+    Stream,
+    attributes(map, from_instruction, event, snapshot, aggregate, computed, derive_from)
 )]
-pub fn stream_section_derive(_input: TokenStream) -> TokenStream {
+pub fn stream_derive(_input: TokenStream) -> TokenStream {
     TokenStream::new()
 }

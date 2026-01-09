@@ -1,4 +1,4 @@
-//! Proto-based struct processing for stream specs.
+//! Proto-based struct processing for hyperstack streams.
 //!
 //! This module handles processing of structs with proto-based mapping attributes,
 //! generating handler code and AST files for proto-based pipelines.
@@ -46,7 +46,7 @@ pub fn process_struct_with_context(
     > = HashMap::new();
     let mut has_events = false;
     let mut computed_fields: Vec<(String, proc_macro2::TokenStream, Type)> = Vec::new();
-    let mut track_from_mappings: HashMap<String, Vec<parse::TrackFromAttribute>> = HashMap::new();
+    let mut derive_from_mappings: HashMap<String, Vec<parse::DeriveFromAttribute>> = HashMap::new();
     let mut aggregate_conditions: HashMap<String, String> = HashMap::new();
 
     if let Fields::Named(fields) = &input.fields {
@@ -75,7 +75,7 @@ pub fn process_struct_with_context(
                         );
                     }
                 } else if let Ok(Some(map_attrs)) =
-                    parse::parse_map_instruction_attribute(attr, &field_name.to_string())
+                    parse::parse_from_instruction_attribute(attr, &field_name.to_string())
                 {
                     has_attrs = true;
                     for map_attr in map_attrs {
@@ -147,7 +147,7 @@ pub fn process_struct_with_context(
                                 &mut events_by_instruction,
                                 &mut has_events,
                                 &mut computed_fields,
-                                &mut track_from_mappings,
+                                &mut derive_from_mappings,
                                 &mut aggregate_conditions,
                             );
                         }
@@ -396,7 +396,7 @@ pub fn process_struct_with_context(
         &events_by_instruction,
         &[],             // No resolver hooks for proto-based specs
         &[],             // No PDA registrations for proto-based specs
-        &HashMap::new(), // No track_from mappings for proto-based specs
+        &HashMap::new(), // No derive_from mappings for proto-based specs
         &HashMap::new(), // No aggregate conditions for proto-based specs
         &[],             // No computed fields for proto-based specs
         &[],             // Empty sections for proto-based specs

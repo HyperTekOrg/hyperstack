@@ -11,7 +11,7 @@ Real-time streaming data pipelines for Solana - transform on-chain events into t
 |---------|----------|----------|-------------|
 | hyperstack | Rust | crates.io | Umbrella crate re-exporting all components |
 | hyperstack-interpreter | Rust | crates.io | AST transformation runtime and VM |
-| hyperstack-spec-macros | Rust | crates.io | Proc-macros for stream specifications |
+| hyperstack-macros | Rust | crates.io | Proc-macros for stream definitions |
 | hyperstack-server | Rust | crates.io | WebSocket server and projection handlers |
 | hyperstack-sdk | Rust | crates.io | Rust client SDK |
 | hyperstack-cli | Rust | crates.io | CLI tool for SDK generation |
@@ -41,7 +41,7 @@ pip install hyperstack-sdk
 
 - `hyperstack/`: Main umbrella crate
 - `interpreter/`: AST transformation runtime and VM
-- `spec-macros/`: Proc-macros for stream specifications
+- `hyperstack-macros/`: Proc-macros for stream definitions
 - `rust/hyperstack-server/`: WebSocket server and projection handlers
 - `rust/hyperstack-sdk/`: Rust client SDK
 - `cli/`: CLI tool for SDK generation
@@ -129,7 +129,7 @@ cd python/hyperstack-sdk && pytest
 hyperstack/
 ├── hyperstack/          # Rust umbrella crate
 ├── interpreter/         # AST transformation runtime and VM
-├── spec-macros/         # Proc-macros for stream specifications
+├── hyperstack-macros/   # Proc-macros for stream definitions
 ├── cli/                 # CLI tool (hyperstack-cli)
 ├── rust/
 │   ├── hyperstack-sdk/      # Rust client SDK
@@ -182,5 +182,5 @@ We use conventional commits for automated releases:
 
 This project uses a dual license approach:
 
-- **Rust infrastructure** (hyperstack, interpreter, spec-macros, server, cli): [Apache-2.0](hyperstack/LICENSE)
+- **Rust infrastructure** (hyperstack, interpreter, hyperstack-macros, server, cli): [Apache-2.0](hyperstack/LICENSE)
 - **Client SDKs** (TypeScript, Python, Rust SDK): [MIT](typescript/LICENSE)

@@ -1,6 +1,6 @@
-//! Code generation module for transform-macros (internal).
+//! Code generation module for hyperstack-macros (internal).
 //!
-//! This module consolidates all code generation logic used by `#[stream_spec]`.
+//! This module consolidates all code generation logic used by `#[hyperstack]`.
 //! All submodules are internal and not exposed publicly.
 
 // Internal submodules - not exposed publicly

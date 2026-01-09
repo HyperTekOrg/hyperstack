@@ -1,14 +1,14 @@
-# hyperstack-spec-macros
+# hyperstack-macros
 
-[![crates.io](https://img.shields.io/crates/v/hyperstack-spec-macros.svg)](https://crates.io/crates/hyperstack-spec-macros)
-[![docs.rs](https://docs.rs/hyperstack-spec-macros/badge.svg)](https://docs.rs/hyperstack-spec-macros)
+[![crates.io](https://img.shields.io/crates/v/hyperstack-macros.svg)](https://crates.io/crates/hyperstack-macros)
+[![docs.rs](https://docs.rs/hyperstack-macros/badge.svg)](https://docs.rs/hyperstack-macros)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-Procedural macros for defining HyperStack stream specifications.
+Procedural macros for defining HyperStack streams.
 
 ## Overview
 
-This crate provides the `#[stream_spec]` attribute macro that transforms annotated Rust structs into full streaming pipeline specifications, including:
+This crate provides the `#[hyperstack]` attribute macro that transforms annotated Rust structs into full streaming pipeline specifications, including:
 
 - State struct generation with field accessors
 - Handler creation functions for event processing
@@ -19,20 +19,20 @@ This crate provides the `#[stream_spec]` attribute macro that transforms annotat
 
 ```toml
 [dependencies]
-hyperstack-spec-macros = "0.1"
+hyperstack-macros = "0.1"
 ```
 
 ## Usage
 
-### IDL-based Pipeline
+### IDL-based Stream
 
 ```rust
-use hyperstack_spec_macros::{stream_spec, StreamSection};
+use hyperstack_macros::{hyperstack, Stream};
 
-#[stream_spec(idl = "idl.json")]
-pub mod my_pipeline {
+#[hyperstack(idl = "idl.json")]
+pub mod my_stream {
     #[entity(name = "MyEntity")]
-    #[derive(StreamSection)]
+    #[derive(Stream)]
     struct Entity {
         #[map(from = "MyAccount", field = "value")]
         pub value: u64,
@@ -43,11 +43,11 @@ pub mod my_pipeline {
 }
 ```
 
-### Proto-based Pipeline
+### Proto-based Stream
 
 ```rust
-#[stream_spec(proto = ["events.proto"])]
-pub mod my_pipeline {
+#[hyperstack(proto = ["events.proto"])]
+pub mod my_stream {
     // entity structs
 }
 ```
@@ -57,12 +57,12 @@ pub mod my_pipeline {
 | Attribute | Description |
 |-----------|-------------|
 | `#[map(...)]` | Map from account fields |
-| `#[map_instruction(...)]` | Map from instruction fields |
+| `#[from_instruction(...)]` | Map from instruction fields |
 | `#[event(...)]` | Capture instruction events |
-| `#[capture(...)]` | Capture entire source data |
+| `#[snapshot(...)]` | Capture entire source data |
 | `#[aggregate(...)]` | Aggregate field values |
 | `#[computed(...)]` | Computed fields from other fields |
-| `#[track_from(...)]` | Track values from instructions |
+| `#[derive_from(...)]` | Derive values from instructions |
 
 ## Generated Output
 

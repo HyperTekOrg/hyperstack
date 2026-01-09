@@ -1,7 +1,7 @@
-//! Shared handler code generation for transform-macros.
+//! Shared handler code generation for hyperstack-macros.
 //!
 //! This module provides unified handler generation that can be used by both:
-//! - `#[stream_spec]` - generates handlers during macro expansion
+//! - `#[hyperstack]` - generates handlers during macro expansion
 //! - `#[ast_spec]` - generates handlers from serialized AST
 //!
 //! The key abstraction is `build_handler_code` which takes a `SerializableHandlerSpec`

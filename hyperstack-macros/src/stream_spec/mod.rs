@@ -1,6 +1,6 @@
-//! Stream spec processing module.
+//! Hyperstack stream processing module.
 //!
-//! This module handles the processing of `#[stream_spec]` macro attributes,
+//! This module handles the processing of `#[hyperstack]` macro attributes,
 //! converting entity struct definitions into stream specifications.
 //!
 //! ## Module Structure
@@ -11,12 +11,12 @@
 //! - `sections` - Nested struct and section processing (464 LOC)
 //! - `computed` - Computed field expression parsing (461 LOC)
 //! - `ast_writer` - AST JSON file generation at compile time (620 LOC)
-//! - `idl_spec` - IDL-based spec processing (~300 LOC)
+//! - `idl_spec` - IDL-based stream processing (~300 LOC)
 //! - `proto_struct` - Proto-based struct processing (~380 LOC)
 //!
 //! ## Processing Flow
 //!
-//! 1. `process_module` receives a module with `#[stream_spec]` attribute
+//! 1. `process_module` receives a module with `#[hyperstack]` attribute
 //! 2. Parses IDL or proto files based on attribute arguments
 //! 3. Processes each entity struct to extract field mappings
 //! 4. Generates handler functions for each source type
@@ -26,8 +26,8 @@
 //! ## Example
 //!
 //! ```rust,ignore
-//! #[stream_spec(idl = "idl.json")]
-//! pub mod my_pipeline {
+//! #[hyperstack(idl = "idl.json")]
+//! pub mod my_stream {
 //!     #[entity(name = "MyEntity")]
 //!     struct MyEntity {
 //!         #[map(from = MyAccount::mint, primary_key)]

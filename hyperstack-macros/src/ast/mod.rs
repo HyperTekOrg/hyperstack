@@ -1,9 +1,9 @@
-//! AST module for hyperstack transform pipelines.
+//! AST module for hyperstack streams.
 //!
 //! This module contains the serializable AST types used for:
-//! - Compile-time AST serialization (from `#[stream_spec]`)
+//! - Compile-time AST serialization (from `#[hyperstack]`)
 //! - AST-based compilation (via `#[ast_spec]`)
-//! - Cross-crate communication (transform-macros -> transform runtime)
+//! - Cross-crate communication (hyperstack-macros -> hyperstack runtime)
 //!
 //! ## Submodules
 //!
@@ -15,10 +15,10 @@
 //!
 //! The AST module enables two compilation paths:
 //!
-//! ### 1. Traditional Path (`#[stream_spec]`)
+//! ### 1. Traditional Path (`#[hyperstack]`)
 //!
 //! ```text
-//! Rust Source -> #[stream_spec] macro -> Generated Code
+//! Rust Source -> #[hyperstack] macro -> Generated Code
 //!                      |
 //!                      +-> AST JSON file (side effect)
 //! ```

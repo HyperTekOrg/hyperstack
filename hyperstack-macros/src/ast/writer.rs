@@ -502,10 +502,10 @@ pub fn build_resolver_hooks(
         .collect()
 }
 
-/// Build instruction hooks from PDA registrations and track_from mappings
+/// Build instruction hooks from PDA registrations and derive_from mappings
 pub fn build_instruction_hooks(
     pda_registrations: &[parse::RegisterPdaAttribute],
-    track_from_mappings: &HashMap<String, Vec<parse::TrackFromAttribute>>,
+    derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
 ) -> Vec<InstructionHook> {
@@ -536,13 +536,13 @@ pub fn build_instruction_hooks(
             .push(action);
     }
 
-    // Process track_from mappings
-    for (instruction_type, track_attrs) in track_from_mappings {
+    // Process derive_from mappings
+    for (instruction_type, derive_attrs) in derive_from_mappings {
         let instr_type_state = format!("{}IxState", instruction_type.split("::").last().unwrap());
 
-        for track_attr in track_attrs {
-            let source = if track_attr.field.ident.to_string().starts_with("__") {
-                match track_attr.field.ident.to_string().as_str() {
+        for derive_attr in derive_attrs {
+            let source = if derive_attr.field.ident.to_string().starts_with("__") {
+                match derive_attr.field.ident.to_string().as_str() {
                     "__timestamp" => MappingSource::FromContext {
                         field: "timestamp".to_string(),
                     },
@@ -555,33 +555,33 @@ pub fn build_instruction_hooks(
                     _ => continue,
                 }
             } else {
-                let path_prefix = match &track_attr.field.explicit_location {
+                let path_prefix = match &derive_attr.field.explicit_location {
                     Some(parse::FieldLocation::Account) => "accounts",
                     Some(parse::FieldLocation::InstructionArg) | None => "data",
                 };
 
                 MappingSource::FromSource {
-                    path: FieldPath::new(&[path_prefix, &track_attr.field.ident.to_string()]),
+                    path: FieldPath::new(&[path_prefix, &derive_attr.field.ident.to_string()]),
                     default: None,
-                    transform: track_attr
+                    transform: derive_attr
                         .transform
                         .as_ref()
                         .and_then(|t| parse_transformation(&t.to_string())),
                 }
             };
 
-            let condition = track_attr.condition.as_ref().map(|cond| ConditionExpr {
+            let condition = derive_attr.condition.as_ref().map(|cond| ConditionExpr {
                 expression: cond.clone(),
                 parsed: condition_parser::parse_condition_expression(cond),
             });
 
             let action = HookAction::SetField {
-                target_field: track_attr.target_field_name.clone(),
+                target_field: derive_attr.target_field_name.clone(),
                 source,
                 condition,
             };
 
-            let lookup_by = track_attr
+            let lookup_by = derive_attr
                 .lookup_by
                 .as_ref()
                 .map(|field_spec| FieldPath::new(&["accounts", &field_spec.ident.to_string()]));

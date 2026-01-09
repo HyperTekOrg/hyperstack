@@ -13,9 +13,9 @@
       "release-type": "rust",
       "component": "hyperstack-interpreter"
     },
-    "spec-macros": {
+    "hyperstack-macros": {
       "release-type": "rust",
-      "component": "hyperstack-spec-macros"
+      "component": "hyperstack-macros"
     },
     "cli": {
       "release-type": "rust",

@@ -1,6 +1,6 @@
-//! IDL-based spec processing.
+//! IDL-based stream processing.
 //!
-//! This module handles processing of `#[stream_spec(idl = "...")]` modules,
+//! This module handles processing of `#[hyperstack(idl = "...")]` modules,
 //! which generate SDK types, parsers, and entity processing from an Anchor IDL file.
 
 use std::collections::HashMap;

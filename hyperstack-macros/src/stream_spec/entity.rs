@@ -95,7 +95,7 @@ pub fn process_entity_struct_with_idl(
 
     // Level 1: Declarative hook macros passed from caller
     // resolver_hooks and pda_registrations are now passed as parameters
-    let mut track_from_mappings: HashMap<String, Vec<parse::TrackFromAttribute>> = HashMap::new();
+    let mut derive_from_mappings: HashMap<String, Vec<parse::DeriveFromAttribute>> = HashMap::new();
     let mut aggregate_conditions: HashMap<String, String> = HashMap::new();
 
     // Collect ALL section names from the entity struct FIRST
@@ -193,7 +193,7 @@ pub fn process_entity_struct_with_idl(
                         );
                     }
                 } else if let Ok(Some(map_attrs)) =
-                    parse::parse_map_instruction_attribute(attr, &field_name.to_string())
+                    parse::parse_from_instruction_attribute(attr, &field_name.to_string())
                 {
                     has_attrs = true;
                     for map_attr in map_attrs {
@@ -243,8 +243,8 @@ pub fn process_entity_struct_with_idl(
                                 field_type.clone(),
                             ));
                     }
-                } else if let Ok(Some(mut capture_attr)) =
-                    parse::parse_capture_attribute(attr, &field_name.to_string())
+                } else if let Ok(Some(mut snapshot_attr)) =
+                    parse::parse_snapshot_attribute(attr, &field_name.to_string())
                 {
                     has_attrs = true;
 
@@ -253,10 +253,10 @@ pub fn process_entity_struct_with_idl(
                     });
 
                     // Infer account type from field type if not explicitly specified
-                    let account_path = if let Some(ref path) = capture_attr.from_account {
+                    let account_path = if let Some(ref path) = snapshot_attr.from_account {
                         Some(path.clone())
                     } else if let Some(inferred_path) = extract_account_type_from_field(field_type) {
-                        capture_attr.inferred_account = Some(inferred_path.clone());
+                        snapshot_attr.inferred_account = Some(inferred_path.clone());
                         Some(inferred_path)
                     } else {
                         None
@@ -267,10 +267,10 @@ pub fn process_entity_struct_with_idl(
 
                         // Check if we have field transforms - encode them in source_field_name
                         // so we can detect and process them differently during code generation
-                        let source_field_marker = if !capture_attr.field_transforms.is_empty() {
+                        let source_field_marker = if !snapshot_attr.field_transforms.is_empty() {
                             format!(
-                                "__capture_with_transforms:{}",
-                                capture_attr
+                                "__snapshot_with_transforms:{}",
+                                snapshot_attr
                                     .field_transforms
                                     .iter()
                                     .map(|(k, v)| format!("{}={}", k, v))
@@ -284,16 +284,16 @@ pub fn process_entity_struct_with_idl(
                         let map_attr = parse::MapAttribute {
                             source_type_path: acct_path,
                             source_field_name: source_field_marker,
-                            target_field_name: capture_attr.target_field_name.clone(),
+                            target_field_name: snapshot_attr.target_field_name.clone(),
                             is_primary_key: false,
                             is_lookup_index: false,
                             temporal_field: None,
-                            strategy: capture_attr.strategy.clone(),
-                            join_on: capture_attr.join_on.as_ref().map(|fs| fs.ident.to_string()),
+                            strategy: snapshot_attr.strategy.clone(),
+                            join_on: snapshot_attr.join_on.as_ref().map(|fs| fs.ident.to_string()),
                             transform: None,
                             is_instruction: false,
-                            is_whole_source: true, // Mark as whole source capture
-                            lookup_by: capture_attr.lookup_by.clone(),
+                            is_whole_source: true, // Mark as whole source snapshot
+                            lookup_by: snapshot_attr.lookup_by.clone(),
                         };
 
                         sources_by_type
@@ -346,22 +346,22 @@ pub fn process_entity_struct_with_idl(
                             .or_default()
                             .push(map_attr);
                     }
-                } else if let Ok(Some(track_attr)) =
-                    parse::parse_track_from_attribute(attr, &field_name.to_string())
+                } else if let Ok(Some(derive_attr)) =
+                    parse::parse_derive_from_attribute(attr, &field_name.to_string())
                 {
-                    // Level 1: Process #[track_from] attribute - VERIFIED AS WORKING!
-                    // This code successfully parses track_from attributes and adds them to track_from_mappings.
+                    // Level 1: Process #[derive_from] attribute
+                    // This code successfully parses derive_from attributes and adds them to derive_from_mappings.
                     // The AST writer then processes these mappings to populate instruction_hooks in the AST.
                     has_attrs = true;
                     state_fields.push(quote! { pub #field_name: #field_type });
 
                     // Group by instruction for handler merging
-                    for instr_path in &track_attr.from_instructions {
+                    for instr_path in &derive_attr.from_instructions {
                         let source_type_str = path_to_string(instr_path);
-                        track_from_mappings
+                        derive_from_mappings
                             .entry(source_type_str)
                             .or_default()
-                            .push(track_attr.clone());
+                            .push(derive_attr.clone());
                     }
                 } else if let Ok(Some(computed_attr)) =
                     parse::parse_computed_attribute(attr, &field_name.to_string())
@@ -400,7 +400,7 @@ pub fn process_entity_struct_with_idl(
                                 &mut events_by_instruction,
                                 &mut has_events,
                                 &mut computed_fields,
-                                &mut track_from_mappings,
+                                &mut derive_from_mappings,
                                 &mut aggregate_conditions,
                             );
                         }
@@ -453,7 +453,7 @@ pub fn process_entity_struct_with_idl(
     // =========================================================================
     // Build the AST and write to disk for cloud compilation.
     // Then use the same AST to generate handler code via shared codegen.
-    // This ensures identical output between #[stream_spec] and #[ast_spec].
+    // This ensures identical output between #[hyperstack] and #[ast_spec].
     
     let ast = build_and_write_ast(
         &entity_name,
@@ -463,7 +463,7 @@ pub fn process_entity_struct_with_idl(
         &events_by_instruction,
         &resolver_hooks,
         &pda_registrations,
-        &track_from_mappings,
+        &derive_from_mappings,
         &aggregate_conditions,
         &computed_fields,
         &section_specs,

@@ -1144,9 +1144,9 @@ name = "hyperstack"
 version = "0.1.1"
 dependencies = [
  "hyperstack-interpreter",
+ "hyperstack-macros",
  "hyperstack-sdk",
  "hyperstack-server",
- "hyperstack-spec-macros",
 ]
 
 [[package]]
@@ -1173,7 +1173,7 @@ dependencies = [
  "bs58",
  "dashmap",
  "hex",
- "hyperstack-spec-macros",
+ "hyperstack-macros",
  "lru",
  "opentelemetry",
  "opentelemetry-otlp",
@@ -1189,6 +1189,19 @@ dependencies = [
  "tonic-build 0.12.3",
  "tracing",
  "tracing-opentelemetry",
+]
+
+[[package]]
+name = "hyperstack-macros"
+version = "0.1.1"
+dependencies = [
+ "hex",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "sha2",
+ "syn",
 ]
 
 [[package]]
@@ -1234,19 +1247,6 @@ dependencies = [
  "yellowstone-vixen-core",
  "yellowstone-vixen-proto",
  "yellowstone-vixen-yellowstone-grpc-source",
-]
-
-[[package]]
-name = "hyperstack-spec-macros"
-version = "0.1.1"
-dependencies = [
- "hex",
- "proc-macro2",
- "quote",
- "serde",
- "serde_json",
- "sha2",
- "syn",
 ]
 
 [[package]]

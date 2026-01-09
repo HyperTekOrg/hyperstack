@@ -12,7 +12,7 @@ This guide explains how to set up a test repository that uses the local hypersta
 | TypeScript SDK | `typescript/` | `hyperstack-react` | npm | React hooks for streaming data |
 | Interpreter | `interpreter/` | `hyperstack-interpreter` | crates.io | AST transformation runtime |
 | Server | `rust/hyperstack-server/` | `hyperstack-server` | crates.io | WebSocket server |
-| Spec Macros | `spec-macros/` | `hyperstack-spec-macros` | crates.io | Proc-macros for specs |
+| Spec Macros | `hyperstack-macros/` | `hyperstack-macros` | crates.io | Proc-macros for stream definitions |
 
 ## Directory Structure
 
@@ -57,7 +57,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# Local path to umbrella crate (includes interpreter, spec-macros, server)
+# Local path to umbrella crate (includes interpreter, macros, server)
 # Use "full" feature to include the SDK as well
 hyperstack = { path = "../hyperstack-oss/main/hyperstack", features = ["full"] }
 
@@ -418,7 +418,7 @@ hyperstack auth login
 Ensure the spec name in CLI command matches `[[specs]] name` in config.
 
 ### "AST file not found"
-Run `cargo build` in your spec crate first. The `#[stream_spec]` macro generates `.hyperstack/<entity>.ast.json` during compilation.
+Run `cargo build` in your spec crate first. The `#[hyperstack]` macro generates `.hyperstack/<entity>.ast.json` during compilation.
 
 ### TypeScript SDK import errors
 Ensure you've built the SDK before importing:

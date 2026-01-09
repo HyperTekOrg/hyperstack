@@ -1,4 +1,4 @@
-//! Section processing for stream specs.
+//! Section processing for hyperstack streams.
 //!
 //! This module handles processing of nested struct sections, including:
 //! - Section extraction from struct definitions
@@ -272,7 +272,7 @@ pub fn process_nested_struct(
     events_by_instruction: &mut HashMap<String, Vec<(String, parse::EventAttribute, Type)>>,
     has_events: &mut bool,
     computed_fields: &mut Vec<(String, proc_macro2::TokenStream, Type)>,
-    track_from_mappings: &mut HashMap<String, Vec<parse::TrackFromAttribute>>,
+    derive_from_mappings: &mut HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &mut HashMap<String, String>,
 ) {
     let section_name = section_field_name.to_string();
@@ -312,7 +312,7 @@ pub fn process_nested_struct(
                         );
                     }
                 } else if let Ok(Some(map_attrs)) =
-                    parse::parse_map_instruction_attribute(attr, &field_name.to_string())
+                    parse::parse_from_instruction_attribute(attr, &field_name.to_string())
                 {
                     for mut map_attr in map_attrs {
                         if !map_attr.target_field_name.contains('.') {
@@ -366,20 +366,20 @@ pub fn process_nested_struct(
                                 field_type.clone(),
                             ));
                     }
-                } else if let Ok(Some(mut capture_attr)) =
-                    parse::parse_capture_attribute(attr, &field_name.to_string())
+                } else if let Ok(Some(mut snapshot_attr)) =
+                    parse::parse_snapshot_attribute(attr, &field_name.to_string())
                 {
                     // Add section prefix if needed
-                    if !capture_attr.target_field_name.contains('.') {
-                        capture_attr.target_field_name =
-                            format!("{}.{}", section_name, capture_attr.target_field_name);
+                    if !snapshot_attr.target_field_name.contains('.') {
+                        snapshot_attr.target_field_name =
+                            format!("{}.{}", section_name, snapshot_attr.target_field_name);
                     }
 
                     // Infer account type from field type if not explicitly specified
-                    let account_path = if let Some(ref path) = capture_attr.from_account {
+                    let account_path = if let Some(ref path) = snapshot_attr.from_account {
                         Some(path.clone())
                     } else if let Some(inferred_path) = extract_account_type_from_field(field_type) {
-                        capture_attr.inferred_account = Some(inferred_path.clone());
+                        snapshot_attr.inferred_account = Some(inferred_path.clone());
                         Some(inferred_path)
                     } else {
                         None
@@ -389,10 +389,10 @@ pub fn process_nested_struct(
                         let source_type_str = path_to_string(&acct_path);
 
                         // Check if we have field transforms - encode them in source_field_name
-                        let source_field_marker = if !capture_attr.field_transforms.is_empty() {
+                        let source_field_marker = if !snapshot_attr.field_transforms.is_empty() {
                             format!(
-                                "__capture_with_transforms:{}",
-                                capture_attr
+                                "__snapshot_with_transforms:{}",
+                                snapshot_attr
                                     .field_transforms
                                     .iter()
                                     .map(|(k, v)| format!("{}={}", k, v))
@@ -406,16 +406,16 @@ pub fn process_nested_struct(
                         let map_attr = parse::MapAttribute {
                             source_type_path: acct_path,
                             source_field_name: source_field_marker,
-                            target_field_name: capture_attr.target_field_name.clone(),
+                            target_field_name: snapshot_attr.target_field_name.clone(),
                             is_primary_key: false,
                             is_lookup_index: false,
                             temporal_field: None,
-                            strategy: capture_attr.strategy.clone(),
-                            join_on: capture_attr.join_on.as_ref().map(|fs| fs.ident.to_string()),
+                            strategy: snapshot_attr.strategy.clone(),
+                            join_on: snapshot_attr.join_on.as_ref().map(|fs| fs.ident.to_string()),
                             transform: None,
                             is_instruction: false,
                             is_whole_source: true, // Mark as whole source capture
-                            lookup_by: capture_attr.lookup_by.clone(),
+                            lookup_by: snapshot_attr.lookup_by.clone(),
                         };
 
                         sources_by_type
@@ -468,22 +468,22 @@ pub fn process_nested_struct(
                             .or_default()
                             .push(map_attr);
                     }
-                } else if let Ok(Some(mut track_attr)) =
-                    parse::parse_track_from_attribute(attr, &field_name.to_string())
+                } else if let Ok(Some(mut derive_attr)) =
+                    parse::parse_derive_from_attribute(attr, &field_name.to_string())
                 {
                     // Add section prefix if needed
-                    if !track_attr.target_field_name.contains('.') {
-                        track_attr.target_field_name =
-                            format!("{}.{}", section_name, track_attr.target_field_name);
+                    if !derive_attr.target_field_name.contains('.') {
+                        derive_attr.target_field_name =
+                            format!("{}.{}", section_name, derive_attr.target_field_name);
                     }
 
                     // Group by instruction for handler merging
-                    for instr_path in &track_attr.from_instructions {
+                    for instr_path in &derive_attr.from_instructions {
                         let source_type_str = path_to_string(instr_path);
-                        track_from_mappings
+                        derive_from_mappings
                             .entry(source_type_str)
                             .or_default()
-                            .push(track_attr.clone());
+                            .push(derive_attr.clone());
                     }
                 } else if let Ok(Some(mut computed_attr)) =
                     parse::parse_computed_attribute(attr, &field_name.to_string())

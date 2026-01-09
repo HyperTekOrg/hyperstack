@@ -1,7 +1,7 @@
-//! Parsing module for transform-macros.
+//! Parsing module for hyperstack-macros.
 //!
 //! This module contains all parsing logic including:
-//! - `attributes` - Parsing of #[map], #[event], #[capture], etc. macro attributes
+//! - `attributes` - Parsing of #[map], #[event], #[snapshot], etc. macro attributes
 //! - `idl` - Parsing of Anchor IDL JSON files
 //! - `proto` - Parsing of Protocol Buffer (.proto) files
 //! - `conditions` - Parsing of condition expressions

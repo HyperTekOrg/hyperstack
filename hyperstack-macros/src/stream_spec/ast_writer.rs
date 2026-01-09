@@ -1,4 +1,4 @@
-//! AST building and file writing for stream specs.
+//! AST building and file writing for hyperstack streams.
 //!
 //! This module handles:
 //! 1. Building `SerializableStreamSpec` from parsed macro attributes
@@ -46,7 +46,7 @@ use super::handlers::{find_field_in_instruction, get_join_on_field};
 /// * `events_by_instruction` - Map of instruction to event mappings
 /// * `resolver_hooks` - Resolver hook definitions
 /// * `pda_registrations` - PDA registration definitions
-/// * `track_from_mappings` - Track-from field mappings
+/// * `derive_from_mappings` - Derive-from field mappings
 /// * `aggregate_conditions` - Conditional aggregate definitions
 /// * `computed_fields` - Computed field definitions
 /// * `section_specs` - Entity section specifications
@@ -60,7 +60,7 @@ pub fn build_ast(
     events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
     resolver_hooks: &[parse::ResolveKeyAttribute],
     pda_registrations: &[parse::RegisterPdaAttribute],
-    track_from_mappings: &HashMap<String, Vec<parse::TrackFromAttribute>>,
+    track_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     section_specs: &[EntitySection],
@@ -182,7 +182,7 @@ pub fn write_ast_at_compile_time(
     events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
     resolver_hooks: &[parse::ResolveKeyAttribute],
     pda_registrations: &[parse::RegisterPdaAttribute],
-    track_from_mappings: &HashMap<String, Vec<parse::TrackFromAttribute>>,
+    track_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     section_specs: &[EntitySection],
@@ -238,7 +238,7 @@ pub fn build_and_write_ast(
     events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
     resolver_hooks: &[parse::ResolveKeyAttribute],
     pda_registrations: &[parse::RegisterPdaAttribute],
-    track_from_mappings: &HashMap<String, Vec<parse::TrackFromAttribute>>,
+    track_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     section_specs: &[EntitySection],
@@ -814,7 +814,7 @@ fn build_resolver_hooks_ast(
 
 fn build_instruction_hooks_ast(
     pda_registrations: &[parse::RegisterPdaAttribute],
-    track_from_mappings: &HashMap<String, Vec<parse::TrackFromAttribute>>,
+    track_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
 ) -> Vec<InstructionHook> {

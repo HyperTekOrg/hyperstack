@@ -6,7 +6,7 @@
 //! ## Features
 //!
 //! - **`interpreter`** (default) - AST transformation runtime and VM
-//! - **`spec-macros`** (default) - Proc-macros for defining stream specifications
+//! - **`macros`** (default) - Proc-macros for defining stream specifications
 //! - **`server`** (default) - WebSocket server and projection handlers
 //! - **`sdk`** - Rust client for connecting to HyperStack servers
 //!
@@ -29,10 +29,14 @@
 //! ```rust,ignore
 //! use hyperstack::prelude::*;
 //!
-//! // Define your stream specification using the proc-macro
-//! stream_spec! {
-//!     name: "MyToken",
-//!     // ... specification
+//! #[hyperstack(idl = "idl.json")]
+//! pub mod my_stream {
+//!     #[entity(name = "MyEntity")]
+//!     #[derive(Stream)]
+//!     struct Entity {
+//!         #[map(from = "MyAccount", field = "value")]
+//!         pub value: u64,
+//!     }
 //! }
 //! ```
 
@@ -40,9 +44,9 @@
 #[cfg(feature = "interpreter")]
 pub use hyperstack_interpreter as interpreter;
 
-// Re-export spec macros
-#[cfg(feature = "spec-macros")]
-pub use hyperstack_spec_macros as spec_macros;
+// Re-export macros
+#[cfg(feature = "macros")]
+pub use hyperstack_macros as macros;
 
 // Re-export server components
 #[cfg(feature = "server")]
@@ -63,17 +67,12 @@ pub mod prelude {
         Mutation, UpdateContext,
     };
 
-    // Re-export the stream_spec macro
-    #[cfg(feature = "spec-macros")]
-    pub use hyperstack_spec_macros::{stream_spec, StreamSection};
+    #[cfg(feature = "macros")]
+    pub use hyperstack_macros::{hyperstack, Stream};
 
     // Re-export server components
     #[cfg(feature = "server")]
-    pub use hyperstack_server::{
-        bus::BusManager,
-        config::ServerConfig,
-        projector::Projector,
-    };
+    pub use hyperstack_server::{bus::BusManager, config::ServerConfig, projector::Projector};
 
     // Re-export SDK client
     #[cfg(feature = "sdk")]

@@ -24,7 +24,7 @@ Instead of building infrastructure, you **declare what data you need**:
 ```rust
 #[entity(name = "Token")]
 pub struct Token {
-    #[map_instruction(Create::mint, primary_key)]
+    #[from_instruction(Create::mint, primary_key)]
     pub mint: String,
     
     #[map(BondingCurve::virtual_sol_reserves)]
@@ -78,13 +78,13 @@ Hyperstack then:
 
 ## Key Concepts
 
-### 1. Specs
+### 1. Streams
 
-A **spec** is a declarative definition of your data model. Written in Rust using macros:
+A **stream** is a declarative definition of your data model. Written in Rust using macros:
 
 ```rust
-#[stream_spec(idl = "parser/idl.json")]
-pub mod my_spec {
+#[hyperstack(idl = "parser/idl.json")]
+pub mod my_stream {
     #[entity(name = "Token")]
     pub struct Token {
         // Entity fields with mappings...
@@ -92,7 +92,7 @@ pub mod my_spec {
 }
 ```
 
-The spec defines:
+The stream defines:
 - **Entities** - The data structures you want
 - **Mappings** - How on-chain data maps to fields
 - **Aggregations** - How to compute derived values
@@ -122,7 +122,9 @@ pub struct Token {
 | Mapping Type | Source | Example |
 |--------------|--------|---------|
 | `#[map]` | Account field | `#[map(BondingCurve::reserves)]` |
-| `#[map_instruction]` | Instruction arg/account | `#[map_instruction(Create::mint)]` |
+| `#[from_instruction]` | Instruction arg/account | `#[from_instruction(Create::mint)]` |
+| `#[snapshot]` | Account snapshot | `#[snapshot(from = Account)]` |
+| `#[derive_from]` | Derive from instruction | `#[derive_from(from = Buy, field = user)]` |
 | `#[aggregate]` | Computed from events | `#[aggregate(from = Buy, strategy = Sum)]` |
 | `#[event]` | Captured instruction | `#[event(strategy = Append)]` |
 | `#[computed]` | Derived from fields | `#[computed(field_a + field_b)]` |
