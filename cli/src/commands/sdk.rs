@@ -98,7 +98,7 @@ pub fn create_typescript(
             
             let pkg = package_name_override
                 .or_else(|| cfg.sdk.as_ref().and_then(|s| s.typescript_package.clone()))
-                .unwrap_or_else(|| "@hyperstack/react".to_string());
+                .unwrap_or_else(|| "hyperstack-react".to_string());
             
             (ast, output, pkg)
         } else {
@@ -158,7 +158,7 @@ fn find_spec_by_name(
         .unwrap_or_else(|| std::path::PathBuf::from(format!("./generated/{}-stack.ts", ast.spec_name)));
     
     let pkg = package_name_override
-        .unwrap_or_else(|| "@hyperstack/react".to_string());
+        .unwrap_or_else(|| "hyperstack-react".to_string());
     
     Ok((ast, output, pkg))
 }

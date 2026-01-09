@@ -12,11 +12,11 @@ Command-line tool for building, deploying, and managing HyperStack stream specif
 
 ```bash
 # Clone the repository
-git clone https://github.com/HyperTekOrg/hyper-stack-platform
-cd hyper-stack-platform
+git clone https://github.com/HyperTekOrg/hyperstack.git
+cd hyperstack
 
 # Build and install the CLI
-cargo install --path oss/packages/cli
+cargo install --path cli
 
 # Or just build (binary will be at target/release/hs)
 cargo build --release -p hyperstack-cli
@@ -47,17 +47,17 @@ hs auth login
 ```toml
 [project]
 name = "my-project"
-output_dir = "./generated"
 
+[sdk]
+output_dir = "./generated"
+typescript_package = "hyperstack-react"  # optional
+
+# Specs are auto-discovered from .hyperstack/*.ast.json
+# Define explicitly for custom naming:
 [[specs]]
-name = "settlement-game"
-entity_name = "SettlementGame"
-crate_name = "flip-atom"
-module_path = "flip_atom::spec::settlement_spec"
-# Optional fields:
-description = "Settlement game state tracking"
-package_name = "@hyperstack/flip-sdk"
-output_path = "./custom/path.ts"
+name = "settlement-game"      # optional, defaults to kebab-case of entity
+ast = "SettlementGame"        # entity name or path to .ast.json
+description = "Settlement game state tracking"  # optional
 ```
 
 4. **Push your spec to the cloud**
@@ -252,29 +252,37 @@ Validate your configuration file.
 
 ## Configuration File Format
 
-The `hyperstack.toml` file defines your project and available specs:
+The `hyperstack.toml` file defines your project and available specs. The CLI auto-discovers AST files, so minimal configuration is needed:
 
 ```toml
 [project]
-# Project name (required)
-name = "my-hyperstack-project"
+name = "my-hyperstack-project"  # required
 
-# Default output directory for generated SDKs (optional, defaults to "./generated")
-output_dir = "./generated"
+[sdk]
+output_dir = "./generated"              # optional, defaults to "./generated"
+typescript_package = "hyperstack-react" # optional, npm package for generated SDK
 
-# Define one or more specs
+[build]
+watch_by_default = true                 # optional, stream build progress
+
+# Specs are auto-discovered from .hyperstack/*.ast.json files
+# Only define [[specs]] if you need custom naming or explicit configuration
 [[specs]]
-# Required fields:
-name = "spec-name"                     # Used in CLI commands
-entity_name = "EntityName"             # Name of the entity in the spec
-crate_name = "crate-name"              # Crate containing the spec
-module_path = "crate::module::path"    # Full module path to spec
-
-# Optional fields:
-description = "Optional description"   # Human-readable description
-package_name = "@org/package"          # TypeScript package name (defaults to @hyperstack/sdk)
-output_path = "./custom/path.ts"       # Custom output path (overrides output_dir)
+name = "my-spec"                        # optional, defaults to kebab-case of entity
+ast = "MyEntity"                        # required: entity name or path to .ast.json
+description = "Optional description"    # optional
 ```
+
+### Minimal Configuration
+
+For most projects, you only need:
+
+```toml
+[project]
+name = "my-project"
+```
+
+The CLI will auto-discover all `.hyperstack/*.ast.json` files and derive spec names from entity names (e.g., `SettlementGame` → `settlement-game`).
 
 ## Build Process
 
@@ -298,13 +306,14 @@ Build statuses: `pending` -> `uploading` -> `queued` -> `building` -> `pushing` 
 
 The CLI uses **AST serialization** to generate SDKs and deployments efficiently:
 
-1. **You define specs** in `hyperstack.toml`
-2. **The `#[stream_spec]` macro** automatically serializes the AST to `.hyperstack/<entity_name>.ast.json` when you compile your spec
+1. **The `#[stream_spec]` macro** automatically serializes the AST to `.hyperstack/<entity_name>.ast.json` when you compile your spec
+2. **CLI auto-discovers** AST files - no manual configuration required for simple projects
 3. **Push to cloud**: The AST is uploaded and versioned
 4. **Build**: CodeBuild compiles the AST into a deployable container
 5. **Deploy**: The container runs as a WebSocket-accessible atom
 
 This means:
+- Zero-config for single-spec projects (just run `hyperstack up`)
 - No need to recompile the CLI when adding new specs
 - No feature flags or hardcoded registries
 - Works with any spec in your workspace
@@ -317,10 +326,11 @@ This means:
 Run `hs auth login` to authenticate.
 
 ### Error: "Spec 'xxx' not found"
-Make sure the spec is defined in your `hyperstack.toml` file. Run:
+Make sure the AST file exists at `.hyperstack/<entity>.ast.json`. Run:
 ```bash
 hs sdk list
 ```
+This shows all auto-discovered and configured specs.
 
 ### Error: "AST file not found"
 Run `cargo build` in your spec crate to generate the AST file at `.hyperstack/<entity>.ast.json`.

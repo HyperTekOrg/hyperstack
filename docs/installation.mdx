@@ -36,7 +36,7 @@ cargo build --release -p hyperstack-cli
 ### TypeScript / React
 
 ```bash
-npm install @hyperstack/react
+npm install hyperstack-react
 ```
 
 **Peer dependencies:**
@@ -147,7 +147,7 @@ borsh = { version = "1.5", features = ["derive"] }
 
 ```bash
 # Install SDK
-npm install @hyperstack/react
+npm install hyperstack-react
 
 # For local development, use localhost WebSocket
 # For production, use your deployed spec URL
@@ -175,7 +175,7 @@ hs auth status
 ### TypeScript SDK
 
 ```tsx
-import { HyperstackProvider, useHyperstack, defineStack } from '@hyperstack/react';
+import { HyperstackProvider, useHyperstack, defineStack } from 'hyperstack-react';
 
 // If this compiles, you're ready to go
 const TestStack = defineStack({
@@ -199,6 +199,6 @@ const TestStack = defineStack({
 | Issue | Solution |
 |-------|----------|
 | `hs: command not found` | Ensure `~/.cargo/bin` is in your PATH |
-| `Cannot find module '@hyperstack/react'` | Run `npm install @hyperstack/react` |
+| `Cannot find module 'hyperstack-react'` | Run `npm install hyperstack-react` |
 | `Peer dependency warnings` | Install `react` and `zustand` explicitly |
 | `Authentication failed` | Run `hs auth login` to refresh credentials |

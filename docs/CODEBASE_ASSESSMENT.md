@@ -60,7 +60,7 @@ hyperstack-oss/main/
 │   ├── hyperstack-sdk/
 │   └── hyperstack-server/
 ├── spec-macros/           # Proc-macro crate
-├── typescript/            # React SDK (@hyperstack/react)
+├── typescript/            # React SDK (hyperstack-react)
 ├── Cargo.toml             # Rust workspace config
 ├── release-please-config.json
 └── README.md
@@ -302,7 +302,7 @@ Tests exist in these files:
 | crates.io | hyperstack-interpreter | Ready |
 | crates.io | hyperstack-spec-macros | Ready |
 | crates.io | hyperstack-cli | Ready |
-| npm | @hyperstack/react | Ready |
+| npm | hyperstack-react | Ready |
 | PyPI | hyperstack-sdk | Ready |
 
 ### Community Features
@@ -551,7 +551,7 @@ Add to `.github/workflows/ci.yml`:
 | cli | `cli/` | `src/main.rs` |
 | hyperstack-server | `rust/hyperstack-server/` | `src/lib.rs` |
 | hyperstack-sdk (Rust) | `rust/hyperstack-sdk/` | `src/lib.rs` |
-| @hyperstack/react | `typescript/` | `src/index.ts` |
+| hyperstack-react | `typescript/` | `src/index.ts` |
 | hyperstack-sdk (Python) | `python/hyperstack-sdk/` | `hyperstack/__init__.py` |
 
 ---

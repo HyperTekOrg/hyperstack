@@ -30,7 +30,7 @@ pub struct TypeScriptConfig {
 impl Default for TypeScriptConfig {
     fn default() -> Self {
         Self {
-            package_name: "@hyperstack/sdk".to_string(),
+            package_name: "hyperstack-react".to_string(),
             generate_helpers: true,
             interface_prefix: "".to_string(),
             export_const_name: "STACK".to_string(),
@@ -77,12 +77,12 @@ impl<S> TypeScriptCompiler<S> {
         self.config = config;
         self
     }
-    
+
     pub fn with_idl(mut self, idl: Option<serde_json::Value>) -> Self {
         self.idl = idl;
         self
     }
-    
+
     pub fn with_handlers_json(mut self, handlers: Option<serde_json::Value>) -> Self {
         self.handlers_json = handlers;
         self
@@ -137,11 +137,11 @@ impl<S> TypeScriptCompiler<S> {
         // Generate main entity interface
         let main_interface = self.generate_main_entity_interface();
         interfaces.push(main_interface);
-        
+
         // Generate nested interfaces for resolved types (instructions, accounts, etc.)
         let nested_interfaces = self.generate_nested_interfaces();
         interfaces.extend(nested_interfaces);
-        
+
         // Generate EventWrapper interface if there are any event types
         if self.has_event_types() {
             interfaces.push(self.generate_event_wrapper_interface());
@@ -220,14 +220,14 @@ impl<S> TypeScriptCompiler<S> {
             // Use type information from the enhanced AST
             for section in &self.spec.sections {
                 let section_fields = sections.entry(section.name.clone()).or_default();
-                
+
                 for field_info in &section.fields {
                     // Check if field is already mapped
-                    let already_exists = section_fields.iter().any(|f| 
-                        f.name == field_info.field_name || 
-                        f.name == to_camel_case(&field_info.field_name)
-                    );
-                    
+                    let already_exists = section_fields.iter().any(|f| {
+                        f.name == field_info.field_name
+                            || f.name == to_camel_case(&field_info.field_name)
+                    });
+
                     if !already_exists {
                         section_fields.push(TypeScriptField {
                             name: field_info.field_name.clone(),
@@ -245,18 +245,20 @@ impl<S> TypeScriptCompiler<S> {
                 if parts.len() > 1 {
                     let section_name = parts[0];
                     let field_name = parts[1];
-                    
+
                     let section_fields = sections.entry(section_name.to_string()).or_default();
-                    
-                    let already_exists = section_fields.iter().any(|f| 
-                        f.name == field_name || 
-                        f.name == to_camel_case(field_name)
-                    );
-                    
+
+                    let already_exists = section_fields
+                        .iter()
+                        .any(|f| f.name == field_name || f.name == to_camel_case(field_name));
+
                     if !already_exists {
                         section_fields.push(TypeScriptField {
                             name: field_name.to_string(),
-                            ts_type: self.base_type_to_typescript(&field_type_info.base_type, field_type_info.is_array),
+                            ts_type: self.base_type_to_typescript(
+                                &field_type_info.base_type,
+                                field_type_info.is_array,
+                            ),
                             optional: field_type_info.is_optional,
                             description: None,
                         });
@@ -328,7 +330,7 @@ impl<S> TypeScriptCompiler<S> {
                 sections.insert(&section.name, true);
             }
         } else {
-            // FALLBACK: Extract section names from field mappings  
+            // FALLBACK: Extract section names from field mappings
             for mapping in &self.spec.handlers {
                 for field_mapping in &mapping.mappings {
                     let parts: Vec<&str> = field_mapping.target_path.split('.').collect();
@@ -390,7 +392,7 @@ impl<S> TypeScriptCompiler<S> {
         } else {
             format!(",\n  helpers: {{\n{}\n  }}", helpers)
         };
-        
+
         format!(
             r#"export const {} = defineStack({{
   name: '{}',
@@ -468,7 +470,7 @@ impl<S> TypeScriptCompiler<S> {
         // First, try to resolve from AST field mappings
         if let Some(field_info) = self.spec.field_mappings.get(&mapping.target_path) {
             let ts_type = self.field_type_info_to_typescript(field_info);
-            
+
             // If it's an Append strategy, wrap in array
             if matches!(mapping.population, PopulationStrategy::Append) {
                 return if ts_type.ends_with("[]") {
@@ -477,7 +479,7 @@ impl<S> TypeScriptCompiler<S> {
                     format!("{}[]", ts_type)
                 };
             }
-            
+
             return ts_type;
         }
 
@@ -519,34 +521,37 @@ impl<S> TypeScriptCompiler<S> {
             }
         }
     }
-    
+
     /// Convert FieldTypeInfo from AST to TypeScript type string
     fn field_type_info_to_typescript(&self, field_info: &FieldTypeInfo) -> String {
         // If we have resolved type information (complex types from IDL), use it
         if let Some(resolved) = &field_info.resolved_type {
             let interface_name = self.resolved_type_to_interface_name(resolved);
-            
+
             // Wrap in EventWrapper if it's an event type
-            let base_type = if resolved.is_event || (resolved.is_instruction && field_info.is_array) {
+            let base_type = if resolved.is_event || (resolved.is_instruction && field_info.is_array)
+            {
                 format!("EventWrapper<{}>", interface_name)
             } else {
                 interface_name
             };
-            
+
             // Handle optional and array
             let with_array = if field_info.is_array {
                 format!("{}[]", base_type)
             } else {
                 base_type
             };
-            
+
             return with_array;
         }
-        
+
         // Check if this is an event field (has BaseType::Any or BaseType::Array with Value inner type)
         // We can detect event fields by looking for them in handlers with AsEvent mappings
-        if field_info.base_type == BaseType::Any || 
-           (field_info.base_type == BaseType::Array && field_info.inner_type.as_deref() == Some("Value")) {
+        if field_info.base_type == BaseType::Any
+            || (field_info.base_type == BaseType::Array
+                && field_info.inner_type.as_deref() == Some("Value"))
+        {
             if let Some(event_type) = self.find_event_interface_for_field(&field_info.field_name) {
                 return if field_info.is_array {
                     format!("{}[]", event_type)
@@ -557,16 +562,16 @@ impl<S> TypeScriptCompiler<S> {
                 };
             }
         }
-        
+
         // Use base type mapping
         self.base_type_to_typescript(&field_info.base_type, field_info.is_array)
     }
-    
+
     /// Find the generated event interface name for a given field
     fn find_event_interface_for_field(&self, field_name: &str) -> Option<String> {
         // Use the raw JSON handlers if available
         let handlers = self.handlers_json.as_ref()?.as_array()?;
-        
+
         // Look through handlers to find event mappings for this field
         for handler in handlers {
             if let Some(mappings) = handler.get("mappings").and_then(|m| m.as_array()) {
@@ -580,7 +585,10 @@ impl<S> TypeScriptCompiler<S> {
                                 if let Some(source) = mapping.get("source") {
                                     if self.extract_event_data(source).is_some() {
                                         // Generate the interface name (e.g., "created" -> "CreatedEvent")
-                                        return Some(format!("{}Event", to_pascal_case(field_name)));
+                                        return Some(format!(
+                                            "{}Event",
+                                            to_pascal_case(field_name)
+                                        ));
                                     }
                                 }
                             }
@@ -591,23 +599,23 @@ impl<S> TypeScriptCompiler<S> {
         }
         None
     }
-    
+
     /// Generate TypeScript interface name from resolved type
     fn resolved_type_to_interface_name(&self, resolved: &ResolvedStructType) -> String {
         to_pascal_case(&resolved.type_name)
     }
-    
+
     /// Generate nested interfaces for all resolved types in the AST
     fn generate_nested_interfaces(&self) -> Vec<String> {
         let mut interfaces = Vec::new();
         let mut generated_types = HashSet::new();
-        
+
         // Collect all resolved types from all sections
         for section in &self.spec.sections {
             for field_info in &section.fields {
                 if let Some(resolved) = &field_info.resolved_type {
                     let type_name = resolved.type_name.clone();
-                    
+
                     // Only generate each type once
                     if generated_types.insert(type_name) {
                         let interface = self.generate_interface_for_resolved_type(resolved);
@@ -616,32 +624,40 @@ impl<S> TypeScriptCompiler<S> {
                 }
             }
         }
-        
+
         // Generate event interfaces from instruction handlers
         interfaces.extend(self.generate_event_interfaces(&mut generated_types));
-        
+
         // Also generate all enum types from the IDL (even if not directly referenced)
         if let Some(idl_value) = &self.idl {
             if let Some(types_array) = idl_value.get("types").and_then(|v| v.as_array()) {
                 for type_def in types_array {
                     if let (Some(type_name), Some(type_obj)) = (
                         type_def.get("name").and_then(|v| v.as_str()),
-                        type_def.get("type").and_then(|v| v.as_object())
+                        type_def.get("type").and_then(|v| v.as_object()),
                     ) {
                         if type_obj.get("kind").and_then(|v| v.as_str()) == Some("enum") {
                             // Only generate if not already generated
                             if generated_types.insert(type_name.to_string()) {
-                                if let Some(variants) = type_obj.get("variants").and_then(|v| v.as_array()) {
-                                    let variant_names: Vec<String> = variants.iter()
-                                        .filter_map(|v| v.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                                if let Some(variants) =
+                                    type_obj.get("variants").and_then(|v| v.as_array())
+                                {
+                                    let variant_names: Vec<String> = variants
+                                        .iter()
+                                        .filter_map(|v| {
+                                            v.get("name")
+                                                .and_then(|n| n.as_str())
+                                                .map(|s| s.to_string())
+                                        })
                                         .collect();
-                                    
+
                                     if !variant_names.is_empty() {
                                         let interface_name = to_pascal_case(type_name);
-                                        let variant_strings: Vec<String> = variant_names.iter()
+                                        let variant_strings: Vec<String> = variant_names
+                                            .iter()
                                             .map(|v| format!("\"{}\"", to_pascal_case(v)))
                                             .collect();
-                                        
+
                                         let enum_type = format!(
                                             "export type {} = {};",
                                             interface_name,
@@ -656,25 +672,25 @@ impl<S> TypeScriptCompiler<S> {
                 }
             }
         }
-        
+
         interfaces
     }
-    
+
     /// Generate TypeScript interfaces for event types from instruction handlers
     fn generate_event_interfaces(&self, generated_types: &mut HashSet<String>) -> Vec<String> {
         let mut interfaces = Vec::new();
-        
+
         // Use the raw JSON handlers if available
         let handlers = match &self.handlers_json {
             Some(h) => h.as_array(),
             None => return interfaces,
         };
-        
+
         let handlers_array = match handlers {
             Some(arr) => arr,
             None => return interfaces,
         };
-        
+
         // Look through handlers to find instruction-based event mappings
         for handler in handlers_array {
             // Check if this handler has event mappings
@@ -688,18 +704,26 @@ impl<S> TypeScriptCompiler<S> {
                                 if let Some(event_data) = self.extract_event_data(source) {
                                     // Extract instruction name from handler source
                                     if let Some(handler_source) = handler.get("source") {
-                                        if let Some(instruction_name) = self.extract_instruction_name(handler_source) {
+                                        if let Some(instruction_name) =
+                                            self.extract_instruction_name(handler_source)
+                                        {
                                             // Generate interface name from target path (e.g., "events.created" -> "CreatedEvent")
-                                            let event_field_name = target_path.split('.').next_back().unwrap_or("");
-                                            let interface_name = format!("{}Event", to_pascal_case(event_field_name));
-                                            
+                                            let event_field_name =
+                                                target_path.split('.').next_back().unwrap_or("");
+                                            let interface_name = format!(
+                                                "{}Event",
+                                                to_pascal_case(event_field_name)
+                                            );
+
                                             // Only generate once
                                             if generated_types.insert(interface_name.clone()) {
-                                                if let Some(interface) = self.generate_event_interface_from_idl(
-                                                    &interface_name,
-                                                    &instruction_name,
-                                                    &event_data
-                                                ) {
+                                                if let Some(interface) = self
+                                                    .generate_event_interface_from_idl(
+                                                        &interface_name,
+                                                        &instruction_name,
+                                                        &event_data,
+                                                    )
+                                                {
                                                     interfaces.push(interface);
                                                 }
                                             }
@@ -712,21 +736,31 @@ impl<S> TypeScriptCompiler<S> {
                 }
             }
         }
-        
+
         interfaces
     }
-    
+
     /// Extract event field data from a mapping source
-    fn extract_event_data(&self, source: &serde_json::Value) -> Option<Vec<(String, Option<String>)>> {
+    fn extract_event_data(
+        &self,
+        source: &serde_json::Value,
+    ) -> Option<Vec<(String, Option<String>)>> {
         if let Some(as_event) = source.get("AsEvent") {
             if let Some(fields) = as_event.get("fields").and_then(|f| f.as_array()) {
                 let mut event_fields = Vec::new();
                 for field in fields {
                     if let Some(from_source) = field.get("FromSource") {
-                        if let Some(path) = from_source.get("path").and_then(|p| p.get("segments")).and_then(|s| s.as_array()) {
+                        if let Some(path) = from_source
+                            .get("path")
+                            .and_then(|p| p.get("segments"))
+                            .and_then(|s| s.as_array())
+                        {
                             // Get the last segment as the field name (e.g., ["data", "game_id"] -> "game_id")
                             if let Some(field_name) = path.last().and_then(|v| v.as_str()) {
-                                let transform = from_source.get("transform").and_then(|t| t.as_str()).map(|s| s.to_string());
+                                let transform = from_source
+                                    .get("transform")
+                                    .and_then(|t| t.as_str())
+                                    .map(|s| s.to_string());
                                 event_fields.push((field_name.to_string(), transform));
                             }
                         }
@@ -737,7 +771,7 @@ impl<S> TypeScriptCompiler<S> {
         }
         None
     }
-    
+
     /// Extract instruction name from handler source
     fn extract_instruction_name(&self, source: &serde_json::Value) -> Option<String> {
         if let Some(source_obj) = source.get("Source") {
@@ -750,22 +784,22 @@ impl<S> TypeScriptCompiler<S> {
         }
         None
     }
-    
+
     /// Generate a TypeScript interface for an event from IDL instruction data
     fn generate_event_interface_from_idl(
         &self,
         interface_name: &str,
         instruction_name: &str,
-        captured_fields: &[(String, Option<String>)]
+        captured_fields: &[(String, Option<String>)],
     ) -> Option<String> {
         // If no fields are captured, generate an empty interface
         if captured_fields.is_empty() {
             return Some(format!("export interface {} {{}}", interface_name));
         }
-        
+
         let idl_value = self.idl.as_ref()?;
         let instructions = idl_value.get("instructions")?.as_array()?;
-        
+
         // Find the instruction in the IDL
         for instruction in instructions {
             if let Some(name) = instruction.get("name").and_then(|n| n.as_str()) {
@@ -773,7 +807,7 @@ impl<S> TypeScriptCompiler<S> {
                     // Get the args
                     if let Some(args) = instruction.get("args").and_then(|a| a.as_array()) {
                         let mut fields = Vec::new();
-                        
+
                         // Only include captured fields
                         for (field_name, transform) in captured_fields {
                             // Find this arg in the instruction
@@ -781,7 +815,10 @@ impl<S> TypeScriptCompiler<S> {
                                 if let Some(arg_name) = arg.get("name").and_then(|n| n.as_str()) {
                                     if arg_name == field_name {
                                         if let Some(arg_type) = arg.get("type") {
-                                            let ts_type = self.idl_type_to_typescript(arg_type, transform.as_deref());
+                                            let ts_type = self.idl_type_to_typescript(
+                                                arg_type,
+                                                transform.as_deref(),
+                                            );
                                             let camel_name = to_camel_case(field_name);
                                             fields.push(format!("  {}: {};", camel_name, ts_type));
                                         }
@@ -790,7 +827,7 @@ impl<S> TypeScriptCompiler<S> {
                                 }
                             }
                         }
-                        
+
                         if !fields.is_empty() {
                             return Some(format!(
                                 "export interface {} {{\n{}\n}}",
@@ -802,22 +839,28 @@ impl<S> TypeScriptCompiler<S> {
                 }
             }
         }
-        
+
         None
     }
-    
+
     /// Convert an IDL type (from JSON) to TypeScript, considering transforms
-    fn idl_type_to_typescript(&self, idl_type: &serde_json::Value, transform: Option<&str>) -> String {
+    fn idl_type_to_typescript(
+        &self,
+        idl_type: &serde_json::Value,
+        transform: Option<&str>,
+    ) -> String {
         #![allow(clippy::only_used_in_recursion)]
         // If there's a HexEncode transform, the result is always a string
         if transform == Some("HexEncode") {
             return "string".to_string();
         }
-        
+
         // Handle different IDL type formats
         if let Some(type_str) = idl_type.as_str() {
             return match type_str {
-                "u8" | "u16" | "u32" | "u64" | "u128" | "i8" | "i16" | "i32" | "i64" | "i128" => "number".to_string(),
+                "u8" | "u16" | "u32" | "u64" | "u128" | "i8" | "i16" | "i32" | "i64" | "i128" => {
+                    "number".to_string()
+                }
                 "f32" | "f64" => "number".to_string(),
                 "bool" => "boolean".to_string(),
                 "string" => "string".to_string(),
@@ -826,7 +869,7 @@ impl<S> TypeScriptCompiler<S> {
                 _ => "any".to_string(),
             };
         }
-        
+
         // Handle complex types (option, vec, etc.)
         if let Some(type_obj) = idl_type.as_object() {
             if let Some(option_type) = type_obj.get("option") {
@@ -838,53 +881,55 @@ impl<S> TypeScriptCompiler<S> {
                 return format!("{}[]", inner);
             }
         }
-        
+
         "any".to_string()
     }
-    
+
     /// Generate a TypeScript interface from a resolved struct type
     fn generate_interface_for_resolved_type(&self, resolved: &ResolvedStructType) -> String {
         let interface_name = to_pascal_case(&resolved.type_name);
-        
+
         // Handle enums as TypeScript union types
         if resolved.is_enum {
-            let variants: Vec<String> = resolved.enum_variants.iter()
+            let variants: Vec<String> = resolved
+                .enum_variants
+                .iter()
                 .map(|v| format!("\"{}\"", to_pascal_case(v)))
                 .collect();
-            
-            return format!(
-                "export type {} = {};",
-                interface_name,
-                variants.join(" | ")
-            );
+
+            return format!("export type {} = {};", interface_name, variants.join(" | "));
         }
-        
+
         // Handle structs as interfaces
-        let fields: Vec<String> = resolved.fields.iter().map(|field| {
-            let field_name = to_camel_case(&field.field_name);
-            let optional_marker = if field.is_optional { "?" } else { "" };
-            let ts_type = self.resolved_field_to_typescript(field);
-            format!("  {}{}: {};", field_name, optional_marker, ts_type)
-        }).collect();
-        
+        let fields: Vec<String> = resolved
+            .fields
+            .iter()
+            .map(|field| {
+                let field_name = to_camel_case(&field.field_name);
+                let optional_marker = if field.is_optional { "?" } else { "" };
+                let ts_type = self.resolved_field_to_typescript(field);
+                format!("  {}{}: {};", field_name, optional_marker, ts_type)
+            })
+            .collect();
+
         format!(
             "export interface {} {{\n{}\n}}",
             interface_name,
             fields.join("\n")
         )
     }
-    
+
     /// Convert a resolved field to TypeScript type
     fn resolved_field_to_typescript(&self, field: &ResolvedField) -> String {
         let base_ts = self.base_type_to_typescript(&field.base_type, false);
-        
+
         if field.is_array {
             format!("{}[]", base_ts)
         } else {
             base_ts
         }
     }
-    
+
     /// Check if the spec has any event types
     fn has_event_types(&self) -> bool {
         for section in &self.spec.sections {
@@ -898,7 +943,7 @@ impl<S> TypeScriptCompiler<S> {
         }
         false
     }
-    
+
     /// Generate the EventWrapper interface
     fn generate_event_wrapper_interface(&self) -> String {
         r#"/**
@@ -914,13 +959,12 @@ export interface EventWrapper<T> {
   slot?: number;
   /** Optional transaction signature */
   signature?: string;
-}"#.to_string()
+}"#
+        .to_string()
     }
 
     fn infer_type_from_field_name(&self, field_name: &str) -> String {
         let lower_name = field_name.to_lowercase();
-
-
 
         // Special case for event fields - these are typically Option<Value> and should be 'any'
         if lower_name.contains("events.") {
@@ -978,13 +1022,13 @@ export interface EventWrapper<T> {
     fn base_type_to_typescript(&self, base_type: &BaseType, is_array: bool) -> String {
         let base_ts_type = match base_type {
             BaseType::Integer => "number",
-            BaseType::Float => "number", 
+            BaseType::Float => "number",
             BaseType::String => "string",
             BaseType::Boolean => "boolean",
             BaseType::Timestamp => "number", // Unix timestamps as numbers
-            BaseType::Binary => "string", // Base64 encoded strings
-            BaseType::Pubkey => "string", // Solana public keys as Base58 strings
-            BaseType::Array => "any[]", // Default array type
+            BaseType::Binary => "string",    // Base64 encoded strings
+            BaseType::Pubkey => "string",    // Solana public keys as Base58 strings
+            BaseType::Array => "any[]",      // Default array type
             BaseType::Object => "Record<string, any>", // Generic object
             BaseType::Any => "any",
         };
@@ -1045,7 +1089,7 @@ fn to_camel_case(s: &str) -> String {
 /// Convert PascalCase/camelCase to snake_case
 fn to_snake_case(s: &str) -> String {
     let mut result = String::new();
-    
+
     for ch in s.chars() {
         if ch.is_uppercase() {
             if !result.is_empty() {
@@ -1056,7 +1100,7 @@ fn to_snake_case(s: &str) -> String {
             result.push(ch);
         }
     }
-    
+
     result
 }
 
@@ -1107,22 +1151,23 @@ pub fn compile_serializable_spec(
     config: Option<TypeScriptConfig>,
 ) -> Result<TypeScriptOutput, String> {
     // Extract IDL and convert to serde_json::Value
-    let idl = spec.idl.as_ref().and_then(|idl_snapshot| {
-        serde_json::to_value(idl_snapshot).ok()
-    });
-    
+    let idl = spec
+        .idl
+        .as_ref()
+        .and_then(|idl_snapshot| serde_json::to_value(idl_snapshot).ok());
+
     // Extract handlers as JSON
     let handlers = serde_json::to_value(&spec.handlers).ok();
-    
+
     // Convert SerializableStreamSpec to TypedStreamSpec
     // We use () as the phantom type since it won't be used
     let typed_spec: TypedStreamSpec<()> = TypedStreamSpec::from_serializable(spec);
-    
+
     let compiler = TypeScriptCompiler::new(typed_spec, entity_name)
         .with_idl(idl)
         .with_handlers_json(handlers)
         .with_config(config.unwrap_or_default());
-    
+
     Ok(compiler.compile())
 }
 
@@ -1151,4 +1196,3 @@ mod tests {
         assert_eq!(value_to_typescript_type(&serde_json::json!([])), "any[]");
     }
 }
-

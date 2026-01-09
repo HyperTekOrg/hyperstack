@@ -17,7 +17,7 @@ A React app that displays live data from a Solana program using Hyperstack's rea
 ## Step 1: Install the SDK
 
 ```bash
-npm install @hyperstack/react zustand react
+npm install hyperstack-react zustand react
 ```
 
 **Peer dependencies:** `react ^18.0.0`, `zustand ^4.0.0`
@@ -32,7 +32,7 @@ Wrap your app with `HyperstackProvider` to enable WebSocket connections:
 // src/main.tsx
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { HyperstackProvider } from '@hyperstack/react';
+import { HyperstackProvider } from 'hyperstack-react';
 import App from './App';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -57,7 +57,7 @@ Create a stack definition that matches your spec's entities:
 
 ```tsx
 // src/stack.ts
-import { defineStack, createListView, createStateView } from '@hyperstack/react';
+import { defineStack, createListView, createStateView } from 'hyperstack-react';
 
 // Define types matching your spec entities
 interface Token {
@@ -95,7 +95,7 @@ export const TokenStack = defineStack({
 
 ```tsx
 // src/App.tsx
-import { useHyperstack } from '@hyperstack/react';
+import { useHyperstack } from 'hyperstack-react';
 import { TokenStack } from './stack';
 
 function TokenList() {
@@ -204,7 +204,7 @@ const { data: recentTokens } = stack.views.tokens.list.use({
 ### Handle Connection State
 
 ```tsx
-import { useConnectionState } from '@hyperstack/react';
+import { useConnectionState } from 'hyperstack-react';
 
 function ConnectionStatus() {
   const state = useConnectionState();

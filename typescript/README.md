@@ -1,25 +1,19 @@
-# @hypertek/typescript
+# Hyperstack React SDK
 
-TypeScript SDK for real-time Solana program data streaming from hyperstack
+TypeScript React SDK for real-time Solana program data streaming from hyperstack
 
 ## Installation
 
 ```bash
-npm install @hypertek/typescript
+npm install hyperstack-react
 ```
-
-## Peer Dependencies
-
-This package requires:
-- `react` ^18.0.0
-- `zustand` ^4.0.0
 
 ## Usage
 
 ### Basic Setup
 
 ```tsx
-import { HyperstackProvider, useHyperstack, defineStack } from '@hypertek/typescript';
+import { HyperstackProvider, useHyperstack, defineStack } from 'hyperstack-react';
 
 const myStack = defineStack({
   // Your stack configuration

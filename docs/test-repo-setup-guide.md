@@ -9,7 +9,7 @@ This guide explains how to set up a test repository that uses the local hypersta
 | Rust umbrella | `hyperstack/` | `hyperstack` | crates.io | Re-exports all Rust components |
 | Rust SDK | `rust/hyperstack-sdk/` | `hyperstack-sdk` | crates.io | Rust client for WebSocket streams |
 | CLI | `cli/` | `hyperstack-cli` | crates.io | Deploy specs, generate SDKs |
-| TypeScript SDK | `typescript/` | `@hyperstack/react` | npm | React hooks for streaming data |
+| TypeScript SDK | `typescript/` | `hyperstack-react` | npm | React hooks for streaming data |
 | Interpreter | `interpreter/` | `hyperstack-interpreter` | crates.io | AST transformation runtime |
 | Server | `rust/hyperstack-server/` | `hyperstack-server` | crates.io | WebSocket server |
 | Spec Macros | `spec-macros/` | `hyperstack-spec-macros` | crates.io | Proc-macros for specs |
@@ -119,7 +119,7 @@ npm link
 
 # Step 2: Link in your test project
 cd /Users/adrian/code/defi/hypertek/hyperstack-test/frontend
-npm link @hyperstack/react
+npm link hyperstack-react
 ```
 
 ### Option B: file: Protocol
@@ -129,7 +129,7 @@ Simpler but uses symlinks under the hood:
 ```json
 {
   "dependencies": {
-    "@hyperstack/react": "file:../../hyperstack-oss/main/typescript"
+    "hyperstack-react": "file:../../hyperstack-oss/main/typescript"
   }
 }
 ```
@@ -171,30 +171,19 @@ This creates `hyperstack.toml`. Edit it for your spec:
 
 ```toml
 [project]
-name = "my-test-stack"
+name = "my-project"
+
+[sdk]
 output_dir = "./generated"
+typescript_package = "hyperstack-react"  # optional
 
+# Specs are auto-discovered from .hyperstack/*.ast.json
+# Define explicitly for custom naming:
 [[specs]]
-name = "my-stream"
-entity_name = "MyEntity"
-crate_name = "hyperstack-test"
-module_path = "hyperstack_test::my_spec"
-description = "Test stream specification"
-package_name = "@hyperstack/my-sdk"
-output_path = "./frontend/src/generated/my-sdk.ts"
+name = "settlement-game"      # optional, defaults to kebab-case of entity
+ast = "SettlementGame"        # entity name or path to .ast.json
+description = "Settlement game state tracking"  # optional
 ```
-
-### Configuration Fields
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | Yes | Spec identifier used in CLI commands |
-| `entity_name` | Yes | Name of the entity in the spec (e.g., `SettlementGame`) |
-| `crate_name` | Yes | Rust crate containing the spec |
-| `module_path` | Yes | Full module path to spec (e.g., `my_crate::spec::my_spec`) |
-| `description` | No | Human-readable description |
-| `package_name` | No | TypeScript package name (default: `@hyperstack/sdk`) |
-| `output_path` | No | Custom output path for generated SDK |
 
 ---
 
@@ -243,7 +232,7 @@ Create `frontend/src/App.tsx`:
 
 ```tsx
 import React from 'react';
-import { HyperstackProvider, useHyperstack, defineStack } from '@hyperstack/react';
+import { HyperstackProvider, useHyperstack, defineStack } from 'hyperstack-react';
 
 // Option 1: Use generated SDK (after running hyperstack sdk create)
 // import { MyEntityStack } from './generated/my-sdk';
@@ -263,18 +252,18 @@ const MyStack = defineStack({
 
 function StreamConsumer() {
   const stack = useHyperstack(MyStack);
-  
+
   // Subscribe to all entities (kv mode)
   const { data: entities, connectionState } = stack.views.myEntity.kv.use();
-  
+
   if (connectionState === 'connecting') {
     return <div>Connecting...</div>;
   }
-  
+
   if (connectionState === 'error') {
     return <div>Connection error</div>;
   }
-  
+
   return (
     <div>
       <h1>Live Entities</h1>
@@ -289,9 +278,9 @@ function StreamConsumer() {
 
 function App() {
   return (
-    <HyperstackProvider config={{ 
+    <HyperstackProvider config={{
       websocketUrl: 'wss://my-stream.stack.hypertek.app',
-      autoSubscribeDefault: true 
+      autoSubscribeDefault: true
     }}>
       <StreamConsumer />
     </HyperstackProvider>
@@ -343,25 +332,25 @@ async fn main() -> anyhow::Result<()> {
     // WebSocket URL from deployment
     let url = std::env::var("WS_URL")
         .unwrap_or_else(|_| "wss://my-stream.stack.hypertek.app".to_string());
-    
+
     // View to subscribe to (EntityName/mode)
     let view = std::env::var("VIEW")
         .unwrap_or_else(|_| "MyEntity/kv".to_string());
-    
+
     println!("Connecting to {} view {}...", url, view);
-    
+
     let mut client = HyperStackClient::<MyEntity>::new(&url, &view);
-    
+
     // Optional: filter to specific key
     if let Ok(key) = std::env::var("KEY") {
         client = client.with_key(key);
     }
-    
+
     let store = client.connect().await?;
     println!("Connected! Watching for updates...\n");
-    
+
     let mut updates = store.subscribe();
-    
+
     loop {
         tokio::select! {
             Ok((key, entity)) = updates.recv() => {
@@ -407,7 +396,7 @@ hyperstack-test/
 ├── src/
 │   └── main.rs             # Rust SDK client example
 └── frontend/
-    ├── package.json        # With @hyperstack/react dependency
+    ├── package.json        # With hyperstack-react dependency
     ├── package-lock.json
     ├── tsconfig.json
     └── src/
