@@ -6,7 +6,9 @@ use anyhow::Result;
 use colored::Colorize;
 use serde::Serialize;
 
-use crate::api_client::{ApiClient, Build, BuildStatus, DeploymentResponse, DeploymentStatus, Spec};
+use crate::api_client::{
+    ApiClient, Build, BuildStatus, DeploymentResponse, DeploymentStatus, Spec,
+};
 
 /// Status overview data for JSON output
 #[derive(Serialize)]
@@ -53,10 +55,7 @@ pub fn status(json: bool) -> Result<()> {
         .filter(|d| d.status == DeploymentStatus::Active || d.status == DeploymentStatus::Updating)
         .collect();
 
-    let in_progress: Vec<&Build> = builds
-        .iter()
-        .filter(|b| !b.status.is_terminal())
-        .collect();
+    let in_progress: Vec<&Build> = builds.iter().filter(|b| !b.status.is_terminal()).collect();
 
     let failed_recent: Vec<&Build> = builds
         .iter()
@@ -78,7 +77,11 @@ pub fn status(json: bool) -> Result<()> {
             "{} {} active deployment{}",
             "●".green(),
             active_deployments.len(),
-            if active_deployments.len() == 1 { "" } else { "s" }
+            if active_deployments.len() == 1 {
+                ""
+            } else {
+                "s"
+            }
         );
 
         for deployment in &active_deployments {
@@ -117,10 +120,8 @@ pub fn status(json: bool) -> Result<()> {
     }
 
     // Specs without deployments
-    let deployed_spec_ids: std::collections::HashSet<_> = active_deployments
-        .iter()
-        .map(|d| d.spec_id)
-        .collect();
+    let deployed_spec_ids: std::collections::HashSet<_> =
+        active_deployments.iter().map(|d| d.spec_id).collect();
 
     let undeployed_specs: Vec<_> = specs
         .iter()

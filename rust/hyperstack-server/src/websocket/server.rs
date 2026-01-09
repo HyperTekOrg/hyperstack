@@ -45,11 +45,7 @@ impl WebSocketServer {
     }
 
     #[cfg(not(feature = "otel"))]
-    pub fn new(
-        bind_addr: SocketAddr,
-        bus_manager: BusManager,
-        view_index: Arc<ViewIndex>,
-    ) -> Self {
+    pub fn new(bind_addr: SocketAddr, bus_manager: BusManager, view_index: Arc<ViewIndex>) -> Self {
         Self {
             bind_addr,
             client_manager: ClientManager::new(),

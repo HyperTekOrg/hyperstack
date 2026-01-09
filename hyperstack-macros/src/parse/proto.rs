@@ -45,7 +45,7 @@ pub struct OneofVariant {
 pub fn parse_proto_file<P: AsRef<Path>>(path: P) -> Result<ProtoAnalysis, String> {
     let content = fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read proto file {:?}: {}", path.as_ref(), e))?;
-    
+
     parse_proto_content(&content)
 }
 
@@ -84,7 +84,7 @@ fn extract_messages(content: &str, analysis: &mut ProtoAnalysis) -> Result<(), S
 
     while i < lines.len() {
         let line = lines[i].trim();
-        
+
         if line.starts_with("message ") {
             if let Some(msg_name) = extract_message_name(line) {
                 let fields = extract_message_fields(&lines, &mut i)?;
@@ -112,7 +112,10 @@ fn extract_message_name(line: &str) -> Option<String> {
     }
 }
 
-fn extract_message_fields(lines: &[&str], start_idx: &mut usize) -> Result<Vec<ProtoField>, String> {
+fn extract_message_fields(
+    lines: &[&str],
+    start_idx: &mut usize,
+) -> Result<Vec<ProtoField>, String> {
     let mut fields = Vec::new();
     let mut brace_count = 0;
     let mut found_opening = false;
@@ -127,14 +130,14 @@ fn extract_message_fields(lines: &[&str], start_idx: &mut usize) -> Result<Vec<P
 
     while *start_idx < lines.len() {
         let line = lines[*start_idx].trim();
-        
+
         if line.contains('{') {
             brace_count += 1;
             if !found_opening {
                 found_opening = true;
             }
         }
-        
+
         if line.contains('}') {
             brace_count -= 1;
             if brace_count == 0 {
@@ -142,7 +145,12 @@ fn extract_message_fields(lines: &[&str], start_idx: &mut usize) -> Result<Vec<P
             }
         }
 
-        if found_opening && brace_count == 1 && !line.starts_with("oneof") && !line.starts_with("//") && !line.is_empty() {
+        if found_opening
+            && brace_count == 1
+            && !line.starts_with("oneof")
+            && !line.starts_with("//")
+            && !line.is_empty()
+        {
             if let Some(field) = parse_field_line(line) {
                 fields.push(field);
             }
@@ -156,7 +164,7 @@ fn extract_message_fields(lines: &[&str], start_idx: &mut usize) -> Result<Vec<P
 
 fn parse_field_line(line: &str) -> Option<ProtoField> {
     let line = line.trim();
-    
+
     if line.starts_with("//") || line.is_empty() || line.starts_with("oneof") || line == "}" {
         return None;
     }
@@ -179,10 +187,7 @@ fn parse_field_line(line: &str) -> Option<ProtoField> {
         number_part = parts[4];
     }
 
-    let field_number = number_part
-        .trim_end_matches(';')
-        .parse::<u32>()
-        .ok()?;
+    let field_number = number_part.trim_end_matches(';').parse::<u32>().ok()?;
 
     Some(ProtoField {
         name: field_name,
@@ -197,7 +202,7 @@ fn extract_oneofs(content: &str, analysis: &mut ProtoAnalysis) -> Result<(), Str
 
     while i < lines.len() {
         let line = lines[i].trim();
-        
+
         if line.starts_with("message ") {
             if let Some(msg_name) = extract_message_name(line) {
                 extract_oneofs_from_message(&lines, &mut i, &msg_name, analysis)?;
@@ -228,28 +233,28 @@ fn extract_oneofs_from_message(
 
     while *start_idx < lines.len() {
         let mut line = lines[*start_idx].trim();
-        
+
         // Check for oneof BEFORE updating brace counts
         if found_opening && brace_count == 1 && line.starts_with("oneof ") {
             let oneof_field = extract_oneof_field_name(line);
             if let Some(field_name) = oneof_field {
                 let variants = extract_oneof_variants(lines, start_idx)?;
-                
+
                 analysis.oneof_types.push(OneofType {
                     message_name: message_name.to_string(),
                     oneof_field: field_name,
                     variants,
                 });
-                
+
                 // Re-read the current line after extract_oneof_variants
                 line = lines[*start_idx].trim();
             }
         }
-        
+
         if line.contains('{') {
             brace_count += 1;
         }
-        
+
         if line.contains('}') {
             brace_count -= 1;
             if brace_count == 0 {
@@ -272,7 +277,10 @@ fn extract_oneof_field_name(line: &str) -> Option<String> {
     }
 }
 
-fn extract_oneof_variants(lines: &[&str], start_idx: &mut usize) -> Result<Vec<OneofVariant>, String> {
+fn extract_oneof_variants(
+    lines: &[&str],
+    start_idx: &mut usize,
+) -> Result<Vec<OneofVariant>, String> {
     let mut variants = Vec::new();
     let mut brace_count = 1;
 
@@ -280,11 +288,11 @@ fn extract_oneof_variants(lines: &[&str], start_idx: &mut usize) -> Result<Vec<O
 
     while *start_idx < lines.len() {
         let line = lines[*start_idx].trim();
-        
+
         if line.contains('{') {
             brace_count += 1;
         }
-        
+
         if line.contains('}') {
             brace_count -= 1;
             if brace_count == 0 {
@@ -306,7 +314,7 @@ fn extract_oneof_variants(lines: &[&str], start_idx: &mut usize) -> Result<Vec<O
 
 fn parse_oneof_variant(line: &str) -> Option<OneofVariant> {
     let line = line.trim();
-    
+
     if line.is_empty() || line.starts_with("//") {
         return None;
     }
@@ -318,10 +326,7 @@ fn parse_oneof_variant(line: &str) -> Option<OneofVariant> {
 
     let type_name = parts[0].to_string();
     let field_name = parts[1].to_string();
-    let number = parts[3]
-        .trim_end_matches(';')
-        .parse::<u32>()
-        .ok()?;
+    let number = parts[3].trim_end_matches(';').parse::<u32>().ok()?;
 
     Some(OneofVariant {
         type_name,
@@ -356,7 +361,7 @@ message GameRegistry {
             oneof_types: Vec::new(),
         };
         extract_messages(content, &mut analysis).unwrap();
-        
+
         assert!(analysis.messages.contains_key("GameRegistry"));
         let msg = &analysis.messages["GameRegistry"];
         assert_eq!(msg.fields.len(), 3);
@@ -377,14 +382,20 @@ message ProgramIxs {
 }
 "#;
         let analysis = parse_proto_content(content).unwrap();
-        
+
         assert_eq!(analysis.oneof_types.len(), 1);
         assert_eq!(analysis.oneof_types[0].message_name, "ProgramIxs");
         assert_eq!(analysis.oneof_types[0].oneof_field, "ix_oneof");
         assert_eq!(analysis.oneof_types[0].variants.len(), 2);
         assert_eq!(analysis.oneof_types[0].variants[0].type_name, "PlaceBetIx");
         assert_eq!(analysis.oneof_types[0].variants[0].field_name, "place_bet");
-        assert_eq!(analysis.oneof_types[0].variants[1].type_name, "CreateGameIx");
-        assert_eq!(analysis.oneof_types[0].variants[1].field_name, "create_game");
+        assert_eq!(
+            analysis.oneof_types[0].variants[1].type_name,
+            "CreateGameIx"
+        );
+        assert_eq!(
+            analysis.oneof_types[0].variants[1].field_name,
+            "create_game"
+        );
     }
 }

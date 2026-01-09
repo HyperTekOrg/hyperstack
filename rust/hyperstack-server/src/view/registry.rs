@@ -23,7 +23,10 @@ impl ViewIndex {
     }
 
     pub fn by_export(&self, entity: &str) -> &[ViewSpec] {
-        self.by_export.get(entity).map(|v| v.as_slice()).unwrap_or(&[])
+        self.by_export
+            .get(entity)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 
     pub fn get_view(&self, id: &str) -> Option<&ViewSpec> {

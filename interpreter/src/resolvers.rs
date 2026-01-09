@@ -6,7 +6,8 @@ pub struct ResolveContext<'a> {
     pub(crate) state_id: u32,
     pub(crate) slot: u64,
     pub(crate) signature: String,
-    pub(crate) reverse_lookups: &'a mut std::collections::HashMap<String, crate::vm::PdaReverseLookup>,
+    pub(crate) reverse_lookups:
+        &'a mut std::collections::HashMap<String, crate::vm::PdaReverseLookup>,
 }
 
 impl<'a> ResolveContext<'a> {
@@ -24,13 +25,13 @@ impl<'a> ResolveContext<'a> {
             reverse_lookups,
         }
     }
-    
+
     /// Try to reverse lookup a PDA address to find the seed value
     /// This is typically used to find the primary key from a PDA account address
     pub fn pda_reverse_lookup(&mut self, pda_address: &str) -> Option<String> {
         // Default lookup name - could be made configurable
         let lookup_name = "default_pda_lookup";
-        
+
         if let Some(lookup_table) = self.reverse_lookups.get_mut(lookup_name) {
             let result = lookup_table.lookup(pda_address);
             if result.is_some() {
@@ -44,11 +45,11 @@ impl<'a> ResolveContext<'a> {
             None
         }
     }
-    
+
     pub fn slot(&self) -> u64 {
         self.slot
     }
-    
+
     pub fn signature(&self) -> &str {
         &self.signature
     }
@@ -58,11 +59,11 @@ impl<'a> ResolveContext<'a> {
 pub enum KeyResolution {
     /// Primary key successfully resolved
     Found(String),
-    
+
     /// Queue this update until we see one of these instruction discriminators
     /// The discriminators identify which instructions can populate the reverse lookup
     QueueUntil(&'static [u8]),
-    
+
     /// Skip this update entirely (don't queue)
     Skip,
 }
@@ -88,7 +89,11 @@ pub struct InstructionContext<'a> {
 }
 
 pub trait ReverseLookupUpdater {
-    fn update(&mut self, pda_address: String, seed_value: String) -> Vec<crate::vm::PendingAccountUpdate>;
+    fn update(
+        &mut self,
+        pda_address: String,
+        seed_value: String,
+    ) -> Vec<crate::vm::PendingAccountUpdate>;
     fn flush_pending(&mut self, pda_address: &str) -> Vec<crate::vm::PendingAccountUpdate>;
 }
 
@@ -114,7 +119,7 @@ impl<'a> InstructionContext<'a> {
             dirty_fields: std::collections::HashSet::new(),
         }
     }
-    
+
     /// Create InstructionContext with metrics support
     #[allow(clippy::too_many_arguments)]
     pub fn with_metrics(
@@ -144,28 +149,37 @@ impl<'a> InstructionContext<'a> {
             dirty_fields: std::collections::HashSet::new(),
         }
     }
-    
+
     /// Get an account address by its name from the instruction
     pub fn account(&self, name: &str) -> Option<String> {
         self.accounts.get(name).cloned()
     }
-    
+
     /// Register a reverse lookup: PDA address -> seed value
     /// This also flushes any pending account updates for this PDA
-    /// 
+    ///
     /// The pending account updates are accumulated internally and can be retrieved
     /// via `take_pending_updates()` after all hooks have executed.
     pub fn register_pda_reverse_lookup(&mut self, pda_address: &str, seed_value: &str) {
-        tracing::info!("📝 Registering PDA reverse lookup: {} -> {}", pda_address, seed_value);
-        let pending = self.reverse_lookup_tx.update(pda_address.to_string(), seed_value.to_string());
+        tracing::info!(
+            "📝 Registering PDA reverse lookup: {} -> {}",
+            pda_address,
+            seed_value
+        );
+        let pending = self
+            .reverse_lookup_tx
+            .update(pda_address.to_string(), seed_value.to_string());
         if !pending.is_empty() {
-            tracing::info!("   🔄 Flushed {} pending account update(s) for this PDA", pending.len());
+            tracing::info!(
+                "   🔄 Flushed {} pending account update(s) for this PDA",
+                pending.len()
+            );
         }
         self.pending_updates.extend(pending);
     }
-    
+
     /// Take all accumulated pending updates
-    /// 
+    ///
     /// This should be called after all instruction hooks have executed to retrieve
     /// any pending account updates that need to be reprocessed.
     pub fn take_pending_updates(&mut self) -> Vec<crate::vm::PendingAccountUpdate> {
@@ -185,7 +199,7 @@ impl<'a> InstructionContext<'a> {
             None
         }
     }
-    
+
     /// Get a field value from the entity state
     /// This allows reading aggregated values or other entity fields
     pub fn get<T: serde::de::DeserializeOwned>(&self, field_path: &str) -> Option<T> {
@@ -221,7 +235,11 @@ impl<'a> InstructionContext<'a> {
     }
 
     /// Helper to get nested value from JSON
-    fn get_nested_value<'b>(&self, value: &'b serde_json::Value, path: &str) -> Option<&'b serde_json::Value> {
+    fn get_nested_value<'b>(
+        &self,
+        value: &'b serde_json::Value,
+        path: &str,
+    ) -> Option<&'b serde_json::Value> {
         let mut current = value;
         for segment in path.split('.') {
             current = current.get(segment)?;
@@ -230,7 +248,11 @@ impl<'a> InstructionContext<'a> {
     }
 
     /// Helper to set nested value in JSON
-    fn set_nested_value_static(value: &mut serde_json::Value, path: &str, new_value: serde_json::Value) {
+    fn set_nested_value_static(
+        value: &mut serde_json::Value,
+        path: &str,
+        new_value: serde_json::Value,
+    ) {
         let segments: Vec<&str> = path.split('.').collect();
         if segments.is_empty() {
             return;
@@ -243,7 +265,9 @@ impl<'a> InstructionContext<'a> {
                 *current = serde_json::json!({});
             }
             let obj = current.as_object_mut().unwrap();
-            current = obj.entry(segment.to_string()).or_insert(serde_json::json!({}));
+            current = obj
+                .entry(segment.to_string())
+                .or_insert(serde_json::json!({}));
         }
 
         // Set final value
@@ -254,24 +278,24 @@ impl<'a> InstructionContext<'a> {
             obj.insert(segments[segments.len() - 1].to_string(), new_value);
         }
     }
-    
+
     /// Access instruction data field
     pub fn data<T: serde::de::DeserializeOwned>(&self, field: &str) -> Option<T> {
         self.instruction_data
             .and_then(|data| data.get(field))
             .and_then(|v| serde_json::from_value(v.clone()).ok())
     }
-    
+
     /// Get the current timestamp
     pub fn timestamp(&self) -> i64 {
         self.timestamp.unwrap_or(0)
     }
-    
+
     /// Get the current slot
     pub fn slot(&self) -> Option<u64> {
         self.slot
     }
-    
+
     /// Get the current signature
     pub fn signature(&self) -> Option<&str> {
         self.signature.as_deref()

@@ -4,9 +4,9 @@
 
 #![allow(dead_code)]
 
+use std::collections::HashMap;
 use syn::parse::{Parse, ParseStream};
 use syn::{Attribute, Path, Token};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct MapAttribute {
@@ -20,23 +20,23 @@ pub struct MapAttribute {
     pub join_on: Option<String>,
     pub transform: Option<String>,
     pub is_instruction: bool,
-    pub is_whole_source: bool,  // NEW: true for whole instruction capture
-    pub lookup_by: Option<FieldSpec>,  // For aggregate/event lookup
+    pub is_whole_source: bool, // NEW: true for whole instruction capture
+    pub lookup_by: Option<FieldSpec>, // For aggregate/event lookup
 }
 
 #[derive(Debug, Clone)]
 pub struct EventAttribute {
     // New type-safe fields
-    pub from_instruction: Option<Path>,  // Explicit source via `from = ...`
-    pub inferred_instruction: Option<Path>,  // Inferred from field type
-    pub capture_fields: Vec<FieldSpec>,  // Field identifiers with location info
-    pub field_transforms: HashMap<String, syn::Ident>,  // Identifier-based transforms
-    
+    pub from_instruction: Option<Path>, // Explicit source via `from = ...`
+    pub inferred_instruction: Option<Path>, // Inferred from field type
+    pub capture_fields: Vec<FieldSpec>, // Field identifiers with location info
+    pub field_transforms: HashMap<String, syn::Ident>, // Identifier-based transforms
+
     // Backward compatibility - old string-based syntax
-    pub instruction: String,  // Legacy: "program::Instruction" format
-    pub capture_fields_legacy: Vec<String>,  // Legacy: string-based fields
-    pub field_transforms_legacy: HashMap<String, String>,  // Legacy: string-based transforms
-    
+    pub instruction: String, // Legacy: "program::Instruction" format
+    pub capture_fields_legacy: Vec<String>, // Legacy: string-based fields
+    pub field_transforms_legacy: HashMap<String, String>, // Legacy: string-based transforms
+
     // Common fields
     pub strategy: String,
     pub target_field_name: String,
@@ -47,14 +47,14 @@ pub struct EventAttribute {
 #[derive(Debug, Clone)]
 pub struct CaptureAttribute {
     // Type-safe fields for account capture
-    pub from_account: Option<Path>,  // Explicit source via `from = ...`
-    pub inferred_account: Option<Path>,  // Inferred from field type
-    
+    pub from_account: Option<Path>, // Explicit source via `from = ...`
+    pub inferred_account: Option<Path>, // Inferred from field type
+
     // Field transformations
-    pub field_transforms: HashMap<String, syn::Ident>,  // Map field name to transformation
-    
+    pub field_transforms: HashMap<String, syn::Ident>, // Map field name to transformation
+
     // Common fields
-    pub strategy: String,  // Only SetOnce or LastWrite allowed
+    pub strategy: String, // Only SetOnce or LastWrite allowed
     pub target_field_name: String,
     pub join_on: Option<FieldSpec>,
     pub lookup_by: Option<FieldSpec>,
@@ -63,7 +63,7 @@ pub struct CaptureAttribute {
 #[derive(Debug, Clone)]
 pub struct FieldSpec {
     pub ident: syn::Ident,
-    pub explicit_location: Option<FieldLocation>,  // For accounts::mint syntax
+    pub explicit_location: Option<FieldLocation>, // For accounts::mint syntax
 }
 
 #[derive(Debug, Clone)]
@@ -285,12 +285,12 @@ struct EventAttributeArgs {
     from: Option<Path>,
     fields: Option<Vec<FieldSpec>>,
     transforms: Option<Vec<FieldTransform>>,
-    
+
     // Backward compatibility
     instruction: Option<String>,
     capture: Option<Vec<String>>,
     transforms_legacy: Option<HashMap<String, String>>,
-    
+
     // Common fields
     strategy: Option<syn::Ident>,
     rename: Option<String>,
@@ -386,7 +386,7 @@ impl Parse for EventAttributeArgs {
                 while !content.is_empty() {
                     let tuple_content;
                     syn::parenthesized!(tuple_content in content);
-                    
+
                     if tuple_content.peek(syn::LitStr) {
                         // Legacy: ("string", Transform)
                         is_legacy = true;
@@ -474,15 +474,15 @@ impl Parse for EventAttributeArgs {
 // Helper function to parse a field spec (ident or location::ident)
 fn parse_field_spec(input: ParseStream) -> syn::Result<FieldSpec> {
     let lookahead = input.lookahead1();
-    
+
     if lookahead.peek(syn::Ident) {
         let first_ident: syn::Ident = input.parse()?;
-        
+
         // Check if there's a :: following
         if input.peek(Token![::]) {
             input.parse::<Token![::]>()?;
             let second_ident: syn::Ident = input.parse()?;
-            
+
             // first_ident is the location (accounts, args, data)
             let location = match first_ident.to_string().as_str() {
                 "accounts" => Some(FieldLocation::Account),
@@ -490,11 +490,14 @@ fn parse_field_spec(input: ParseStream) -> syn::Result<FieldSpec> {
                 _ => {
                     return Err(syn::Error::new(
                         first_ident.span(),
-                        format!("Invalid field location '{}'. Use 'accounts', 'args', or 'data'", first_ident),
+                        format!(
+                            "Invalid field location '{}'. Use 'accounts', 'args', or 'data'",
+                            first_ident
+                        ),
                     ));
                 }
             };
-            
+
             Ok(FieldSpec {
                 ident: second_ident,
                 explicit_location: location,
@@ -525,7 +528,8 @@ pub fn parse_event_attribute(
 
     // Convert new-style transforms to HashMap
     let field_transforms = if let Some(transforms) = args.transforms {
-        transforms.into_iter()
+        transforms
+            .into_iter()
             .map(|ft| (ft.field.to_string(), ft.transform))
             .collect()
     } else {
@@ -536,7 +540,8 @@ pub fn parse_event_attribute(
     let field_transforms_legacy = args.transforms_legacy.unwrap_or_default();
 
     // Determine strategy
-    let strategy = args.strategy
+    let strategy = args
+        .strategy
         .map(|s| s.to_string())
         .unwrap_or_else(|| "SetOnce".to_string());
 
@@ -545,7 +550,7 @@ pub fn parse_event_attribute(
 
     Ok(Some(EventAttribute {
         from_instruction: args.from,
-        inferred_instruction: None,  // Will be filled in later from field type
+        inferred_instruction: None, // Will be filled in later from field type
         capture_fields: args.fields.unwrap_or_default(),
         field_transforms,
         instruction: instruction_str,
@@ -565,7 +570,7 @@ struct SnapshotAttributeArgs {
     rename: Option<String>,
     join_on: Option<FieldSpec>,
     lookup_by: Option<FieldSpec>,
-    transforms: Vec<(String, syn::Ident)>,  // Field transformations: (field_name, transform)
+    transforms: Vec<(String, syn::Ident)>, // Field transformations: (field_name, transform)
 }
 
 impl Parse for SnapshotAttributeArgs {
@@ -616,17 +621,17 @@ impl Parse for SnapshotAttributeArgs {
                 // Parse transforms = [(field1, Transform1), (field2, Transform2)]
                 let content;
                 syn::bracketed!(content in input);
-                
+
                 while !content.is_empty() {
                     let tuple_content;
                     syn::parenthesized!(tuple_content in content);
-                    
+
                     let field_name: syn::Ident = tuple_content.parse()?;
                     tuple_content.parse::<Token![,]>()?;
                     let transform: syn::Ident = tuple_content.parse()?;
-                    
+
                     transforms.push((field_name.to_string(), transform));
-                    
+
                     if !content.is_empty() {
                         content.parse::<Token![,]>()?;
                     }
@@ -667,7 +672,9 @@ pub fn parse_snapshot_attribute(
     let target_name = args.rename.unwrap_or_else(|| target_field_name.to_string());
 
     // Determine strategy - only SetOnce or LastWrite allowed
-    let strategy = args.strategy.as_ref()
+    let strategy = args
+        .strategy
+        .as_ref()
         .map(|s| s.to_string())
         .unwrap_or_else(|| "SetOnce".to_string());
 
@@ -683,7 +690,7 @@ pub fn parse_snapshot_attribute(
 
     Ok(Some(CaptureAttribute {
         from_account: args.from,
-        inferred_account: None,  // Will be filled in later from field type
+        inferred_account: None, // Will be filled in later from field type
         field_transforms: args.transforms.into_iter().collect(),
         strategy,
         target_field_name: target_name,
@@ -839,7 +846,7 @@ pub fn parse_aggregate_attribute(
     // Determine strategy - default to Count if no field specified, Sum otherwise
     let strategy = if let Some(ref strategy_ident) = args.strategy {
         let strategy_str = strategy_ident.to_string();
-        
+
         // Validate strategy
         let valid_strategies = ["Sum", "Count", "Min", "Max", "UniqueCount"];
         if !valid_strategies.contains(&strategy_str.as_str()) {
@@ -852,7 +859,7 @@ pub fn parse_aggregate_attribute(
                 ),
             ));
         }
-        
+
         strategy_str
     } else {
         // Default strategy based on whether field is specified
@@ -993,11 +1000,17 @@ impl Parse for StreamSpecAttributeArgs {
             }
         }
 
-        Ok(StreamSpecAttributeArgs { proto_files, idl_file, skip_decoders })
+        Ok(StreamSpecAttributeArgs {
+            proto_files,
+            idl_file,
+            skip_decoders,
+        })
     }
 }
 
-pub fn parse_stream_spec_attribute(attr: proc_macro::TokenStream) -> Result<StreamSpecAttribute, syn::Error> {
+pub fn parse_stream_spec_attribute(
+    attr: proc_macro::TokenStream,
+) -> Result<StreamSpecAttribute, syn::Error> {
     if attr.is_empty() {
         return Ok(StreamSpecAttribute {
             proto_files: Vec::new(),
@@ -1016,17 +1029,17 @@ pub fn parse_stream_spec_attribute(attr: proc_macro::TokenStream) -> Result<Stre
 }
 
 /// Parse #[resolve_key_for(AccountType)] attribute
-pub fn parse_resolve_key_for_attribute(attr: &Attribute) -> syn::Result<Option<ResolverKeyForAttr>> {
+pub fn parse_resolve_key_for_attribute(
+    attr: &Attribute,
+) -> syn::Result<Option<ResolverKeyForAttr>> {
     if !attr.path().is_ident("resolve_key_for") {
         return Ok(None);
     }
-    
+
     // Parse the account type path inside the attribute
     let account_type_path: Path = attr.parse_args()?;
-    
-    Ok(Some(ResolverKeyForAttr {
-        account_type_path,
-    }))
+
+    Ok(Some(ResolverKeyForAttr { account_type_path }))
 }
 
 #[derive(Debug, Clone)]
@@ -1035,17 +1048,19 @@ pub struct ResolverKeyForAttr {
 }
 
 /// Parse #[after_instruction(InstructionType)] attribute
-/// 
+///
 /// NOTE: This attribute is no longer supported for direct use by users.
 /// All instruction hooks must be defined using declarative macros:
 /// - Use #[register_pda] to register PDA mappings
 /// - Use #[derive_from] to derive fields from instructions
 /// - Use #[aggregate] for aggregations with optional conditions
-pub fn parse_after_instruction_attribute(attr: &Attribute) -> syn::Result<Option<AfterInstructionAttr>> {
+pub fn parse_after_instruction_attribute(
+    attr: &Attribute,
+) -> syn::Result<Option<AfterInstructionAttr>> {
     if !attr.path().is_ident("after_instruction") {
         return Ok(None);
     }
-    
+
     // Reject all user-written #[after_instruction] attributes
     Err(syn::Error::new_spanned(
         attr,
@@ -1063,7 +1078,7 @@ pub fn parse_after_instruction_attribute(attr: &Attribute) -> syn::Result<Option
          for conditional aggregations\n\
          \n\
           These declarative macros are captured in the AST and enable secure cloud deployment.\n\
-         See documentation for examples."
+         See documentation for examples.",
     ))
 }
 
@@ -1075,7 +1090,7 @@ pub struct AfterInstructionAttr {
 /// Extract resolver hooks from an impl block
 pub fn extract_resolver_hooks(item_impl: &syn::ItemImpl) -> Vec<ResolverHookSpec> {
     let mut hooks = Vec::new();
-    
+
     for item in &item_impl.items {
         if let syn::ImplItem::Fn(method) = item {
             for attr in &method.attrs {
@@ -1087,7 +1102,7 @@ pub fn extract_resolver_hooks(item_impl: &syn::ItemImpl) -> Vec<ResolverHookSpec
                         fn_sig: method.sig.clone(),
                     });
                 }
-                
+
                 if let Ok(Some(instruction_attr)) = parse_after_instruction_attribute(attr) {
                     hooks.push(ResolverHookSpec {
                         kind: ResolverHookKind::AfterInstruction,
@@ -1099,14 +1114,14 @@ pub fn extract_resolver_hooks(item_impl: &syn::ItemImpl) -> Vec<ResolverHookSpec
             }
         }
     }
-    
+
     hooks
 }
 
 /// Extract resolver hooks from a standalone function
 pub fn extract_resolver_hooks_from_fn(item_fn: &syn::ItemFn) -> Vec<ResolverHookSpec> {
     let mut hooks = Vec::new();
-    
+
     for attr in &item_fn.attrs {
         if let Ok(Some(resolver_attr)) = parse_resolve_key_for_attribute(attr) {
             hooks.push(ResolverHookSpec {
@@ -1116,7 +1131,7 @@ pub fn extract_resolver_hooks_from_fn(item_fn: &syn::ItemFn) -> Vec<ResolverHook
                 fn_sig: item_fn.sig.clone(),
             });
         }
-        
+
         if let Ok(Some(instruction_attr)) = parse_after_instruction_attribute(attr) {
             hooks.push(ResolverHookSpec {
                 kind: ResolverHookKind::AfterInstruction,
@@ -1126,7 +1141,7 @@ pub fn extract_resolver_hooks_from_fn(item_fn: &syn::ItemFn) -> Vec<ResolverHook
             });
         }
     }
-    
+
     hooks
 }
 
@@ -1152,8 +1167,8 @@ pub enum ResolverHookKind {
 #[derive(Debug, Clone)]
 pub struct DeriveFromAttribute {
     pub from_instructions: Vec<Path>,
-    pub field: FieldSpec,  // Can be special: __timestamp, __slot, __signature
-    pub strategy: String,  // LastWrite, SetOnce
+    pub field: FieldSpec, // Can be special: __timestamp, __slot, __signature
+    pub strategy: String, // LastWrite, SetOnce
     pub lookup_by: Option<FieldSpec>,
     pub condition: Option<String>,
     pub transform: Option<syn::Ident>,
@@ -1262,7 +1277,8 @@ pub fn parse_derive_from_attribute(
         syn::Error::new_spanned(attr, "#[derive_from] requires 'field' parameter")
     })?;
 
-    let strategy = args.strategy
+    let strategy = args
+        .strategy
         .map(|s| s.to_string())
         .unwrap_or_else(|| "LastWrite".to_string());
 
@@ -1281,9 +1297,9 @@ pub fn parse_derive_from_attribute(
 #[derive(Debug, Clone)]
 pub struct ResolveKeyAttribute {
     pub account_path: Path,
-    pub strategy: String,  // "pda_reverse_lookup", "direct_field"
+    pub strategy: String, // "pda_reverse_lookup", "direct_field"
     pub lookup_name: Option<String>,
-    pub queue_until: Vec<Path>,  // Instruction paths
+    pub queue_until: Vec<Path>, // Instruction paths
 }
 
 struct ResolveKeyAttributeArgs {
@@ -1348,9 +1364,7 @@ impl Parse for ResolveKeyAttributeArgs {
     }
 }
 
-pub fn parse_resolve_key_attribute(
-    attr: &Attribute,
-) -> syn::Result<Option<ResolveKeyAttribute>> {
+pub fn parse_resolve_key_attribute(attr: &Attribute) -> syn::Result<Option<ResolveKeyAttribute>> {
     if !attr.path().is_ident("resolve_key") {
         return Ok(None);
     }
@@ -1361,7 +1375,8 @@ pub fn parse_resolve_key_attribute(
         syn::Error::new_spanned(attr, "#[resolve_key] requires 'account' parameter")
     })?;
 
-    let strategy = args.strategy
+    let strategy = args
+        .strategy
         .map(|s| s.to_string())
         .unwrap_or_else(|| "pda_reverse_lookup".to_string());
 
@@ -1378,7 +1393,7 @@ pub fn parse_resolve_key_attribute(
 pub struct RegisterPdaAttribute {
     pub instruction_path: Path,
     pub pda_field: FieldSpec,
-    pub primary_key_field: FieldSpec,  // The primary key to associate with the PDA
+    pub primary_key_field: FieldSpec, // The primary key to associate with the PDA
     pub lookup_name: String,
 }
 
@@ -1432,9 +1447,7 @@ impl Parse for RegisterPdaAttributeArgs {
     }
 }
 
-pub fn parse_register_pda_attribute(
-    attr: &Attribute,
-) -> syn::Result<Option<RegisterPdaAttribute>> {
+pub fn parse_register_pda_attribute(attr: &Attribute) -> syn::Result<Option<RegisterPdaAttribute>> {
     if !attr.path().is_ident("register_pda") {
         return Ok(None);
     }
@@ -1453,7 +1466,9 @@ pub fn parse_register_pda_attribute(
         syn::Error::new_spanned(attr, "#[register_pda] requires 'primary_key' parameter")
     })?;
 
-    let lookup_name = args.lookup_name.unwrap_or_else(|| "default_pda_lookup".to_string());
+    let lookup_name = args
+        .lookup_name
+        .unwrap_or_else(|| "default_pda_lookup".to_string());
 
     Ok(Some(RegisterPdaAttribute {
         instruction_path,

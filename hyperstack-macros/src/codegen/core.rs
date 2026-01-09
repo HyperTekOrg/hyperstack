@@ -6,7 +6,10 @@ use quote::quote;
 use crate::ast::*;
 
 /// Generate hook action implementations.
-pub fn generate_hook_actions(actions: &[HookAction], _lookup_by: &Option<FieldPath>) -> TokenStream {
+pub fn generate_hook_actions(
+    actions: &[HookAction],
+    _lookup_by: &Option<FieldPath>,
+) -> TokenStream {
     let action_code: Vec<TokenStream> = actions.iter().map(|action| {
         match action {
             HookAction::RegisterPdaMapping { pda_field, seed_field, lookup_name: _ } => {
@@ -58,7 +61,11 @@ pub fn generate_hook_actions(actions: &[HookAction], _lookup_by: &Option<FieldPa
 /// Generate code for a SetField action.
 pub fn generate_set_field_code(target_field: &str, source: &MappingSource) -> TokenStream {
     match source {
-        MappingSource::FromSource { path, default: _, transform: _ } => {
+        MappingSource::FromSource {
+            path,
+            default: _,
+            transform: _,
+        } => {
             let field_str = path.segments.last().cloned().unwrap_or_default();
             quote! {
                 if let Some(value) = ctx.data::<serde_json::Value>(#field_str) {
@@ -73,15 +80,17 @@ pub fn generate_set_field_code(target_field: &str, source: &MappingSource) -> To
                 ctx.set(#target_field, serde_json::from_str::<serde_json::Value>(#value_str).unwrap_or(serde_json::Value::Null));
             }
         }
-        MappingSource::FromContext { field } => {
-            match field.as_str() {
-                "slot" => quote! { ctx.set(#target_field, serde_json::json!(ctx.slot().unwrap_or(0))); },
-                "signature" => quote! { ctx.set(#target_field, serde_json::json!(ctx.signature().unwrap_or_default())); },
-                "timestamp" => quote! { ctx.set(#target_field, serde_json::json!(ctx.timestamp())); },
-                _ => quote! {}
+        MappingSource::FromContext { field } => match field.as_str() {
+            "slot" => {
+                quote! { ctx.set(#target_field, serde_json::json!(ctx.slot().unwrap_or(0))); }
             }
-        }
-        _ => quote! {}
+            "signature" => {
+                quote! { ctx.set(#target_field, serde_json::json!(ctx.signature().unwrap_or_default())); }
+            }
+            "timestamp" => quote! { ctx.set(#target_field, serde_json::json!(ctx.timestamp())); },
+            _ => quote! {},
+        },
+        _ => quote! {},
     }
 }
 
@@ -103,14 +112,14 @@ pub fn generate_parsed_condition_code(condition: &ParsedCondition) -> TokenStrea
         ParsedCondition::Comparison { field, op, value } => {
             let field_str = field.segments.last().cloned().unwrap_or_default();
             let value_str = serde_json::to_string(value).unwrap_or_else(|_| "null".to_string());
-            
+
             // For numeric comparisons, extract the value as appropriate type
             match op {
                 ComparisonOp::Equal | ComparisonOp::NotEqual => {
                     let op_code = match op {
                         ComparisonOp::Equal => quote! { == },
                         ComparisonOp::NotEqual => quote! { != },
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     };
                     quote! {
                         ctx.data::<serde_json::Value>(#field_str)
@@ -118,15 +127,17 @@ pub fn generate_parsed_condition_code(condition: &ParsedCondition) -> TokenStrea
                             .unwrap_or(false)
                     }
                 }
-                ComparisonOp::GreaterThan | ComparisonOp::GreaterThanOrEqual | 
-                ComparisonOp::LessThan | ComparisonOp::LessThanOrEqual => {
+                ComparisonOp::GreaterThan
+                | ComparisonOp::GreaterThanOrEqual
+                | ComparisonOp::LessThan
+                | ComparisonOp::LessThanOrEqual => {
                     // For ordering comparisons, try to compare as numbers
                     let op_code = match op {
                         ComparisonOp::GreaterThan => quote! { > },
                         ComparisonOp::GreaterThanOrEqual => quote! { >= },
                         ComparisonOp::LessThan => quote! { < },
                         ComparisonOp::LessThanOrEqual => quote! { <= },
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     };
                     quote! {
                         {
@@ -142,7 +153,8 @@ pub fn generate_parsed_condition_code(condition: &ParsedCondition) -> TokenStrea
             }
         }
         ParsedCondition::Logical { op, conditions } => {
-            let condition_codes: Vec<TokenStream> = conditions.iter()
+            let condition_codes: Vec<TokenStream> = conditions
+                .iter()
                 .map(generate_parsed_condition_code)
                 .collect();
             match op {

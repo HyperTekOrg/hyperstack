@@ -12,10 +12,10 @@ use syn::{Fields, ItemStruct, Type};
 use crate::parse;
 use crate::utils::{path_to_string, to_snake_case};
 
+use super::ast_writer::write_ast_at_compile_time;
+use super::entity::process_map_attribute;
 use super::handlers::{convert_event_to_map_attributes, determine_event_instruction};
 use super::sections::{is_primitive_or_wrapper, process_nested_struct};
-use super::entity::process_map_attribute;
-use super::ast_writer::write_ast_at_compile_time;
 
 // ============================================================================
 // Proto Struct Processing

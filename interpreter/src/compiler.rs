@@ -577,7 +577,11 @@ impl<S> TypedCompiler<S> {
 
         ops.extend(self.compile_key_loading(&spec.key_resolution, key_reg, &spec.mappings));
 
-        ops.extend(self.compile_temporal_index_update(&spec.key_resolution, key_reg, &spec.mappings));
+        ops.extend(self.compile_temporal_index_update(
+            &spec.key_resolution,
+            key_reg,
+            &spec.mappings,
+        ));
 
         ops.push(OpCode::ReadOrInitState {
             state_id: self.state_id,
@@ -1307,15 +1311,16 @@ impl<S> TypedCompiler<S> {
                 KeyResolutionStrategy::Embedded { primary_field: _ } => {
                     // For Embedded handlers, find the mapping that targets this lookup index field
                     // and use its source path to load the lookup value
-                    let source_path_opt = self.find_source_path_for_lookup_index(mappings, &lookup_index.field_name);
-                    
+                    let source_path_opt =
+                        self.find_source_path_for_lookup_index(mappings, &lookup_index.field_name);
+
                     let load_path = if let Some(ref path) = source_path_opt {
                         FieldPath::new(&path.iter().map(|s| s.as_str()).collect::<Vec<_>>())
                     } else {
                         // Fallback to source_field if no mapping found
                         FieldPath::new(&[source_field])
                     };
-                    
+
                     ops.push(OpCode::LoadEventField {
                         path: load_path,
                         dest: lookup_reg,
@@ -1356,7 +1361,7 @@ impl<S> TypedCompiler<S> {
                             primary_key: key_reg,
                         });
                     }
-                    
+
                     // Also update PDA reverse lookup table if there's a resolver configured for this entity
                     // This allows instruction handlers to look up the primary key from PDA addresses
                     // Only do this when the source path is different (e.g., __account_address -> id.round_address)
@@ -1372,14 +1377,15 @@ impl<S> TypedCompiler<S> {
                 KeyResolutionStrategy::Lookup { primary_field } => {
                     // For Lookup handlers, check if there's a mapping that targets this lookup index field
                     // If so, the lookup value is the same as the primary_field used for key resolution
-                    let has_mapping_to_lookup_field = mappings.iter().any(|m| {
-                        m.target_path == lookup_index.field_name
-                    });
+                    let has_mapping_to_lookup_field = mappings
+                        .iter()
+                        .any(|m| m.target_path == lookup_index.field_name);
 
                     if has_mapping_to_lookup_field {
                         // Load the lookup value from the event using the primary_field path
                         // (this is the same value used for key resolution)
-                        let path_segments: Vec<&str> = primary_field.segments.iter().map(|s| s.as_str()).collect();
+                        let path_segments: Vec<&str> =
+                            primary_field.segments.iter().map(|s| s.as_str()).collect();
                         ops.push(OpCode::LoadEventField {
                             path: FieldPath::new(&path_segments),
                             dest: lookup_reg,
@@ -1395,7 +1401,8 @@ impl<S> TypedCompiler<S> {
                         });
                     }
                 }
-                KeyResolutionStrategy::Computed { .. } | KeyResolutionStrategy::TemporalLookup { .. } => {
+                KeyResolutionStrategy::Computed { .. }
+                | KeyResolutionStrategy::TemporalLookup { .. } => {
                     // Computed and TemporalLookup handlers don't populate lookup indexes
                 }
             }
@@ -1431,7 +1438,11 @@ impl<S> TypedCompiler<S> {
                     ops.extend(load_ops);
 
                     // Apply transformation if specified in source
-                    if let MappingSource::FromSource { transform: Some(transform_type), .. } = source {
+                    if let MappingSource::FromSource {
+                        transform: Some(transform_type),
+                        ..
+                    } = source
+                    {
                         ops.push(OpCode::Transform {
                             source: temp_reg,
                             dest: temp_reg,

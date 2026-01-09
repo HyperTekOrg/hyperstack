@@ -19,16 +19,18 @@ struct PumpToken {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let url = std::env::args().nth(1).unwrap_or_else(|| "ws://127.0.0.1:8080".to_string());
-    
+    let url = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "ws://127.0.0.1:8080".to_string());
+
     let client = HyperStackClient::<PumpToken>::new(url, "PumpToken/list");
-    
+
     let store = client.connect().await?;
-    
+
     println!("watching for new pump.fun token launches...\n");
-    
+
     let mut updates = store.subscribe();
-    
+
     loop {
         tokio::select! {
             Ok((mint, token)) = updates.recv() => {

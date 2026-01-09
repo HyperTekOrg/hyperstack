@@ -104,7 +104,15 @@ pub fn hyperstack(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - `#[derive_from(...)]` - Derive values from instructions
 #[proc_macro_derive(
     Stream,
-    attributes(map, from_instruction, event, snapshot, aggregate, computed, derive_from)
+    attributes(
+        map,
+        from_instruction,
+        event,
+        snapshot,
+        aggregate,
+        computed,
+        derive_from
+    )
 )]
 pub fn stream_derive(_input: TokenStream) -> TokenStream {
     TokenStream::new()

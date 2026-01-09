@@ -199,9 +199,11 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
     // Determine if this IDL uses Steel-style discriminants (1 byte) or Anchor-style (8 bytes)
     // Steel IDLs have a `discriminant` field with {"type": "u8", "value": N}
     // Anchor IDLs have a `discriminator` array with 8 bytes
-    let uses_steel_discriminant = idl.instructions.iter()
+    let uses_steel_discriminant = idl
+        .instructions
+        .iter()
         .any(|ix| ix.discriminant.is_some() && ix.discriminator.is_empty());
-    
+
     let discriminator_size: usize = if uses_steel_discriminant { 1 } else { 8 };
 
     let unpack_arms = idl.instructions.iter().map(|ix| {
@@ -214,7 +216,7 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
 
         // Use the correct offset based on IDL type
         let disc_size = discriminator_size;
-        
+
         // Check if instruction has no args - use Default instead of deserializing
         let has_args = !ix.args.is_empty();
         if has_args {
@@ -382,7 +384,7 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
                                 yellowstone_vixen_core::ParseError::from(e.to_string())
                             }
                         })?;
-                    
+
                     Ok(parsed)
                 } else {
                     Err(yellowstone_vixen_core::ParseError::Filtered)

@@ -292,8 +292,10 @@ impl Metrics {
 
     /// Record VM event processing duration in milliseconds
     pub fn record_vm_event_duration(&self, duration_ms: f64, event_type: &str) {
-        self.vm_event_processing_duration
-            .record(duration_ms, &[KeyValue::new("event_type", event_type.to_string())]);
+        self.vm_event_processing_duration.record(
+            duration_ms,
+            &[KeyValue::new("event_type", event_type.to_string())],
+        );
     }
 
     /// Record mutations emitted by the VM

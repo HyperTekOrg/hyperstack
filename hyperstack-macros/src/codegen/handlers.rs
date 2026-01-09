@@ -11,8 +11,8 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 use crate::ast::{
-    FieldPath, KeyResolutionStrategy, MappingSource, PopulationStrategy,
-    SerializableFieldMapping, SerializableHandlerSpec, SourceSpec, Transformation,
+    FieldPath, KeyResolutionStrategy, MappingSource, PopulationStrategy, SerializableFieldMapping,
+    SerializableHandlerSpec, SourceSpec, Transformation,
 };
 
 /// Build handler code from a serializable handler spec.
@@ -29,22 +29,25 @@ use crate::ast::{
 /// # Returns
 ///
 /// A `TokenStream` containing the code to construct a `TypedHandlerSpec`.
-pub fn build_handler_code(handler: &SerializableHandlerSpec, state_name: &syn::Ident) -> TokenStream {
+pub fn build_handler_code(
+    handler: &SerializableHandlerSpec,
+    state_name: &syn::Ident,
+) -> TokenStream {
     // Generate source spec code
     let source_code = build_source_spec_code(&handler.source);
-    
+
     // Generate key resolution code
     let key_resolution_code = build_key_resolution_code(&handler.key_resolution);
-    
+
     // Generate field mapping code
     let mappings_code: Vec<TokenStream> = handler
         .mappings
         .iter()
         .map(build_field_mapping_code)
         .collect();
-    
+
     let emit = handler.emit;
-    
+
     quote! {
         hyperstack_interpreter::ast::TypedHandlerSpec::<#state_name>::new(
             #source_code,
@@ -72,7 +75,7 @@ pub fn build_handler_fn(
     state_name: &syn::Ident,
 ) -> TokenStream {
     let handler_code = build_handler_code(handler, state_name);
-    
+
     quote! {
         fn #handler_name() -> hyperstack_interpreter::ast::TypedHandlerSpec<#state_name> {
             #handler_code
@@ -92,7 +95,7 @@ fn build_source_spec_code(source: &SourceSpec) -> TokenStream {
                 Some(id) => quote! { Some(#id.to_string()) },
                 None => quote! { None },
             };
-            
+
             let discriminator_code = match discriminator {
                 Some(disc) => {
                     let bytes = disc.iter();
@@ -100,7 +103,7 @@ fn build_source_spec_code(source: &SourceSpec) -> TokenStream {
                 }
                 None => quote! { None },
             };
-            
+
             quote! {
                 hyperstack_interpreter::ast::SourceSpec::Source {
                     program_id: #program_id_code,
@@ -173,8 +176,12 @@ fn build_field_path_code(path: &FieldPath) -> TokenStream {
 /// Generate code for ComputeFunction.
 fn build_compute_function_code(func: &crate::ast::ComputeFunction) -> TokenStream {
     match func {
-        crate::ast::ComputeFunction::Sum => quote! { hyperstack_interpreter::ast::ComputeFunction::Sum },
-        crate::ast::ComputeFunction::Concat => quote! { hyperstack_interpreter::ast::ComputeFunction::Concat },
+        crate::ast::ComputeFunction::Sum => {
+            quote! { hyperstack_interpreter::ast::ComputeFunction::Sum }
+        }
+        crate::ast::ComputeFunction::Concat => {
+            quote! { hyperstack_interpreter::ast::ComputeFunction::Concat }
+        }
         crate::ast::ComputeFunction::Format(fmt) => {
             quote! { hyperstack_interpreter::ast::ComputeFunction::Format(#fmt.to_string()) }
         }
@@ -189,7 +196,7 @@ fn build_field_mapping_code(mapping: &SerializableFieldMapping) -> TokenStream {
     let target_path = &mapping.target_path;
     let source_code = build_mapping_source_code(&mapping.source);
     let population_code = build_population_strategy_code(&mapping.population);
-    
+
     let base_mapping = quote! {
         hyperstack_interpreter::ast::TypedFieldMapping::new(
             #target_path.to_string(),
@@ -197,7 +204,7 @@ fn build_field_mapping_code(mapping: &SerializableFieldMapping) -> TokenStream {
             #population_code,
         )
     };
-    
+
     // Add transform if present
     match &mapping.transform {
         Some(transform) => {
@@ -293,7 +300,7 @@ fn build_mapping_source_code(source: &MappingSource) -> TokenStream {
                     }
                 })
                 .collect();
-            
+
             if transform_insertions.is_empty() {
                 quote! {
                     hyperstack_interpreter::ast::MappingSource::AsCapture {
@@ -325,27 +332,51 @@ fn build_mapping_source_code(source: &MappingSource) -> TokenStream {
 /// Generate code for PopulationStrategy.
 fn build_population_strategy_code(strategy: &PopulationStrategy) -> TokenStream {
     match strategy {
-        PopulationStrategy::SetOnce => quote! { hyperstack_interpreter::ast::PopulationStrategy::SetOnce },
-        PopulationStrategy::LastWrite => quote! { hyperstack_interpreter::ast::PopulationStrategy::LastWrite },
-        PopulationStrategy::Append => quote! { hyperstack_interpreter::ast::PopulationStrategy::Append },
-        PopulationStrategy::Merge => quote! { hyperstack_interpreter::ast::PopulationStrategy::Merge },
+        PopulationStrategy::SetOnce => {
+            quote! { hyperstack_interpreter::ast::PopulationStrategy::SetOnce }
+        }
+        PopulationStrategy::LastWrite => {
+            quote! { hyperstack_interpreter::ast::PopulationStrategy::LastWrite }
+        }
+        PopulationStrategy::Append => {
+            quote! { hyperstack_interpreter::ast::PopulationStrategy::Append }
+        }
+        PopulationStrategy::Merge => {
+            quote! { hyperstack_interpreter::ast::PopulationStrategy::Merge }
+        }
         PopulationStrategy::Max => quote! { hyperstack_interpreter::ast::PopulationStrategy::Max },
         PopulationStrategy::Sum => quote! { hyperstack_interpreter::ast::PopulationStrategy::Sum },
-        PopulationStrategy::Count => quote! { hyperstack_interpreter::ast::PopulationStrategy::Count },
+        PopulationStrategy::Count => {
+            quote! { hyperstack_interpreter::ast::PopulationStrategy::Count }
+        }
         PopulationStrategy::Min => quote! { hyperstack_interpreter::ast::PopulationStrategy::Min },
-        PopulationStrategy::UniqueCount => quote! { hyperstack_interpreter::ast::PopulationStrategy::UniqueCount },
+        PopulationStrategy::UniqueCount => {
+            quote! { hyperstack_interpreter::ast::PopulationStrategy::UniqueCount }
+        }
     }
 }
 
 /// Generate code for Transformation.
 fn build_transformation_code(transform: &Transformation) -> TokenStream {
     match transform {
-        Transformation::HexEncode => quote! { hyperstack_interpreter::ast::Transformation::HexEncode },
-        Transformation::HexDecode => quote! { hyperstack_interpreter::ast::Transformation::HexDecode },
-        Transformation::Base58Encode => quote! { hyperstack_interpreter::ast::Transformation::Base58Encode },
-        Transformation::Base58Decode => quote! { hyperstack_interpreter::ast::Transformation::Base58Decode },
-        Transformation::ToString => quote! { hyperstack_interpreter::ast::Transformation::ToString },
-        Transformation::ToNumber => quote! { hyperstack_interpreter::ast::Transformation::ToNumber },
+        Transformation::HexEncode => {
+            quote! { hyperstack_interpreter::ast::Transformation::HexEncode }
+        }
+        Transformation::HexDecode => {
+            quote! { hyperstack_interpreter::ast::Transformation::HexDecode }
+        }
+        Transformation::Base58Encode => {
+            quote! { hyperstack_interpreter::ast::Transformation::Base58Encode }
+        }
+        Transformation::Base58Decode => {
+            quote! { hyperstack_interpreter::ast::Transformation::Base58Decode }
+        }
+        Transformation::ToString => {
+            quote! { hyperstack_interpreter::ast::Transformation::ToString }
+        }
+        Transformation::ToNumber => {
+            quote! { hyperstack_interpreter::ast::Transformation::ToNumber }
+        }
     }
 }
 
@@ -371,13 +402,13 @@ pub fn generate_handlers_from_specs(
 ) -> (Vec<TokenStream>, Vec<TokenStream>) {
     let mut handler_fns = Vec::new();
     let mut handler_calls = Vec::new();
-    
+
     for (i, handler) in handlers.iter().enumerate() {
         // Extract type name for handler naming
         let type_name = match &handler.source {
             SourceSpec::Source { type_name, .. } => type_name.clone(),
         };
-        
+
         // Generate handler name from type
         let handler_suffix = crate::utils::to_snake_case(&type_name);
         let handler_name = format_ident!(
@@ -386,19 +417,19 @@ pub fn generate_handlers_from_specs(
             handler_suffix,
             i
         );
-        
+
         let handler_fn = build_handler_fn(handler, &handler_name, state_name);
         handler_fns.push(handler_fn);
         handler_calls.push(quote! { #handler_name() });
     }
-    
+
     (handler_fns, handler_calls)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_build_field_path_code() {
         let path = FieldPath::new(&["accounts", "mint"]);
@@ -408,7 +439,7 @@ mod tests {
         assert!(code_str.contains("accounts"));
         assert!(code_str.contains("mint"));
     }
-    
+
     #[test]
     fn test_build_population_strategy_code() {
         let strategy = PopulationStrategy::Sum;

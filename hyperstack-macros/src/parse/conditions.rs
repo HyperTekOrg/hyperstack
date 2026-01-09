@@ -1,21 +1,21 @@
-use crate::ast::{ParsedCondition, ComparisonOp, LogicalOp, FieldPath};
+use crate::ast::{ComparisonOp, FieldPath, LogicalOp, ParsedCondition};
 
 /// Parse a condition expression string into a ParsedCondition AST
-/// 
+///
 /// Supported syntax:
 /// - Comparisons: "field > 100", "amount >= 1000000"
 /// - Logical ops: "amount > 100 && user != \"excluded\"", "a < 10 || a > 1000"
 /// - Field refs: "amount", "data.field", "accounts.user"
-/// 
+///
 /// Returns None if parsing fails (will emit compile error)
 pub fn parse_condition_expression(expr: &str) -> Option<ParsedCondition> {
     let expr = expr.trim();
-    
+
     // Try to parse as logical expression first (contains && or ||)
     if let Some(parsed) = try_parse_logical(expr) {
         return Some(parsed);
     }
-    
+
     // Parse as comparison
     try_parse_comparison(expr)
 }
@@ -23,12 +23,12 @@ pub fn parse_condition_expression(expr: &str) -> Option<ParsedCondition> {
 fn try_parse_logical(expr: &str) -> Option<ParsedCondition> {
     // Split on && or || (respecting precedence: && before ||)
     // For simplicity, we can use a basic tokenizer
-    
+
     // Find top-level || first (lowest precedence)
     if let Some(pos) = find_top_level_operator(expr, "||") {
         let left = expr[..pos].trim();
         let right = expr[pos + 2..].trim();
-        
+
         return Some(ParsedCondition::Logical {
             op: LogicalOp::Or,
             conditions: vec![
@@ -37,12 +37,12 @@ fn try_parse_logical(expr: &str) -> Option<ParsedCondition> {
             ],
         });
     }
-    
+
     // Find top-level && (higher precedence)
     if let Some(pos) = find_top_level_operator(expr, "&&") {
         let left = expr[..pos].trim();
         let right = expr[pos + 2..].trim();
-        
+
         return Some(ParsedCondition::Logical {
             op: LogicalOp::And,
             conditions: vec![
@@ -51,7 +51,7 @@ fn try_parse_logical(expr: &str) -> Option<ParsedCondition> {
             ],
         });
     }
-    
+
     None
 }
 
@@ -65,19 +65,19 @@ fn try_parse_comparison(expr: &str) -> Option<ParsedCondition> {
         (">", ComparisonOp::GreaterThan),
         ("<", ComparisonOp::LessThan),
     ];
-    
+
     for (op_str, op) in &operators {
         if let Some(pos) = find_top_level_operator(expr, op_str) {
             let field = expr[..pos].trim();
             let value = expr[pos + op_str.len()..].trim();
-            
+
             // Parse field path
             let field_segments: Vec<&str> = field.split('.').collect();
             let field_path = FieldPath::new(&field_segments);
-            
+
             // Parse value (number, string, or bool)
             let value_json = parse_value(value)?;
-            
+
             return Some(ParsedCondition::Comparison {
                 field: field_path,
                 op: op.clone(),
@@ -85,7 +85,7 @@ fn try_parse_comparison(expr: &str) -> Option<ParsedCondition> {
             });
         }
     }
-    
+
     None
 }
 
@@ -94,11 +94,11 @@ fn find_top_level_operator(expr: &str, op: &str) -> Option<usize> {
     let mut depth = 0;
     let mut in_quotes = false;
     let mut quote_char = '\0';
-    
+
     let chars: Vec<char> = expr.chars().collect();
     for i in 0..chars.len() {
         let c = chars[i];
-        
+
         if !in_quotes {
             if c == '"' || c == '\'' {
                 in_quotes = true;
@@ -114,16 +114,16 @@ fn find_top_level_operator(expr: &str, op: &str) -> Option<usize> {
             in_quotes = false;
         }
     }
-    
+
     None
 }
 
 fn parse_value(value: &str) -> Option<serde_json::Value> {
     use serde_json::Value;
-    
+
     // Remove underscores from numeric literals (Rust style: 1_000_000)
     let value_clean = value.replace('_', "");
-    
+
     // Try parsing as different types
     if value_clean == "true" {
         Some(Value::Bool(true))
@@ -146,7 +146,7 @@ fn parse_value(value: &str) -> Option<serde_json::Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_simple_comparison() {
         let parsed = parse_condition_expression("amount > 1000").unwrap();
@@ -159,7 +159,7 @@ mod tests {
             _ => panic!("Expected comparison"),
         }
     }
-    
+
     #[test]
     fn test_numeric_with_underscores() {
         let parsed = parse_condition_expression("amount > 1_000_000_000_000").unwrap();
@@ -172,7 +172,7 @@ mod tests {
             _ => panic!("Expected comparison"),
         }
     }
-    
+
     #[test]
     fn test_logical_and() {
         let parsed = parse_condition_expression("amount > 100 && user != \"excluded\"").unwrap();
@@ -184,7 +184,7 @@ mod tests {
             _ => panic!("Expected logical"),
         }
     }
-    
+
     #[test]
     fn test_nested_field_path() {
         let parsed = parse_condition_expression("data.amount >= 500").unwrap();

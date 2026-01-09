@@ -19,7 +19,7 @@ use super::{
 };
 
 /// Configuration for code generation.
-/// 
+///
 /// This struct allows controlling which components are generated,
 /// useful for partial generation in different contexts.
 #[derive(Debug, Clone, Default)]
@@ -89,11 +89,14 @@ pub fn generate_all_from_spec(
 ) -> TokenStream {
     let entity_name = &ast.state_name;
     let state_name_ident = format_ident!("{}State", entity_name);
-    
+
     // Get program name from IDL
     let program_name = ctx.idl.get_name();
     let state_enum_name = format!("{}State", crate::parse::idl::to_pascal_case(program_name));
-    let instruction_enum_name = format!("{}Instruction", crate::parse::idl::to_pascal_case(program_name));
+    let instruction_enum_name = format!(
+        "{}Instruction",
+        crate::parse::idl::to_pascal_case(program_name)
+    );
 
     // Generate each component based on config
     let sdk_types = if config.sdk_types {
@@ -109,11 +112,7 @@ pub fn generate_all_from_spec(
     };
 
     let registries = if config.resolvers {
-        generate_resolver_registries(
-            &ast.resolver_hooks,
-            &ast.instruction_hooks,
-            Some(ctx.idl),
-        )
+        generate_resolver_registries(&ast.resolver_hooks, &ast.instruction_hooks, Some(ctx.idl))
     } else {
         quote! {}
     };
@@ -192,11 +191,14 @@ pub fn generate_components_from_spec(
 ) -> GeneratedComponents {
     let entity_name = &ast.state_name;
     let state_name_ident = format_ident!("{}State", entity_name);
-    
+
     // Get program name from IDL
     let program_name = ctx.idl.get_name();
     let state_enum_name = format!("{}State", crate::parse::idl::to_pascal_case(program_name));
-    let instruction_enum_name = format!("{}Instruction", crate::parse::idl::to_pascal_case(program_name));
+    let instruction_enum_name = format!(
+        "{}Instruction",
+        crate::parse::idl::to_pascal_case(program_name)
+    );
 
     GeneratedComponents {
         sdk_types: if config.sdk_types {
@@ -210,11 +212,7 @@ pub fn generate_components_from_spec(
             quote! {}
         },
         registries: if config.resolvers {
-            generate_resolver_registries(
-                &ast.resolver_hooks,
-                &ast.instruction_hooks,
-                Some(ctx.idl),
-            )
+            generate_resolver_registries(&ast.resolver_hooks, &ast.instruction_hooks, Some(ctx.idl))
         } else {
             quote! {}
         },
@@ -239,13 +237,15 @@ pub fn generate_components_from_spec(
             quote! {}
         },
         handler_fns: if config.handlers {
-            let (fns, _) = generate_handlers_from_specs(&ast.handlers, entity_name, &state_name_ident);
+            let (fns, _) =
+                generate_handlers_from_specs(&ast.handlers, entity_name, &state_name_ident);
             fns
         } else {
             Vec::new()
         },
         handler_calls: if config.handlers {
-            let (_, calls) = generate_handlers_from_specs(&ast.handlers, entity_name, &state_name_ident);
+            let (_, calls) =
+                generate_handlers_from_specs(&ast.handlers, entity_name, &state_name_ident);
             calls
         } else {
             Vec::new()

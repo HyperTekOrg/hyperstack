@@ -42,7 +42,9 @@ pub mod view;
 pub mod websocket;
 
 pub use bus::{BusManager, BusMessage};
-pub use config::{HealthConfig, HttpHealthConfig, ServerConfig, WebSocketConfig, YellowstoneConfig};
+pub use config::{
+    HealthConfig, HttpHealthConfig, ServerConfig, WebSocketConfig, YellowstoneConfig,
+};
 pub use health::{HealthMonitor, StreamStatus};
 pub use http_health::HttpHealthServer;
 #[cfg(feature = "otel")]
@@ -60,11 +62,11 @@ use std::sync::Arc;
 /// This function receives a mutations sender and optional health monitor, then sets up the Vixen runtime
 pub type ParserSetupFn = Arc<
     dyn Fn(
-        tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
-        Option<HealthMonitor>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send>> 
-        + Send 
-        + Sync
+            tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
+            Option<HealthMonitor>,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send>>
+        + Send
+        + Sync,
 >;
 
 /// Specification for a HyperStack server
@@ -76,7 +78,10 @@ pub struct Spec {
 }
 
 impl Spec {
-    pub fn new(bytecode: hyperstack_interpreter::compiler::MultiEntityBytecode, program_id: impl Into<String>) -> Self {
+    pub fn new(
+        bytecode: hyperstack_interpreter::compiler::MultiEntityBytecode,
+        program_id: impl Into<String>,
+    ) -> Self {
         Self {
             bytecode,
             program_id: program_id.into(),
@@ -207,7 +212,7 @@ impl ServerBuilder {
         // Use provided views or create default views from spec
         let view_index = self.views.unwrap_or_else(|| {
             let mut index = ViewIndex::new();
-            
+
             // Auto-register default views for each entity in the spec
             if let Some(ref spec) = self.spec {
                 for entity_name in spec.bytecode.entities.keys() {
@@ -220,7 +225,7 @@ impl ServerBuilder {
                         filters: Filters::all(),
                         delivery: Delivery::default(),
                     });
-                    
+
                     // Register list view (all entities)
                     index.add_spec(ViewSpec {
                         id: format!("{}/list", entity_name),
@@ -230,7 +235,7 @@ impl ServerBuilder {
                         filters: Filters::all(),
                         delivery: Delivery::default(),
                     });
-                    
+
                     // Register state view (single shared state)
                     index.add_spec(ViewSpec {
                         id: format!("{}/state", entity_name),
@@ -240,7 +245,7 @@ impl ServerBuilder {
                         filters: Filters::all(),
                         delivery: Delivery::default(),
                     });
-                    
+
                     // Register append view (append-only log)
                     index.add_spec(ViewSpec {
                         id: format!("{}/append", entity_name),
@@ -250,11 +255,11 @@ impl ServerBuilder {
                         filters: Filters::all(),
                         delivery: Delivery::default(),
                     });
-                    
+
                     tracing::info!("Registered views for entity: {}", entity_name);
                 }
             }
-            
+
             index
         });
 
@@ -263,7 +268,7 @@ impl ServerBuilder {
         let mut runtime = Runtime::new(self.config, view_index, self.metrics);
         #[cfg(not(feature = "otel"))]
         let mut runtime = Runtime::new(self.config, view_index);
-        
+
         // Add spec if provided
         if let Some(spec) = self.spec {
             runtime = runtime.with_spec(spec);
@@ -278,7 +283,7 @@ impl ServerBuilder {
         // Use provided views or create default views from spec
         let view_index = self.views.unwrap_or_else(|| {
             let mut index = ViewIndex::new();
-            
+
             // Auto-register default views for each entity in the spec
             if let Some(ref spec) = self.spec {
                 for entity_name in spec.bytecode.entities.keys() {
@@ -291,7 +296,7 @@ impl ServerBuilder {
                         filters: Filters::all(),
                         delivery: Delivery::default(),
                     });
-                    
+
                     // Register list view
                     index.add_spec(ViewSpec {
                         id: format!("{}/list", entity_name),
@@ -301,7 +306,7 @@ impl ServerBuilder {
                         filters: Filters::all(),
                         delivery: Delivery::default(),
                     });
-                    
+
                     // Register state view
                     index.add_spec(ViewSpec {
                         id: format!("{}/state", entity_name),
@@ -311,7 +316,7 @@ impl ServerBuilder {
                         filters: Filters::all(),
                         delivery: Delivery::default(),
                     });
-                    
+
                     // Register append view
                     index.add_spec(ViewSpec {
                         id: format!("{}/append", entity_name),
@@ -323,15 +328,15 @@ impl ServerBuilder {
                     });
                 }
             }
-            
+
             index
         });
-        
+
         #[cfg(feature = "otel")]
         let mut runtime = Runtime::new(self.config, view_index, self.metrics);
         #[cfg(not(feature = "otel"))]
         let mut runtime = Runtime::new(self.config, view_index);
-        
+
         if let Some(spec) = self.spec {
             runtime = runtime.with_spec(spec);
         }

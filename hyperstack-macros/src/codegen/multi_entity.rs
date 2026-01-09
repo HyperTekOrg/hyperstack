@@ -9,9 +9,9 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
+use super::core::to_snake_case;
 use crate::parse::proto::ProtoAnalysis;
 use crate::proto_codegen;
-use super::core::to_snake_case;
 
 /// Generate multi-entity bytecode builder function.
 ///

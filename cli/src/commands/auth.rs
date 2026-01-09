@@ -10,7 +10,7 @@ pub fn register() -> Result<()> {
     print!("Username: ");
     use std::io::{self, Write};
     io::stdout().flush()?;
-    
+
     let mut username = String::new();
     io::stdin().read_line(&mut username)?;
     let username = username.trim();
@@ -35,7 +35,7 @@ pub fn register() -> Result<()> {
     println!();
     println!("{}", "✓ Account created successfully!".green().bold());
     println!("Username: {}", response.user.username);
-    
+
     if let Some(api_key) = &response.api_key {
         ApiClient::save_api_key(api_key)?;
         println!("{}", "✓ API key saved".green());
@@ -57,7 +57,7 @@ pub fn login() -> Result<()> {
     print!("Username: ");
     use std::io::{self, Write};
     io::stdout().flush()?;
-    
+
     let mut username = String::new();
     io::stdin().read_line(&mut username)?;
     let username = username.trim();
@@ -73,7 +73,7 @@ pub fn login() -> Result<()> {
     println!();
     println!("{}", "✓ Login successful!".green().bold());
     println!("Username: {}", response.user.username);
-    
+
     if let Some(api_key) = &response.api_key {
         ApiClient::save_api_key(api_key)?;
         println!("{}", "✓ API key saved".green());
@@ -87,9 +87,9 @@ pub fn login() -> Result<()> {
 
 pub fn logout() -> Result<()> {
     println!("Logging out...");
-    
+
     ApiClient::delete_api_key()?;
-    
+
     println!("{}", "✓ Logged out successfully".green().bold());
     println!("Your credentials have been removed from this device.");
 
@@ -103,11 +103,16 @@ pub fn status() -> Result<()> {
             println!();
             println!("You are logged in and ready to use Hyperstack.");
             println!();
-            println!("API key location: {}", 
+            println!(
+                "API key location: {}",
                 ApiClient::new()
                     .ok()
                     .and_then(|_| dirs::home_dir())
-                    .map(|home| home.join(".hyperstack").join("credentials.toml").display().to_string())
+                    .map(|home| home
+                        .join(".hyperstack")
+                        .join("credentials.toml")
+                        .display()
+                        .to_string())
                     .unwrap_or_else(|| "~/.hyperstack/credentials.toml".to_string())
             );
         }
@@ -136,18 +141,27 @@ pub fn whoami() -> Result<()> {
     println!("{} Verifying authentication...", "->".blue().bold());
 
     let client = ApiClient::new()?;
-    
+
     // Try to list specs as a way to verify the API key is valid
     match client.list_specs() {
         Ok(specs) => {
             println!("{}", "OK Authenticated".green().bold());
             println!();
-            println!("  API key: {}...{}", &api_key[..8], &api_key[api_key.len()-4..]);
+            println!(
+                "  API key: {}...{}",
+                &api_key[..8],
+                &api_key[api_key.len() - 4..]
+            );
             println!("  Specs: {}", specs.len());
             println!();
-            println!("API key location: {}", 
+            println!(
+                "API key location: {}",
                 dirs::home_dir()
-                    .map(|home| home.join(".hyperstack").join("credentials.toml").display().to_string())
+                    .map(|home| home
+                        .join(".hyperstack")
+                        .join("credentials.toml")
+                        .display()
+                        .to_string())
                     .unwrap_or_else(|| "~/.hyperstack/credentials.toml".to_string())
             );
         }
@@ -162,4 +176,3 @@ pub fn whoami() -> Result<()> {
 
     Ok(())
 }
-

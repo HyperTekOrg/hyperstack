@@ -3,24 +3,30 @@ use colored::Colorize;
 use std::fs;
 use std::path::Path;
 
-use crate::config::{discover_ast_files, find_ast_file, HyperstackConfig, DiscoveredAst};
+use crate::config::{discover_ast_files, find_ast_file, DiscoveredAst, HyperstackConfig};
 
 /// List all available specs from the configuration or auto-discovered ASTs
 pub fn list(config_path: &str) -> Result<()> {
     // Try to load config
     let config = HyperstackConfig::load_optional(config_path)?;
-    
+
     // Also discover local AST files
     let discovered = discover_ast_files(None)?;
-    
-    let has_config_specs = config.as_ref().map(|c| !c.specs.is_empty()).unwrap_or(false);
-    
+
+    let has_config_specs = config
+        .as_ref()
+        .map(|c| !c.specs.is_empty())
+        .unwrap_or(false);
+
     if !has_config_specs && discovered.is_empty() {
         println!("{}", "No specs found.".yellow());
         println!();
         println!("To add specs:");
         println!("  1. Build your spec crate to generate .hyperstack/*.ast.json files");
-        println!("  2. Run {} to create a configuration", "hyperstack init".cyan());
+        println!(
+            "  2. Run {} to create a configuration",
+            "hyperstack init".cyan()
+        );
         return Ok(());
     }
 
@@ -32,23 +38,23 @@ pub fn list(config_path: &str) -> Result<()> {
             let name = spec.name.as_deref().unwrap_or(&spec.ast);
             println!("  {}", name.green().bold());
             println!("    AST: {}", spec.ast);
-            
+
             if let Some(desc) = &spec.description {
                 println!("    Description: {}", desc);
             }
-            
+
             let output_path = cfg.get_output_path(name, None);
             println!("    Output: {}", output_path.display());
             println!();
         }
     }
-    
+
     // Show discovered ASTs not in config
     let config_asts: std::collections::HashSet<_> = config
         .as_ref()
         .map(|c| c.specs.iter().map(|s| s.ast.clone()).collect())
         .unwrap_or_default();
-    
+
     for ast in discovered {
         if !config_asts.contains(&ast.entity_name) {
             println!("  {} {}", "•".dimmed(), ast.spec_name.green().bold());
@@ -86,20 +92,22 @@ pub fn create_typescript(
     let (ast, output_path, package_name) = if let Some(ref cfg) = config {
         if let Some(spec_config) = cfg.find_spec(spec_name) {
             // Found in config - use config settings
-            let ast = find_ast_file(&spec_config.ast, None)?
-                .ok_or_else(|| anyhow::anyhow!(
+            let ast = find_ast_file(&spec_config.ast, None)?.ok_or_else(|| {
+                anyhow::anyhow!(
                     "AST file not found for '{}'. Build your spec crate first.",
                     spec_config.ast
-                ))?;
-            
+                )
+            })?;
+
             let name = spec_config.name.as_deref().unwrap_or(&spec_config.ast);
-            let output = output_override.map(|p| p.into())
+            let output = output_override
+                .map(|p| p.into())
                 .unwrap_or_else(|| cfg.get_output_path(name, None));
-            
+
             let pkg = package_name_override
                 .or_else(|| cfg.sdk.as_ref().and_then(|s| s.typescript_package.clone()))
                 .unwrap_or_else(|| "hyperstack-react".to_string());
-            
+
             (ast, output, pkg)
         } else {
             // Not in config - try auto-discovery
@@ -147,19 +155,20 @@ fn find_spec_by_name(
     output_override: Option<String>,
     package_name_override: Option<String>,
 ) -> Result<(DiscoveredAst, std::path::PathBuf, String)> {
-    let ast = find_ast_file(spec_name, None)?
-        .ok_or_else(|| anyhow::anyhow!(
+    let ast = find_ast_file(spec_name, None)?.ok_or_else(|| {
+        anyhow::anyhow!(
             "Spec '{}' not found.\n\
              Make sure you've built your spec crate to generate .hyperstack/*.ast.json files.",
             spec_name
-        ))?;
-    
-    let output = output_override.map(|p| p.into())
-        .unwrap_or_else(|| std::path::PathBuf::from(format!("./generated/{}-stack.ts", ast.spec_name)));
-    
-    let pkg = package_name_override
-        .unwrap_or_else(|| "hyperstack-react".to_string());
-    
+        )
+    })?;
+
+    let output = output_override.map(|p| p.into()).unwrap_or_else(|| {
+        std::path::PathBuf::from(format!("./generated/{}-stack.ts", ast.spec_name))
+    });
+
+    let pkg = package_name_override.unwrap_or_else(|| "hyperstack-react".to_string());
+
     Ok((ast, output, pkg))
 }
 

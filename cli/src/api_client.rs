@@ -167,7 +167,10 @@ impl std::fmt::Display for BuildStatus {
 impl BuildStatus {
     /// Returns true if this is a terminal state (no more transitions expected)
     pub fn is_terminal(&self) -> bool {
-        matches!(self, BuildStatus::Completed | BuildStatus::Failed | BuildStatus::Cancelled)
+        matches!(
+            self,
+            BuildStatus::Completed | BuildStatus::Failed | BuildStatus::Cancelled
+        )
     }
 }
 
@@ -279,8 +282,8 @@ pub struct StopDeploymentResponse {
 
 impl ApiClient {
     pub fn new() -> Result<Self> {
-        let base_url = std::env::var("HYPERSTACK_API_URL")
-            .unwrap_or_else(|_| DEFAULT_API_URL.to_string());
+        let base_url =
+            std::env::var("HYPERSTACK_API_URL").unwrap_or_else(|_| DEFAULT_API_URL.to_string());
 
         let api_key = Self::load_api_key().ok();
 
@@ -522,7 +525,12 @@ impl ApiClient {
     }
 
     /// List builds for the authenticated user, optionally filtered by spec_id
-    pub fn list_builds_filtered(&self, limit: Option<i64>, offset: Option<i64>, spec_id: Option<i32>) -> Result<Vec<Build>> {
+    pub fn list_builds_filtered(
+        &self,
+        limit: Option<i64>,
+        offset: Option<i64>,
+        spec_id: Option<i32>,
+    ) -> Result<Vec<Build>> {
         let api_key = self.require_api_key()?;
 
         let mut url = format!("{}/api/builds", self.base_url);
@@ -591,7 +599,10 @@ impl ApiClient {
 
         let response = self
             .client
-            .get(format!("{}/api/deployments/{}", self.base_url, deployment_id))
+            .get(format!(
+                "{}/api/deployments/{}",
+                self.base_url, deployment_id
+            ))
             .bearer_auth(api_key)
             .send()
             .context("Failed to send get deployment request")?;
@@ -606,7 +617,10 @@ impl ApiClient {
 
         let response = self
             .client
-            .delete(format!("{}/api/deployments/{}", self.base_url, deployment_id))
+            .delete(format!(
+                "{}/api/deployments/{}",
+                self.base_url, deployment_id
+            ))
             .bearer_auth(api_key)
             .send()
             .context("Failed to send stop deployment request")?;
@@ -626,16 +640,12 @@ impl ApiClient {
         response: reqwest::blocking::Response,
     ) -> Result<T> {
         if response.status().is_success() {
-            response
-                .json()
-                .context("Failed to parse response JSON")
+            response.json().context("Failed to parse response JSON")
         } else {
             let status = response.status();
-            let error: ErrorResponse = response
-                .json()
-                .unwrap_or_else(|_| ErrorResponse {
-                    error: "Unknown error".to_string(),
-                });
+            let error: ErrorResponse = response.json().unwrap_or_else(|_| ErrorResponse {
+                error: "Unknown error".to_string(),
+            });
             anyhow::bail!("API error ({}): {}", status, error.error);
         }
     }
@@ -643,22 +653,21 @@ impl ApiClient {
     // Credentials management
 
     fn credentials_path() -> Result<PathBuf> {
-        let home = dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+        let home =
+            dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
         Ok(home.join(".hyperstack").join("credentials.toml"))
     }
 
     pub fn save_api_key(api_key: &str) -> Result<()> {
         let path = Self::credentials_path()?;
-        
+
         // Create directory if it doesn't exist
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
 
         let content = format!("api_key = \"{}\"\n", api_key);
-        fs::write(&path, content)
-            .context("Failed to save API key")?;
+        fs::write(&path, content).context("Failed to save API key")?;
 
         Ok(())
     }
@@ -673,8 +682,8 @@ impl ApiClient {
             api_key: String,
         }
 
-        let creds: Credentials = toml::from_str(&content)
-            .context("Failed to parse credentials file")?;
+        let creds: Credentials =
+            toml::from_str(&content).context("Failed to parse credentials file")?;
 
         Ok(creds.api_key)
     }
@@ -682,10 +691,8 @@ impl ApiClient {
     pub fn delete_api_key() -> Result<()> {
         let path = Self::credentials_path()?;
         if path.exists() {
-            fs::remove_file(&path)
-                .context("Failed to delete credentials file")?;
+            fs::remove_file(&path).context("Failed to delete credentials file")?;
         }
         Ok(())
     }
 }
-

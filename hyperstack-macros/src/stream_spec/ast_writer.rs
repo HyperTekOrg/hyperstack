@@ -9,14 +9,14 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use crate::ast::writer::{
+    convert_idl_to_snapshot, parse_population_strategy, parse_transformation,
+};
 use crate::ast::{
     ComputedFieldSpec, ConditionExpr, EntitySection, FieldPath, HookAction, IdentitySpec,
     InstructionHook, KeyResolutionStrategy, LookupIndexSpec, MappingSource, ResolverHook,
     ResolverStrategy, SerializableFieldMapping, SerializableHandlerSpec, SerializableStreamSpec,
     SourceSpec,
-};
-use crate::ast::writer::{
-    convert_idl_to_snapshot, parse_population_strategy, parse_transformation,
 };
 use crate::parse;
 use crate::parse::conditions as condition_parser;
@@ -60,7 +60,7 @@ pub fn build_ast(
     events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
     resolver_hooks: &[parse::ResolveKeyAttribute],
     pda_registrations: &[parse::RegisterPdaAttribute],
-    track_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
+    derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     section_specs: &[EntitySection],
@@ -79,7 +79,7 @@ pub fn build_ast(
     let resolver_hooks_ast = build_resolver_hooks_ast(resolver_hooks, idl);
     let instruction_hooks_ast = build_instruction_hooks_ast(
         pda_registrations,
-        track_from_mappings,
+        derive_from_mappings,
         aggregate_conditions,
         sources_by_type,
     );
@@ -182,7 +182,7 @@ pub fn write_ast_at_compile_time(
     events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
     resolver_hooks: &[parse::ResolveKeyAttribute],
     pda_registrations: &[parse::RegisterPdaAttribute],
-    track_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
+    derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     section_specs: &[EntitySection],
@@ -208,7 +208,7 @@ pub fn write_ast_at_compile_time(
             events_by_instruction,
             resolver_hooks,
             pda_registrations,
-            track_from_mappings,
+            derive_from_mappings,
             aggregate_conditions,
             computed_fields,
             section_specs,
@@ -238,7 +238,7 @@ pub fn build_and_write_ast(
     events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
     resolver_hooks: &[parse::ResolveKeyAttribute],
     pda_registrations: &[parse::RegisterPdaAttribute],
-    track_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
+    derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     section_specs: &[EntitySection],
@@ -253,7 +253,7 @@ pub fn build_and_write_ast(
         events_by_instruction,
         resolver_hooks,
         pda_registrations,
-        track_from_mappings,
+        derive_from_mappings,
         aggregate_conditions,
         computed_fields,
         section_specs,
@@ -305,9 +305,15 @@ fn build_handlers(
 
     // Process account sources
     for ((source_type, join_key), mappings) in &sources_by_type_and_join {
-        if let Some(handler) =
-            build_source_handler(source_type, join_key, mappings, aggregate_conditions, primary_keys, lookup_indexes, idl)
-        {
+        if let Some(handler) = build_source_handler(
+            source_type,
+            join_key,
+            mappings,
+            aggregate_conditions,
+            primary_keys,
+            lookup_indexes,
+            idl,
+        ) {
             handlers.push(handler);
         }
     }
@@ -331,9 +337,14 @@ fn build_handlers(
 
     // Process event sources
     for ((instruction, join_key), event_mappings) in &events_by_instruction_and_join {
-        if let Some(handler) =
-            build_event_handler(instruction, join_key, event_mappings, primary_keys, lookup_indexes, idl)
-        {
+        if let Some(handler) = build_event_handler(
+            instruction,
+            join_key,
+            event_mappings,
+            primary_keys,
+            lookup_indexes,
+            idl,
+        ) {
             handlers.push(handler);
         }
     }
@@ -375,11 +386,11 @@ fn build_source_handler(
         let source = if mapping.is_whole_source {
             let field_transforms = if mapping
                 .source_field_name
-                .starts_with("__capture_with_transforms:")
+                .starts_with("__snapshot_with_transforms:")
             {
                 let transforms_str = mapping
                     .source_field_name
-                    .strip_prefix("__capture_with_transforms:")
+                    .strip_prefix("__snapshot_with_transforms:")
                     .unwrap_or("");
                 transforms_str
                     .split(',')
@@ -404,7 +415,10 @@ fn build_source_handler(
                 } else {
                     let prefix = idl
                         .and_then(|idl| {
-                            idl.get_instruction_field_prefix(account_type, &mapping.source_field_name)
+                            idl.get_instruction_field_prefix(
+                                account_type,
+                                &mapping.source_field_name,
+                            )
                         })
                         .unwrap_or("data");
                     FieldPath::new(&[prefix, &mapping.source_field_name])
@@ -418,7 +432,10 @@ fn build_source_handler(
             MappingSource::FromSource {
                 path: field_path,
                 default: None,
-                transform: mapping.transform.as_ref().and_then(|t| parse_transformation(t)),
+                transform: mapping
+                    .transform
+                    .as_ref()
+                    .and_then(|t| parse_transformation(t)),
             }
         };
 
@@ -446,19 +463,23 @@ fn build_source_handler(
         }
     }
 
-    let is_aggregation = mappings
-        .iter()
-        .any(|m| matches!(m.strategy.as_str(), "Sum" | "Count" | "Min" | "Max" | "UniqueCount"));
+    let is_aggregation = mappings.iter().any(|m| {
+        matches!(
+            m.strategy.as_str(),
+            "Sum" | "Count" | "Min" | "Max" | "UniqueCount"
+        )
+    });
 
     // Try to find lookup_by from the first mapping that has it
-    let lookup_by_field = mappings.iter()
+    let lookup_by_field = mappings
+        .iter()
         .find_map(|m| m.lookup_by.as_ref())
         .map(|fs| {
             // FieldSpec has explicit_location which tells us if it's accounts:: or data::
             let prefix = match &fs.explicit_location {
                 Some(parse::FieldLocation::Account) => "accounts",
                 Some(parse::FieldLocation::InstructionArg) => "data",
-                None => "accounts",  // Default to accounts for compatibility
+                None => "accounts", // Default to accounts for compatibility
             };
             format!("{}.{}", prefix, fs.ident)
         });
@@ -480,12 +501,12 @@ fn build_source_handler(
             // If it doesn't match the primary key, we need a Lookup resolution to do a
             // reverse lookup (e.g., accounts.bonding_curve -> mint via PDA lookup).
             let lookup_field_name = lookup_field.split('.').next_back().unwrap_or(lookup_field);
-            
+
             // Check if any primary key field name matches the lookup_by field name
             // Primary keys are like "id.mint", so we compare the last segment
-            let is_primary_key_field = primary_keys.iter().any(|pk| {
-                pk.split('.').next_back().unwrap_or(pk) == lookup_field_name
-            });
+            let is_primary_key_field = primary_keys
+                .iter()
+                .any(|pk| pk.split('.').next_back().unwrap_or(pk) == lookup_field_name);
 
             if is_primary_key_field {
                 // The lookup_by field IS the primary key itself - use Embedded
@@ -521,15 +542,20 @@ fn build_source_handler(
         let account_has_lookup_index = lookup_indexes.iter().any(|(field_name, _)| {
             // Extract the account type from the lookup index field name
             // For example, "id.bonding_curve" -> check if this is "BondingCurve" account
-            field_name.split('.').next_back()
+            field_name
+                .split('.')
+                .next_back()
                 .map(|last_part| {
                     // Convert to account type name (e.g., "bonding_curve" -> "BondingCurve")
-                    let account_name = last_part.split('_')
+                    let account_name = last_part
+                        .split('_')
                         .map(|part| {
                             let mut chars = part.chars();
                             match chars.next() {
                                 None => String::new(),
-                                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                                Some(first) => {
+                                    first.to_uppercase().collect::<String>() + chars.as_str()
+                                }
                             }
                         })
                         .collect::<String>();
@@ -702,9 +728,9 @@ fn build_event_handler(
         (String::new(), parse::FieldLocation::InstructionArg)
     };
 
-    let is_temporal_lookup = lookup_indexes
-        .iter()
-        .any(|(field, temporal_field)| field.ends_with(&lookup_field_name) && temporal_field.is_some());
+    let is_temporal_lookup = lookup_indexes.iter().any(|(field, temporal_field)| {
+        field.ends_with(&lookup_field_name) && temporal_field.is_some()
+    });
 
     let lookup_field_prefix = match lookup_field_location {
         parse::FieldLocation::Account => "accounts",
@@ -726,9 +752,9 @@ fn build_event_handler(
         //
         // Check if any primary key field name matches the lookup_by field name
         // Primary keys are like "id.mint", so we compare the last segment
-        let is_primary_key_field = primary_keys.iter().any(|pk| {
-            pk.split('.').next_back().unwrap_or(pk) == lookup_field_name
-        });
+        let is_primary_key_field = primary_keys
+            .iter()
+            .any(|pk| pk.split('.').next_back().unwrap_or(pk) == lookup_field_name);
 
         if is_primary_key_field {
             // The lookup_by field IS the primary key itself - use Embedded
@@ -814,7 +840,7 @@ fn build_resolver_hooks_ast(
 
 fn build_instruction_hooks_ast(
     pda_registrations: &[parse::RegisterPdaAttribute],
-    track_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
+    derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
 ) -> Vec<InstructionHook> {
@@ -845,13 +871,13 @@ fn build_instruction_hooks_ast(
             .push(action);
     }
 
-    // Process track_from mappings
-    for (instruction_type, track_attrs) in track_from_mappings {
+    // Process derive_from mappings
+    for (instruction_type, derive_attrs) in derive_from_mappings {
         let instr_type_state = format!("{}IxState", instruction_type.split("::").last().unwrap());
 
-        for track_attr in track_attrs {
-            let source = if track_attr.field.ident.to_string().starts_with("__") {
-                match track_attr.field.ident.to_string().as_str() {
+        for derive_attr in derive_attrs {
+            let source = if derive_attr.field.ident.to_string().starts_with("__") {
+                match derive_attr.field.ident.to_string().as_str() {
                     "__timestamp" => MappingSource::FromContext {
                         field: "timestamp".to_string(),
                     },
@@ -864,33 +890,33 @@ fn build_instruction_hooks_ast(
                     _ => continue,
                 }
             } else {
-                let path_prefix = match &track_attr.field.explicit_location {
+                let path_prefix = match &derive_attr.field.explicit_location {
                     Some(parse::FieldLocation::Account) => "accounts",
                     Some(parse::FieldLocation::InstructionArg) | None => "data",
                 };
 
                 MappingSource::FromSource {
-                    path: FieldPath::new(&[path_prefix, &track_attr.field.ident.to_string()]),
+                    path: FieldPath::new(&[path_prefix, &derive_attr.field.ident.to_string()]),
                     default: None,
-                    transform: track_attr
+                    transform: derive_attr
                         .transform
                         .as_ref()
                         .and_then(|t| parse_transformation(&t.to_string())),
                 }
             };
 
-            let condition = track_attr.condition.as_ref().map(|cond| ConditionExpr {
+            let condition = derive_attr.condition.as_ref().map(|cond| ConditionExpr {
                 expression: cond.clone(),
                 parsed: condition_parser::parse_condition_expression(cond),
             });
 
             let action = HookAction::SetField {
-                target_field: track_attr.target_field_name.clone(),
+                target_field: derive_attr.target_field_name.clone(),
                 source,
                 condition,
             };
 
-            let lookup_by = track_attr
+            let lookup_by = derive_attr
                 .lookup_by
                 .as_ref()
                 .map(|field_spec| FieldPath::new(&["accounts", &field_spec.ident.to_string()]));

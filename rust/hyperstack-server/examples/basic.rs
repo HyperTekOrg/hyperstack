@@ -17,11 +17,11 @@
 //! use hyperstack_server::Server;
 //! # use transform::compiler::MultiEntityBytecode;
 //! # use hyperstack_server::Spec;
-//! 
+//!
 //! # fn mock_spec() -> Spec {
 //! #     Spec::new(MultiEntityBytecode::new().build(), "your_program_id")
 //! # }
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
 //!     // Setup logging
@@ -49,11 +49,11 @@
 //! use std::time::Duration;
 //! # use transform::compiler::MultiEntityBytecode;
 //! # use hyperstack_server::Spec;
-//! 
+//!
 //! # fn mock_spec() -> Spec {
 //! #     Spec::new(MultiEntityBytecode::new().build(), "your_program_id")
 //! # }
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
 //!     // Setup logging with custom filter
@@ -98,11 +98,11 @@
 //! use hyperstack_server::Server;
 //! # use transform::compiler::MultiEntityBytecode;
 //! # use hyperstack_server::Spec;
-//! 
+//!
 //! # fn mock_spec() -> Spec {
 //! #     Spec::new(MultiEntityBytecode::new().build(), "your_program_id")
 //! # }
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
 //!     // Enable health monitoring with defaults (30s heartbeat, 10s timeout)

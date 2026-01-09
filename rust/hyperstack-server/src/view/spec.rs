@@ -1,7 +1,7 @@
 use crate::websocket::frame::Mode;
 
 // # View System Architecture
-// 
+//
 // The view system uses hierarchical View IDs instead of simple entity names,
 // enabling sophisticated filtering and organization:
 //

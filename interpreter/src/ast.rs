@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::marker::PhantomData;
 use std::collections::BTreeMap;
+use std::marker::PhantomData;
 
 // ============================================================================
 // IDL Snapshot Types - Embedded IDL for AST-only compilation
@@ -179,9 +179,15 @@ pub struct IdlTypeDefSnapshot {
 #[serde(untagged)]
 pub enum IdlTypeDefKindSnapshot {
     /// Struct: { "kind": "struct", "fields": [...] }
-    Struct { kind: String, fields: Vec<IdlFieldSnapshot> },
+    Struct {
+        kind: String,
+        fields: Vec<IdlFieldSnapshot>,
+    },
     /// Enum: { "kind": "enum", "variants": [...] }
-    Enum { kind: String, variants: Vec<IdlEnumVariantSnapshot> },
+    Enum {
+        kind: String,
+        variants: Vec<IdlEnumVariantSnapshot>,
+    },
 }
 
 /// Enum variant
@@ -221,10 +227,16 @@ impl IdlTypeSnapshot {
             IdlTypeSnapshot::Array(arr) => {
                 if arr.array.len() == 2 {
                     match (&arr.array[0], &arr.array[1]) {
-                        (IdlArrayElementSnapshot::TypeName(t), IdlArrayElementSnapshot::Size(size)) => {
+                        (
+                            IdlArrayElementSnapshot::TypeName(t),
+                            IdlArrayElementSnapshot::Size(size),
+                        ) => {
                             format!("[{}; {}]", Self::map_simple_type(t), size)
                         }
-                        (IdlArrayElementSnapshot::Type(nested), IdlArrayElementSnapshot::Size(size)) => {
+                        (
+                            IdlArrayElementSnapshot::Type(nested),
+                            IdlArrayElementSnapshot::Size(size),
+                        ) => {
                             format!("[{}; {}]", nested.to_rust_type_string(), size)
                         }
                         _ => "Vec<u8>".to_string(),
@@ -239,12 +251,10 @@ impl IdlTypeSnapshot {
             IdlTypeSnapshot::Vec(vec) => {
                 format!("Vec<{}>", vec.vec.to_rust_type_string())
             }
-            IdlTypeSnapshot::Defined(def) => {
-                match &def.defined {
-                    IdlDefinedInnerSnapshot::Named { name } => name.clone(),
-                    IdlDefinedInnerSnapshot::Simple(s) => s.clone(),
-                }
-            }
+            IdlTypeSnapshot::Defined(def) => match &def.defined {
+                IdlDefinedInnerSnapshot::Named { name } => name.clone(),
+                IdlDefinedInnerSnapshot::Simple(s) => s.clone(),
+            },
         }
     }
 
@@ -340,71 +350,138 @@ pub struct ComputedFieldSpec {
 pub enum ComputedExpr {
     // Existing variants
     /// Reference to a field: "field_name" or "section.field_name"
-    FieldRef { path: String },
-    
+    FieldRef {
+        path: String,
+    },
+
     /// Unwrap with default: expr.unwrap_or(default)
-    UnwrapOr { expr: Box<ComputedExpr>, default: serde_json::Value },
-    
+    UnwrapOr {
+        expr: Box<ComputedExpr>,
+        default: serde_json::Value,
+    },
+
     /// Binary operation: left op right
-    Binary { op: BinaryOp, left: Box<ComputedExpr>, right: Box<ComputedExpr> },
-    
+    Binary {
+        op: BinaryOp,
+        left: Box<ComputedExpr>,
+        right: Box<ComputedExpr>,
+    },
+
     /// Type cast: expr as type
-    Cast { expr: Box<ComputedExpr>, to_type: String },
-    
+    Cast {
+        expr: Box<ComputedExpr>,
+        to_type: String,
+    },
+
     /// Method call: expr.method(args)
-    MethodCall { expr: Box<ComputedExpr>, method: String, args: Vec<ComputedExpr> },
-    
+    MethodCall {
+        expr: Box<ComputedExpr>,
+        method: String,
+        args: Vec<ComputedExpr>,
+    },
+
     /// Literal value: numbers, booleans, strings
-    Literal { value: serde_json::Value },
-    
+    Literal {
+        value: serde_json::Value,
+    },
+
     /// Parenthesized expression for grouping
-    Paren { expr: Box<ComputedExpr> },
-    
+    Paren {
+        expr: Box<ComputedExpr>,
+    },
+
     // Variable reference (for let bindings)
-    Var { name: String },
-    
+    Var {
+        name: String,
+    },
+
     // Let binding: let name = value; body
-    Let { name: String, value: Box<ComputedExpr>, body: Box<ComputedExpr> },
-    
+    Let {
+        name: String,
+        value: Box<ComputedExpr>,
+        body: Box<ComputedExpr>,
+    },
+
     // Conditional: if condition { then_branch } else { else_branch }
-    If { condition: Box<ComputedExpr>, then_branch: Box<ComputedExpr>, else_branch: Box<ComputedExpr> },
-    
+    If {
+        condition: Box<ComputedExpr>,
+        then_branch: Box<ComputedExpr>,
+        else_branch: Box<ComputedExpr>,
+    },
+
     // Option constructors
     None,
-    Some { value: Box<ComputedExpr> },
-    
+    Some {
+        value: Box<ComputedExpr>,
+    },
+
     // Byte/array operations
-    Slice { expr: Box<ComputedExpr>, start: usize, end: usize },
-    Index { expr: Box<ComputedExpr>, index: usize },
-    
+    Slice {
+        expr: Box<ComputedExpr>,
+        start: usize,
+        end: usize,
+    },
+    Index {
+        expr: Box<ComputedExpr>,
+        index: usize,
+    },
+
     // Byte conversion functions
-    U64FromLeBytes { bytes: Box<ComputedExpr> },
-    U64FromBeBytes { bytes: Box<ComputedExpr> },
-    
+    U64FromLeBytes {
+        bytes: Box<ComputedExpr>,
+    },
+    U64FromBeBytes {
+        bytes: Box<ComputedExpr>,
+    },
+
     // Byte array literals: [0u8; 32] or [1, 2, 3]
-    ByteArray { bytes: Vec<u8> },
-    
+    ByteArray {
+        bytes: Vec<u8>,
+    },
+
     // Closure for map operations: |x| body
-    Closure { param: String, body: Box<ComputedExpr> },
-    
+    Closure {
+        param: String,
+        body: Box<ComputedExpr>,
+    },
+
     // Unary operations
-    Unary { op: UnaryOp, expr: Box<ComputedExpr> },
-    
+    Unary {
+        op: UnaryOp,
+        expr: Box<ComputedExpr>,
+    },
+
     // JSON array to bytes conversion (for working with captured byte arrays)
-    JsonToBytes { expr: Box<ComputedExpr> },
+    JsonToBytes {
+        expr: Box<ComputedExpr>,
+    },
 }
 
 /// Binary operators for computed expressions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BinaryOp {
     // Arithmetic
-    Add, Sub, Mul, Div, Mod,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
     // Comparison
-    Gt, Lt, Gte, Lte, Eq, Ne,
+    Gt,
+    Lt,
+    Gte,
+    Lte,
+    Eq,
+    Ne,
     // Logical
-    And, Or,
+    And,
+    Or,
     // Bitwise
-    Xor, BitAnd, BitOr, Shl, Shr,
+    Xor,
+    BitAnd,
+    BitOr,
+    Shl,
+    Shr,
 }
 
 /// Unary operators for computed expressions
@@ -447,10 +524,10 @@ pub struct TypedStreamSpec<S> {
     pub state_name: String,
     pub identity: IdentitySpec,
     pub handlers: Vec<TypedHandlerSpec<S>>,
-    pub sections: Vec<EntitySection>,  // NEW: Complete structural information
+    pub sections: Vec<EntitySection>, // NEW: Complete structural information
     pub field_mappings: BTreeMap<String, FieldTypeInfo>, // NEW: All field type info by target path
-    pub resolver_hooks: Vec<ResolverHook>,  // NEW: Resolver hooks for PDA key resolution
-    pub instruction_hooks: Vec<InstructionHook>,  // NEW: Instruction hooks for PDA registration
+    pub resolver_hooks: Vec<ResolverHook>, // NEW: Resolver hooks for PDA key resolution
+    pub instruction_hooks: Vec<InstructionHook>, // NEW: Instruction hooks for PDA registration
     pub computed_fields: Vec<String>, // List of computed field paths
     _phantom: PhantomData<S>,
 }
@@ -502,7 +579,8 @@ impl<S> TypedStreamSpec<S> {
 
     /// Get all fields for a specific section
     pub fn get_section_fields(&self, section_name: &str) -> Option<&Vec<FieldTypeInfo>> {
-        self.sections.iter()
+        self.sections
+            .iter()
             .find(|s| s.name == section_name)
             .map(|s| &s.fields)
     }
@@ -538,7 +616,11 @@ impl<S> TypedStreamSpec<S> {
         TypedStreamSpec {
             state_name: spec.state_name,
             identity: spec.identity,
-            handlers: spec.handlers.into_iter().map(|h| TypedHandlerSpec::from_serializable(h)).collect(),
+            handlers: spec
+                .handlers
+                .into_iter()
+                .map(|h| TypedHandlerSpec::from_serializable(h))
+                .collect(),
             sections: spec.sections,
             field_mappings: spec.field_mappings,
             resolver_hooks: spec.resolver_hooks,
@@ -570,7 +652,7 @@ pub struct LookupIndexSpec {
 pub struct ResolverHook {
     /// Account type this resolver applies to (e.g., "BondingCurveState")
     pub account_type: String,
-    
+
     /// Resolution strategy
     pub strategy: ResolverStrategy,
 }
@@ -583,11 +665,9 @@ pub enum ResolverStrategy {
         /// Instruction discriminators to queue until (8 bytes each)
         queue_discriminators: Vec<Vec<u8>>,
     },
-    
+
     /// Extract primary key directly from account data (future)
-    DirectField {
-        field_path: FieldPath,
-    },
+    DirectField { field_path: FieldPath },
 }
 
 /// Declarative instruction hook specification
@@ -595,10 +675,10 @@ pub enum ResolverStrategy {
 pub struct InstructionHook {
     /// Instruction type this hook applies to (e.g., "CreateIxState")
     pub instruction_type: String,
-    
+
     /// Actions to perform when this instruction is processed
     pub actions: Vec<HookAction>,
-    
+
     /// Lookup strategy for finding the entity
     pub lookup_by: Option<FieldPath>,
 }
@@ -611,14 +691,14 @@ pub enum HookAction {
         seed_field: FieldPath,
         lookup_name: String,
     },
-    
+
     /// Set a field value (for #[track_from])
     SetField {
         target_field: String,
         source: MappingSource,
         condition: Option<ConditionExpr>,
     },
-    
+
     /// Increment a field value (for conditional aggregations)
     IncrementField {
         target_field: String,
@@ -632,7 +712,7 @@ pub enum HookAction {
 pub struct ConditionExpr {
     /// Expression as string (will be parsed and validated)
     pub expression: String,
-    
+
     /// Parsed representation (for validation and execution)
     pub parsed: Option<ParsedCondition>,
 }
@@ -645,7 +725,7 @@ pub enum ParsedCondition {
         op: ComparisonOp,
         value: serde_json::Value,
     },
-    
+
     /// Logical AND/OR
     Logical {
         op: LogicalOp,
@@ -722,7 +802,11 @@ impl<S> TypedHandlerSpec<S> {
         TypedHandlerSpec {
             source: spec.source,
             key_resolution: spec.key_resolution,
-            mappings: spec.mappings.into_iter().map(|m| TypedFieldMapping::from_serializable(m)).collect(),
+            mappings: spec
+                .mappings
+                .into_iter()
+                .map(|m| TypedFieldMapping::from_serializable(m))
+                .collect(),
             conditions: spec.conditions,
             emit: spec.emit,
             _phantom: PhantomData,
@@ -848,13 +932,15 @@ pub enum MappingSource {
 impl MappingSource {
     pub fn with_transform(self, transform: Transformation) -> Self {
         match self {
-            MappingSource::FromSource { path, default, transform: _ } => {
-                MappingSource::FromSource {
-                    path,
-                    default,
-                    transform: Some(transform),
-                }
-            }
+            MappingSource::FromSource {
+                path,
+                default,
+                transform: _,
+            } => MappingSource::FromSource {
+                path,
+                default,
+                transform: Some(transform),
+            },
             other => other,
         }
     }
@@ -889,10 +975,10 @@ pub enum ConditionOp {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldTypeInfo {
     pub field_name: String,
-    pub rust_type_name: String,     // Full Rust type: "Option<i64>", "Vec<Value>", etc.
-    pub base_type: BaseType,        // Fundamental type classification
-    pub is_optional: bool,          // true for Option<T>
-    pub is_array: bool,             // true for Vec<T>
+    pub rust_type_name: String, // Full Rust type: "Option<i64>", "Vec<Value>", etc.
+    pub base_type: BaseType,    // Fundamental type classification
+    pub is_optional: bool,      // true for Option<T>
+    pub is_array: bool,         // true for Vec<T>
     pub inner_type: Option<String>, // For Option<T> or Vec<T>, store the inner type
     pub source_path: Option<String>, // Path to source field if this is mapped
     /// Resolved type information for complex types (instructions, accounts, custom types)
@@ -930,20 +1016,20 @@ pub struct ResolvedField {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum BaseType {
     // Numeric types
-    Integer,    // i8, i16, i32, i64, u8, u16, u32, u64, usize, isize
-    Float,      // f32, f64
+    Integer, // i8, i16, i32, i64, u8, u16, u32, u64, usize, isize
+    Float,   // f32, f64
     // Text types
-    String,     // String, &str
+    String, // String, &str
     // Boolean
-    Boolean,    // bool
+    Boolean, // bool
     // Complex types
-    Object,     // Custom structs, HashMap, etc.
-    Array,      // Vec<T>, arrays
-    Binary,     // Bytes, binary data
+    Object, // Custom structs, HashMap, etc.
+    Array,  // Vec<T>, arrays
+    Binary, // Bytes, binary data
     // Special types
-    Timestamp,  // Detected from field names ending in _at, _time, etc.
-    Pubkey,     // Solana public key (Base58 encoded)
-    Any,        // serde_json::Value, unknown types
+    Timestamp, // Detected from field names ending in _at, _time, etc.
+    Pubkey,    // Solana public key (Base58 encoded)
+    Any,       // serde_json::Value, unknown types
 }
 
 /// Represents a logical section/group of fields in the entity
@@ -955,12 +1041,11 @@ pub struct EntitySection {
     pub parent_field: Option<String>, // If this section comes from a nested struct field
 }
 
-
-
 impl FieldTypeInfo {
     pub fn new(field_name: String, rust_type_name: String) -> Self {
-        let (base_type, is_optional, is_array, inner_type) = Self::analyze_rust_type(&rust_type_name);
-        
+        let (base_type, is_optional, is_array, inner_type) =
+            Self::analyze_rust_type(&rust_type_name);
+
         FieldTypeInfo {
             field_name: field_name.clone(),
             rust_type_name,
@@ -981,22 +1066,36 @@ impl FieldTypeInfo {
     /// Analyze a Rust type string and extract structural information
     fn analyze_rust_type(rust_type: &str) -> (BaseType, bool, bool, Option<String>) {
         let type_str = rust_type.trim();
-        
+
         // Handle Option<T>
         if let Some(inner) = Self::extract_generic_inner(type_str, "Option") {
-            let (inner_base_type, _, inner_is_array, inner_inner_type) = Self::analyze_rust_type(&inner);
-            return (inner_base_type, true, inner_is_array, inner_inner_type.or(Some(inner)));
+            let (inner_base_type, _, inner_is_array, inner_inner_type) =
+                Self::analyze_rust_type(&inner);
+            return (
+                inner_base_type,
+                true,
+                inner_is_array,
+                inner_inner_type.or(Some(inner)),
+            );
         }
-        
+
         // Handle Vec<T>
         if let Some(inner) = Self::extract_generic_inner(type_str, "Vec") {
-            let (_inner_base_type, inner_is_optional, _, inner_inner_type) = Self::analyze_rust_type(&inner);
-            return (BaseType::Array, inner_is_optional, true, inner_inner_type.or(Some(inner)));
+            let (_inner_base_type, inner_is_optional, _, inner_inner_type) =
+                Self::analyze_rust_type(&inner);
+            return (
+                BaseType::Array,
+                inner_is_optional,
+                true,
+                inner_inner_type.or(Some(inner)),
+            );
         }
-        
+
         // Handle primitive types
         let base_type = match type_str {
-            "i8" | "i16" | "i32" | "i64" | "isize" | "u8" | "u16" | "u32" | "u64" | "usize" => BaseType::Integer,
+            "i8" | "i16" | "i32" | "i64" | "isize" | "u8" | "u16" | "u32" | "u64" | "usize" => {
+                BaseType::Integer
+            }
             "f32" | "f64" => BaseType::Float,
             "bool" => BaseType::Boolean,
             "String" | "&str" | "str" => BaseType::String,
@@ -1013,10 +1112,10 @@ impl FieldTypeInfo {
                 }
             }
         };
-        
+
         (base_type, false, false, None)
     }
-    
+
     /// Extract inner type from generic like "Option<T>" -> "T"
     fn extract_generic_inner(type_str: &str, generic_name: &str) -> Option<String> {
         let pattern = format!("{}<", generic_name);
@@ -1029,11 +1128,11 @@ impl FieldTypeInfo {
         }
         None
     }
-    
+
     /// Infer semantic type based on field name patterns
     fn infer_semantic_type(field_name: &str, base_type: BaseType) -> BaseType {
         let lower_name = field_name.to_lowercase();
-        
+
         // If already classified as integer, check if it should be timestamp
         if base_type == BaseType::Integer
             && (lower_name.ends_with("_at")
@@ -1045,7 +1144,7 @@ impl FieldTypeInfo {
         {
             return BaseType::Timestamp;
         }
-        
+
         base_type
     }
 }
@@ -1060,30 +1159,30 @@ pub trait FieldAccessor<S> {
 
 impl SerializableStreamSpec {
     /// Compute deterministic content hash (SHA256 of canonical JSON).
-    /// 
+    ///
     /// The hash is computed over the entire spec except the content_hash field itself,
     /// ensuring the same AST always produces the same hash regardless of when it was
     /// generated or by whom.
     pub fn compute_content_hash(&self) -> String {
-        use sha2::{Sha256, Digest};
-        
+        use sha2::{Digest, Sha256};
+
         // Clone and clear the hash field for computation
         let mut spec_for_hash = self.clone();
         spec_for_hash.content_hash = None;
-        
+
         // Serialize to JSON (serde_json produces consistent output for the same struct)
-        let json = serde_json::to_string(&spec_for_hash)
-            .expect("Failed to serialize spec for hashing");
-        
+        let json =
+            serde_json::to_string(&spec_for_hash).expect("Failed to serialize spec for hashing");
+
         // Compute SHA256 hash
         let mut hasher = Sha256::new();
         hasher.update(json.as_bytes());
         let result = hasher.finalize();
-        
+
         // Return hex-encoded hash
         hex::encode(result)
     }
-    
+
     /// Verify that the content_hash matches the computed hash.
     /// Returns true if hash is valid or not set.
     pub fn verify_content_hash(&self) -> bool {
@@ -1095,7 +1194,7 @@ impl SerializableStreamSpec {
             None => true, // No hash to verify
         }
     }
-    
+
     /// Set the content_hash field to the computed hash.
     pub fn with_content_hash(mut self) -> Self {
         self.content_hash = Some(self.compute_content_hash());

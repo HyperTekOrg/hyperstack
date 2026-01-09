@@ -21,10 +21,10 @@ pub fn generate_bytecode_from_spec(spec: &SerializableStreamSpec) -> TokenStream
             let ast_json = #spec_json;
             let spec: hyperstack_interpreter::ast::SerializableStreamSpec = serde_json::from_str(ast_json)
                 .expect("Failed to parse embedded AST JSON");
-            
+
             // Convert to typed spec and compile
             let typed_spec = hyperstack_interpreter::ast::TypedStreamSpec::<serde_json::Value>::from_serializable(spec);
-            
+
             // Create multi-entity bytecode using from_single
             hyperstack_interpreter::compiler::MultiEntityBytecode::from_single(
                 #entity_name.to_string(),

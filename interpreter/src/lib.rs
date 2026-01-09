@@ -34,10 +34,10 @@ pub mod typescript;
 pub mod vm;
 
 // Re-export commonly used items
-pub use typescript::{TypeScriptCompiler, TypeScriptConfig, write_typescript_to_file};
-pub use resolvers::{ResolveContext, InstructionContext, KeyResolution, ReverseLookupUpdater};
+pub use metrics_context::{FieldAccessor, FieldRef, MetricsContext};
+pub use resolvers::{InstructionContext, KeyResolution, ResolveContext, ReverseLookupUpdater};
+pub use typescript::{write_typescript_to_file, TypeScriptCompiler, TypeScriptConfig};
 pub use vm::{PendingAccountUpdate, PendingQueueStats, UpdateContext};
-pub use metrics_context::{MetricsContext, FieldAccessor, FieldRef};
 
 // Re-export macros for convenient use
 // The field! macro is the new recommended way to create field references
@@ -55,7 +55,7 @@ pub struct Mutation {
 
 /// Generic wrapper for event data that includes context metadata
 /// This ensures type safety for events captured in entity specs
-/// 
+///
 /// # Runtime Structure
 /// Events captured with `#[event]` are automatically wrapped in this structure:
 /// ```json
@@ -82,7 +82,7 @@ pub struct EventWrapper<T = Value> {
 
 /// Generic wrapper for account capture data that includes context metadata
 /// This ensures type safety for accounts captured with `#[capture]` in entity specs
-/// 
+///
 /// # Runtime Structure
 /// Accounts captured with `#[capture]` are automatically wrapped in this structure:
 /// ```json

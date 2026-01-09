@@ -27,19 +27,20 @@ struct PumpToken {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let url = std::env::args().nth(1).unwrap_or_else(|| "ws://127.0.0.1:8080".to_string());
+    let url = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "ws://127.0.0.1:8080".to_string());
     let mint = std::env::var("KEY").expect("KEY env var required (token mint address)");
-    
-    let client = HyperStackClient::<PumpToken>::new(url, "PumpToken/kv")
-        .with_key(&mint);
-    
+
+    let client = HyperStackClient::<PumpToken>::new(url, "PumpToken/kv").with_key(&mint);
+
     let store = client.connect().await?;
-    
+
     println!("watching trades for token {}...\n", mint);
-    
+
     let mut updates = store.subscribe();
     let mut trade_history: VecDeque<TradeInfo> = VecDeque::with_capacity(100);
-    
+
     loop {
         tokio::select! {
             Ok((_key, token)) = updates.recv() => {
@@ -48,8 +49,8 @@ async fn main() -> anyhow::Result<()> {
                     if trade_history.len() > 100 {
                         trade_history.pop_front();
                     }
-                    
-                    println!("[{}] {} | {}... | {:.4} SOL (total: {} trades)", 
+
+                    println!("[{}] {} | {}... | {:.4} SOL (total: {} trades)",
                         Utc::now().format("%H:%M:%S"),
                         trade.direction,
                         &trade.wallet[..8],

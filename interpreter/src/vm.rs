@@ -1,4 +1,6 @@
-use crate::ast::{BinaryOp, ComparisonOp, ComputedExpr, ComputedFieldSpec, FieldPath, Transformation};
+use crate::ast::{
+    BinaryOp, ComparisonOp, ComputedExpr, ComputedFieldSpec, FieldPath, Transformation,
+};
 use crate::compiler::{MultiEntityBytecode, OpCode};
 use crate::Mutation;
 use dashmap::DashMap;
@@ -555,6 +557,12 @@ impl VmContext {
         let mut dirty_fields: HashSet<String> = HashSet::new();
 
         while pc < handler.len() {
+            tracing::debug!(
+                "Executing opcode {}/{}: {:?}",
+                pc + 1,
+                handler.len(),
+                &handler[pc]
+            );
             match &handler[pc] {
                 OpCode::LoadEventField {
                     path,
@@ -569,10 +577,12 @@ impl VmContext {
                         value
                     );
                     // Warn if accounts.* path returns null - this helps debug key resolution issues
-                    if value.is_null() && path.segments.len() >= 2 && path.segments[0] == "accounts" {
+                    if value.is_null() && path.segments.len() >= 2 && path.segments[0] == "accounts"
+                    {
                         tracing::warn!(
                             "⚠️ LoadEventField returned NULL for accounts path: {:?} -> dest={}",
-                            path.segments, dest
+                            path.segments,
+                            dest
                         );
                     }
                     self.registers[*dest] = value;
@@ -588,7 +598,11 @@ impl VmContext {
                         "CopyRegister: source={}, dest={}, value={:?}",
                         source,
                         dest,
-                        if value.is_null() { "NULL".to_string() } else { format!("{}", value) }
+                        if value.is_null() {
+                            "NULL".to_string()
+                        } else {
+                            format!("{}", value)
+                        }
                     );
                     self.registers[*dest] = value;
                     pc += 1;
@@ -710,7 +724,11 @@ impl VmContext {
                     path,
                     value,
                 } => {
-                    tracing::trace!("AppendToArray: path={}, value={:?}", path, self.registers[*value]);
+                    tracing::trace!(
+                        "AppendToArray: path={}, value={:?}",
+                        path,
+                        self.registers[*value]
+                    );
                     self.append_to_array(*object, path, *value)?;
                     dirty_fields.insert(path.to_string());
                     pc += 1;
@@ -724,7 +742,11 @@ impl VmContext {
                     pc += 1;
                 }
                 OpCode::CreateEvent { dest, event_value } => {
-                    tracing::trace!("CreateEvent: event_value_reg={}, event_value={:?}", event_value, self.registers[*event_value]);
+                    tracing::trace!(
+                        "CreateEvent: event_value_reg={}, event_value={:?}",
+                        event_value,
+                        self.registers[*event_value]
+                    );
                     let timestamp = std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap()
@@ -990,7 +1012,9 @@ impl VmContext {
 
                     tracing::debug!(
                         "📝 UpdateLookupIndex: {} -> {} (index: {})",
-                        lookup_val, pk_val, index_name
+                        lookup_val,
+                        pk_val,
+                        index_name
                     );
 
                     index.insert(lookup_val, pk_val);
@@ -1010,29 +1034,38 @@ impl VmContext {
                             .states
                             .get(&actual_state_id)
                             .ok_or("State table not found")?;
-                        
+
                         if let Some(index) = state.lookup_indexes.get(index_name) {
                             let found = index.lookup(&lookup_val).unwrap_or(Value::Null);
                             tracing::debug!(
                                 "🔍 LookupIndex: {} -> {} (index: {}, entries: {})",
-                                lookup_val, found, index_name, index.len()
+                                lookup_val,
+                                found,
+                                index_name,
+                                index.len()
                             );
                             found
                         } else {
                             Value::Null
                         }
                     };
-                    
+
                     // Fallback: Check PDA reverse lookup table if regular index returned NULL or doesn't exist
                     // This handles cases where Lookup key resolution uses PDA addresses
                     let final_result = if result.is_null() {
+                        tracing::debug!(
+                            "🔍 LookupIndex failed for {}, attempting PDA reverse lookup fallback",
+                            lookup_val
+                        );
                         if let Some(pda_str) = lookup_val.as_str() {
                             let state = self
                                 .states
                                 .get_mut(&actual_state_id)
                                 .ok_or("State table not found")?;
-                                
-                            if let Some(pda_lookup) = state.pda_reverse_lookups.get_mut("default_pda_lookup") {
+
+                            if let Some(pda_lookup) =
+                                state.pda_reverse_lookups.get_mut("default_pda_lookup")
+                            {
                                 if let Some(resolved) = pda_lookup.lookup(pda_str) {
                                     tracing::info!(
                                         "🔍 LookupIndex (PDA fallback): {} -> {} (via default_pda_lookup)",
@@ -1056,7 +1089,8 @@ impl VmContext {
                         } else {
                             tracing::debug!(
                                 "🔍 LookupIndex: {} -> NOT FOUND (index: {} does not exist)",
-                                lookup_val, index_name
+                                lookup_val,
+                                index_name
                             );
                             Value::Null
                         }
@@ -1233,10 +1267,10 @@ impl VmContext {
                         .states
                         .get_mut(&actual_state_id)
                         .ok_or("State table not found")?;
-                    
+
                     let pda_val = self.registers[*pda_address].clone();
                     let pk_val = self.registers[*primary_key].clone();
-                    
+
                     // Only update if both values are non-null strings
                     if let (Some(pda_str), Some(pk_str)) = (pda_val.as_str(), pk_val.as_str()) {
                         // Get or create the PDA reverse lookup table
@@ -1244,12 +1278,14 @@ impl VmContext {
                             .pda_reverse_lookups
                             .entry(lookup_name.clone())
                             .or_insert_with(|| PdaReverseLookup::new(10000));
-                        
+
                         pda_lookup.insert(pda_str.to_string(), pk_str.to_string());
-                        
+
                         tracing::debug!(
                             "📝 UpdatePdaReverseLookup: {} -> {} (lookup: {})",
-                            pda_str, pk_str, lookup_name
+                            pda_str,
+                            pk_str,
+                            lookup_name
                         );
                     } else if !pk_val.is_null() {
                         // Primary key might be a u64, convert to string
@@ -1259,17 +1295,19 @@ impl VmContext {
                                     .pda_reverse_lookups
                                     .entry(lookup_name.clone())
                                     .or_insert_with(|| PdaReverseLookup::new(10000));
-                                
+
                                 pda_lookup.insert(pda_str.to_string(), pk_num.to_string());
-                                
+
                                 tracing::debug!(
                                     "📝 UpdatePdaReverseLookup: {} -> {} (lookup: {}, pk was u64)",
-                                    pda_str, pk_num, lookup_name
+                                    pda_str,
+                                    pk_num,
+                                    lookup_name
                                 );
                             }
                         }
                     }
-                    
+
                     pc += 1;
                 }
             }
@@ -1277,6 +1315,10 @@ impl VmContext {
             self.instructions_executed += 1;
         }
 
+        tracing::info!(
+            "🏁 Handler completed: produced {} mutation(s)",
+            output.len()
+        );
         Ok(output)
     }
 
@@ -1293,7 +1335,7 @@ impl VmContext {
                 path.segments
             );
         }
-        
+
         if path.segments.is_empty() {
             // For WholeSource (empty path), filter out internal metadata fields
             // This prevents __account_address, __resolved_primary_key, __update_context
@@ -1324,7 +1366,9 @@ impl VmContext {
                         );
                         tracing::warn!(
                             "  event has top-level keys: {:?}",
-                            event_value.as_object().map(|o| o.keys().collect::<Vec<_>>())
+                            event_value
+                                .as_object()
+                                .map(|o| o.keys().collect::<Vec<_>>())
                         );
                         // Show what's in the accounts object if it exists
                         if let Some(accounts) = event_value.get("accounts") {
@@ -1753,15 +1797,25 @@ impl VmContext {
                     Ok(json!(encoded))
                 } else if value.is_string() {
                     // Value is already a string (likely already base58 encoded), return as-is
-                    tracing::debug!("Base58Encode: value is already a string, passing through: {:?}", value);
+                    tracing::debug!(
+                        "Base58Encode: value is already a string, passing through: {:?}",
+                        value
+                    );
                     Ok(value.clone())
                 } else {
-                    tracing::error!("Base58Encode failed: value type is {:?}, value: {:?}", 
-                        if value.is_null() { "null" }
-                        else if value.is_boolean() { "boolean" }
-                        else if value.is_number() { "number" }
-                        else if value.is_object() { "object" }
-                        else { "unknown" },
+                    tracing::error!(
+                        "Base58Encode failed: value type is {:?}, value: {:?}",
+                        if value.is_null() {
+                            "null"
+                        } else if value.is_boolean() {
+                            "boolean"
+                        } else if value.is_number() {
+                            "number"
+                        } else if value.is_object() {
+                            "object"
+                        } else {
+                            "unknown"
+                        },
                         value
                     );
                     Err("Base58Encode requires an array of numbers".into())
@@ -1769,7 +1823,9 @@ impl VmContext {
             }
             Transformation::Base58Decode => {
                 if let Some(s) = value.as_str() {
-                    let bytes = bs58::decode(s).into_vec().map_err(|e| format!("Base58 decode error: {}", e))?;
+                    let bytes = bs58::decode(s)
+                        .into_vec()
+                        .map_err(|e| format!("Base58 decode error: {}", e))?;
                     Ok(json!(bytes))
                 } else {
                     Err("Base58Decode requires a string".into())
@@ -1885,6 +1941,13 @@ impl VmContext {
             .pda_reverse_lookups
             .entry(lookup_name.to_string())
             .or_insert_with(|| PdaReverseLookup::new(10000));
+
+        tracing::info!(
+            "📝 Registering PDA reverse lookup: {} -> {} (lookup: {})",
+            pda_address,
+            seed_value,
+            lookup_name
+        );
 
         // Insert and check if an entry was evicted
         let evicted_pda = lookup.insert(pda_address.clone(), seed_value);
@@ -2027,6 +2090,12 @@ impl VmContext {
             .get_mut(&state_id)
             .ok_or("State table not found")?;
 
+        tracing::debug!(
+            "📋 Queued account update for PDA {} (type: {}, slot: {})",
+            pda_address,
+            account_type,
+            slot
+        );
         let pending = PendingAccountUpdate {
             account_type,
             pda_address: pda_address.clone(),
@@ -2079,7 +2148,6 @@ impl VmContext {
             }
 
             updates.push(pending);
-            self.pending_queue_size += 1;
         }
 
         Ok(())
@@ -2181,6 +2249,11 @@ impl VmContext {
         if let Some((_, pending_updates)) = state.pending_updates.remove(pda_address) {
             let count = pending_updates.len();
             self.pending_queue_size = self.pending_queue_size.saturating_sub(count as u64);
+            tracing::info!(
+                "🔄 Flushed {} pending account update(s) for PDA {}",
+                count,
+                pda_address
+            );
             Ok(pending_updates)
         } else {
             Ok(Vec::new())
@@ -2199,11 +2272,17 @@ impl VmContext {
         if let Some(lookup) = state.pda_reverse_lookups.get_mut(lookup_name) {
             if let Some(value) = lookup.lookup(pda_address) {
                 self.pda_cache_hits += 1;
+                tracing::debug!(
+                    "✓ PDA reverse lookup cache hit: {} -> {}",
+                    pda_address,
+                    value
+                );
                 return Some(value);
             }
         }
 
         self.pda_cache_misses += 1;
+        tracing::debug!("✗ PDA reverse lookup cache miss: {}", pda_address);
         None
     }
 
@@ -2225,15 +2304,12 @@ impl VmContext {
         env: &std::collections::HashMap<String, Value>,
     ) -> Result<Value> {
         match expr {
-            ComputedExpr::FieldRef { path } => {
-                self.get_field_from_state(state, path)
-            }
+            ComputedExpr::FieldRef { path } => self.get_field_from_state(state, path),
 
-            ComputedExpr::Var { name } => {
-                env.get(name)
-                    .cloned()
-                    .ok_or_else(|| format!("Undefined variable: {}", name).into())
-            }
+            ComputedExpr::Var { name } => env
+                .get(name)
+                .cloned()
+                .ok_or_else(|| format!("Undefined variable: {}", name).into()),
 
             ComputedExpr::Let { name, value, body } => {
                 let val = self.evaluate_computed_expr_with_env(value, state, env)?;
@@ -2242,7 +2318,11 @@ impl VmContext {
                 self.evaluate_computed_expr_with_env(body, state, &new_env)
             }
 
-            ComputedExpr::If { condition, then_branch, else_branch } => {
+            ComputedExpr::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 let cond_val = self.evaluate_computed_expr_with_env(condition, state, env)?;
                 if self.value_to_bool(&cond_val) {
                     self.evaluate_computed_expr_with_env(then_branch, state, env)
@@ -2253,17 +2333,13 @@ impl VmContext {
 
             ComputedExpr::None => Ok(Value::Null),
 
-            ComputedExpr::Some { value } => {
-                self.evaluate_computed_expr_with_env(value, state, env)
-            }
+            ComputedExpr::Some { value } => self.evaluate_computed_expr_with_env(value, state, env),
 
             ComputedExpr::Slice { expr, start, end } => {
                 let val = self.evaluate_computed_expr_with_env(expr, state, env)?;
                 match val {
                     Value::Array(arr) => {
-                        let slice: Vec<Value> = arr.get(*start..*end)
-                            .unwrap_or(&[])
-                            .to_vec();
+                        let slice: Vec<Value> = arr.get(*start..*end).unwrap_or(&[]).to_vec();
                         Ok(Value::Array(slice))
                     }
                     _ => Err(format!("Cannot slice non-array value: {:?}", val).into()),
@@ -2273,9 +2349,7 @@ impl VmContext {
             ComputedExpr::Index { expr, index } => {
                 let val = self.evaluate_computed_expr_with_env(expr, state, env)?;
                 match val {
-                    Value::Array(arr) => {
-                        Ok(arr.get(*index).cloned().unwrap_or(Value::Null))
-                    }
+                    Value::Array(arr) => Ok(arr.get(*index).cloned().unwrap_or(Value::Null)),
                     _ => Err(format!("Cannot index non-array value: {:?}", val).into()),
                 }
             }
@@ -2284,9 +2358,14 @@ impl VmContext {
                 let val = self.evaluate_computed_expr_with_env(bytes, state, env)?;
                 let byte_vec = self.value_to_bytes(&val)?;
                 if byte_vec.len() < 8 {
-                    return Err(format!("u64::from_le_bytes requires 8 bytes, got {}", byte_vec.len()).into());
+                    return Err(format!(
+                        "u64::from_le_bytes requires 8 bytes, got {}",
+                        byte_vec.len()
+                    )
+                    .into());
                 }
-                let arr: [u8; 8] = byte_vec[..8].try_into()
+                let arr: [u8; 8] = byte_vec[..8]
+                    .try_into()
                     .map_err(|_| "Failed to convert to [u8; 8]")?;
                 Ok(json!(u64::from_le_bytes(arr)))
             }
@@ -2295,9 +2374,14 @@ impl VmContext {
                 let val = self.evaluate_computed_expr_with_env(bytes, state, env)?;
                 let byte_vec = self.value_to_bytes(&val)?;
                 if byte_vec.len() < 8 {
-                    return Err(format!("u64::from_be_bytes requires 8 bytes, got {}", byte_vec.len()).into());
+                    return Err(format!(
+                        "u64::from_be_bytes requires 8 bytes, got {}",
+                        byte_vec.len()
+                    )
+                    .into());
                 }
-                let arr: [u8; 8] = byte_vec[..8].try_into()
+                let arr: [u8; 8] = byte_vec[..8]
+                    .try_into()
                     .map_err(|_| "Failed to convert to [u8; 8]")?;
                 Ok(json!(u64::from_be_bytes(arr)))
             }
@@ -2371,24 +2455,23 @@ impl VmContext {
                 self.apply_method_call(&val, method, &evaluated_args)
             }
 
-            ComputedExpr::Literal { value } => {
-                Ok(value.clone())
-            }
+            ComputedExpr::Literal { value } => Ok(value.clone()),
 
-            ComputedExpr::Paren { expr } => {
-                self.evaluate_computed_expr_with_env(expr, state, env)
-            }
+            ComputedExpr::Paren { expr } => self.evaluate_computed_expr_with_env(expr, state, env),
         }
     }
 
     /// Convert a JSON value to a byte vector
     fn value_to_bytes(&self, val: &Value) -> Result<Vec<u8>> {
         match val {
-            Value::Array(arr) => {
-                arr.iter()
-                    .map(|v| v.as_u64().map(|n| n as u8).ok_or_else(|| "Array element not a valid byte".into()))
-                    .collect()
-            }
+            Value::Array(arr) => arr
+                .iter()
+                .map(|v| {
+                    v.as_u64()
+                        .map(|n| n as u8)
+                        .ok_or_else(|| "Array element not a valid byte".into())
+                })
+                .collect(),
             Value::String(s) => {
                 // Try to decode as hex
                 if s.starts_with("0x") || s.starts_with("0X") {
@@ -2405,18 +2488,14 @@ impl VmContext {
     fn apply_unary_op(&self, op: &crate::ast::UnaryOp, val: &Value) -> Result<Value> {
         use crate::ast::UnaryOp;
         match op {
-            UnaryOp::Not => {
-                Ok(json!(!self.value_to_bool(val)))
-            }
-            UnaryOp::ReverseBits => {
-                match val.as_u64() {
-                    Some(n) => Ok(json!(n.reverse_bits())),
-                    None => match val.as_i64() {
-                        Some(n) => Ok(json!((n as u64).reverse_bits())),
-                        None => Err("reverse_bits requires an integer".into()),
-                    }
-                }
-            }
+            UnaryOp::Not => Ok(json!(!self.value_to_bool(val))),
+            UnaryOp::ReverseBits => match val.as_u64() {
+                Some(n) => Ok(json!(n.reverse_bits())),
+                None => match val.as_i64() {
+                    Some(n) => Ok(json!((n as u64).reverse_bits())),
+                    None => Err("reverse_bits requires an integer".into()),
+                },
+            },
         }
     }
 
@@ -2460,12 +2539,10 @@ impl VmContext {
                 // Modulo - only for integers
                 match (left.as_i64(), right.as_i64()) {
                     (Some(a), Some(b)) if b != 0 => Ok(json!(a % b)),
-                    (None, _) | (_, None) => {
-                        match (left.as_u64(), right.as_u64()) {
-                            (Some(a), Some(b)) if b != 0 => Ok(json!(a % b)),
-                            _ => Err("Modulo requires non-zero integer operands".into()),
-                        }
-                    }
+                    (None, _) | (_, None) => match (left.as_u64(), right.as_u64()) {
+                        (Some(a), Some(b)) if b != 0 => Ok(json!(a % b)),
+                        _ => Err("Modulo requires non-zero integer operands".into()),
+                    },
                     _ => Err("Modulo by zero".into()),
                 }
             }
@@ -2491,51 +2568,41 @@ impl VmContext {
             }
 
             // Bitwise operations
-            BinaryOp::Xor => {
-                match (left.as_u64(), right.as_u64()) {
+            BinaryOp::Xor => match (left.as_u64(), right.as_u64()) {
+                (Some(a), Some(b)) => Ok(json!(a ^ b)),
+                _ => match (left.as_i64(), right.as_i64()) {
                     (Some(a), Some(b)) => Ok(json!(a ^ b)),
-                    _ => match (left.as_i64(), right.as_i64()) {
-                        (Some(a), Some(b)) => Ok(json!(a ^ b)),
-                        _ => Err("XOR requires integer operands".into()),
-                    }
-                }
-            }
-            BinaryOp::BitAnd => {
-                match (left.as_u64(), right.as_u64()) {
+                    _ => Err("XOR requires integer operands".into()),
+                },
+            },
+            BinaryOp::BitAnd => match (left.as_u64(), right.as_u64()) {
+                (Some(a), Some(b)) => Ok(json!(a & b)),
+                _ => match (left.as_i64(), right.as_i64()) {
                     (Some(a), Some(b)) => Ok(json!(a & b)),
-                    _ => match (left.as_i64(), right.as_i64()) {
-                        (Some(a), Some(b)) => Ok(json!(a & b)),
-                        _ => Err("BitAnd requires integer operands".into()),
-                    }
-                }
-            }
-            BinaryOp::BitOr => {
-                match (left.as_u64(), right.as_u64()) {
+                    _ => Err("BitAnd requires integer operands".into()),
+                },
+            },
+            BinaryOp::BitOr => match (left.as_u64(), right.as_u64()) {
+                (Some(a), Some(b)) => Ok(json!(a | b)),
+                _ => match (left.as_i64(), right.as_i64()) {
                     (Some(a), Some(b)) => Ok(json!(a | b)),
-                    _ => match (left.as_i64(), right.as_i64()) {
-                        (Some(a), Some(b)) => Ok(json!(a | b)),
-                        _ => Err("BitOr requires integer operands".into()),
-                    }
-                }
-            }
-            BinaryOp::Shl => {
-                match (left.as_u64(), right.as_u64()) {
+                    _ => Err("BitOr requires integer operands".into()),
+                },
+            },
+            BinaryOp::Shl => match (left.as_u64(), right.as_u64()) {
+                (Some(a), Some(b)) => Ok(json!(a << b)),
+                _ => match (left.as_i64(), right.as_i64()) {
                     (Some(a), Some(b)) => Ok(json!(a << b)),
-                    _ => match (left.as_i64(), right.as_i64()) {
-                        (Some(a), Some(b)) => Ok(json!(a << b)),
-                        _ => Err("Shl requires integer operands".into()),
-                    }
-                }
-            }
-            BinaryOp::Shr => {
-                match (left.as_u64(), right.as_u64()) {
+                    _ => Err("Shl requires integer operands".into()),
+                },
+            },
+            BinaryOp::Shr => match (left.as_u64(), right.as_u64()) {
+                (Some(a), Some(b)) => Ok(json!(a >> b)),
+                _ => match (left.as_i64(), right.as_i64()) {
                     (Some(a), Some(b)) => Ok(json!(a >> b)),
-                    _ => match (left.as_i64(), right.as_i64()) {
-                        (Some(a), Some(b)) => Ok(json!(a >> b)),
-                        _ => Err("Shr requires integer operands".into()),
-                    }
-                }
-            }
+                    _ => Err("Shr requires integer operands".into()),
+                },
+            },
         }
     }
 
@@ -2611,11 +2678,7 @@ impl VmContext {
             return Ok(json!(false));
         }
 
-        Err(format!(
-            "Cannot compare {:?} and {:?}",
-            left, right
-        )
-        .into())
+        Err(format!("Cannot compare {:?} and {:?}", left, right).into())
     }
 
     /// Convert a value to boolean for logical operations
@@ -2664,9 +2727,9 @@ impl VmContext {
                 } else if let Some(n) = value.as_f64() {
                     Ok(json!(n as u64))
                 } else if let Some(s) = value.as_str() {
-                    s.parse::<u64>()
-                        .map(|n| json!(n))
-                        .map_err(|e| format!("Cannot parse '{}' as unsigned integer: {}", s, e).into())
+                    s.parse::<u64>().map(|n| json!(n)).map_err(|e| {
+                        format!("Cannot parse '{}' as unsigned integer: {}", s, e).into()
+                    })
                 } else {
                     Err(format!("Cannot cast {:?} to {}", value, to_type).into())
                 }
@@ -2686,12 +2749,8 @@ impl VmContext {
                     Err(format!("Cannot cast {:?} to {}", value, to_type).into())
                 }
             }
-            "String" | "string" => {
-                Ok(json!(value.to_string()))
-            }
-            "bool" => {
-                Ok(json!(self.value_to_bool(value)))
-            }
+            "String" | "string" => Ok(json!(value.to_string())),
+            "bool" => Ok(json!(self.value_to_bool(value))),
             _ => {
                 // Unknown type, return value as-is
                 Ok(value.clone())
@@ -2717,12 +2776,8 @@ impl VmContext {
                     Ok(value.clone())
                 }
             }
-            "is_some" => {
-                Ok(json!(!value.is_null()))
-            }
-            "is_none" => {
-                Ok(json!(value.is_null()))
-            }
+            "is_some" => Ok(json!(!value.is_null())),
+            "is_none" => Ok(json!(value.is_null())),
             "abs" => {
                 if let Some(n) = value.as_i64() {
                     Ok(json!(n.abs()))
@@ -2743,9 +2798,7 @@ impl VmContext {
                     Err(format!("Cannot call len() on {:?}", value).into())
                 }
             }
-            "to_string" => {
-                Ok(json!(value.to_string()))
-            }
+            "to_string" => Ok(json!(value.to_string())),
             "min" => {
                 if args.is_empty() {
                     return Err("min() requires an argument".into());
@@ -2782,7 +2835,11 @@ impl VmContext {
                 } else if let (Some(a), Some(b)) = (value.as_u64(), other.as_u64()) {
                     Ok(json!(a.saturating_add(b)))
                 } else {
-                    Err(format!("Cannot call saturating_add() on {:?} and {:?}", value, other).into())
+                    Err(format!(
+                        "Cannot call saturating_add() on {:?} and {:?}",
+                        value, other
+                    )
+                    .into())
                 }
             }
             "saturating_sub" => {
@@ -2795,7 +2852,11 @@ impl VmContext {
                 } else if let (Some(a), Some(b)) = (value.as_u64(), other.as_u64()) {
                     Ok(json!(a.saturating_sub(b)))
                 } else {
-                    Err(format!("Cannot call saturating_sub() on {:?} and {:?}", value, other).into())
+                    Err(format!(
+                        "Cannot call saturating_sub() on {:?} and {:?}",
+                        value, other
+                    )
+                    .into())
                 }
             }
             _ => {
@@ -2839,7 +2900,7 @@ impl VmContext {
     /// Set a field value in state by path (e.g., "section.field")
     fn set_field_in_state(&self, state: &mut Value, path: &str, value: Value) -> Result<()> {
         let segments: Vec<&str> = path.split('.').collect();
-        
+
         if segments.is_empty() {
             return Err("Empty path".into());
         }
@@ -2861,9 +2922,7 @@ impl VmContext {
                     *current = json!({});
                 }
                 let obj = current.as_object_mut().unwrap();
-                current = obj
-                    .entry(segment.to_string())
-                    .or_insert_with(|| json!({}));
+                current = obj.entry(segment.to_string()).or_insert_with(|| json!({}));
             }
         }
 

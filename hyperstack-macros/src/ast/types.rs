@@ -181,8 +181,14 @@ pub struct IdlTypeDefSnapshot {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum IdlTypeDefKindSnapshot {
-    Struct { kind: String, fields: Vec<IdlFieldSnapshot> },
-    Enum { kind: String, variants: Vec<IdlEnumVariantSnapshot> },
+    Struct {
+        kind: String,
+        fields: Vec<IdlFieldSnapshot>,
+    },
+    Enum {
+        kind: String,
+        variants: Vec<IdlEnumVariantSnapshot>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -219,58 +225,125 @@ pub struct ComputedFieldSpec {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ComputedExpr {
     // Existing variants
-    FieldRef { path: String },
-    UnwrapOr { expr: Box<ComputedExpr>, default: serde_json::Value },
-    Binary { op: BinaryOp, left: Box<ComputedExpr>, right: Box<ComputedExpr> },
-    Cast { expr: Box<ComputedExpr>, to_type: String },
-    MethodCall { expr: Box<ComputedExpr>, method: String, args: Vec<ComputedExpr> },
-    Literal { value: serde_json::Value },
-    Paren { expr: Box<ComputedExpr> },
-    
+    FieldRef {
+        path: String,
+    },
+    UnwrapOr {
+        expr: Box<ComputedExpr>,
+        default: serde_json::Value,
+    },
+    Binary {
+        op: BinaryOp,
+        left: Box<ComputedExpr>,
+        right: Box<ComputedExpr>,
+    },
+    Cast {
+        expr: Box<ComputedExpr>,
+        to_type: String,
+    },
+    MethodCall {
+        expr: Box<ComputedExpr>,
+        method: String,
+        args: Vec<ComputedExpr>,
+    },
+    Literal {
+        value: serde_json::Value,
+    },
+    Paren {
+        expr: Box<ComputedExpr>,
+    },
+
     // Variable reference (for let bindings)
-    Var { name: String },
-    
+    Var {
+        name: String,
+    },
+
     // Let binding: let name = value; body
-    Let { name: String, value: Box<ComputedExpr>, body: Box<ComputedExpr> },
-    
+    Let {
+        name: String,
+        value: Box<ComputedExpr>,
+        body: Box<ComputedExpr>,
+    },
+
     // Conditional: if condition { then_branch } else { else_branch }
-    If { condition: Box<ComputedExpr>, then_branch: Box<ComputedExpr>, else_branch: Box<ComputedExpr> },
-    
+    If {
+        condition: Box<ComputedExpr>,
+        then_branch: Box<ComputedExpr>,
+        else_branch: Box<ComputedExpr>,
+    },
+
     // Option constructors
     None,
-    Some { value: Box<ComputedExpr> },
-    
+    Some {
+        value: Box<ComputedExpr>,
+    },
+
     // Byte/array operations
-    Slice { expr: Box<ComputedExpr>, start: usize, end: usize },
-    Index { expr: Box<ComputedExpr>, index: usize },
-    
+    Slice {
+        expr: Box<ComputedExpr>,
+        start: usize,
+        end: usize,
+    },
+    Index {
+        expr: Box<ComputedExpr>,
+        index: usize,
+    },
+
     // Byte conversion functions
-    U64FromLeBytes { bytes: Box<ComputedExpr> },
-    U64FromBeBytes { bytes: Box<ComputedExpr> },
-    
+    U64FromLeBytes {
+        bytes: Box<ComputedExpr>,
+    },
+    U64FromBeBytes {
+        bytes: Box<ComputedExpr>,
+    },
+
     // Byte array literals: [0u8; 32] or [1, 2, 3]
-    ByteArray { bytes: Vec<u8> },
-    
+    ByteArray {
+        bytes: Vec<u8>,
+    },
+
     // Closure for map operations: |x| body
-    Closure { param: String, body: Box<ComputedExpr> },
-    
+    Closure {
+        param: String,
+        body: Box<ComputedExpr>,
+    },
+
     // Unary operations
-    Unary { op: UnaryOp, expr: Box<ComputedExpr> },
-    
+    Unary {
+        op: UnaryOp,
+        expr: Box<ComputedExpr>,
+    },
+
     // JSON array to bytes conversion (for working with captured byte arrays)
-    JsonToBytes { expr: Box<ComputedExpr> },
+    JsonToBytes {
+        expr: Box<ComputedExpr>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BinaryOp {
     // Arithmetic
-    Add, Sub, Mul, Div, Mod,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
     // Comparison
-    Gt, Lt, Gte, Lte, Eq, Ne,
+    Gt,
+    Lt,
+    Gte,
+    Lte,
+    Eq,
+    Ne,
     // Logical
-    And, Or,
+    And,
+    Or,
     // Bitwise
-    Xor, BitAnd, BitOr, Shl, Shr,
+    Xor,
+    BitAnd,
+    BitOr,
+    Shl,
+    Shr,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -468,7 +541,7 @@ pub enum BaseType {
     Array,
     Binary,
     Timestamp,
-    Pubkey,  // Solana public key (Base58 encoded)
+    Pubkey, // Solana public key (Base58 encoded)
     Any,
 }
 
@@ -560,30 +633,30 @@ pub enum LogicalOp {
 
 impl SerializableStreamSpec {
     /// Compute deterministic content hash (SHA256 of canonical JSON).
-    /// 
+    ///
     /// The hash is computed over the entire spec except the content_hash field itself,
     /// ensuring the same AST always produces the same hash regardless of when it was
     /// generated or by whom.
     pub fn compute_content_hash(&self) -> String {
-        use sha2::{Sha256, Digest};
-        
+        use sha2::{Digest, Sha256};
+
         // Clone and clear the hash field for computation
         let mut spec_for_hash = self.clone();
         spec_for_hash.content_hash = None;
-        
+
         // Serialize to JSON (serde_json produces consistent output for the same struct)
-        let json = serde_json::to_string(&spec_for_hash)
-            .expect("Failed to serialize spec for hashing");
-        
+        let json =
+            serde_json::to_string(&spec_for_hash).expect("Failed to serialize spec for hashing");
+
         // Compute SHA256 hash
         let mut hasher = Sha256::new();
         hasher.update(json.as_bytes());
         let result = hasher.finalize();
-        
+
         // Return hex-encoded hash
         hex::encode(result)
     }
-    
+
     /// Verify that the content_hash matches the computed hash.
     /// Returns true if hash is valid or not set.
     #[allow(dead_code)]
@@ -596,7 +669,7 @@ impl SerializableStreamSpec {
             None => true, // No hash to verify
         }
     }
-    
+
     /// Set the content_hash field to the computed hash.
     #[allow(dead_code)]
     pub fn with_content_hash(mut self) -> Self {

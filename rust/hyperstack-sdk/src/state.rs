@@ -104,7 +104,7 @@ where
 
     pub(crate) async fn apply_upsert(&self, key: String, value: Value) {
         let mut data = self.data.write().await;
-        
+
         if let Ok(typed) = serde_json::from_value::<T>(value) {
             match &mut *data {
                 StoreData::Kv(map) => {
@@ -117,7 +117,6 @@ where
                 }
             }
         }
-        
     }
 
     pub(crate) async fn apply_delete(&self, key: String) {
@@ -150,4 +149,3 @@ where
         }
     }
 }
-

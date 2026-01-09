@@ -9,13 +9,13 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HyperstackConfig {
     pub project: ProjectConfig,
-    
+
     #[serde(default)]
     pub specs: Vec<SpecConfig>,
-    
+
     #[serde(default)]
     pub sdk: Option<SdkConfig>,
-    
+
     #[serde(default)]
     pub build: Option<BuildConfig>,
 }
@@ -31,7 +31,7 @@ pub struct ProjectConfig {
 pub struct SdkConfig {
     #[serde(default = "default_output_dir")]
     pub output_dir: String,
-    
+
     /// NPM package name for TypeScript SDK
     #[serde(skip_serializing_if = "Option::is_none")]
     pub typescript_package: Option<String>,
@@ -60,11 +60,11 @@ pub struct SpecConfig {
     /// If not provided, derived from AST entity name (kebab-case)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    
+
     /// Entity name OR path to .ast.json file
     /// Examples: "SettlementGame" or "./path/to/SettlementGame.ast.json"
     pub ast: String,
-    
+
     /// Optional description
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -76,14 +76,14 @@ impl HyperstackConfig {
         let path = path.as_ref();
         let contents = fs::read_to_string(path)
             .with_context(|| format!("Failed to read config file: {}", path.display()))?;
-        
+
         let config: HyperstackConfig = toml::from_str(&contents)
             .with_context(|| format!("Failed to parse config file: {}", path.display()))?;
-        
+
         config.validate()?;
         Ok(config)
     }
-    
+
     /// Try to load config, returning None if file doesn't exist
     pub fn load_optional<P: AsRef<Path>>(path: P) -> Result<Option<Self>> {
         let path = path.as_ref();
@@ -92,13 +92,13 @@ impl HyperstackConfig {
         }
         Self::load(path).map(Some)
     }
-    
+
     /// Validate the configuration
     pub fn validate(&self) -> Result<()> {
         if self.project.name.is_empty() {
             anyhow::bail!("Project name cannot be empty");
         }
-        
+
         // Check for duplicate spec names
         let mut names = HashSet::new();
         for spec in &self.specs {
@@ -108,30 +108,31 @@ impl HyperstackConfig {
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Find a spec by name
     pub fn find_spec(&self, name: &str) -> Option<&SpecConfig> {
-        self.specs.iter().find(|s| {
-            s.name.as_deref() == Some(name) || s.ast == name
-        })
+        self.specs
+            .iter()
+            .find(|s| s.name.as_deref() == Some(name) || s.ast == name)
     }
-    
+
     /// Get the output directory for SDK generation
     pub fn get_output_dir(&self) -> &str {
-        self.sdk.as_ref()
+        self.sdk
+            .as_ref()
             .map(|s| s.output_dir.as_str())
             .unwrap_or("./generated")
     }
-    
+
     /// Get output path for a spec
     pub fn get_output_path(&self, spec_name: &str, override_path: Option<String>) -> PathBuf {
         if let Some(path) = override_path {
             return PathBuf::from(path);
         }
-        
+
         PathBuf::from(self.get_output_dir()).join(format!("{}-stack.ts", spec_name))
     }
 }
@@ -154,21 +155,23 @@ impl DiscoveredAst {
     pub fn from_path(path: PathBuf) -> Result<Self> {
         let contents = fs::read_to_string(&path)
             .with_context(|| format!("Failed to read AST file: {}", path.display()))?;
-        
+
         let ast: serde_json::Value = serde_json::from_str(&contents)
             .with_context(|| format!("Failed to parse AST JSON: {}", path.display()))?;
-        
-        let entity_name = ast.get("state_name")
+
+        let entity_name = ast
+            .get("state_name")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("AST missing 'state_name' field: {}", path.display()))?
             .to_string();
-        
-        let program_id = ast.get("program_id")
+
+        let program_id = ast
+            .get("program_id")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
-        
+
         let spec_name = to_kebab_case(&entity_name);
-        
+
         Ok(Self {
             path,
             entity_name,
@@ -176,12 +179,12 @@ impl DiscoveredAst {
             spec_name,
         })
     }
-    
+
     /// Load the full AST content as JSON
     pub fn load_ast(&self) -> Result<serde_json::Value> {
         let contents = fs::read_to_string(&self.path)
             .with_context(|| format!("Failed to read AST file: {}", self.path.display()))?;
-        
+
         serde_json::from_str(&contents)
             .with_context(|| format!("Failed to parse AST JSON: {}", self.path.display()))
     }
@@ -208,20 +211,20 @@ pub fn to_kebab_case(s: &str) -> String {
 pub fn discover_ast_files(base_path: Option<&Path>) -> Result<Vec<DiscoveredAst>> {
     let base = base_path.unwrap_or_else(|| Path::new("."));
     let mut discovered = Vec::new();
-    
+
     // First check .hyperstack/ in the base directory
     let local_hyperstack = base.join(".hyperstack");
     if local_hyperstack.is_dir() {
         discover_in_dir(&local_hyperstack, &mut discovered)?;
     }
-    
+
     // Then search subdirectories (max depth 3 to avoid excessive searching)
     discover_recursive(base, &mut discovered, 0, 3)?;
-    
+
     // Deduplicate by entity name (prefer closer paths)
     let mut seen_entities = HashSet::new();
     discovered.retain(|ast| seen_entities.insert(ast.entity_name.clone()));
-    
+
     Ok(discovered)
 }
 
@@ -229,11 +232,11 @@ fn discover_in_dir(dir: &Path, discovered: &mut Vec<DiscoveredAst>) -> Result<()
     if !dir.is_dir() {
         return Ok(());
     }
-    
+
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
-        
+
         if path.is_file() {
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                 if name.ends_with(".ast.json") {
@@ -248,19 +251,24 @@ fn discover_in_dir(dir: &Path, discovered: &mut Vec<DiscoveredAst>) -> Result<()
             }
         }
     }
-    
+
     Ok(())
 }
 
-fn discover_recursive(dir: &Path, discovered: &mut Vec<DiscoveredAst>, depth: usize, max_depth: usize) -> Result<()> {
+fn discover_recursive(
+    dir: &Path,
+    discovered: &mut Vec<DiscoveredAst>,
+    depth: usize,
+    max_depth: usize,
+) -> Result<()> {
     if depth >= max_depth || !dir.is_dir() {
         return Ok(());
     }
-    
+
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
-        
+
         if path.is_dir() {
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                 // Skip hidden dirs (except .hyperstack), node_modules, target, etc.
@@ -272,7 +280,7 @@ fn discover_recursive(dir: &Path, discovered: &mut Vec<DiscoveredAst>, depth: us
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -283,14 +291,14 @@ pub fn find_ast_file(name: &str, base_path: Option<&Path>) -> Result<Option<Disc
     if as_path.exists() && as_path.is_file() {
         return DiscoveredAst::from_path(as_path.to_path_buf()).map(Some);
     }
-    
+
     // Search for matching AST
     let discovered = discover_ast_files(base_path)?;
-    
+
     // Match by entity name or spec name
     let name_lower = name.to_lowercase();
     let name_kebab = to_kebab_case(name);
-    
+
     Ok(discovered.into_iter().find(|ast| {
         ast.entity_name.to_lowercase() == name_lower
             || ast.spec_name == name_kebab
@@ -305,28 +313,30 @@ pub fn resolve_specs_to_push(
 ) -> Result<Vec<DiscoveredAst>> {
     // If a specific spec name is given, find just that one
     if let Some(name) = spec_name {
-        let ast = find_ast_file(name, None)?
-            .ok_or_else(|| anyhow::anyhow!(
+        let ast = find_ast_file(name, None)?.ok_or_else(|| {
+            anyhow::anyhow!(
                 "AST file not found for '{}'\n\nSearched in .hyperstack/ directories.\n\
                  Make sure your spec is compiled (cargo build) and the AST file exists.",
                 name
-            ))?;
+            )
+        })?;
         return Ok(vec![ast]);
     }
-    
+
     // If we have a config with specs defined, use those
     if let Some(config) = config {
         if !config.specs.is_empty() {
             let mut result = Vec::new();
             for spec in &config.specs {
-                let ast = find_ast_file(&spec.ast, None)?
-                    .ok_or_else(|| anyhow::anyhow!(
+                let ast = find_ast_file(&spec.ast, None)?.ok_or_else(|| {
+                    anyhow::anyhow!(
                         "AST file not found for spec '{}' (ast: '{}')\n\
                          Make sure your spec is compiled and the AST file exists.",
                         spec.name.as_deref().unwrap_or(&spec.ast),
                         spec.ast
-                    ))?;
-                
+                    )
+                })?;
+
                 // Override spec name if provided in config
                 let mut ast = ast;
                 if let Some(name) = &spec.name {
@@ -337,10 +347,10 @@ pub fn resolve_specs_to_push(
             return Ok(result);
         }
     }
-    
+
     // Auto-discover all AST files
     let discovered = discover_ast_files(None)?;
-    
+
     if discovered.is_empty() {
         anyhow::bail!(
             "No AST files found.\n\n\
@@ -349,14 +359,14 @@ pub fn resolve_specs_to_push(
              Alternatively, create a hyperstack.toml to configure your specs."
         );
     }
-    
+
     Ok(discovered)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_to_kebab_case() {
         assert_eq!(to_kebab_case("SettlementGame"), "settlement-game");

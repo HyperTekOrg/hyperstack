@@ -11,9 +11,9 @@
 use std::collections::{BTreeMap, HashMap};
 
 use super::types::*;
+use crate::parse;
 use crate::parse::conditions as condition_parser;
 use crate::parse::idl as idl_parser;
-use crate::parse;
 
 /// Write a SerializableStreamSpec to a JSON file.
 ///
@@ -151,7 +151,9 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
     // Determine if this IDL uses Steel-style discriminants (1 byte) or Anchor-style (8 bytes)
     // Steel IDLs have a `discriminant` field with {"type": "u8", "value": N}
     // Anchor IDLs have a `discriminator` array with 8 bytes
-    let uses_steel_discriminant = idl.instructions.iter()
+    let uses_steel_discriminant = idl
+        .instructions
+        .iter()
         .any(|ix| ix.discriminant.is_some() && ix.discriminator.is_empty());
     let discriminant_size: usize = if uses_steel_discriminant { 1 } else { 8 };
 
@@ -249,7 +251,9 @@ pub fn convert_idl_type(idl_type: &idl_parser::IdlType) -> IdlTypeSnapshot {
                 idl_parser::IdlTypeDefinedInner::Named { name } => {
                     IdlDefinedInnerSnapshot::Named { name: name.clone() }
                 }
-                idl_parser::IdlTypeDefinedInner::Simple(s) => IdlDefinedInnerSnapshot::Simple(s.clone()),
+                idl_parser::IdlTypeDefinedInner::Simple(s) => {
+                    IdlDefinedInnerSnapshot::Simple(s.clone())
+                }
             },
         }),
     }
@@ -306,11 +310,11 @@ pub fn build_handlers_from_sources(
             let source = if mapping.is_whole_source {
                 let field_transforms = if mapping
                     .source_field_name
-                    .starts_with("__capture_with_transforms:")
+                    .starts_with("__snapshot_with_transforms:")
                 {
                     let transforms_str = mapping
                         .source_field_name
-                        .strip_prefix("__capture_with_transforms:")
+                        .strip_prefix("__snapshot_with_transforms:")
                         .unwrap_or("");
                     transforms_str
                         .split(',')
@@ -373,7 +377,10 @@ pub fn build_handlers_from_sources(
                 if is_instruction {
                     let prefix = idl
                         .and_then(|idl| {
-                            idl.get_instruction_field_prefix(account_type, &mapping.source_field_name)
+                            idl.get_instruction_field_prefix(
+                                account_type,
+                                &mapping.source_field_name,
+                            )
                         })
                         .unwrap_or("data");
                     primary_field = Some(format!("{}.{}", prefix, mapping.source_field_name));
@@ -391,14 +398,15 @@ pub fn build_handlers_from_sources(
         });
 
         // Try to find lookup_by from the first mapping that has it
-        let lookup_by_field = mappings.iter()
+        let lookup_by_field = mappings
+            .iter()
             .find_map(|m| m.lookup_by.as_ref())
             .map(|fs| {
                 // FieldSpec has explicit_location which tells us if it's accounts:: or data::
                 let prefix = match &fs.explicit_location {
                     Some(parse::FieldLocation::Account) => "accounts",
                     Some(parse::FieldLocation::InstructionArg) => "data",
-                    None => "accounts",  // Default to accounts for compatibility
+                    None => "accounts", // Default to accounts for compatibility
                 };
                 format!("{}.{}", prefix, fs.ident)
             });

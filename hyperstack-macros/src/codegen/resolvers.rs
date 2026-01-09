@@ -5,12 +5,12 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
+use super::core::{generate_hook_actions, to_snake_case};
 use crate::ast::*;
 use crate::parse::idl::IdlSpec;
-use super::core::{generate_hook_actions, to_snake_case};
 
 /// Generate resolver registry and instruction hook registry.
-/// 
+///
 /// This creates the `get_resolver_for_account_type` and `get_instruction_hooks` functions.
 pub fn generate_resolver_registries(
     resolver_hooks: &[ResolverHook],
@@ -122,21 +122,27 @@ fn generate_instruction_hook_registry(
 
     let hook_arms = hooks_by_instruction.iter().map(|(event_type, hooks)| {
         // Generate function definitions and names separately
-        let (hook_fn_defs, hook_fn_names): (Vec<_>, Vec<_>) = hooks.iter().enumerate().map(|(idx, hook)| {
-            // Strip "IxState" suffix for cleaner function names
-            let instruction_base = hook.instruction_type.strip_suffix("IxState")
-                .unwrap_or(&hook.instruction_type);
-            let fn_name = format_ident!("hook_{}_{}", to_snake_case(instruction_base), idx);
-            let actions = generate_hook_actions(&hook.actions, &hook.lookup_by);
-            
-            let fn_def = quote! {
-                fn #fn_name(ctx: &mut hyperstack_interpreter::resolvers::InstructionContext) {
-                    #actions
-                }
-            };
-            
-            (fn_def, fn_name)
-        }).unzip();
+        let (hook_fn_defs, hook_fn_names): (Vec<_>, Vec<_>) = hooks
+            .iter()
+            .enumerate()
+            .map(|(idx, hook)| {
+                // Strip "IxState" suffix for cleaner function names
+                let instruction_base = hook
+                    .instruction_type
+                    .strip_suffix("IxState")
+                    .unwrap_or(&hook.instruction_type);
+                let fn_name = format_ident!("hook_{}_{}", to_snake_case(instruction_base), idx);
+                let actions = generate_hook_actions(&hook.actions, &hook.lookup_by);
+
+                let fn_def = quote! {
+                    fn #fn_name(ctx: &mut hyperstack_interpreter::resolvers::InstructionContext) {
+                        #actions
+                    }
+                };
+
+                (fn_def, fn_name)
+            })
+            .unzip();
 
         quote! {
             #event_type => {

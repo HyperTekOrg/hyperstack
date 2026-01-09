@@ -19,20 +19,22 @@ fn package_to_module_name(package: &str) -> String {
     format!("{}_proto", last_segment)
 }
 
-pub fn generate_proto_module_declarations(proto_analyses: &[(String, ProtoAnalysis)]) -> TokenStream {
+pub fn generate_proto_module_declarations(
+    proto_analyses: &[(String, ProtoAnalysis)],
+) -> TokenStream {
     let mut module_declarations = Vec::new();
-    
+
     for (_path, analysis) in proto_analyses {
         let module_name = format_ident!("{}", package_to_module_name(&analysis.package));
         let package_name = &analysis.package;
-        
+
         module_declarations.push(quote! {
             pub mod #module_name {
                 tonic::include_proto!(#package_name);
             }
         });
     }
-    
+
     quote! {
         #(#module_declarations)*
     }
@@ -54,7 +56,8 @@ pub fn generate_proto_decoders(proto_analyses: &[(String, ProtoAnalysis)]) -> To
             let mut match_arms = Vec::new();
 
             for variant in &oneof_type.variants {
-                let variant_name_ident = format_ident!("{}", snake_case_to_pascal_case(&variant.field_name));
+                let variant_name_ident =
+                    format_ident!("{}", snake_case_to_pascal_case(&variant.field_name));
                 let type_name = format!("{}State", variant.type_name);
 
                 match_arms.push(quote! {
@@ -65,13 +68,13 @@ pub fn generate_proto_decoders(proto_analyses: &[(String, ProtoAnalysis)]) -> To
             }
 
             let decoder_fn_name = format_ident!(
-                "decode_{}_{}", 
+                "decode_{}_{}",
                 analysis.package.replace('.', "_"),
                 to_snake_case(&oneof_type.message_name)
             );
 
             let message_name_snake_ident = format_ident!("{}", message_name_snake);
-            
+
             decoder_functions.push(quote! {
                 fn #decoder_fn_name(bytes: &[u8]) -> Result<(serde_json::Value, String), Box<dyn std::error::Error>> {
                     use #module_name::{#message_name_ident, #message_name_snake_ident::#oneof_enum_ident};
@@ -96,7 +99,7 @@ pub fn generate_proto_decoders(proto_analyses: &[(String, ProtoAnalysis)]) -> To
 fn to_snake_case(s: &str) -> String {
     let mut result = String::new();
     let mut prev_is_lower = false;
-    
+
     for (i, ch) in s.chars().enumerate() {
         if ch.is_uppercase() {
             if i > 0 && prev_is_lower {
@@ -109,7 +112,7 @@ fn to_snake_case(s: &str) -> String {
             prev_is_lower = ch.is_lowercase();
         }
     }
-    
+
     result
 }
 
@@ -120,7 +123,7 @@ pub fn generate_proto_router_setup(proto_analyses: &[(String, ProtoAnalysis)]) -
         for oneof_type in &analysis.oneof_types {
             let type_url = format!("/{}.{}", analysis.package, oneof_type.message_name);
             let decoder_fn_name = format_ident!(
-                "decode_{}_{}", 
+                "decode_{}_{}",
                 analysis.package.replace('.', "_"),
                 to_snake_case(&oneof_type.message_name)
             );

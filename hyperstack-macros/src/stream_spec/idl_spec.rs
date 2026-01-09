@@ -50,11 +50,7 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
     let program_id = idl
         .address
         .as_ref()
-        .or_else(|| {
-            idl.metadata
-                .as_ref()
-                .and_then(|m| m.address.as_ref())
-        })
+        .or_else(|| idl.metadata.as_ref().and_then(|m| m.address.as_ref()))
         .map(|s| s.as_str())
         .unwrap_or("11111111111111111111111111111111");
 
@@ -78,7 +74,7 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                 let has_stream_section = item_struct.attrs.iter().any(|attr| {
                     if attr.path().is_ident("derive") {
                         if let syn::Meta::List(meta_list) = &attr.meta {
-                            return meta_list.tokens.to_string().contains("StreamSection");
+                            return meta_list.tokens.to_string().contains("Stream");
                         }
                     }
                     false

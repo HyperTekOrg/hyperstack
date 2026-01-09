@@ -61,22 +61,24 @@ struct SettlementGame {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let url = std::env::args().nth(1).unwrap_or_else(|| "ws://127.0.0.1:8080".to_string());
-    
+    let url = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "ws://127.0.0.1:8080".to_string());
+
     let view = std::env::var("VIEW").unwrap_or_else(|_| "SettlementGame/kv".to_string());
-    
+
     let mut client = HyperStackClient::<SettlementGame>::new(url, &view);
-    
+
     if let Ok(key) = std::env::var("KEY") {
         client = client.with_key(key);
     }
-    
+
     let store = client.connect().await?;
-    
+
     println!("connected, watching {}...\n", view);
-    
+
     let mut updates = store.subscribe();
-    
+
     loop {
         tokio::select! {
             Ok((key, game)) = updates.recv() => {

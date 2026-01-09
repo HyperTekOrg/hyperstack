@@ -9,7 +9,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 /// Generate VmHandler implementation for processing account and instruction updates.
-/// 
+///
 /// This is the complex handler that includes:
 /// - Resolver integration for account types
 /// - Instruction hook execution
@@ -67,7 +67,7 @@ pub fn generate_vm_handler(
                 let slot = raw_update.slot;
                 let account = raw_update.account.as_ref().unwrap();
                 let signature = bs58::encode(account.txn_signature.as_ref().unwrap()).into_string();
-                
+
                 // Record event received for health monitoring
                 if let Some(ref health) = self.health_monitor {
                     health.record_event().await;

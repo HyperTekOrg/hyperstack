@@ -54,11 +54,11 @@ impl Projector {
         while let Some(mutations) = self.mutations_rx.recv().await {
             for mutation in mutations.iter() {
                 let _start = Instant::now();
-                
+
                 if let Err(e) = self.process_mutation(mutation).await {
                     error!("Failed to process mutation: {}", e);
                 }
-                
+
                 #[cfg(feature = "otel")]
                 if let Some(ref metrics) = self.metrics {
                     let latency_ms = start.elapsed().as_secs_f64() * 1000.0;
@@ -112,7 +112,7 @@ impl Projector {
             });
 
             self.publish_frame(spec, mutation, message).await;
-            
+
             #[cfg(feature = "otel")]
             if let Some(ref metrics) = self.metrics {
                 let mode_str = match spec.mode {

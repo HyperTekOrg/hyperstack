@@ -52,7 +52,11 @@ fn extract_deps_recursive(expr: &ComputedExpr, section: &str, deps: &mut HashSet
             extract_deps_recursive(value, section, deps);
             extract_deps_recursive(body, section, deps);
         }
-        ComputedExpr::If { condition, then_branch, else_branch } => {
+        ComputedExpr::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
             extract_deps_recursive(condition, section, deps);
             extract_deps_recursive(then_branch, section, deps);
             extract_deps_recursive(else_branch, section, deps);
@@ -87,35 +91,46 @@ fn extract_deps_recursive(expr: &ComputedExpr, section: &str, deps: &mut HashSet
 }
 
 /// Topologically sort computed fields by dependencies within a section.
-fn sort_by_dependencies<'a>(fields: &[&'a ComputedFieldSpec], section: &str) -> Vec<&'a ComputedFieldSpec> {
+fn sort_by_dependencies<'a>(
+    fields: &[&'a ComputedFieldSpec],
+    section: &str,
+) -> Vec<&'a ComputedFieldSpec> {
     // Build field name to spec mapping
     let mut name_to_spec: HashMap<String, &ComputedFieldSpec> = HashMap::new();
     let mut field_deps: HashMap<String, HashSet<String>> = HashMap::new();
-    
+
     for spec in fields {
-        let field_name = spec.target_path.split('.').next_back().unwrap_or(&spec.target_path).to_string();
+        let field_name = spec
+            .target_path
+            .split('.')
+            .next_back()
+            .unwrap_or(&spec.target_path)
+            .to_string();
         name_to_spec.insert(field_name.clone(), *spec);
         let deps = extract_field_dependencies(&spec.expression, section);
         field_deps.insert(field_name, deps);
     }
-    
+
     // Topological sort using Kahn's algorithm
     let mut result: Vec<&ComputedFieldSpec> = Vec::new();
     let mut remaining: HashSet<String> = name_to_spec.keys().cloned().collect();
-    
+
     // Keep iterating until all fields are sorted
     while !remaining.is_empty() {
         let mut ready: Vec<String> = Vec::new();
-        
+
         for name in &remaining {
             let deps = field_deps.get(name).unwrap();
             // A field is ready if all its dependencies that are computed fields have been processed
-            let computed_deps: HashSet<_> = deps.intersection(&name_to_spec.keys().cloned().collect()).cloned().collect();
+            let computed_deps: HashSet<_> = deps
+                .intersection(&name_to_spec.keys().cloned().collect())
+                .cloned()
+                .collect();
             if computed_deps.iter().all(|d| !remaining.contains(d)) {
                 ready.push(name.clone());
             }
         }
-        
+
         if ready.is_empty() && !remaining.is_empty() {
             // Circular dependency or dependency on non-existent field - just add remaining fields
             for name in &remaining {
@@ -125,7 +140,7 @@ fn sort_by_dependencies<'a>(fields: &[&'a ComputedFieldSpec], section: &str) -> 
             }
             break;
         }
-        
+
         for name in ready {
             remaining.remove(&name);
             if let Some(spec) = name_to_spec.get(&name) {
@@ -133,7 +148,7 @@ fn sort_by_dependencies<'a>(fields: &[&'a ComputedFieldSpec], section: &str) -> 
             }
         }
     }
-    
+
     result
 }
 
@@ -157,7 +172,7 @@ pub fn generate_computed_evaluator(computed_field_specs: &[ComputedFieldSpec]) -
 
     // Group computed fields by section
     let mut fields_by_section: HashMap<String, Vec<&ComputedFieldSpec>> = HashMap::new();
-    
+
     for spec in computed_field_specs {
         let parts: Vec<&str> = spec.target_path.split('.').collect();
         if parts.len() >= 2 {
@@ -195,7 +210,8 @@ pub fn generate_computed_evaluator(computed_field_specs: &[ComputedFieldSpec]) -
     }).collect();
 
     // Generate the list of computed field paths for the helper function
-    let computed_paths: Vec<String> = computed_field_specs.iter()
+    let computed_paths: Vec<String> = computed_field_specs
+        .iter()
         .map(|spec| spec.target_path.clone())
         .collect();
     let computed_paths_strs: Vec<&str> = computed_paths.iter().map(|s| s.as_str()).collect();
@@ -217,10 +233,10 @@ pub fn generate_computed_evaluator(computed_field_specs: &[ComputedFieldSpec]) -
 }
 
 /// Generate code for a computed expression.
-/// 
+///
 /// This generates code that extracts values from JSON and performs calculations.
 /// The code generation handles multiple types including f64, u64, Option<T>, byte arrays, etc.
-/// 
+///
 /// The generated code expects a `state` variable in scope that is `&serde_json::Value`.
 pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
     match expr {
@@ -231,11 +247,11 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
                 // e.g., "round_snapshot.slot_hash" -> state.get("round_snapshot").and_then(|s| s.get("slot_hash"))
                 let section = parts[0];
                 let mut chain = quote! { state.get(#section) };
-                
+
                 for field in &parts[1..] {
                     chain = quote! { #chain.and_then(|s| s.get(#field)) };
                 }
-                
+
                 quote! { #chain.cloned() }
             } else if parts.len() == 1 {
                 // Single identifier - could be a local variable, treat as such
@@ -250,7 +266,13 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
             // Extract the default value as a numeric literal
             let default_num = match default {
                 serde_json::Value::Number(n) => n.as_f64().unwrap_or(0.0),
-                serde_json::Value::Bool(b) => if *b { 1.0 } else { 0.0 },
+                serde_json::Value::Bool(b) => {
+                    if *b {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                }
                 _ => 0.0,
             };
             quote! {
@@ -284,12 +306,17 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
         }
         ComputedExpr::Cast { expr, to_type } => {
             let type_ident = format_ident!("{}", to_type);
-            
+
             // Special handling for .max() calls being cast to f64
             // This avoids type ambiguity: (expr.max(1) as f64) should generate (expr.max(1) as f64)
             // but we need to ensure the max argument is also properly typed for the target type
             if to_type == "f64" {
-                if let ComputedExpr::MethodCall { expr: inner_expr, method, args } = expr.as_ref() {
+                if let ComputedExpr::MethodCall {
+                    expr: inner_expr,
+                    method,
+                    args,
+                } = expr.as_ref()
+                {
                     if method == "max" && args.len() == 1 {
                         // Generate the inner expression and max call with explicit f64 cast on argument
                         let inner_code = generate_computed_expr_code(inner_expr);
@@ -298,15 +325,16 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
                     }
                 }
             }
-            
+
             let inner = generate_computed_expr_code(expr);
             quote! { (#inner as #type_ident) }
         }
         ComputedExpr::MethodCall { expr, method, args } => {
             let inner = generate_computed_expr_code(expr);
             let method_ident = format_ident!("{}", method);
-            let arg_codes: Vec<TokenStream> = args.iter().map(generate_computed_expr_code).collect();
-            
+            let arg_codes: Vec<TokenStream> =
+                args.iter().map(generate_computed_expr_code).collect();
+
             // Special handling for .map() on Option<serde_json::Value> - need to extract the numeric value
             if method == "map" && args.len() == 1 {
                 if let ComputedExpr::Closure { param, body } = &args[0] {
@@ -318,7 +346,7 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
                     };
                 }
             }
-            
+
             // Special handling for .max() to avoid type ambiguity when expr is a cast
             // If the expr is a Cast to f64, we need to ensure max arguments are also f64
             if method == "max" && args.len() == 1 {
@@ -330,7 +358,7 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
                     }
                 }
             }
-            
+
             quote! { #inner.#method_ident(#(#arg_codes),*) }
         }
         ComputedExpr::Literal { value } => {
@@ -353,7 +381,7 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
                 serde_json::Value::Null => {
                     quote! { () }
                 }
-                _ => quote! { 0.0_f64 }
+                _ => quote! { 0.0_f64 },
             }
         }
         ComputedExpr::Paren { expr } => {
@@ -376,7 +404,11 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
                 }
             }
         }
-        ComputedExpr::If { condition, then_branch, else_branch } => {
+        ComputedExpr::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
             let cond_code = generate_computed_expr_code(condition);
             let then_code = generate_computed_expr_code(then_branch);
             let else_code = generate_computed_expr_code(else_branch);
@@ -424,9 +456,12 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
             }
         }
         ComputedExpr::ByteArray { bytes } => {
-            let byte_literals: Vec<proc_macro2::TokenStream> = bytes.iter().map(|b| {
-                quote! { #b }
-            }).collect();
+            let byte_literals: Vec<proc_macro2::TokenStream> = bytes
+                .iter()
+                .map(|b| {
+                    quote! { #b }
+                })
+                .collect();
             quote! { [#(#byte_literals),*] }
         }
         ComputedExpr::Closure { param, body } => {

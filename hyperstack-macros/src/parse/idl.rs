@@ -69,13 +69,13 @@ impl IdlInstruction {
         if !self.discriminator.is_empty() {
             return self.discriminator.clone();
         }
-        
+
         // Convert Steel discriminant to 8-byte discriminator
         if let Some(disc) = &self.discriminant {
             let value = disc.value as u8;
             return vec![value, 0, 0, 0, 0, 0, 0, 0];
         }
-        
+
         // Default empty
         Vec::new()
     }
@@ -179,8 +179,14 @@ pub struct IdlTypeDef {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum IdlTypeDefKind {
-    Struct { kind: String, fields: Vec<IdlField> },
-    Enum { kind: String, variants: Vec<IdlEnumVariant> },
+    Struct {
+        kind: String,
+        fields: Vec<IdlField>,
+    },
+    Enum {
+        kind: String,
+        variants: Vec<IdlEnumVariant>,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -206,31 +212,36 @@ pub struct IdlError {
 pub fn parse_idl_file<P: AsRef<Path>>(path: P) -> Result<IdlSpec, String> {
     let content = fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read IDL file {:?}: {}", path.as_ref(), e))?;
-    
+
     parse_idl_content(&content)
 }
 
 pub fn parse_idl_content(content: &str) -> Result<IdlSpec, String> {
-    serde_json::from_str(content)
-        .map_err(|e| format!("Failed to parse IDL JSON: {}", e))
+    serde_json::from_str(content).map_err(|e| format!("Failed to parse IDL JSON: {}", e))
 }
 
 impl IdlSpec {
     pub fn get_name(&self) -> &str {
-        self.name.as_deref()
+        self.name
+            .as_deref()
             .or_else(|| self.metadata.as_ref().map(|m| m.name.as_str()))
             .unwrap_or("unknown")
     }
-    
+
     pub fn get_version(&self) -> &str {
-        self.version.as_deref()
+        self.version
+            .as_deref()
             .or_else(|| self.metadata.as_ref().map(|m| m.version.as_str()))
             .unwrap_or("0.1.0")
     }
-    
+
     /// Check if a field is an account (vs an arg/data field) for a given instruction
     /// Returns Some("accounts") if it's an account, Some("data") if it's an arg, None if not found
-    pub fn get_instruction_field_prefix(&self, instruction_name: &str, field_name: &str) -> Option<&'static str> {
+    pub fn get_instruction_field_prefix(
+        &self,
+        instruction_name: &str,
+        field_name: &str,
+    ) -> Option<&'static str> {
         for instruction in &self.instructions {
             if instruction.name.eq_ignore_ascii_case(instruction_name) {
                 // Check if it's an account
@@ -252,7 +263,7 @@ impl IdlSpec {
         // Instruction not found
         None
     }
-    
+
     /// Get the discriminator bytes for an instruction by name
     pub fn get_instruction_discriminator(&self, instruction_name: &str) -> Option<Vec<u8>> {
         for instruction in &self.instructions {
@@ -325,7 +336,7 @@ fn map_simple_type(idl_type: &str) -> String {
 
 pub fn to_snake_case(s: &str) -> String {
     let mut result = String::new();
-    
+
     for c in s.chars() {
         if c.is_uppercase() {
             if !result.is_empty() {
@@ -336,7 +347,7 @@ pub fn to_snake_case(s: &str) -> String {
             result.push(c);
         }
     }
-    
+
     result
 }
 

@@ -49,7 +49,8 @@ where
             partition: None,
         };
 
-        tx.send(Message::Text(serde_json::to_string(&subscription)?)).await?;
+        tx.send(Message::Text(serde_json::to_string(&subscription)?))
+            .await?;
 
         let mode = infer_mode_from_view(&self.view);
         let store = EntityStore::new(mode);

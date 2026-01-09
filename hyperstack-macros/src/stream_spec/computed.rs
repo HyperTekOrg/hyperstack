@@ -80,7 +80,11 @@ pub fn qualify_field_refs(expr: ComputedExpr, section: &str) -> ComputedExpr {
             value: Box::new(qualify_field_refs(*value, section)),
             body: Box::new(qualify_field_refs(*body, section)),
         },
-        ComputedExpr::If { condition, then_branch, else_branch } => ComputedExpr::If {
+        ComputedExpr::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => ComputedExpr::If {
             condition: Box::new(qualify_field_refs(*condition, section)),
             then_branch: Box::new(qualify_field_refs(*then_branch, section)),
             else_branch: Box::new(qualify_field_refs(*else_branch, section)),
@@ -223,7 +227,7 @@ fn extract_field_references_recursive(
 // ============================================================================
 
 /// Recursive descent parser for expressions.
-/// 
+///
 /// Grammar (simplified):
 /// ```text
 /// expr         = let_expr | if_expr | or_expr
@@ -285,83 +289,64 @@ fn resolve_bindings_in_expr(expr: ComputedExpr, bindings: &HashSet<String>) -> C
                 body: Box::new(resolved_body),
             }
         }
-        ComputedExpr::If { condition, then_branch, else_branch } => {
-            ComputedExpr::If {
-                condition: Box::new(resolve_bindings_in_expr(*condition, bindings)),
-                then_branch: Box::new(resolve_bindings_in_expr(*then_branch, bindings)),
-                else_branch: Box::new(resolve_bindings_in_expr(*else_branch, bindings)),
-            }
-        }
-        ComputedExpr::Binary { op, left, right } => {
-            ComputedExpr::Binary {
-                op,
-                left: Box::new(resolve_bindings_in_expr(*left, bindings)),
-                right: Box::new(resolve_bindings_in_expr(*right, bindings)),
-            }
-        }
-        ComputedExpr::Unary { op, expr } => {
-            ComputedExpr::Unary {
-                op,
-                expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
-            }
-        }
-        ComputedExpr::MethodCall { expr, method, args } => {
-            ComputedExpr::MethodCall {
-                expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
-                method,
-                args: args.into_iter().map(|a| resolve_bindings_in_expr(a, bindings)).collect(),
-            }
-        }
-        ComputedExpr::UnwrapOr { expr, default } => {
-            ComputedExpr::UnwrapOr {
-                expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
-                default,
-            }
-        }
-        ComputedExpr::Cast { expr, to_type } => {
-            ComputedExpr::Cast {
-                expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
-                to_type,
-            }
-        }
-        ComputedExpr::Paren { expr } => {
-            ComputedExpr::Paren {
-                expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
-            }
-        }
-        ComputedExpr::Some { value } => {
-            ComputedExpr::Some {
-                value: Box::new(resolve_bindings_in_expr(*value, bindings)),
-            }
-        }
-        ComputedExpr::Slice { expr, start, end } => {
-            ComputedExpr::Slice {
-                expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
-                start,
-                end,
-            }
-        }
-        ComputedExpr::Index { expr, index } => {
-            ComputedExpr::Index {
-                expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
-                index,
-            }
-        }
-        ComputedExpr::U64FromLeBytes { bytes } => {
-            ComputedExpr::U64FromLeBytes {
-                bytes: Box::new(resolve_bindings_in_expr(*bytes, bindings)),
-            }
-        }
-        ComputedExpr::U64FromBeBytes { bytes } => {
-            ComputedExpr::U64FromBeBytes {
-                bytes: Box::new(resolve_bindings_in_expr(*bytes, bindings)),
-            }
-        }
-        ComputedExpr::JsonToBytes { expr } => {
-            ComputedExpr::JsonToBytes {
-                expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
-            }
-        }
+        ComputedExpr::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => ComputedExpr::If {
+            condition: Box::new(resolve_bindings_in_expr(*condition, bindings)),
+            then_branch: Box::new(resolve_bindings_in_expr(*then_branch, bindings)),
+            else_branch: Box::new(resolve_bindings_in_expr(*else_branch, bindings)),
+        },
+        ComputedExpr::Binary { op, left, right } => ComputedExpr::Binary {
+            op,
+            left: Box::new(resolve_bindings_in_expr(*left, bindings)),
+            right: Box::new(resolve_bindings_in_expr(*right, bindings)),
+        },
+        ComputedExpr::Unary { op, expr } => ComputedExpr::Unary {
+            op,
+            expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
+        },
+        ComputedExpr::MethodCall { expr, method, args } => ComputedExpr::MethodCall {
+            expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
+            method,
+            args: args
+                .into_iter()
+                .map(|a| resolve_bindings_in_expr(a, bindings))
+                .collect(),
+        },
+        ComputedExpr::UnwrapOr { expr, default } => ComputedExpr::UnwrapOr {
+            expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
+            default,
+        },
+        ComputedExpr::Cast { expr, to_type } => ComputedExpr::Cast {
+            expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
+            to_type,
+        },
+        ComputedExpr::Paren { expr } => ComputedExpr::Paren {
+            expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
+        },
+        ComputedExpr::Some { value } => ComputedExpr::Some {
+            value: Box::new(resolve_bindings_in_expr(*value, bindings)),
+        },
+        ComputedExpr::Slice { expr, start, end } => ComputedExpr::Slice {
+            expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
+            start,
+            end,
+        },
+        ComputedExpr::Index { expr, index } => ComputedExpr::Index {
+            expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
+            index,
+        },
+        ComputedExpr::U64FromLeBytes { bytes } => ComputedExpr::U64FromLeBytes {
+            bytes: Box::new(resolve_bindings_in_expr(*bytes, bindings)),
+        },
+        ComputedExpr::U64FromBeBytes { bytes } => ComputedExpr::U64FromBeBytes {
+            bytes: Box::new(resolve_bindings_in_expr(*bytes, bindings)),
+        },
+        ComputedExpr::JsonToBytes { expr } => ComputedExpr::JsonToBytes {
+            expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
+        },
         ComputedExpr::Closure { param, body } => {
             // The closure param is also a binding
             let mut new_bindings = bindings.clone();
@@ -372,10 +357,10 @@ fn resolve_bindings_in_expr(expr: ComputedExpr, bindings: &HashSet<String>) -> C
             }
         }
         // These don't contain sub-expressions
-        ComputedExpr::Var { .. } |
-        ComputedExpr::None |
-        ComputedExpr::Literal { .. } |
-        ComputedExpr::ByteArray { .. } => expr,
+        ComputedExpr::Var { .. }
+        | ComputedExpr::None
+        | ComputedExpr::Literal { .. }
+        | ComputedExpr::ByteArray { .. } => expr,
     }
 }
 
@@ -383,19 +368,29 @@ fn resolve_bindings_in_expr(expr: ComputedExpr, bindings: &HashSet<String>) -> C
 fn parse_let_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (ComputedExpr, usize) {
     // Skip "let"
     let mut pos = start + 1;
-    
+
     // Get variable name
     let name = if pos < tokens.len() {
         if let proc_macro2::TokenTree::Ident(ident) = &tokens[pos] {
             pos += 1;
             ident.to_string()
         } else {
-            return (ComputedExpr::Literal { value: serde_json::Value::Null }, pos);
+            return (
+                ComputedExpr::Literal {
+                    value: serde_json::Value::Null,
+                },
+                pos,
+            );
         }
     } else {
-        return (ComputedExpr::Literal { value: serde_json::Value::Null }, pos);
+        return (
+            ComputedExpr::Literal {
+                value: serde_json::Value::Null,
+            },
+            pos,
+        );
     };
-    
+
     // Skip "="
     if pos < tokens.len() {
         if let proc_macro2::TokenTree::Punct(p) = &tokens[pos] {
@@ -404,11 +399,11 @@ fn parse_let_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (ComputedE
             }
         }
     }
-    
+
     // Parse value expression (until semicolon)
     let (value, new_pos) = parse_expr_until_semicolon(tokens, pos);
     pos = new_pos;
-    
+
     // Skip semicolon
     if pos < tokens.len() {
         if let proc_macro2::TokenTree::Punct(p) = &tokens[pos] {
@@ -417,23 +412,29 @@ fn parse_let_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (ComputedE
             }
         }
     }
-    
+
     // Parse body expression
     let (body, final_pos) = parse_expr(tokens, pos);
-    
-    (ComputedExpr::Let {
-        name,
-        value: Box::new(value),
-        body: Box::new(body),
-    }, final_pos)
+
+    (
+        ComputedExpr::Let {
+            name,
+            value: Box::new(value),
+            body: Box::new(body),
+        },
+        final_pos,
+    )
 }
 
 /// Parse expression until semicolon (for let bindings).
-fn parse_expr_until_semicolon(tokens: &[proc_macro2::TokenTree], start: usize) -> (ComputedExpr, usize) {
+fn parse_expr_until_semicolon(
+    tokens: &[proc_macro2::TokenTree],
+    start: usize,
+) -> (ComputedExpr, usize) {
     // Find the semicolon, accounting for nested braces
     let mut depth: i32 = 0;
     let mut end = start;
-    
+
     while end < tokens.len() {
         match &tokens[end] {
             proc_macro2::TokenTree::Punct(p) if p.as_char() == ';' && depth == 0 => break,
@@ -454,7 +455,7 @@ fn parse_expr_until_semicolon(tokens: &[proc_macro2::TokenTree], start: usize) -
             _ => end += 1,
         }
     }
-    
+
     let expr_tokens: Vec<_> = tokens[start..end].to_vec();
     let (expr, _) = parse_binary_expr(&expr_tokens, 0, 0);
     (expr, end)
@@ -464,7 +465,7 @@ fn parse_expr_until_semicolon(tokens: &[proc_macro2::TokenTree], start: usize) -
 fn parse_if_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (ComputedExpr, usize) {
     // Skip "if"
     let mut pos = start + 1;
-    
+
     // Parse condition (until opening brace)
     let mut cond_tokens = Vec::new();
     while pos < tokens.len() {
@@ -477,7 +478,7 @@ fn parse_if_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (ComputedEx
         pos += 1;
     }
     let (condition, _) = parse_binary_expr(&cond_tokens, 0, 0);
-    
+
     // Parse then branch (inside braces)
     let then_branch = if pos < tokens.len() {
         if let proc_macro2::TokenTree::Group(g) = &tokens[pos] {
@@ -487,15 +488,21 @@ fn parse_if_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (ComputedEx
                 let (expr, _) = parse_expr(&inner_tokens, 0);
                 expr
             } else {
-                ComputedExpr::Literal { value: serde_json::Value::Null }
+                ComputedExpr::Literal {
+                    value: serde_json::Value::Null,
+                }
             }
         } else {
-            ComputedExpr::Literal { value: serde_json::Value::Null }
+            ComputedExpr::Literal {
+                value: serde_json::Value::Null,
+            }
         }
     } else {
-        ComputedExpr::Literal { value: serde_json::Value::Null }
+        ComputedExpr::Literal {
+            value: serde_json::Value::Null,
+        }
     };
-    
+
     // Skip "else"
     if pos < tokens.len() {
         if let proc_macro2::TokenTree::Ident(ident) = &tokens[pos] {
@@ -504,7 +511,7 @@ fn parse_if_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (ComputedEx
             }
         }
     }
-    
+
     // Parse else branch (inside braces)
     let else_branch = if pos < tokens.len() {
         if let proc_macro2::TokenTree::Group(g) = &tokens[pos] {
@@ -514,20 +521,29 @@ fn parse_if_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (ComputedEx
                 let (expr, _) = parse_expr(&inner_tokens, 0);
                 expr
             } else {
-                ComputedExpr::Literal { value: serde_json::Value::Null }
+                ComputedExpr::Literal {
+                    value: serde_json::Value::Null,
+                }
             }
         } else {
-            ComputedExpr::Literal { value: serde_json::Value::Null }
+            ComputedExpr::Literal {
+                value: serde_json::Value::Null,
+            }
         }
     } else {
-        ComputedExpr::Literal { value: serde_json::Value::Null }
+        ComputedExpr::Literal {
+            value: serde_json::Value::Null,
+        }
     };
-    
-    (ComputedExpr::If {
-        condition: Box::new(condition),
-        then_branch: Box::new(then_branch),
-        else_branch: Box::new(else_branch),
-    }, pos)
+
+    (
+        ComputedExpr::If {
+            condition: Box::new(condition),
+            then_branch: Box::new(then_branch),
+            else_branch: Box::new(else_branch),
+        },
+        pos,
+    )
 }
 
 /// Binary expression parser with precedence climbing.
@@ -570,7 +586,7 @@ fn parse_binary_expr(
 /// Try to parse a binary operator at the given position.
 ///
 /// Returns (operator, precedence, new position) if found.
-/// 
+///
 /// Precedence levels (higher = tighter binding):
 /// - 1: || (or)
 /// - 2: && (and)
@@ -655,17 +671,28 @@ fn try_parse_binary_op(
 /// Parse a unary expression.
 fn parse_unary_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (ComputedExpr, usize) {
     if start >= tokens.len() {
-        return (ComputedExpr::Literal { value: serde_json::Value::Null }, start);
+        return (
+            ComputedExpr::Literal {
+                value: serde_json::Value::Null,
+            },
+            start,
+        );
     }
-    
+
     // Check for unary ! operator
     if let proc_macro2::TokenTree::Punct(p) = &tokens[start] {
         if p.as_char() == '!' {
             let (inner, pos) = parse_unary_expr(tokens, start + 1);
-            return (ComputedExpr::Unary { op: UnaryOp::Not, expr: Box::new(inner) }, pos);
+            return (
+                ComputedExpr::Unary {
+                    op: UnaryOp::Not,
+                    expr: Box::new(inner),
+                },
+                pos,
+            );
         }
     }
-    
+
     parse_postfix_expr(tokens, start)
 }
 
@@ -683,7 +710,7 @@ fn parse_postfix_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
             if group.delimiter() == proc_macro2::Delimiter::Bracket {
                 pos += 1;
                 let inner_tokens: Vec<_> = group.stream().into_iter().collect();
-                
+
                 // Check if it's a range (contains ..)
                 let mut is_range = false;
                 let mut dot_dot_pos = None;
@@ -700,25 +727,25 @@ fn parse_postfix_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
                         }
                     }
                 }
-                
+
                 if is_range {
                     // Parse start..end
                     let dot_pos = dot_dot_pos.unwrap();
                     let start_tokens: Vec<_> = inner_tokens[..dot_pos].to_vec();
                     let end_tokens: Vec<_> = inner_tokens[dot_pos + 2..].to_vec();
-                    
+
                     let start_val = if start_tokens.is_empty() {
                         0
                     } else {
                         parse_usize_literal(&start_tokens)
                     };
-                    
+
                     let end_val = if end_tokens.is_empty() {
                         usize::MAX
                     } else {
                         parse_usize_literal(&end_tokens)
                     };
-                    
+
                     expr = ComputedExpr::Slice {
                         expr: Box::new(expr),
                         start: start_val,
@@ -768,7 +795,7 @@ fn parse_postfix_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
                                         continue;
                                     }
                                 }
-                                
+
                                 // Handle reverse_bits() as a unary op
                                 if name == "reverse_bits" && args.is_empty() {
                                     expr = ComputedExpr::Unary {
@@ -777,7 +804,7 @@ fn parse_postfix_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
                                     };
                                     continue;
                                 }
-                                
+
                                 // Handle to_bytes() for JSON array to Vec<u8> conversion
                                 if name == "to_bytes" && args.is_empty() {
                                     expr = ComputedExpr::JsonToBytes {
@@ -844,7 +871,7 @@ fn parse_usize_literal(tokens: &[proc_macro2::TokenTree]) -> usize {
     if tokens.is_empty() {
         return 0;
     }
-    
+
     if let proc_macro2::TokenTree::Literal(lit) = &tokens[0] {
         let lit_str = lit.to_string().replace('_', "");
         lit_str.parse::<usize>().unwrap_or(0)
@@ -878,7 +905,7 @@ fn parse_primary_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
                 start + 1,
             )
         }
-        
+
         // Bracket expression - byte array literal: [0u8; 32] or [1, 2, 3]
         proc_macro2::TokenTree::Group(group)
             if group.delimiter() == proc_macro2::Delimiter::Bracket =>
@@ -887,37 +914,35 @@ fn parse_primary_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
             let bytes = parse_byte_array_literal(&inner_tokens);
             (ComputedExpr::ByteArray { bytes }, start + 1)
         }
-        
+
         // Closure: |param| body
-        proc_macro2::TokenTree::Punct(p) if p.as_char() == '|' => {
-            parse_closure(tokens, start)
-        }
+        proc_macro2::TokenTree::Punct(p) if p.as_char() == '|' => parse_closure(tokens, start),
 
         // Identifier (field reference, None, Some, or type-qualified function)
         proc_macro2::TokenTree::Ident(ident) => {
             let name = ident.to_string();
-            
+
             // Check for None
             if name == "None" {
                 return (ComputedExpr::None, start + 1);
             }
-            
+
             // Check for Some(expr)
-            if name == "Some"
-                && start + 1 < tokens.len()
-            {
+            if name == "Some" && start + 1 < tokens.len() {
                 if let proc_macro2::TokenTree::Group(group) = &tokens[start + 1] {
                     if group.delimiter() == proc_macro2::Delimiter::Parenthesis {
                         let inner_tokens: Vec<_> = group.stream().into_iter().collect();
                         let (inner_expr, _) = parse_expr(&inner_tokens, 0);
                         return (
-                            ComputedExpr::Some { value: Box::new(inner_expr) },
+                            ComputedExpr::Some {
+                                value: Box::new(inner_expr),
+                            },
                             start + 2,
                         );
                     }
                 }
             }
-            
+
             // Check for type-qualified function call: Type::method(args)
             // e.g., u64::from_le_bytes(expr)
             if start + 1 < tokens.len() {
@@ -925,35 +950,49 @@ fn parse_primary_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
                     if p1.as_char() == ':' && start + 2 < tokens.len() {
                         if let proc_macro2::TokenTree::Punct(p2) = &tokens[start + 2] {
                             if p2.as_char() == ':' && start + 3 < tokens.len() {
-                                if let proc_macro2::TokenTree::Ident(method_ident) = &tokens[start + 3] {
+                                if let proc_macro2::TokenTree::Ident(method_ident) =
+                                    &tokens[start + 3]
+                                {
                                     let method_name = method_ident.to_string();
-                                    
+
                                     // Check for function call
                                     if start + 4 < tokens.len() {
-                                        if let proc_macro2::TokenTree::Group(group) = &tokens[start + 4] {
-                                            if group.delimiter() == proc_macro2::Delimiter::Parenthesis {
-                                                let inner_tokens: Vec<_> = group.stream().into_iter().collect();
+                                        if let proc_macro2::TokenTree::Group(group) =
+                                            &tokens[start + 4]
+                                        {
+                                            if group.delimiter()
+                                                == proc_macro2::Delimiter::Parenthesis
+                                            {
+                                                let inner_tokens: Vec<_> =
+                                                    group.stream().into_iter().collect();
                                                 let (arg_expr, _) = parse_expr(&inner_tokens, 0);
-                                                
+
                                                 // Handle u64::from_le_bytes and u64::from_be_bytes
                                                 if name == "u64" && method_name == "from_le_bytes" {
                                                     return (
-                                                        ComputedExpr::U64FromLeBytes { bytes: Box::new(arg_expr) },
+                                                        ComputedExpr::U64FromLeBytes {
+                                                            bytes: Box::new(arg_expr),
+                                                        },
                                                         start + 5,
                                                     );
                                                 }
                                                 if name == "u64" && method_name == "from_be_bytes" {
                                                     return (
-                                                        ComputedExpr::U64FromBeBytes { bytes: Box::new(arg_expr) },
+                                                        ComputedExpr::U64FromBeBytes {
+                                                            bytes: Box::new(arg_expr),
+                                                        },
                                                         start + 5,
                                                     );
                                                 }
-                                                
+
                                                 // Generic type::method(arg) - treat as method call
                                                 return (
                                                     ComputedExpr::MethodCall {
                                                         expr: Box::new(arg_expr),
-                                                        method: format!("{}::{}", name, method_name),
+                                                        method: format!(
+                                                            "{}::{}",
+                                                            name, method_name
+                                                        ),
                                                         args: vec![],
                                                     },
                                                     start + 5,
@@ -967,7 +1006,7 @@ fn parse_primary_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
                     }
                 }
             }
-            
+
             (ComputedExpr::FieldRef { path: name }, start + 1)
         }
 
@@ -1009,7 +1048,7 @@ fn parse_primary_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
 fn parse_closure(tokens: &[proc_macro2::TokenTree], start: usize) -> (ComputedExpr, usize) {
     // Skip first |
     let mut pos = start + 1;
-    
+
     // Get parameter name
     let param = if pos < tokens.len() {
         if let proc_macro2::TokenTree::Ident(ident) = &tokens[pos] {
@@ -1021,7 +1060,7 @@ fn parse_closure(tokens: &[proc_macro2::TokenTree], start: usize) -> (ComputedEx
     } else {
         "x".to_string()
     };
-    
+
     // Skip second |
     if pos < tokens.len() {
         if let proc_macro2::TokenTree::Punct(p) = &tokens[pos] {
@@ -1030,11 +1069,11 @@ fn parse_closure(tokens: &[proc_macro2::TokenTree], start: usize) -> (ComputedEx
             }
         }
     }
-    
+
     // Parse body (rest of tokens)
     let remaining: Vec<_> = tokens[pos..].to_vec();
     let (body, consumed) = parse_expr(&remaining, 0);
-    
+
     (
         ComputedExpr::Closure {
             param,
@@ -1049,7 +1088,7 @@ fn parse_byte_array_literal(tokens: &[proc_macro2::TokenTree]) -> Vec<u8> {
     if tokens.is_empty() {
         return vec![];
     }
-    
+
     // Check for repeat syntax: [value; count]
     // Look for semicolon
     let mut semicolon_pos = None;
@@ -1061,22 +1100,22 @@ fn parse_byte_array_literal(tokens: &[proc_macro2::TokenTree]) -> Vec<u8> {
             }
         }
     }
-    
+
     if let Some(semi_pos) = semicolon_pos {
         // Repeat syntax: [value; count]
         let value_tokens: Vec<_> = tokens[..semi_pos].to_vec();
         let count_tokens: Vec<_> = tokens[semi_pos + 1..].to_vec();
-        
+
         let value = parse_byte_value(&value_tokens);
         let count = parse_usize_from_tokens(&count_tokens);
-        
+
         return vec![value; count];
     }
-    
+
     // List syntax: [1, 2, 3]
     let mut bytes = Vec::new();
     let mut current_tokens = Vec::new();
-    
+
     for token in tokens {
         if let proc_macro2::TokenTree::Punct(p) = token {
             if p.as_char() == ',' {
@@ -1089,12 +1128,12 @@ fn parse_byte_array_literal(tokens: &[proc_macro2::TokenTree]) -> Vec<u8> {
         }
         current_tokens.push(token.clone());
     }
-    
+
     // Don't forget the last element
     if !current_tokens.is_empty() {
         bytes.push(parse_byte_value(&current_tokens));
     }
-    
+
     bytes
 }
 
@@ -1103,7 +1142,7 @@ fn parse_byte_value(tokens: &[proc_macro2::TokenTree]) -> u8 {
     if tokens.is_empty() {
         return 0;
     }
-    
+
     if let proc_macro2::TokenTree::Literal(lit) = &tokens[0] {
         let lit_str = lit.to_string();
         // Handle hex literals (0xFF, 0xFFu8)
@@ -1124,7 +1163,7 @@ fn parse_byte_value(tokens: &[proc_macro2::TokenTree]) -> u8 {
         let clean = lit_str.trim_end_matches(|c: char| c.is_alphabetic());
         return clean.parse::<u8>().unwrap_or(0);
     }
-    
+
     0
 }
 
@@ -1133,12 +1172,15 @@ fn parse_usize_from_tokens(tokens: &[proc_macro2::TokenTree]) -> usize {
     if tokens.is_empty() {
         return 0;
     }
-    
+
     if let proc_macro2::TokenTree::Literal(lit) = &tokens[0] {
-        let lit_str = lit.to_string().trim_end_matches(|c: char| c.is_alphabetic()).to_string();
+        let lit_str = lit
+            .to_string()
+            .trim_end_matches(|c: char| c.is_alphabetic())
+            .to_string();
         return lit_str.parse::<usize>().unwrap_or(0);
     }
-    
+
     0
 }
 

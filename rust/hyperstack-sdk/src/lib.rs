@@ -25,12 +25,12 @@
 //! - **List** - All entities matching filters
 //! - **Append** - Append-only event log
 
-mod mutation;
 mod client;
+mod mutation;
 mod state;
 
-pub use mutation::{Frame, Mode};
 pub use client::{HyperStackClient, Subscription};
+pub use mutation::{Frame, Mode};
 pub use state::EntityStore;
 
 pub use serde_json::Value;
