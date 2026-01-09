@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-sdk-v0.1.4...hyperstack-sdk-v0.1.5) (2026-01-09)
+
+
+### Bug Fixes
+
+* Broken streams after naming refactor ([64437b4](https://github.com/HyperTekOrg/hyperstack/commit/64437b4d80c3b2ec68468ce11bbeaab49678aa8b))
+
 ## [0.1.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-sdk-v0.1.2...hyperstack-sdk-v0.1.4) (2026-01-09)
 
 

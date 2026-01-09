@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.1.4...hyperstack-macros-v0.1.5) (2026-01-09)
+
+
+### Bug Fixes
+
+* Broken streams after naming refactor ([64437b4](https://github.com/HyperTekOrg/hyperstack/commit/64437b4d80c3b2ec68468ce11bbeaab49678aa8b))
+* Map syntax ([8a5eaad](https://github.com/HyperTekOrg/hyperstack/commit/8a5eaadf5642dc7e569b2591e8e051c728a6eb9f))
+* Module name snake case ([72348a4](https://github.com/HyperTekOrg/hyperstack/commit/72348a42ee3988e94873db0d24317f3e661e093d))
+
 ## [0.1.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.1.2...hyperstack-macros-v0.1.4) (2026-01-09)
 
 
