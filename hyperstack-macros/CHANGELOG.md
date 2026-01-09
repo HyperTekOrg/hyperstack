@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.1.1...hyperstack-macros-v0.1.2) (2026-01-09)
+
+
+### Bug Fixes
+
+* Update naming ([4381946](https://github.com/HyperTekOrg/hyperstack/commit/4381946147e9c51c7de0cb0e63a052c9e9379600))
+
 ## [0.1.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-spec-macros-v0.1.0...hyperstack-spec-macros-v0.1.1) (2026-01-09)
 
 

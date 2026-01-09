@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.1.1...hyperstack-interpreter-v0.1.2) (2026-01-09)
+
+
+### Bug Fixes
+
+* Update naming ([4381946](https://github.com/HyperTekOrg/hyperstack/commit/4381946147e9c51c7de0cb0e63a052c9e9379600))
+* Update typescript package name ([6267eae](https://github.com/HyperTekOrg/hyperstack/commit/6267eaeb19e00a3e1c1f76fca417f56170edafb9))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-macros bumped from 0.1.1 to 0.1.2
+
 ## [0.1.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.1.0...hyperstack-interpreter-v0.1.1) (2026-01-09)
 
 
