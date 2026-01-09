@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.1.4...hyperstack-react-v0.1.5) (2026-01-09)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-react:** Synchronize hyperstack versions
+
 ## [0.1.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.1.3...hyperstack-react-v0.1.4) (2026-01-09)
 
 
