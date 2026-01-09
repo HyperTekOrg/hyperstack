@@ -22,7 +22,7 @@ jobs:
       # Rust crates
       hyperstack--release_created: ${{ steps.release.outputs['hyperstack--release_created'] }}
       hyperstack-interpreter--release_created: ${{ steps.release.outputs['interpreter--release_created'] }}
-      hyperstack-spec-macros--release_created: ${{ steps.release.outputs['spec-macros--release_created'] }}
+      hyperstack-macros--release_created: ${{ steps.release.outputs['hyperstack-macros--release_created'] }}
       hyperstack-cli--release_created: ${{ steps.release.outputs['cli--release_created'] }}
       hyperstack-server--release_created: ${{ steps.release.outputs['rust/hyperstack-server--release_created'] }}
       # TODO: Uncomment when Rust SDK is ready
@@ -50,7 +50,7 @@ jobs:
     if: |
       needs.release-please.outputs['hyperstack--release_created'] == 'true' ||
       needs.release-please.outputs['hyperstack-interpreter--release_created'] == 'true' ||
-      needs.release-please.outputs['hyperstack-spec-macros--release_created'] == 'true' ||
+      needs.release-please.outputs['hyperstack-macros--release_created'] == 'true' ||
       needs.release-please.outputs['hyperstack-cli--release_created'] == 'true' ||
       needs.release-please.outputs['hyperstack-server--release_created'] == 'true'
     steps:
@@ -68,10 +68,10 @@ jobs:
       - name: Login to crates.io
         run: cargo login ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-      - name: Publish hyperstack-spec-macros
-        if: needs.release-please.outputs['hyperstack-spec-macros--release_created'] == 'true'
+      - name: Publish hyperstack-macros
+        if: needs.release-please.outputs['hyperstack-macros--release_created'] == 'true'
         run: |
-          cd spec-macros
+          cd hyperstack-macros
           cargo publish --allow-dirty || echo "Package may already be published"
           sleep 30
 
