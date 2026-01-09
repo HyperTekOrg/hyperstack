@@ -913,7 +913,7 @@ fn generate_computed_fields_hook(
                         }
                     }
                 } else {
-                    eprintln!("Skipping computed fields for section '{}' (dependencies not available)", #section_str);
+                    tracing::trace!("Skipping computed fields for section '{}' (dependencies not available)", #section_str);
                 }
             }
         }
