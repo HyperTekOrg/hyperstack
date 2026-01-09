@@ -9,30 +9,31 @@ permissions:
   contents: write
   pull-requests: write
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   release-please:
     runs-on: ubuntu-latest
     outputs:
-      # Aggregate outputs
       releases_created: ${{ steps.release.outputs.releases_created }}
       paths_released: ${{ steps.release.outputs.paths_released }}
-      
+
       # Rust crates
       hyperstack--release_created: ${{ steps.release.outputs['hyperstack--release_created'] }}
-      hyperstack--tag_name: ${{ steps.release.outputs['hyperstack--tag_name'] }}
       hyperstack-interpreter--release_created: ${{ steps.release.outputs['interpreter--release_created'] }}
       hyperstack-spec-macros--release_created: ${{ steps.release.outputs['spec-macros--release_created'] }}
       hyperstack-cli--release_created: ${{ steps.release.outputs['cli--release_created'] }}
       hyperstack-server--release_created: ${{ steps.release.outputs['rust/hyperstack-server--release_created'] }}
-      hyperstack-sdk-rust--release_created: ${{ steps.release.outputs['rust/hyperstack-sdk--release_created'] }}
-      
+      # TODO: Uncomment when Rust SDK is ready
+      # hyperstack-sdk-rust--release_created: ${{ steps.release.outputs['rust/hyperstack-sdk--release_created'] }}
+
       # TypeScript
       hyperstack-react--release_created: ${{ steps.release.outputs['typescript--release_created'] }}
-      hyperstack-react--tag_name: ${{ steps.release.outputs['typescript--tag_name'] }}
-      
+
       # Python
-      hyperstack-sdk-python--release_created: ${{ steps.release.outputs['python/hyperstack-sdk--release_created'] }}
-      hyperstack-sdk-python--tag_name: ${{ steps.release.outputs['python/hyperstack-sdk--tag_name'] }}
+      # TODO: Uncomment when Python SDK is ready
+      # hyperstack-sdk-python--release_created: ${{ steps.release.outputs['python/hyperstack-sdk--release_created'] }}
 
     steps:
       - uses: googleapis/release-please-action@v4
@@ -41,3 +42,129 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  publish-rust:
+    name: Publish Rust Crates to crates.io
+    needs: release-please
+    runs-on: ubuntu-latest
+    if: |
+      needs.release-please.outputs['hyperstack--release_created'] == 'true' ||
+      needs.release-please.outputs['hyperstack-interpreter--release_created'] == 'true' ||
+      needs.release-please.outputs['hyperstack-spec-macros--release_created'] == 'true' ||
+      needs.release-please.outputs['hyperstack-cli--release_created'] == 'true' ||
+      needs.release-please.outputs['hyperstack-server--release_created'] == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          protoc --version
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Login to crates.io
+        run: cargo login ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Publish hyperstack-spec-macros
+        if: needs.release-please.outputs['hyperstack-spec-macros--release_created'] == 'true'
+        run: |
+          cd spec-macros
+          cargo publish --allow-dirty || echo "Package may already be published"
+          sleep 30
+
+      - name: Publish hyperstack-interpreter
+        if: needs.release-please.outputs['hyperstack-interpreter--release_created'] == 'true'
+        run: |
+          cd interpreter
+          cargo publish --allow-dirty || echo "Package may already be published"
+          sleep 30
+
+      - name: Publish hyperstack-server
+        if: needs.release-please.outputs['hyperstack-server--release_created'] == 'true'
+        run: |
+          cd rust/hyperstack-server
+          cargo publish --allow-dirty || echo "Package may already be published"
+          sleep 30
+
+      # TODO: Uncomment when Rust SDK is ready
+      # - name: Publish hyperstack-sdk
+      #   if: needs.release-please.outputs['hyperstack-sdk-rust--release_created'] == 'true'
+      #   run: |
+      #     cd rust/hyperstack-sdk
+      #     cargo publish --allow-dirty || echo "Package may already be published"
+      #     sleep 30
+
+      - name: Publish hyperstack (umbrella)
+        if: needs.release-please.outputs['hyperstack--release_created'] == 'true'
+        run: |
+          cd hyperstack
+          cargo publish --allow-dirty || echo "Package may already be published"
+          sleep 30
+
+      - name: Publish hyperstack-cli
+        if: needs.release-please.outputs['hyperstack-cli--release_created'] == 'true'
+        run: |
+          cd cli
+          cargo publish --allow-dirty || echo "Package may already be published"
+
+  publish-npm:
+    name: Publish to npm
+    needs: release-please
+    runs-on: ubuntu-latest
+    if: needs.release-please.outputs['hyperstack-react--release_created'] == 'true'
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+          cache-dependency-path: typescript/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # TODO: Uncomment when Python SDK is ready for PyPI publishing
+  # publish-pypi:
+  #   name: Publish to PyPI
+  #   needs: release-please
+  #   runs-on: ubuntu-latest
+  #   if: needs.release-please.outputs['hyperstack-sdk-python--release_created'] == 'true'
+  #   defaults:
+  #     run:
+  #       working-directory: python/hyperstack-sdk
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #
+  #     - name: Setup Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: '3.11'
+  #
+  #     - name: Install build dependencies
+  #       run: pip install build twine
+  #
+  #     - name: Build package
+  #       run: python -m build
+  #
+  #     - name: Publish to PyPI
+  #       run: twine upload dist/*
+  #       env:
+  #         TWINE_USERNAME: __token__
+  #         TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
