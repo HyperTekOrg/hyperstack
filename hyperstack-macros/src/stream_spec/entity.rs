@@ -26,14 +26,17 @@ use crate::utils::{path_to_string, to_camel_case, to_snake_case};
 
 use super::ast_writer::build_and_write_ast;
 use super::computed::{
-    extract_field_references_from_section, extract_section_references,
-    parse_computed_expression, qualify_field_refs,
+    extract_field_references_from_section, extract_section_references, parse_computed_expression,
+    qualify_field_refs,
 };
 use super::handlers::{
     convert_event_to_map_attributes, determine_event_instruction, extract_account_type_from_field,
     generate_pda_registration_functions, generate_resolver_functions,
 };
-use super::sections::{self as sections, extract_section_from_struct_with_idl, is_primitive_or_wrapper, process_nested_struct};
+use super::sections::{
+    self as sections, extract_section_from_struct_with_idl, is_primitive_or_wrapper,
+    process_nested_struct,
+};
 
 // ============================================================================
 // Entity Processing
@@ -117,7 +120,7 @@ pub fn process_entity_struct_with_idl(
     // Task 3: Collect section definitions for AST
     let mut section_specs: Vec<EntitySection> = Vec::new();
     let mut root_fields: Vec<FieldTypeInfo> = Vec::new();
-    
+
     if let Fields::Named(entity_fields) = &input.fields {
         for field in &entity_fields.named {
             let field_name = field.ident.as_ref().unwrap().to_string();
@@ -140,7 +143,11 @@ pub fn process_entity_struct_with_idl(
                             section_specs.push(section);
                         } else {
                             // It's a non-section field (like capture fields) - add to root
-                            let field_type_info = sections::analyze_field_type_with_idl(&field_name, &rust_type_name, idl);
+                            let field_type_info = sections::analyze_field_type_with_idl(
+                                &field_name,
+                                &rust_type_name,
+                                idl,
+                            );
                             root_fields.push(field_type_info);
                         }
                     }
@@ -148,15 +155,18 @@ pub fn process_entity_struct_with_idl(
             } else {
                 // Even if it's a "wrapper", we might want its type info if it's not truly primitive
                 // For example, Option<ComplexType> should be included
-                let field_type_info = sections::analyze_field_type_with_idl(&field_name, &rust_type_name, idl);
+                let field_type_info =
+                    sections::analyze_field_type_with_idl(&field_name, &rust_type_name, idl);
                 // Only add if it has a resolved_type (meaning it's a complex type from IDL)
-                if field_type_info.resolved_type.is_some() || field_type_info.base_type == crate::ast::BaseType::Object {
+                if field_type_info.resolved_type.is_some()
+                    || field_type_info.base_type == crate::ast::BaseType::Object
+                {
                     root_fields.push(field_type_info);
                 }
             }
         }
     }
-    
+
     // Add root fields as a pseudo-section if there are any
     if !root_fields.is_empty() {
         section_specs.push(EntitySection {
@@ -255,7 +265,8 @@ pub fn process_entity_struct_with_idl(
                     // Infer account type from field type if not explicitly specified
                     let account_path = if let Some(ref path) = snapshot_attr.from_account {
                         Some(path.clone())
-                    } else if let Some(inferred_path) = extract_account_type_from_field(field_type) {
+                    } else if let Some(inferred_path) = extract_account_type_from_field(field_type)
+                    {
                         snapshot_attr.inferred_account = Some(inferred_path.clone());
                         Some(inferred_path)
                     } else {
@@ -289,7 +300,10 @@ pub fn process_entity_struct_with_idl(
                             is_lookup_index: false,
                             temporal_field: None,
                             strategy: snapshot_attr.strategy.clone(),
-                            join_on: snapshot_attr.join_on.as_ref().map(|fs| fs.ident.to_string()),
+                            join_on: snapshot_attr
+                                .join_on
+                                .as_ref()
+                                .map(|fs| fs.ident.to_string()),
                             transform: None,
                             is_instruction: false,
                             is_whole_source: true, // Mark as whole source snapshot
@@ -454,7 +468,7 @@ pub fn process_entity_struct_with_idl(
     // Build the AST and write to disk for cloud compilation.
     // Then use the same AST to generate handler code via shared codegen.
     // This ensures identical output between #[hyperstack] and #[ast_spec].
-    
+
     let ast = build_and_write_ast(
         &entity_name,
         &primary_keys,
@@ -471,11 +485,8 @@ pub fn process_entity_struct_with_idl(
     );
 
     // Generate handler functions using the shared codegen
-    let (handler_fns, _handler_calls) = codegen::generate_handlers_from_specs(
-        &ast.handlers,
-        &entity_name,
-        &state_name,
-    );
+    let (handler_fns, _handler_calls) =
+        codegen::generate_handlers_from_specs(&ast.handlers, &entity_name, &state_name);
 
     let game_event_struct = if has_events && !skip_game_event {
         quote! {
@@ -511,15 +522,10 @@ pub fn process_entity_struct_with_idl(
         })
         .collect();
 
-
-
     // Generate computed fields evaluation function if there are any computed fields
     // This function will be called after aggregations complete to evaluate derived fields
     let computed_fields_hook = if !computed_fields.is_empty() {
-        generate_computed_fields_hook(
-            &computed_fields,
-            &all_section_names,
-        )
+        generate_computed_fields_hook(&computed_fields, &all_section_names)
     } else {
         // Generate a no-op function even when there are no computed fields
         // so the evaluator callback can still reference it
@@ -542,6 +548,8 @@ pub fn process_entity_struct_with_idl(
     let resolver_fns = generate_resolver_functions(&resolver_hooks, idl);
     let pda_registration_fns = generate_pda_registration_functions(&pda_registrations);
 
+    let module_name = format_ident!("{}", to_snake_case(&entity_name));
+
     let output = quote! {
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
         pub struct #state_name {
@@ -550,7 +558,7 @@ pub fn process_entity_struct_with_idl(
 
         #game_event_struct
 
-        pub mod #name {
+        pub mod #module_name {
             use super::*;
 
             #(#accessor_defs)*
@@ -655,10 +663,11 @@ fn generate_computed_fields_hook(
         if parts.len() == 2 {
             let section = parts[0].to_string();
             let field = parts[1].to_string();
-            fields_by_section
-                .entry(section.clone())
-                .or_default()
-                .push((field.clone(), expression.clone(), field_type.clone()));
+            fields_by_section.entry(section.clone()).or_default().push((
+                field.clone(),
+                expression.clone(),
+                field_type.clone(),
+            ));
         }
     }
 
@@ -766,7 +775,7 @@ fn generate_computed_fields_hook(
         let field_evaluations: Vec<_> = fields.iter().map(|(field_name, expression, field_type)| {
             let field_str = field_name.as_str();
             let field_ident = format_ident!("{}", field_name);
-            
+
             // Parse the expression into an AST and generate evaluation code
             // This transforms expressions like `round_snapshot.slot_hash.to_bytes()` into
             // proper JSON state access code
@@ -888,7 +897,7 @@ fn generate_computed_fields_hook(
             quote! {
                 // Clone the state for immutable reference during computation
                 let state_snapshot = state.clone();
-                
+
                 // Extract cross-section data first (immutable borrow)
                 #(#dep_extractions)*
 
@@ -938,5 +947,3 @@ fn generate_computed_fields_hook(
         }
     }
 }
-
-
