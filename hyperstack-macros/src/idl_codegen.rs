@@ -107,9 +107,7 @@ fn generate_instruction_types(
     instructions: &[IdlInstruction],
     _types: &[IdlTypeDef],
 ) -> TokenStream {
-    let instruction_structs = instructions
-        .iter()
-        .map(|instruction| generate_instruction_type(instruction));
+    let instruction_structs = instructions.iter().map(generate_instruction_type);
 
     quote! {
         #(#instruction_structs)*
@@ -156,7 +154,7 @@ fn generate_instruction_type(instruction: &IdlInstruction) -> TokenStream {
 }
 
 fn generate_custom_types(types: &[IdlTypeDef]) -> TokenStream {
-    let type_defs = types.iter().map(|type_def| generate_custom_type(type_def));
+    let type_defs = types.iter().map(generate_custom_type);
 
     quote! {
         #(#type_defs)*
