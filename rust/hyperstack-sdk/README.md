@@ -2,7 +2,7 @@
 
 [![crates.io](https://img.shields.io/crates/v/hyperstack-sdk.svg)](https://crates.io/crates/hyperstack-sdk)
 [![docs.rs](https://docs.rs/hyperstack-sdk/badge.svg)](https://docs.rs/hyperstack-sdk)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Rust client SDK for connecting to HyperStack streaming servers.
 
@@ -71,4 +71,4 @@ cargo run --example pump_trades
 
 ## License
 
-Apache-2.0
+MIT

@@ -32,7 +32,7 @@ await client.connect()
 
 ## License
 
-Apache-2.0
+MIT
 
 ## Links
 

@@ -182,6 +182,5 @@ We use conventional commits for automated releases:
 
 This project uses a dual license approach:
 
-- **Rust packages**: [Apache-2.0](hyperstack/LICENSE)
-- **Client SDK**: [MIT](typescript/LICENSE)
-- **Python SDK**: [Apache-2.0](python/hyperstack-sdk/LICENSE)
+- **Rust infrastructure** (hyperstack, interpreter, spec-macros, server, cli): [Apache-2.0](hyperstack/LICENSE)
+- **Client SDKs** (TypeScript, Python, Rust SDK): [MIT](typescript/LICENSE)
