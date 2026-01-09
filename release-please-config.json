@@ -13,10 +13,6 @@
       "release-type": "rust",
       "component": "hyperstack-interpreter"
     },
-    "hyperstack-sdk": {
-      "release-type": "rust",
-      "component": "hyperstack-sdk"
-    },
     "hyperstack-macros": {
       "release-type": "rust",
       "component": "hyperstack-macros"
@@ -24,6 +20,10 @@
     "cli": {
       "release-type": "rust",
       "component": "hyperstack-cli"
+    },
+    "rust/hyperstack-sdk": {
+      "release-type": "rust",
+      "component": "hyperstack-sdk"
     },
     "rust/hyperstack-server": {
       "release-type": "rust",
