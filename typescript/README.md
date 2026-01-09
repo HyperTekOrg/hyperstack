@@ -1,6 +1,6 @@
 # @hypertek/typescript
 
-TypeScript SDK for real-time Solana program data streaming from Hyper Stack.
+TypeScript SDK for real-time Solana program data streaming from hyperstack
 
 ## Installation
 
