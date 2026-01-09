@@ -1141,7 +1141,7 @@ dependencies = [
 
 [[package]]
 name = "hyperstack"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hyperstack-interpreter",
  "hyperstack-sdk",
@@ -1151,7 +1151,7 @@ dependencies = [
 
 [[package]]
 name = "hyperstack-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1168,7 +1168,7 @@ dependencies = [
 
 [[package]]
 name = "hyperstack-interpreter"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bs58",
  "dashmap",
@@ -1207,7 +1207,7 @@ dependencies = [
 
 [[package]]
 name = "hyperstack-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1238,7 +1238,7 @@ dependencies = [
 
 [[package]]
 name = "hyperstack-spec-macros"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hex",
  "proc-macro2",
