@@ -38,6 +38,19 @@
     {
       "type": "cargo-workspace",
       "merge": false
+    },
+    {
+      "type": "linked-versions",
+      "groupName": "hyperstack",
+      "components": [
+        "hyperstack",
+        "hyperstack-interpreter",
+        "hyperstack-sdk",
+        "hyperstack-macros",
+        "hyperstack-cli",
+        "hyperstack-server",
+        "hyperstack-react"
+      ]
     }
   ]
 }

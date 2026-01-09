@@ -75,6 +75,10 @@ This repo uses [release-please](https://github.com/googleapis/release-please) fo
 | `release-please-config.json` | Package definitions and release settings |
 | `.release-please-manifest.json` | Tracks current version of each package |
 
+### Synchronized Versions
+
+All packages (Rust and TypeScript) are kept at the same version number using the `linked-versions` plugin. When any package receives a version bump, all packages are updated to the highest version in the group. This ensures compatibility when using packages individually.
+
 ### Tag format
 
 Tags follow the pattern `{component}-v{version}`:
