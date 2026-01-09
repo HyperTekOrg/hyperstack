@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.1.3...hyperstack-react-v0.1.4) (2026-01-09)
+
+
+### Bug Fixes
+
+* React 19 ([3036d58](https://github.com/HyperTekOrg/hyperstack/commit/3036d582282507d7d220103f450316e2c9abe62d))
+* Update package.lock ([c2faf14](https://github.com/HyperTekOrg/hyperstack/commit/c2faf14934fa72e97bf89ff75c1efd337046fdc4))
+
 ## [0.1.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.1.2...hyperstack-react-v0.1.3) (2026-01-09)
 
 
