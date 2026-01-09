@@ -22,7 +22,7 @@ hyperstack-macros = { version = "0.1.2", path = "../hyperstack-macros", optional
 hyperstack-server = { version = "0.1.2", path = "../rust/hyperstack-server", optional = true }
 
 # SDK - Rust client for connecting to HyperStack servers
-hyperstack-sdk = { version = "0.1.0", path = "../rust/hyperstack-sdk", optional = true }
+hyperstack-sdk = { version = "0.1.2", path = "../rust/hyperstack-sdk", optional = true }
 
 [features]
 default = ["interpreter", "macros", "server"]

@@ -13,6 +13,10 @@
       "release-type": "rust",
       "component": "hyperstack-interpreter"
     },
+    "hyperstack-sdk": {
+      "release-type": "rust",
+      "component": "hyperstack-sdk"
+    },
     "hyperstack-macros": {
       "release-type": "rust",
       "component": "hyperstack-macros"
