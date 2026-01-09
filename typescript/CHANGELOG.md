@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.1.2...hyperstack-react-v0.1.3) (2026-01-09)
+
+
+### Bug Fixes
+
+* Update typescript package name ([6267eae](https://github.com/HyperTekOrg/hyperstack/commit/6267eaeb19e00a3e1c1f76fca417f56170edafb9))
+
 ## [0.1.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.1.1...hyperstack-react-v0.1.2) (2026-01-09)
 
 
