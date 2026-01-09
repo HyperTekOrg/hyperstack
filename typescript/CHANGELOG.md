@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.1.1...hyperstack-react-v0.1.2) (2026-01-09)
+
+
+### Bug Fixes
+
+* Update npm published package name ([a7cdb82](https://github.com/HyperTekOrg/hyperstack/commit/a7cdb82889ecb5fd1943df796cbf6c30219c476c))
+
 ## [0.1.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.1.0...hyperstack-react-v0.1.1) (2026-01-09)
 
 
