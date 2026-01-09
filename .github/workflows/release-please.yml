@@ -25,8 +25,7 @@ jobs:
       hyperstack-macros--release_created: ${{ steps.release.outputs['hyperstack-macros--release_created'] }}
       hyperstack-cli--release_created: ${{ steps.release.outputs['cli--release_created'] }}
       hyperstack-server--release_created: ${{ steps.release.outputs['rust/hyperstack-server--release_created'] }}
-      # TODO: Uncomment when Rust SDK is ready
-      # hyperstack-sdk-rust--release_created: ${{ steps.release.outputs['rust/hyperstack-sdk--release_created'] }}
+      hyperstack-sdk-rust--release_created: ${{ steps.release.outputs['rust/hyperstack-sdk--release_created'] }}
 
       # TypeScript
       hyperstack-react--release_created: ${{ steps.release.outputs['typescript--release_created'] }}
@@ -89,13 +88,12 @@ jobs:
           cargo publish --allow-dirty || echo "Package may already be published"
           sleep 30
 
-      # TODO: Uncomment when Rust SDK is ready
-      # - name: Publish hyperstack-sdk
-      #   if: needs.release-please.outputs['hyperstack-sdk-rust--release_created'] == 'true'
-      #   run: |
-      #     cd rust/hyperstack-sdk
-      #     cargo publish --allow-dirty || echo "Package may already be published"
-      #     sleep 30
+      - name: Publish hyperstack-sdk
+        if: needs.release-please.outputs['hyperstack-sdk-rust--release_created'] == 'true'
+        run: |
+          cd rust/hyperstack-sdk
+          cargo publish --allow-dirty || echo "Package may already be published"
+          sleep 30
 
       - name: Publish hyperstack (umbrella)
         if: needs.release-please.outputs['hyperstack--release_created'] == 'true'
