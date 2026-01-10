@@ -29,6 +29,7 @@ pub mod compiler;
 pub mod metrics_context;
 pub mod proto_router;
 pub mod resolvers;
+pub mod rust;
 pub mod spec_trait;
 pub mod typescript;
 pub mod vm;
