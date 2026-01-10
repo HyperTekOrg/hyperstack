@@ -1,5 +1,6 @@
 use chrono::Utc;
-use hyperstack_sdk::HyperStackClient;
+use futures_util::StreamExt;
+use hyperstack_sdk::{Entity, HyperStack, Update};
 use serde::{Deserialize, Serialize};
 use tokio::time::{sleep, Duration};
 
@@ -17,37 +18,54 @@ struct PumpToken {
     virtual_sol_reserves: Option<u64>,
 }
 
+struct PumpTokenEntity;
+
+impl Entity for PumpTokenEntity {
+    type Data = PumpToken;
+    const NAME: &'static str = "PumpToken";
+
+    fn state_view() -> &'static str {
+        "PumpToken/state"
+    }
+    fn list_view() -> &'static str {
+        "PumpToken/list"
+    }
+    fn kv_view() -> &'static str {
+        "PumpToken/kv"
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let url = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "ws://127.0.0.1:8080".to_string());
 
-    let client = HyperStackClient::<PumpToken>::new(url, "PumpToken/list");
-
-    let store = client.connect().await?;
+    let hs = HyperStack::connect(&url).await?;
 
     println!("watching for new pump.fun token launches...\n");
 
-    let mut updates = store.subscribe();
+    let mut stream = hs.watch::<PumpTokenEntity>().await;
 
     loop {
         tokio::select! {
-            Ok((mint, token)) = updates.recv() => {
-                if token.name.is_some() || token.symbol.is_some() {
-                    println!("\n[{}] new token launch", Utc::now().format("%Y-%m-%d %H:%M:%S UTC"));
-                    println!("mint: {}", mint);
-                    if let Some(name) = &token.name {
-                        println!("name: {}", name);
-                    }
-                    if let Some(symbol) = &token.symbol {
-                        println!("symbol: {}", symbol);
-                    }
-                    if let Some(creator) = &token.creator {
-                        println!("creator: {}", creator);
-                    }
-                    if let Some(sol) = token.virtual_sol_reserves {
-                        println!("initial liquidity: {:.4} SOL", sol as f64 / 1e9);
+            Some(update) = stream.next() => {
+                if let Update::Upsert { key: mint, data: token } = update {
+                    if token.name.is_some() || token.symbol.is_some() {
+                        println!("\n[{}] new token launch", Utc::now().format("%Y-%m-%d %H:%M:%S UTC"));
+                        println!("mint: {}", mint);
+                        if let Some(name) = &token.name {
+                            println!("name: {}", name);
+                        }
+                        if let Some(symbol) = &token.symbol {
+                            println!("symbol: {}", symbol);
+                        }
+                        if let Some(creator) = &token.creator {
+                            println!("creator: {}", creator);
+                        }
+                        if let Some(sol) = token.virtual_sol_reserves {
+                            println!("initial liquidity: {:.4} SOL", sol as f64 / 1e9);
+                        }
                     }
                 }
             }

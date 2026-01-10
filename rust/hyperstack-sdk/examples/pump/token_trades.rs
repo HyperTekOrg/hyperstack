@@ -1,5 +1,6 @@
 use chrono::Utc;
-use hyperstack_sdk::HyperStackClient;
+use futures_util::StreamExt;
+use hyperstack_sdk::{Entity, HyperStack, Update};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use tokio::time::{sleep, Duration};
@@ -25,6 +26,23 @@ struct PumpToken {
     last_trade: Option<TradeInfo>,
 }
 
+struct PumpTokenEntity;
+
+impl Entity for PumpTokenEntity {
+    type Data = PumpToken;
+    const NAME: &'static str = "PumpToken";
+
+    fn state_view() -> &'static str {
+        "PumpToken/state"
+    }
+    fn list_view() -> &'static str {
+        "PumpToken/list"
+    }
+    fn kv_view() -> &'static str {
+        "PumpToken/kv"
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let url = std::env::args()
@@ -32,30 +50,30 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|| "ws://127.0.0.1:8080".to_string());
     let mint = std::env::var("KEY").expect("KEY env var required (token mint address)");
 
-    let client = HyperStackClient::<PumpToken>::new(url, "PumpToken/kv").with_key(&mint);
-
-    let store = client.connect().await?;
+    let hs = HyperStack::connect(&url).await?;
 
     println!("watching trades for token {}...\n", mint);
 
-    let mut updates = store.subscribe();
+    let mut stream = hs.watch_key::<PumpTokenEntity>(&mint).await;
     let mut trade_history: VecDeque<TradeInfo> = VecDeque::with_capacity(100);
 
     loop {
         tokio::select! {
-            Ok((_key, token)) = updates.recv() => {
-                if let Some(trade) = token.last_trade {
-                    trade_history.push_back(trade.clone());
-                    if trade_history.len() > 100 {
-                        trade_history.pop_front();
-                    }
+            Some(update) = stream.next() => {
+                if let Update::Upsert { data: token, .. } | Update::Patch { data: token, .. } = update {
+                    if let Some(trade) = token.last_trade {
+                        trade_history.push_back(trade.clone());
+                        if trade_history.len() > 100 {
+                            trade_history.pop_front();
+                        }
 
-                    println!("[{}] {} | {}... | {:.4} SOL (total: {} trades)",
-                        Utc::now().format("%H:%M:%S"),
-                        trade.direction,
-                        &trade.wallet[..8],
-                        trade.amount_sol,
-                        trade_history.len());
+                        println!("[{}] {} | {}... | {:.4} SOL (total: {} trades)",
+                            Utc::now().format("%H:%M:%S"),
+                            trade.direction,
+                            &trade.wallet[..8],
+                            trade.amount_sol,
+                            trade_history.len());
+                    }
                 }
             }
             _ = sleep(Duration::from_secs(60)) => {

@@ -1,36 +1,49 @@
-//! # hyperstack-sdk
-//!
 //! Rust client SDK for connecting to HyperStack streaming servers.
 //!
-//! This crate provides a WebSocket client for subscribing to real-time
-//! entity updates from HyperStack servers.
-//!
-//! ## Example
-//!
 //! ```rust,ignore
-//! use hyperstack_sdk::{HyperStackClient, Subscription};
+//! use hyperstack_sdk::{HyperStack, Entity, Update};
+//! use futures_util::StreamExt;
+//! use my_stack::{PumpfunToken, PumpfunTokenEntity};
 //!
-//! let client = HyperStackClient::connect("ws://localhost:8877").await?;
-//! let sub = client.subscribe("MyEntity/kv", Some(key)).await?;
-//!
-//! while let Some(frame) = sub.next().await {
-//!     println!("Update: {:?}", frame);
+//! #[tokio::main]
+//! async fn main() -> anyhow::Result<()> {
+//!     let hs = HyperStack::connect("wss://mainnet.hyperstack.xyz").await?;
+//!     
+//!     if let Some(token) = hs.get::<PumpfunTokenEntity>("mint_address").await {
+//!         println!("Token: {:?}", token);
+//!     }
+//!     
+//!     let mut stream = hs.watch::<PumpfunTokenEntity>().await;
+//!     while let Some(update) = stream.next().await {
+//!         match update {
+//!             Update::Upsert { key, data } => println!("Updated: {}", key),
+//!             Update::Delete { key } => println!("Deleted: {}", key),
+//!             _ => {}
+//!         }
+//!     }
+//!     
+//!     Ok(())
 //! }
 //! ```
-//!
-//! ## Streaming Modes
-//!
-//! - **State** - Single shared state object
-//! - **KV** - Key-value lookups by entity key
-//! - **List** - All entities matching filters
-//! - **Append** - Append-only event log
 
 mod client;
-mod mutation;
-mod state;
+mod config;
+mod connection;
+mod entity;
+mod error;
+mod frame;
+mod store;
+mod stream;
+mod subscription;
 
-pub use client::{HyperStackClient, Subscription};
-pub use mutation::{Frame, Mode};
-pub use state::EntityStore;
+pub use client::{HyperStack, HyperStackBuilder};
+pub use config::HyperStackConfig;
+pub use connection::ConnectionState;
+pub use entity::{Entity, Filterable};
+pub use error::HyperStackError;
+pub use frame::{Frame, Mode, Operation};
+pub use store::{SharedStore, StoreUpdate};
+pub use stream::{EntityStream, Update};
+pub use subscription::Subscription;
 
 pub use serde_json::Value;

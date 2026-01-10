@@ -1,105 +1,124 @@
-use crate::mutation::{Frame, Mode};
-use crate::state::EntityStore;
-use anyhow::Result;
-use futures_util::{SinkExt, StreamExt};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use tokio_tungstenite::{connect_async, tungstenite::Message};
+use crate::config::{ConnectionConfig, HyperStackConfig};
+use crate::connection::{ConnectionManager, ConnectionState};
+use crate::entity::Entity;
+use crate::error::HyperStackError;
+use crate::frame::Frame;
+use crate::store::SharedStore;
+use crate::stream::EntityStream;
+use std::time::Duration;
+use tokio::sync::mpsc;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Subscription {
-    pub view: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub key: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub partition: Option<String>,
+pub struct HyperStack {
+    connection: ConnectionManager,
+    store: SharedStore,
+    #[allow(dead_code)]
+    config: HyperStackConfig,
 }
 
-pub struct HyperStackClient<T> {
-    url: String,
-    view: String,
-    key: Option<String>,
-    _phantom: std::marker::PhantomData<T>,
-}
-
-impl<T> HyperStackClient<T>
-where
-    T: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
-{
-    pub fn new(url: impl Into<String>, view: impl Into<String>) -> Self {
-        Self {
-            url: url.into(),
-            view: view.into(),
-            key: None,
-            _phantom: std::marker::PhantomData,
-        }
+impl HyperStack {
+    pub fn builder() -> HyperStackBuilder {
+        HyperStackBuilder::default()
     }
 
-    pub fn with_key(mut self, key: impl Into<String>) -> Self {
-        self.key = Some(key.into());
+    pub async fn connect(url: &str) -> Result<Self, HyperStackError> {
+        Self::builder().url(url).connect().await
+    }
+
+    pub async fn get<E: Entity>(&self, key: &str) -> Option<E::Data> {
+        self.connection
+            .ensure_subscription(E::state_view(), Some(key))
+            .await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        self.store.get::<E::Data>(E::NAME, key).await
+    }
+
+    pub async fn list<E: Entity>(&self) -> Vec<E::Data> {
+        self.connection
+            .ensure_subscription(E::list_view(), None)
+            .await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        self.store.list::<E::Data>(E::NAME).await
+    }
+
+    pub async fn watch<E: Entity>(&self) -> EntityStream<E::Data> {
+        self.connection
+            .ensure_subscription(E::list_view(), None)
+            .await;
+        EntityStream::new(self.store.subscribe(), E::NAME.to_string())
+    }
+
+    pub async fn watch_key<E: Entity>(&self, key: &str) -> EntityStream<E::Data> {
+        self.connection
+            .ensure_subscription(E::kv_view(), Some(key))
+            .await;
+        EntityStream::new_filtered(self.store.subscribe(), E::NAME.to_string(), key.to_string())
+    }
+
+    pub async fn connection_state(&self) -> ConnectionState {
+        self.connection.state().await
+    }
+
+    pub async fn disconnect(&self) {
+        self.connection.disconnect().await;
+    }
+
+    pub fn store(&self) -> &SharedStore {
+        &self.store
+    }
+}
+
+#[derive(Default)]
+pub struct HyperStackBuilder {
+    url: Option<String>,
+    config: HyperStackConfig,
+}
+
+impl HyperStackBuilder {
+    pub fn url(mut self, url: &str) -> Self {
+        self.url = Some(url.to_string());
         self
     }
 
-    pub async fn connect(self) -> Result<EntityStore<T>> {
-        let (ws, _) = connect_async(&self.url).await?;
-        let (mut tx, mut rx) = ws.split();
+    pub fn auto_reconnect(mut self, enabled: bool) -> Self {
+        self.config.auto_reconnect = enabled;
+        self
+    }
 
-        let subscription = Subscription {
-            view: self.view.clone(),
-            key: self.key,
-            partition: None,
-        };
+    pub fn reconnect_intervals(mut self, intervals: Vec<Duration>) -> Self {
+        self.config.reconnect_intervals = intervals;
+        self
+    }
 
-        tx.send(Message::Text(serde_json::to_string(&subscription)?))
-            .await?;
+    pub fn max_reconnect_attempts(mut self, max: u32) -> Self {
+        self.config.max_reconnect_attempts = max;
+        self
+    }
 
-        let mode = infer_mode_from_view(&self.view);
-        let store = EntityStore::new(mode);
-        let store_ref = store.clone();
+    pub fn ping_interval(mut self, interval: Duration) -> Self {
+        self.config.ping_interval = interval;
+        self
+    }
 
-        let mut tx_clone = tx;
+    pub async fn connect(self) -> Result<HyperStack, HyperStackError> {
+        let url = self.url.ok_or(HyperStackError::MissingUrl)?;
+        let store = SharedStore::new();
+        let store_clone = store.clone();
+
+        let (frame_tx, mut frame_rx) = mpsc::channel::<Frame>(1000);
+
+        let connection_config: ConnectionConfig = self.config.clone().into();
+        let connection = ConnectionManager::new(url, connection_config, frame_tx).await;
+
         tokio::spawn(async move {
-            while let Some(Ok(msg)) = rx.next().await {
-                match msg {
-                    Message::Binary(bytes) => {
-                        let text = String::from_utf8_lossy(&bytes);
-                        if let Ok(frame) = serde_json::from_str::<Frame>(&text) {
-                            match frame.op.as_str() {
-                                "patch" => {
-                                    store_ref.apply_patch(frame.key, frame.data).await;
-                                }
-                                "upsert" => {
-                                    store_ref.apply_upsert(frame.key, frame.data).await;
-                                }
-                                "delete" => {
-                                    store_ref.apply_delete(frame.key).await;
-                                }
-                                _ => {
-                                    store_ref.apply_upsert(frame.key, frame.data).await;
-                                }
-                            }
-                        }
-                    }
-                    Message::Ping(payload) => {
-                        let _ = tx_clone.send(Message::Pong(payload)).await;
-                    }
-                    Message::Close(_) => break,
-                    _ => {}
-                }
+            while let Some(frame) = frame_rx.recv().await {
+                store_clone.apply_frame(frame).await;
             }
         });
 
-        Ok(store)
-    }
-}
-
-fn infer_mode_from_view(view: &str) -> Mode {
-    if view.ends_with("/state") {
-        Mode::State
-    } else if view.ends_with("/list") {
-        Mode::List
-    } else if view.ends_with("/append") {
-        Mode::Append
-    } else {
-        Mode::Kv
+        Ok(HyperStack {
+            connection,
+            store,
+            config: self.config,
+        })
     }
 }
