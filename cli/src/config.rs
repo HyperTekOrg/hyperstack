@@ -26,15 +26,16 @@ pub struct ProjectConfig {
     pub name: String,
 }
 
-/// SDK generation settings
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SdkConfig {
     #[serde(default = "default_output_dir")]
     pub output_dir: String,
 
-    /// NPM package name for TypeScript SDK
     #[serde(skip_serializing_if = "Option::is_none")]
     pub typescript_package: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rust_crate_prefix: Option<String>,
 }
 
 fn default_output_dir() -> String {

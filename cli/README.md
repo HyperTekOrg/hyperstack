@@ -51,6 +51,7 @@ name = "my-project"
 [sdk]
 output_dir = "./generated"
 typescript_package = "hyperstack-react"  # optional
+rust_crate_prefix = "hyperstack"         # optional, prefix for generated crate names
 
 # Specs are auto-discovered from .hyperstack/*.ast.json
 # Define explicitly for custom naming:
@@ -242,6 +243,43 @@ hs sdk create typescript settlement-game --output ./my-sdk/game.ts
 hs sdk create typescript settlement-game --package-name @myorg/game-sdk
 ```
 
+#### `hs sdk create rust <spec-name>`
+Generate a Rust SDK crate for the specified spec.
+
+```bash
+# Generate with default settings (outputs to ./generated/<spec-name>-stack/)
+hs sdk create rust settlement-game
+
+# Generate with custom output directory
+hs sdk create rust settlement-game --output ./crates/game-sdk
+
+# Generate with custom crate name
+hs sdk create rust settlement-game --crate-name game-sdk
+```
+
+The generated crate includes:
+- `Cargo.toml` with hyperstack-sdk dependency
+- `src/lib.rs` with re-exports
+- `src/types.rs` with all data structs
+- `src/entity.rs` with Entity trait implementations
+
+Usage after generation:
+
+```toml
+# Add to your Cargo.toml
+[dependencies]
+hyperstack-sdk = "0.2"
+settlement-game-stack = { path = "./generated/settlement-game-stack" }
+```
+
+```rust
+use hyperstack_sdk::HyperStack;
+use settlement_game_stack::{SettlementGame, SettlementGameEntity};
+
+let hs = HyperStack::connect("wss://example.com").await?;
+let game = hs.get::<SettlementGameEntity>("game_id").await;
+```
+
 ### Configuration Management
 
 #### `hs config init`
@@ -261,6 +299,7 @@ name = "my-hyperstack-project"  # required
 [sdk]
 output_dir = "./generated"              # optional, defaults to "./generated"
 typescript_package = "hyperstack-react" # optional, npm package for generated SDK
+rust_crate_prefix = "hyperstack"        # optional, prefix for generated Rust crate names
 
 [build]
 watch_by_default = true                 # optional, stream build progress

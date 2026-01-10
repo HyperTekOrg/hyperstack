@@ -128,6 +128,20 @@ enum CreateCommands {
         #[arg(short, long)]
         package_name: Option<String>,
     },
+
+    /// Generate Rust SDK crate
+    Rust {
+        /// Name of the spec to generate SDK for
+        spec_name: String,
+
+        /// Output directory path (overrides config)
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// Crate name for generated Rust crate
+        #[arg(short, long)]
+        crate_name: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -378,6 +392,11 @@ fn run(cli: Cli) -> anyhow::Result<()> {
                 } => {
                     commands::sdk::create_typescript(&cli.config, &spec_name, output, package_name)
                 }
+                CreateCommands::Rust {
+                    spec_name,
+                    output,
+                    crate_name,
+                } => commands::sdk::create_rust(&cli.config, &spec_name, output, crate_name),
             },
             SdkCommands::List => commands::sdk::list(&cli.config),
         },

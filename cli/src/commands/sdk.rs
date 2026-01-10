@@ -172,7 +172,6 @@ fn find_spec_by_name(
     Ok((ast, output, pkg))
 }
 
-/// Generate SDK from a discovered AST file
 fn generate_sdk_from_ast(
     ast: &DiscoveredAst,
     output_path: &Path,
@@ -184,7 +183,6 @@ fn generate_sdk_from_ast(
         ast.path.display()
     );
 
-    // Read and deserialize the AST
     let ast_json = fs::read_to_string(&ast.path)
         .with_context(|| format!("Failed to read AST file: {}", ast.path.display()))?;
 
@@ -193,7 +191,6 @@ fn generate_sdk_from_ast(
 
     println!("{} Compiling TypeScript from AST...", "→".blue().bold());
 
-    // Compile TypeScript
     let config = hyperstack_interpreter::typescript::TypeScriptConfig {
         package_name: package_name.to_string(),
         generate_helpers: true,
@@ -208,9 +205,120 @@ fn generate_sdk_from_ast(
     )
     .map_err(|e| anyhow::anyhow!("Failed to compile TypeScript: {}", e))?;
 
-    // Write to file
     hyperstack_interpreter::typescript::write_typescript_to_file(&output, output_path)
         .with_context(|| format!("Failed to write TypeScript to {}", output_path.display()))?;
 
     Ok(())
+}
+
+pub fn create_rust(
+    config_path: &str,
+    spec_name: &str,
+    output_override: Option<String>,
+    crate_name_override: Option<String>,
+) -> Result<()> {
+    println!("{} Looking for spec '{}'...", "→".blue().bold(), spec_name);
+
+    let config = HyperstackConfig::load_optional(config_path)?;
+
+    let (ast, output_dir, crate_name) = find_spec_for_rust(
+        spec_name,
+        config.as_ref(),
+        output_override,
+        crate_name_override,
+    )?;
+
+    println!(
+        "{} Found spec: {}",
+        "✓".green().bold(),
+        ast.entity_name.bold()
+    );
+    println!("  Path: {}", ast.path.display());
+    if let Some(pid) = &ast.program_id {
+        println!("  Program ID: {}", pid);
+    }
+
+    let crate_dir = output_dir.join(&crate_name);
+    println!("  Output: {}", crate_dir.display());
+
+    println!("\n{} Generating Rust SDK...", "→".blue().bold());
+
+    let ast_json = fs::read_to_string(&ast.path)
+        .with_context(|| format!("Failed to read AST file: {}", ast.path.display()))?;
+
+    let spec: hyperstack_interpreter::ast::SerializableStreamSpec = serde_json::from_str(&ast_json)
+        .with_context(|| format!("Failed to deserialize AST from {}", ast.path.display()))?;
+
+    let rust_config = hyperstack_interpreter::rust::RustConfig {
+        crate_name: crate_name.clone(),
+        sdk_version: "0.2".to_string(),
+    };
+
+    let output = hyperstack_interpreter::rust::compile_serializable_spec(
+        spec,
+        ast.entity_name.clone(),
+        Some(rust_config),
+    )
+    .map_err(|e| anyhow::anyhow!("Failed to compile Rust: {}", e))?;
+
+    hyperstack_interpreter::rust::write_rust_crate(&output, &crate_dir)
+        .with_context(|| format!("Failed to write Rust crate to {}", crate_dir.display()))?;
+
+    println!("{} Successfully generated Rust SDK!", "✓".green().bold());
+    println!("  Crate: {}", crate_dir.display().to_string().bold());
+    println!("\n  Add to your Cargo.toml:");
+    println!(
+        "    {} = {{ path = \"{}\" }}",
+        crate_name.cyan(),
+        crate_dir.display()
+    );
+
+    Ok(())
+}
+
+fn find_spec_for_rust(
+    spec_name: &str,
+    config: Option<&HyperstackConfig>,
+    output_override: Option<String>,
+    crate_name_override: Option<String>,
+) -> Result<(DiscoveredAst, std::path::PathBuf, String)> {
+    let ast = if let Some(cfg) = config {
+        if let Some(spec_config) = cfg.find_spec(spec_name) {
+            find_ast_file(&spec_config.ast, None)?.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "AST file not found for '{}'. Build your spec crate first.",
+                    spec_config.ast
+                )
+            })?
+        } else {
+            find_ast_file(spec_name, None)?.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Spec '{}' not found.\n\
+                     Make sure you've built your spec crate to generate .hyperstack/*.ast.json files.",
+                    spec_name
+                )
+            })?
+        }
+    } else {
+        find_ast_file(spec_name, None)?.ok_or_else(|| {
+            anyhow::anyhow!(
+                "Spec '{}' not found.\n\
+                 Make sure you've built your spec crate to generate .hyperstack/*.ast.json files.",
+                spec_name
+            )
+        })?
+    };
+
+    let output_dir = output_override
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            config
+                .and_then(|c| c.sdk.as_ref())
+                .map(|s| std::path::PathBuf::from(&s.output_dir))
+                .unwrap_or_else(|| std::path::PathBuf::from("./generated"))
+        });
+
+    let crate_name = crate_name_override.unwrap_or_else(|| format!("{}-stack", ast.spec_name));
+
+    Ok((ast, output_dir, crate_name))
 }
