@@ -61,6 +61,8 @@ pub fn init(config_path: &str) -> Result<()> {
         specs,
         sdk: Some(SdkConfig {
             output_dir: "./generated".to_string(),
+            typescript_output_dir: None,
+            rust_output_dir: None,
             typescript_package: None,
             rust_crate_prefix: None,
         }),

@@ -43,8 +43,10 @@ pub fn list(config_path: &str) -> Result<()> {
                 println!("    Description: {}", desc);
             }
 
-            let output_path = cfg.get_output_path(name, None);
-            println!("    Output: {}", output_path.display());
+            let ts_output = cfg.get_typescript_output_path(name, None);
+            let rust_output = cfg.get_rust_output_path(name, None);
+            println!("    TypeScript: {}", ts_output.display());
+            println!("    Rust: {}", rust_output.display());
             println!();
         }
     }
@@ -102,7 +104,7 @@ pub fn create_typescript(
             let name = spec_config.name.as_deref().unwrap_or(&spec_config.ast);
             let output = output_override
                 .map(|p| p.into())
-                .unwrap_or_else(|| cfg.get_output_path(name, None));
+                .unwrap_or_else(|| cfg.get_typescript_output_path(name, None));
 
             let pkg = package_name_override
                 .or_else(|| cfg.sdk.as_ref().and_then(|s| s.typescript_package.clone()))
@@ -251,7 +253,7 @@ pub fn create_rust(
 
     let rust_config = hyperstack_interpreter::rust::RustConfig {
         crate_name: crate_name.clone(),
-        sdk_version: "0.2".to_string(),
+        sdk_version: "0.1".to_string(),
     };
 
     let output = hyperstack_interpreter::rust::compile_serializable_spec(
@@ -313,8 +315,7 @@ fn find_spec_for_rust(
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| {
             config
-                .and_then(|c| c.sdk.as_ref())
-                .map(|s| std::path::PathBuf::from(&s.output_dir))
+                .map(|c| std::path::PathBuf::from(c.get_rust_output_dir()))
                 .unwrap_or_else(|| std::path::PathBuf::from("./generated"))
         });
 

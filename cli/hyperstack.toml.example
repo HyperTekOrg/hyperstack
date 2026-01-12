@@ -10,7 +10,9 @@ name = "my-project"
 
 # SDK generation settings (optional)
 [sdk]
-output_dir = "./generated"
+output_dir = "./generated"              # Default for both languages
+# typescript_output_dir = "./frontend/src/generated"  # Override for TypeScript
+# rust_output_dir = "./crates/generated"              # Override for Rust
 # typescript_package = "@myorg/my-sdk"
 
 # Build preferences (optional)

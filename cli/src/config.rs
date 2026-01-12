@@ -32,6 +32,12 @@ pub struct SdkConfig {
     pub output_dir: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub typescript_output_dir: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rust_output_dir: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub typescript_package: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -120,7 +126,6 @@ impl HyperstackConfig {
             .find(|s| s.name.as_deref() == Some(name) || s.ast == name)
     }
 
-    /// Get the output directory for SDK generation
     pub fn get_output_dir(&self) -> &str {
         self.sdk
             .as_ref()
@@ -128,13 +133,38 @@ impl HyperstackConfig {
             .unwrap_or("./generated")
     }
 
-    /// Get output path for a spec
-    pub fn get_output_path(&self, spec_name: &str, override_path: Option<String>) -> PathBuf {
+    pub fn get_typescript_output_dir(&self) -> &str {
+        self.sdk
+            .as_ref()
+            .and_then(|s| s.typescript_output_dir.as_deref())
+            .unwrap_or_else(|| self.get_output_dir())
+    }
+
+    pub fn get_rust_output_dir(&self) -> &str {
+        self.sdk
+            .as_ref()
+            .and_then(|s| s.rust_output_dir.as_deref())
+            .unwrap_or_else(|| self.get_output_dir())
+    }
+
+    pub fn get_typescript_output_path(
+        &self,
+        spec_name: &str,
+        override_path: Option<String>,
+    ) -> PathBuf {
         if let Some(path) = override_path {
             return PathBuf::from(path);
         }
 
-        PathBuf::from(self.get_output_dir()).join(format!("{}-stack.ts", spec_name))
+        PathBuf::from(self.get_typescript_output_dir()).join(format!("{}-stack.ts", spec_name))
+    }
+
+    pub fn get_rust_output_path(&self, _spec_name: &str, override_path: Option<String>) -> PathBuf {
+        if let Some(path) = override_path {
+            return PathBuf::from(path);
+        }
+
+        PathBuf::from(self.get_rust_output_dir())
     }
 }
 
