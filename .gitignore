@@ -148,3 +148,4 @@ infra/overlays/local/rendered/
 *.kubeconfig
 .opencode
 .astro
+docs/.astro
