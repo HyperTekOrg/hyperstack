@@ -1,0 +1,165 @@
+---
+title: Python SDK
+description: Reference for the HyperStack Python SDK.
+sidebar:
+  order: 3
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" title="Work in Progress">
+The Python SDK is under active development and is currently in alpha. Features and APIs are subject to change before the stable 1.0 release.
+</Aside>
+
+The HyperStack Python SDK provides an `asyncio`-based client for streaming real-time Solana program data into your Python applications. It's designed for data science, backend services, and automation scripts that require live state updates.
+
+## Installation
+
+The Python SDK is not yet published to PyPI. To use it, you must install it from the source repository.
+
+### From Source
+
+```bash
+# Clone the repository
+git clone https://github.com/HyperTekOrg/hyperstack.git
+cd hyperstack/python/hyperstack-sdk
+
+# Install in editable mode
+pip install -e .
+```
+
+**Requirements:**
+- Python 3.9+
+- `websockets` library (installed automatically)
+
+## Quick Start
+
+The following example connects to a HyperStack server and subscribes to a Key-Value view.
+
+```python
+import asyncio
+from hyperstack import HyperStackClient
+
+async def main():
+    # Use the async context manager for automatic connection/disconnection
+    async with HyperStackClient("wss://your-hyperstack-server.com") as client:
+        # Subscribe to a view
+        store = client.subscribe("SettlementGame/kv")
+        
+        print("Subscribed, waiting for updates...")
+        
+        # Iterating over the store yields updates as they arrive
+        async for update in store:
+            print(f"Key: {update.key}, Data: {update.data}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Client API
+
+### `HyperStackClient`
+
+The main entry point for the SDK. It manages the WebSocket connection and subscription routing.
+
+#### Constructor
+
+```python
+client = HyperStackClient(
+    url="wss://...",
+    reconnect_intervals=[1, 2, 4, 8, 16],
+    ping_interval=15,
+    on_connect=None,
+    on_disconnect=None,
+    on_error=None
+)
+```
+
+- **`url`**: The WebSocket URL of the HyperStack server.
+- **`reconnect_intervals`**: A list of seconds to wait between reconnection attempts.
+- **`ping_interval`**: Seconds between WebSocket pings to keep the connection alive.
+- **`on_connect` / `on_disconnect`**: Async callbacks triggered on connection state changes.
+
+#### Methods
+
+- **`await connect()`**: Manually open the connection.
+- **`await disconnect()`**: Manually close the connection.
+- **`subscribe(view, key=None, parser=None)`**: Creates a new subscription and returns a `Store`.
+
+## Subscriptions & Stores
+
+When you subscribe to a view, the client returns a `Store` object. The `Store` maintains the local state and provides an async iterator for updates.
+
+### Subscription Modes
+
+HyperStack uses suffixes in the view name to determine how data is managed:
+
+| Mode | Suffix | Description |
+| :--- | :--- | :--- |
+| **KV** | `/kv` | Standard Key-Value storage. (Default if no suffix) |
+| **State** | `/state` | Single-ton state projection. |
+| **List** | `/list` | Ordered list of items. |
+| **Append** | `/append` | Write-only stream of events. |
+
+```python
+# Example: Subscribing to a list view
+event_store = client.subscribe("GameEvents/append")
+```
+
+### The `Store` Class
+
+The `Store` provides several ways to access data:
+
+1.  **Async Iteration**: `async for update in store:` yields `Update` objects.
+2.  **Synchronous Get**: `store.get(key=None)` returns the current value for a key without waiting.
+3.  **Asynchronous Get**: `await store.get_async(key=None)` (Planned: will wait for initial data).
+
+```python
+async for update in store:
+    # update.key is the string identifier
+    # update.data is the parsed data (Dict or Custom Type)
+    print(update.data)
+```
+
+## Custom Parsers
+
+By default, `update.data` is a raw dictionary parsed from JSON. You can provide a custom parser function to transform this into typed objects (e.g., Dataclasses or Pydantic models).
+
+```python
+from dataclasses import dataclass
+from typing import Dict, Any
+
+@dataclass
+class GameState:
+    score: int
+    active: bool
+
+def parse_game_state(data: Dict[str, Any]) -> GameState:
+    return GameState(
+        score=data.get("score", 0),
+        active=data.get("active", False)
+    )
+
+# The store will now yield GameState objects
+store = client.subscribe("Game/state", parser=parse_game_state)
+
+async for update in store:
+    game: GameState = update.data
+    print(f"Current Score: {game.score}")
+```
+
+## Error Handling
+
+The SDK provides specific exception types for different failure modes:
+
+```python
+from hyperstack import HyperStackError, ConnectionError, SubscriptionError
+
+try:
+    async with HyperStackClient(url) as client:
+        # ...
+except ConnectionError:
+    print("Failed to connect to server")
+except HyperStackError as e:
+    print(f"An error occurred: {e}")
+```
