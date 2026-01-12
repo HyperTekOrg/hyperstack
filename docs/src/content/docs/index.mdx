@@ -1,19 +1,6 @@
 ---
 title: Hyperstack
 description: Real-time streaming data pipelines for Solana
-template: splash
-hero:
-  title: Hyperstack
-  tagline: Data infrastructure as code for Solana. Define your schema, we handle the rest.
-  actions:
-    - text: Get Started
-      link: /getting-started/quickstart/
-      icon: right-arrow
-      variant: primary
-    - text: View on GitHub
-      link: https://github.com/HyperTekOrg/hyperstack
-      icon: external
-      variant: minimal
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
@@ -28,38 +15,11 @@ Hyperstack is **data infrastructure as code** for Solana. Define a schema that c
 - WebSocket streaming of that schema into your app
 - Generating type-safe client code to sync the schema into your app
 
-<CardGrid stagger>
-  <Card title="Real-time Sync" icon="rocket">
-    React hooks that give you your application state as soon as it happens on chain, already formatted in your desired schema.
-  </Card>
-  <Card title="Infrastructure as Code" icon="setting">
-    No complex Solana infrastructure to manage. Focus on building your app, not maintaining servers.
-  </Card>
-  <Card title="Type-safe SDKs" icon="document">
-    Auto-generated type-safe client code based on your schema definition. TypeScript, Python, and Rust.
-  </Card>
-  <Card title="Schema-Driven" icon="puzzle">
-    Define your data schema once and we handle streaming, indexing, and syncing automatically.
-  </Card>
-</CardGrid>
-
 ## Quick Example
 
 ```typescript
-// Define your stack
-const TokenStack = defineStack({
-  name: 'my-tokens',
-  views: {
-    tokens: {
-      list: createListView<Token>('Token/list'),
-      state: createStateView<Token>('Token/state'),
-    },
-  },
-});
-
-// Use in your React app
 function TokenList() {
-  const stack = useHyperstack(TokenStack);
+  const stack = useHyperstack(MY_PROGRAM_STACK);
   const { data: tokens } = stack.views.tokens.list.use();
 
   return tokens?.map(token => <TokenCard key={token.mint} {...token} />);
