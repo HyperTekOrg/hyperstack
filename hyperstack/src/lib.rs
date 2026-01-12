@@ -76,5 +76,5 @@ pub mod prelude {
 
     // Re-export SDK client
     #[cfg(feature = "sdk")]
-    pub use hyperstack_sdk::HyperStackClient;
+    pub use hyperstack_sdk::HyperStack;
 }
