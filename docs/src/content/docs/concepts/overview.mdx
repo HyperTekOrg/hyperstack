@@ -1,5 +1,7 @@
 ---
 title: How Hyperstack Works
+sidebar:
+  order: 1
 ---
 
 Hyperstack is a declarative data layer for Solana. You define the data shape you need, and Hyperstack handles all the infrastructure to stream it to your app in real-time.
@@ -48,32 +50,32 @@ Hyperstack then:
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    YOUR SPEC                            │
-│  (Rust macros defining entities, mappings, aggregates)  │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────┐
-│                   HYPERSTACK CLOUD                       │
-│                                                          │
-│   ┌────────────┐    ┌────────────┐    ┌────────────┐    │
-│   │  Compiler  │ →  │     VM     │ →  │  Streamer  │    │
-│   └────────────┘    └────────────┘    └────────────┘    │
-│         ↑                 ↑                  ↓          │
-│    AST Bytecode     State Tables      WebSocket         │
-│                                                          │
-│   ┌──────────────────────────────────────────────────┐  │
-│   │              Yellowstone gRPC                     │  │
-│   │         (Real-time Solana data feed)             │  │
-│   └──────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────┐
-│                     YOUR APP                            │
-│                                                          │
-│   const { data } = stack.views.tokens.list.use()        │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
++-------------------------------------------------------------+
+|                    YOUR SPEC                                 |
+|  (Rust macros defining entities, mappings, aggregates)       |
++-------------------------------------------------------------+
+                          |
++-------------------------------------------------------------+
+|                   HYPERSTACK CLOUD                           |
+|                                                              |
+|   +------------+    +------------+    +------------+         |
+|   |  Compiler  | -> |     VM     | -> |  Streamer  |         |
+|   +------------+    +------------+    +------------+         |
+|         ^                 ^                  |               |
+|    AST Bytecode     State Tables      WebSocket              |
+|                                                              |
+|   +----------------------------------------------------+    |
+|   |              Yellowstone gRPC                       |    |
+|   |         (Real-time Solana data feed)                |    |
+|   +----------------------------------------------------+    |
++-------------------------------------------------------------+
+                          |
++-------------------------------------------------------------+
+|                     YOUR APP                                 |
+|                                                              |
+|   const { data } = stack.views.tokens.list.use()            |
+|                                                              |
++-------------------------------------------------------------+
 ```
 
 ---
@@ -244,7 +246,7 @@ console.log(token.volume)  // bigint
 
 ## Next Steps
 
-- [React Quickstart](/quickstart/react) - Build your first app
+- [React Quickstart](/getting-started/quickstart) - Build your first app
 - [Stack API](/concepts/stack-api) - Client-side API reference
-- [Spec DSL](/spec-dsl/macros) - Full macro reference
+- [Creating Specs](/specs/overview) - Create custom data streams
 - [CLI Commands](/cli/commands) - Deployment and management

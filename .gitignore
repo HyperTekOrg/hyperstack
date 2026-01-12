@@ -147,3 +147,4 @@ ignored
 infra/overlays/local/rendered/
 *.kubeconfig
 .opencode
+.astro

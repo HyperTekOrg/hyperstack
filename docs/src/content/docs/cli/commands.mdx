@@ -1,5 +1,7 @@
 ---
 title: CLI Command Reference
+sidebar:
+  order: 1
 ---
 
 Complete reference for the Hyperstack CLI (`hs`).
@@ -189,7 +191,7 @@ hs spec list
 hs spec list --json
 ```
 
-### hs spec show &lt;spec-name&gt;
+### hs spec show \<spec-name\>
 
 Show detailed spec information.
 
@@ -198,7 +200,7 @@ hs spec show my-spec
 hs spec show my-spec --version 3
 ```
 
-### hs spec versions &lt;spec-name&gt;
+### hs spec versions \<spec-name\>
 
 Show version history.
 
@@ -207,7 +209,7 @@ hs spec versions my-spec
 hs spec versions my-spec --limit 10
 ```
 
-### hs spec delete &lt;spec-name&gt;
+### hs spec delete \<spec-name\>
 
 Delete a spec from remote.
 
@@ -220,7 +222,7 @@ hs spec delete my-spec --force  # Skip confirmation
 
 ## Build Commands
 
-### hs build create &lt;spec-name&gt;
+### hs build create \<spec-name\>
 
 Create a new build from a spec.
 
@@ -249,7 +251,7 @@ hs build list --status completed
 hs build list --limit 10
 ```
 
-### hs build status &lt;build-id&gt;
+### hs build status \<build-id\>
 
 Get detailed build status.
 
@@ -259,7 +261,7 @@ hs build status 123 --watch
 hs build status 123 --json
 ```
 
-### hs build logs &lt;build-id&gt;
+### hs build logs \<build-id\>
 
 View build logs.
 
@@ -271,7 +273,7 @@ hs build logs 123
 
 ## Deployment Commands
 
-### hs deploy info &lt;build-id&gt;
+### hs deploy info \<build-id\>
 
 Show deployment information for a build.
 
@@ -293,7 +295,7 @@ hs deploy list
 hs deploy list --limit 20
 ```
 
-### hs deploy stop &lt;deployment-id&gt;
+### hs deploy stop \<deployment-id\>
 
 Stop a deployment.
 
@@ -301,7 +303,7 @@ Stop a deployment.
 hs deploy stop 123
 ```
 
-### hs deploy rollback &lt;spec-name&gt;
+### hs deploy rollback \<spec-name\>
 
 Rollback to a previous deployment.
 
@@ -341,7 +343,7 @@ List specs available for SDK generation.
 hs sdk list
 ```
 
-### hs sdk create typescript &lt;spec-name&gt;
+### hs sdk create typescript \<spec-name\>
 
 Generate TypeScript SDK.
 
@@ -390,8 +392,8 @@ ast = ".hyperstack/Token.ast.json"
 ### Status Flow
 
 ```
-pending → uploading → queued → building → pushing → deploying → completed
-                                                              ↘ failed
+pending -> uploading -> queued -> building -> pushing -> deploying -> completed
+                                                                   \-> failed
 ```
 
 ### Build Phases
