@@ -263,20 +263,28 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
         }
         ComputedExpr::UnwrapOr { expr, default } => {
             let inner = generate_computed_expr_code(expr);
-            // Extract the default value as a numeric literal
             let default_num = match default {
-                serde_json::Value::Number(n) => n.as_f64().unwrap_or(0.0),
-                serde_json::Value::Bool(b) => {
-                    if *b {
-                        1.0
+                serde_json::Value::Number(n) => {
+                    if let Some(i) = n.as_i64() {
+                        quote! { #i }
+                    } else if let Some(u) = n.as_u64() {
+                        quote! { #u }
                     } else {
-                        0.0
+                        let f = n.as_f64().unwrap_or(0.0);
+                        quote! { #f }
                     }
                 }
-                _ => 0.0,
+                serde_json::Value::Bool(b) => {
+                    if *b {
+                        quote! { 1i64 }
+                    } else {
+                        quote! { 0i64 }
+                    }
+                }
+                _ => quote! { 0i64 },
             };
             quote! {
-                #inner.and_then(|v| v.as_f64().or_else(|| v.as_i64().map(|i| i as f64))).unwrap_or(#default_num)
+                #inner.and_then(|v| v.as_i64().or_else(|| v.as_u64().map(|u| u as i64))).unwrap_or(#default_num)
             }
         }
         ComputedExpr::Binary { op, left, right } => {

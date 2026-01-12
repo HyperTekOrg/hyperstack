@@ -2970,3 +2970,96 @@ impl crate::resolvers::ReverseLookupUpdater for VmContext {
             })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::{BinaryOp, ComputedExpr, ComputedFieldSpec};
+
+    #[test]
+    fn test_computed_field_preserves_integer_type() {
+        let vm = VmContext::new();
+
+        let mut state = serde_json::json!({
+            "trading": {
+                "total_buy_volume": 20000000000_i64,
+                "total_sell_volume": 17951316474_i64
+            }
+        });
+
+        let spec = ComputedFieldSpec {
+            target_path: "trading.total_volume".to_string(),
+            result_type: "Option<u64>".to_string(),
+            expression: ComputedExpr::Binary {
+                op: BinaryOp::Add,
+                left: Box::new(ComputedExpr::UnwrapOr {
+                    expr: Box::new(ComputedExpr::FieldRef {
+                        path: "trading.total_buy_volume".to_string(),
+                    }),
+                    default: serde_json::json!(0),
+                }),
+                right: Box::new(ComputedExpr::UnwrapOr {
+                    expr: Box::new(ComputedExpr::FieldRef {
+                        path: "trading.total_sell_volume".to_string(),
+                    }),
+                    default: serde_json::json!(0),
+                }),
+            },
+        };
+
+        vm.evaluate_computed_fields_from_ast(&mut state, &[spec])
+            .unwrap();
+
+        let total_volume = state
+            .get("trading")
+            .and_then(|t| t.get("total_volume"))
+            .expect("total_volume should exist");
+
+        let serialized = serde_json::to_string(total_volume).unwrap();
+        assert!(
+            !serialized.contains('.'),
+            "Integer should not have decimal point: {}",
+            serialized
+        );
+        assert_eq!(
+            total_volume.as_i64(),
+            Some(37951316474),
+            "Value should be correct sum"
+        );
+    }
+
+    #[test]
+    fn test_set_field_sum_preserves_integer_type() {
+        let mut vm = VmContext::new();
+        vm.registers[0] = serde_json::json!({});
+        vm.registers[1] = serde_json::json!(20000000000_i64);
+        vm.registers[2] = serde_json::json!(17951316474_i64);
+
+        vm.set_field_sum(0, "trading.total_buy_volume", 1).unwrap();
+        vm.set_field_sum(0, "trading.total_sell_volume", 2).unwrap();
+
+        let state = &vm.registers[0];
+        let buy_vol = state
+            .get("trading")
+            .and_then(|t| t.get("total_buy_volume"))
+            .unwrap();
+        let sell_vol = state
+            .get("trading")
+            .and_then(|t| t.get("total_sell_volume"))
+            .unwrap();
+
+        let buy_serialized = serde_json::to_string(buy_vol).unwrap();
+        let sell_serialized = serde_json::to_string(sell_vol).unwrap();
+
+        assert!(
+            !buy_serialized.contains('.'),
+            "Buy volume should not have decimal: {}",
+            buy_serialized
+        );
+        assert!(
+            !sell_serialized.contains('.'),
+            "Sell volume should not have decimal: {}",
+            sell_serialized
+        );
+    }
+}
