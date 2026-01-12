@@ -6,6 +6,7 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
 
 #[derive(Debug, Clone)]
 pub enum Update<T> {
@@ -37,7 +38,7 @@ impl<T> Update<T> {
 }
 
 pub struct EntityStream<T> {
-    rx: broadcast::Receiver<StoreUpdate>,
+    inner: BroadcastStream<StoreUpdate>,
     view: String,
     key_filter: Option<String>,
     _marker: PhantomData<T>,
@@ -46,7 +47,7 @@ pub struct EntityStream<T> {
 impl<T: DeserializeOwned + Clone + Send + 'static> EntityStream<T> {
     pub fn new(rx: broadcast::Receiver<StoreUpdate>, view: String) -> Self {
         Self {
-            rx,
+            inner: BroadcastStream::new(rx),
             view,
             key_filter: None,
             _marker: PhantomData,
@@ -55,7 +56,7 @@ impl<T: DeserializeOwned + Clone + Send + 'static> EntityStream<T> {
 
     pub fn new_filtered(rx: broadcast::Receiver<StoreUpdate>, view: String, key: String) -> Self {
         Self {
-            rx,
+            inner: BroadcastStream::new(rx),
             view,
             key_filter: Some(key),
             _marker: PhantomData,
@@ -69,8 +70,8 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for EntityStre
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
         loop {
-            match this.rx.try_recv() {
-                Ok(update) => {
+            match Pin::new(&mut this.inner).poll_next(cx) {
+                Poll::Ready(Some(Ok(update))) => {
                     if update.view != this.view {
                         continue;
                     }
@@ -97,25 +98,32 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for EntityStre
                         }
                         Operation::Patch => {
                             if let Some(data) = update.data {
-                                if let Ok(typed) = serde_json::from_value::<T>(data) {
-                                    return Poll::Ready(Some(Update::Patch {
-                                        key: update.key,
-                                        data: typed,
-                                    }));
+                                match serde_json::from_value::<T>(data) {
+                                    Ok(typed) => {
+                                        return Poll::Ready(Some(Update::Patch {
+                                            key: update.key,
+                                            data: typed,
+                                        }));
+                                    }
+                                    Err(_) => {
+                                        // Partial patches can't deserialize to full type - skip
+                                        continue;
+                                    }
                                 }
                             }
                         }
                     }
                 }
-                Err(broadcast::error::TryRecvError::Empty) => {
-                    cx.waker().wake_by_ref();
-                    return Poll::Pending;
+                Poll::Ready(Some(Err(_lagged))) => {
+                    // Receiver lagged behind - messages were dropped. Continue to next.
+                    tracing::warn!("EntityStream lagged behind, some messages were dropped");
+                    continue;
                 }
-                Err(broadcast::error::TryRecvError::Closed) => {
+                Poll::Ready(None) => {
                     return Poll::Ready(None);
                 }
-                Err(broadcast::error::TryRecvError::Lagged(_)) => {
-                    continue;
+                Poll::Pending => {
+                    return Poll::Pending;
                 }
             }
         }
