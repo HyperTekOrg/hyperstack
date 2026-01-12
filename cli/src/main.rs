@@ -139,7 +139,7 @@ enum CreateCommands {
         output: Option<String>,
 
         /// Crate name for generated Rust crate
-        #[arg(short, long)]
+        #[arg(long)]
         crate_name: Option<String>,
     },
 }
