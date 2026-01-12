@@ -28,7 +28,7 @@ impl Default for RustConfig {
     fn default() -> Self {
         Self {
             crate_name: "generated-stack".to_string(),
-            sdk_version: "0.2".to_string(),
+            sdk_version: "0.1".to_string(),
         }
     }
 }
@@ -111,12 +111,13 @@ pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState}};
 
     fn generate_types_rs(&self) -> String {
         let mut output = String::new();
-        output.push_str("use serde::{Deserialize, Serialize};\n\n");
+        output.push_str("use serde::{Deserialize, Deserializer, Serialize};\n\n");
+        output.push_str(&self.generate_serde_helpers());
 
         let mut generated = HashSet::new();
 
         for section in &self.spec.sections {
-            if section.name != "Root" && generated.insert(section.name.clone()) {
+            if !Self::is_root_section(&section.name) && generated.insert(section.name.clone()) {
                 output.push_str(&self.generate_struct_for_section(section));
                 output.push_str("\n\n");
             }
@@ -168,11 +169,16 @@ pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState}};
         )
     }
 
+    /// Check if a section name is the root section (case-insensitive)
+    fn is_root_section(name: &str) -> bool {
+        name.eq_ignore_ascii_case("root")
+    }
+
     fn generate_main_entity_struct(&self) -> String {
         let mut fields = Vec::new();
 
         for section in &self.spec.sections {
-            if section.name != "Root" {
+            if !Self::is_root_section(&section.name) {
                 let field_name = to_snake_case(&section.name);
                 let type_name = format!("{}{}", self.entity_name, to_pascal_case(&section.name));
                 let serde_attr = if field_name != section.name {
@@ -191,7 +197,7 @@ pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState}};
         }
 
         for section in &self.spec.sections {
-            if section.name == "Root" {
+            if Self::is_root_section(&section.name) {
                 for field in &section.fields {
                     let field_name = to_snake_case(&field.field_name);
                     let rust_type = self.field_type_to_rust(field);
@@ -276,7 +282,7 @@ pub struct EventWrapper<T> {
     pub timestamp: i64,
     pub data: T,
     #[serde(default)]
-    pub slot: Option<u64>,
+    pub slot: Option<f64>,
     #[serde(default)]
     pub signature: Option<String>,
 }
@@ -291,6 +297,31 @@ impl<T: Default> Default for EventWrapper<T> {
         }
     }
 }
+"#
+        .to_string()
+    }
+
+    fn generate_serde_helpers(&self) -> String {
+        r#"mod serde_helpers {
+    use serde::{Deserialize, Deserializer};
+
+    pub fn deserialize_number_from_any<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum NumOrNull {
+            Num(f64),
+            Null,
+        }
+        match NumOrNull::deserialize(deserializer)? {
+            NumOrNull::Num(n) => Ok(Some(n)),
+            NumOrNull::Null => Ok(None),
+        }
+    }
+}
+
 "#
         .to_string()
     }
@@ -329,7 +360,7 @@ impl Entity for {entity_name}Entity {{
     fn field_type_to_rust(&self, field: &FieldTypeInfo) -> String {
         let base = self.base_type_to_rust(&field.base_type, &field.rust_type_name);
 
-        let typed = if field.is_array {
+        let typed = if field.is_array && !matches!(field.base_type, BaseType::Array) {
             format!("Vec<{}>", base)
         } else {
             base

@@ -125,8 +125,9 @@ impl<S> TypeScriptCompiler<S> {
         }
 
         // Deduplicate fields within each section and generate interfaces
+        // Skip root section - its fields will be flattened into main entity interface
         for (section_name, fields) in all_sections {
-            if processed_types.insert(section_name.clone()) {
+            if !is_root_section(&section_name) && processed_types.insert(section_name.clone()) {
                 let deduplicated_fields = self.deduplicate_fields(fields);
                 let interface =
                     self.generate_interface_from_fields(&section_name, &deduplicated_fields);
@@ -324,13 +325,11 @@ impl<S> TypeScriptCompiler<S> {
             }
         }
 
-        // NEW: Use actual section names from enhanced AST if available
         if !self.spec.sections.is_empty() {
             for section in &self.spec.sections {
                 sections.insert(&section.name, true);
             }
         } else {
-            // FALLBACK: Extract section names from field mappings
             for mapping in &self.spec.handlers {
                 for field_mapping in &mapping.mappings {
                     let parts: Vec<&str> = field_mapping.target_path.split('.').collect();
@@ -343,23 +342,35 @@ impl<S> TypeScriptCompiler<S> {
 
         let mut fields = Vec::new();
 
-        // Add each section as a field in the main interface (sorted by key)
+        // Add non-root sections as nested interface references
         for section in sections.keys() {
-            // Generate proper interface names like GameEvents, GameStatus, etc.
-            let base_name = if self.entity_name.contains("Game") {
-                "Game"
-            } else {
-                &self.entity_name
-            };
-            let section_interface_name = format!("{}{}", base_name, to_pascal_case(section));
-            fields.push(format!(
-                "  {}: {};",
-                to_camel_case(section),
-                section_interface_name
-            ));
+            if !is_root_section(section) {
+                let base_name = if self.entity_name.contains("Game") {
+                    "Game"
+                } else {
+                    &self.entity_name
+                };
+                let section_interface_name = format!("{}{}", base_name, to_pascal_case(section));
+                fields.push(format!(
+                    "  {}: {};",
+                    to_camel_case(section),
+                    section_interface_name
+                ));
+            }
         }
 
-        // If no sections found, create a basic structure
+        // Flatten root section fields directly into main interface
+        for section in &self.spec.sections {
+            if is_root_section(&section.name) {
+                for field in &section.fields {
+                    let field_name = to_camel_case(&field.field_name);
+                    let ts_type = self.field_type_info_to_typescript(field);
+                    let optional_marker = if field.is_optional { "?" } else { "" };
+                    fields.push(format!("  {}{}: {};", field_name, optional_marker, ts_type));
+                }
+            }
+        }
+
         if fields.is_empty() {
             fields.push("  // Generated interface - extend as needed".to_string());
         }
@@ -1102,6 +1113,11 @@ fn to_snake_case(s: &str) -> String {
     }
 
     result
+}
+
+/// Check if a section name is the root section (case-insensitive)
+fn is_root_section(name: &str) -> bool {
+    name.eq_ignore_ascii_case("root")
 }
 
 /// Convert PascalCase/camelCase to kebab-case
