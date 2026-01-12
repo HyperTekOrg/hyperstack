@@ -1,11 +1,14 @@
 # hyperstack-sdk
 
+> **Work in Progress:** This SDK is under active development and has not yet been published to PyPI.
+
 Python SDK for HyperStack - Real-time Solana program data streaming.
 
 ## Installation
 
 ```bash
-pip install hyperstack-sdk
+# Not yet published - install from source for development
+pip install -e .
 ```
 
 ## Requirements

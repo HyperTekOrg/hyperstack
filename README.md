@@ -16,7 +16,7 @@ Real-time streaming data pipelines for Solana - transform on-chain events into t
 | hyperstack-sdk | Rust | crates.io | Rust client SDK |
 | hyperstack-cli | Rust | crates.io | CLI tool for SDK generation |
 | hyperstack-react | TypeScript | npm | React SDK with hooks |
-| hyperstack-sdk | Python | PyPI | Python client SDK |
+| hyperstack-sdk | Python | PyPI | Python client SDK *(work in progress - not yet published)* |
 
 ## Quick Start
 
@@ -33,7 +33,10 @@ npm install hyperstack-react
 ```
 
 ### Python
+> **Note:** The Python SDK is a work in progress and has not yet been published to PyPI.
+
 ```bash
+# Coming soon
 pip install hyperstack-sdk
 ```
 
