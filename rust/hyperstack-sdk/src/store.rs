@@ -27,22 +27,32 @@ impl SharedStore {
     }
 
     pub async fn apply_frame(&self, frame: Frame) {
+        let entity_name = extract_entity_name(&frame.entity);
+        let data = unwrap_list_item(&frame.data);
+        tracing::debug!(
+            "apply_frame: entity={}, key={}, op={}, has_item={}",
+            entity_name,
+            frame.key,
+            frame.op,
+            frame.data.get("item").is_some()
+        );
+
         let mut entities = self.entities.write().await;
         let view_map = entities
-            .entry(frame.entity.clone())
+            .entry(entity_name.to_string())
             .or_insert_with(HashMap::new);
 
         let operation = frame.operation();
 
         match operation {
             Operation::Upsert | Operation::Create => {
-                view_map.insert(frame.key.clone(), frame.data.clone());
+                view_map.insert(frame.key.clone(), data.clone());
             }
             Operation::Patch => {
                 let entry = view_map
                     .entry(frame.key.clone())
                     .or_insert_with(|| serde_json::json!({}));
-                if let (Some(obj), Some(patch)) = (entry.as_object_mut(), frame.data.as_object()) {
+                if let (Some(obj), Some(patch)) = (entry.as_object_mut(), data.as_object()) {
                     for (k, v) in patch {
                         obj.insert(k.clone(), v.clone());
                     }
@@ -54,10 +64,10 @@ impl SharedStore {
         }
 
         let _ = self.updates_tx.send(StoreUpdate {
-            view: frame.entity,
+            view: entity_name.to_string(),
             key: frame.key,
             operation,
-            data: Some(frame.data),
+            data: Some(data),
         });
     }
 
@@ -88,6 +98,18 @@ impl SharedStore {
 
     pub fn subscribe(&self) -> broadcast::Receiver<StoreUpdate> {
         self.updates_tx.subscribe()
+    }
+}
+
+fn extract_entity_name(view_path: &str) -> &str {
+    view_path.split('/').next().unwrap_or(view_path)
+}
+
+fn unwrap_list_item(data: &serde_json::Value) -> serde_json::Value {
+    if let Some(item) = data.get("item") {
+        item.clone()
+    } else {
+        data.clone()
     }
 }
 
