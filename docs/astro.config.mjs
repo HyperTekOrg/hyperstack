@@ -25,8 +25,33 @@ export default defineConfig({
           autogenerate: { directory: 'concepts' },
         },
         {
+          label: 'Specs (Rust DSL)',
+          autogenerate: { directory: 'specs' },
+        },
+        {
+          label: 'SDKs',
+          items: [
+            {
+              label: 'TypeScript',
+              autogenerate: { directory: 'sdks/typescript' },
+            },
+            {
+              label: 'Rust',
+              autogenerate: { directory: 'sdks/rust' },
+            },
+            {
+              label: 'Python',
+              autogenerate: { directory: 'sdks/python' },
+            },
+          ],
+        },
+        {
           label: 'CLI',
           autogenerate: { directory: 'cli' },
+        },
+        {
+          label: 'Self-Hosting',
+          autogenerate: { directory: 'self-hosting' },
         },
       ],
       // Enable search when content is ready
