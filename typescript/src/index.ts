@@ -1,4 +1,4 @@
-export { HyperstackProvider, useHyperstackContext } from './provider';
+export { HyperstackProvider, useHyperstackContext, useConnectionState } from './provider';
 export { defineStack, useHyperstack } from './stack';
 export { createStateView, createListView } from './view-factory';
 export { createRuntime } from './runtime';

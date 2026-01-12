@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, ReactNode } from 'react';
-import { HyperstackConfig, NetworkConfig } from './types';
+import React, { createContext, useContext, useEffect, useMemo, useRef, ReactNode, useSyncExternalStore } from 'react';
+import { HyperstackConfig, NetworkConfig, ConnectionState } from './types';
 import { createRuntime, HyperstackRuntime } from './runtime';
 
 interface HyperstackContextValue {
@@ -122,4 +122,17 @@ export function useHyperstackContext() {
     throw new Error('useHyperstackContext must be used within HyperstackProvider');
   }
   return context;
+}
+
+export function useConnectionState(): ConnectionState {
+  const { runtime } = useHyperstackContext();
+  return useSyncExternalStore(
+    (callback) => {
+      const unsubscribe = runtime.store.subscribe(() => {
+        callback();
+      });
+      return unsubscribe;
+    },
+    () => runtime.store.getState().connectionState
+  );
 }
