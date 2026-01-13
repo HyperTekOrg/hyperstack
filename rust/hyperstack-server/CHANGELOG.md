@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.7](https://github.com/HyperTekOrg/hyperstack/compare/v0.1.6...v0.1.7) (2026-01-13)
+
+
+### Bug Fixes
+
+* Feature flag import ([a5c3160](https://github.com/HyperTekOrg/hyperstack/commit/a5c3160cedff5c678c23f266627d2fa7bebc890c))
+* Missing import ([dc9a92d](https://github.com/HyperTekOrg/hyperstack/commit/dc9a92d7f685692746d8c6349da440b2e21028aa))
+
 ## [0.1.6](https://github.com/HyperTekOrg/hyperstack/compare/v0.1.5...v0.1.6) (2026-01-13)
 
 

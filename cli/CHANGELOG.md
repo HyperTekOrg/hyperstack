@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/HyperTekOrg/hyperstack/compare/v0.1.6...v0.1.7) (2026-01-13)
+
+
+### Bug Fixes
+
+* Update api url ([12b1be2](https://github.com/HyperTekOrg/hyperstack/commit/12b1be27f9a5117037398fd30ed137df4c788159))
+
 ## [0.1.6](https://github.com/HyperTekOrg/hyperstack/compare/v0.1.5...v0.1.6) (2026-01-13)
 
 
