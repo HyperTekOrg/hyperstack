@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.9](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.1.8...hyperstack-server-v0.1.9) (2026-01-13)
+
+
+### Bug Fixes
+
+* Otel feature flag on timing ([42626fb](https://github.com/HyperTekOrg/hyperstack/commit/42626fbc9db0e48f5ab966741c5e71bc34718059))
+* Variable incorrectly named ([826fb82](https://github.com/HyperTekOrg/hyperstack/commit/826fb825f12dd17f96be439aa99d59d3a60bb96c))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.1.8 to 0.1.9
+
 ## [0.1.8](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.1.7...hyperstack-server-v0.1.8) (2026-01-13)
 
 
