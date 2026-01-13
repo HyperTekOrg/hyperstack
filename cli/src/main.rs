@@ -54,7 +54,7 @@ enum Commands {
         /// Name of specific spec to deploy (deploys all if not specified)
         spec_name: Option<String>,
 
-        /// Deploy to a specific branch (creates {spec-name}-{branch}.stack.hypertek.app)
+        /// Deploy to a specific branch (creates {spec-name}-{branch}.stack.usehyperstack.com)
         #[arg(short, long)]
         branch: Option<String>,
 

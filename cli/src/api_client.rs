@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 /// Production API URL (used by default in release builds)
 #[cfg(not(feature = "local"))]
-const DEFAULT_API_URL: &str = "https://api.hypertek.app";
+const DEFAULT_API_URL: &str = "https://api.usehyperstack.com";
 
 /// Local development API URL (enabled with --features local)
 #[cfg(feature = "local")]
@@ -211,8 +211,8 @@ pub struct CreateBuildRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ast_payload: Option<serde_json::Value>,
     /// Branch name for branch deployments (e.g., "preview-abc123")
-    /// Branch deployments get URL: {spec-name}-{branch}.stack.hypertek.app
-    /// Production deployments (no branch) get: {spec-name}.stack.hypertek.app
+    /// Branch deployments get URL: {spec-name}-{branch}.stack.usehyperstack.com
+    /// Production deployments (no branch) get: {spec-name}.stack.usehyperstack.com
     #[serde(skip_serializing_if = "Option::is_none")]
     pub branch: Option<String>,
 }
