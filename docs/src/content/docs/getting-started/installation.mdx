@@ -44,6 +44,7 @@ npm install hyperstack-react
 ```
 
 **Peer dependencies:**
+
 - `react` ^18.0.0
 - `zustand` ^4.0.0
 
@@ -161,8 +162,8 @@ npm install hyperstack-react
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
+| Variable             | Description           | Default        |
+| -------------------- | --------------------- | -------------- |
 | `HYPERSTACK_API_URL` | Override API endpoint | Production API |
 
 ---
@@ -179,11 +180,15 @@ hs auth status
 ### TypeScript SDK
 
 ```tsx
-import { HyperstackProvider, useHyperstack, defineStack } from 'hyperstack-react';
+import {
+  HyperstackProvider,
+  useHyperstack,
+  defineStack,
+} from "hyperstack-react";
 
 // If this compiles, you're ready to go
 const TestStack = defineStack({
-  name: 'test',
+  name: "test",
   views: {},
 });
 ```
@@ -200,9 +205,9 @@ const TestStack = defineStack({
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| `hs: command not found` | Ensure `~/.cargo/bin` is in your PATH |
-| `Cannot find module 'hyperstack-react'` | Run `npm install hyperstack-react` |
-| `Peer dependency warnings` | Install `react` and `zustand` explicitly |
-| `Authentication failed` | Run `hs auth login` to refresh credentials |
+| Issue                                   | Solution                                   |
+| --------------------------------------- | ------------------------------------------ |
+| `hs: command not found`                 | Ensure `~/.cargo/bin` is in your PATH      |
+| `Cannot find module 'hyperstack-react'` | Run `npm install hyperstack-react`         |
+| `Peer dependency warnings`              | Install `react` and `zustand` explicitly   |
+| `Authentication failed`                 | Run `hs auth login` to refresh credentials |

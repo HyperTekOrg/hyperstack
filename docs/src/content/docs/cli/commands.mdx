@@ -10,24 +10,24 @@ Complete reference for the Hyperstack CLI (`hs`).
 
 ## Global Options
 
-| Option | Description |
-|--------|-------------|
+| Option                | Description                                          |
+| --------------------- | ---------------------------------------------------- |
 | `--config, -c <path>` | Path to hyperstack.toml (default: `hyperstack.toml`) |
-| `--json, -j` | Output as JSON |
-| `--help, -h` | Show help |
-| `--version, -V` | Show version |
+| `--json, -j`          | Output as JSON                                       |
+| `--help, -h`          | Show help                                            |
+| `--version, -V`       | Show version                                         |
 
 ---
 
 ## Quick Reference
 
-| Command | Description |
-|---------|-------------|
-| `hs init` | Initialize project |
-| `hs up [spec]` | Deploy spec (push + build + deploy) |
-| `hs status` | Show project overview |
-| `hs logs [build-id]` | View build logs |
-| `hs auth login` | Authenticate |
+| Command              | Description                         |
+| -------------------- | ----------------------------------- |
+| `hs init`            | Initialize project                  |
+| `hs up [spec]`       | Deploy spec (push + build + deploy) |
+| `hs status`          | Show project overview               |
+| `hs logs [build-id]` | View build logs                     |
+| `hs auth login`      | Authenticate                        |
 
 ---
 
@@ -132,10 +132,10 @@ hs up my-spec --preview
 
 **Options:**
 
-| Flag | Description |
-|------|-------------|
-| `--branch, -b <name>` | Deploy to named branch |
-| `--preview` | Create preview deployment |
+| Flag                  | Description               |
+| --------------------- | ------------------------- |
+| `--branch, -b <name>` | Deploy to named branch    |
+| `--preview`           | Create preview deployment |
 
 ### hs status
 
@@ -235,11 +235,11 @@ hs build create my-spec --no-wait
 
 **Options:**
 
-| Flag | Description |
-|------|-------------|
+| Flag                | Description                            |
+| ------------------- | -------------------------------------- |
 | `--version, -v <n>` | Use specific version (default: latest) |
-| `--ast-file <path>` | Use local AST file directly |
-| `--no-wait, -n` | Don't wait for completion |
+| `--ast-file <path>` | Use local AST file directly            |
+| `--no-wait, -n`     | Don't wait for completion              |
 
 ### hs build list
 
@@ -283,6 +283,7 @@ hs deploy info 123 --json
 ```
 
 **Output includes:**
+
 - WebSocket URL: `wss://my-spec.stack.hypertek.app`
 - Status, uptime, resource usage
 
@@ -323,13 +324,13 @@ hs deploy rollback my-spec --branch staging
 
 **Options:**
 
-| Flag | Description |
-|------|-------------|
-| `--to <version>` | Target version |
-| `--build <id>` | Target build ID |
-| `--branch <name>` | Branch to rollback |
-| `--rebuild, -r` | Force full rebuild |
-| `--no-wait, -n` | Don't watch progress |
+| Flag              | Description          |
+| ----------------- | -------------------- |
+| `--to <version>`  | Target version       |
+| `--build <id>`    | Target build ID      |
+| `--branch <name>` | Branch to rollback   |
+| `--rebuild, -r`   | Force full rebuild   |
+| `--no-wait, -n`   | Don't watch progress |
 
 ---
 
@@ -398,17 +399,17 @@ pending -> uploading -> queued -> building -> pushing -> deploying -> completed
 
 ### Build Phases
 
-| Phase | Description |
-|-------|-------------|
-| SUBMITTED | Queued for processing |
-| PROVISIONING | Starting build environment |
-| DOWNLOAD_SOURCE | Preparing source |
-| INSTALL | Installing dependencies |
-| PRE_BUILD | Preparing build |
-| BUILD | Compiling |
-| POST_BUILD | Finalizing |
-| UPLOAD_ARTIFACTS | Publishing image |
-| FINALIZING | Deploying to runtime |
+| Phase            | Description                |
+| ---------------- | -------------------------- |
+| SUBMITTED        | Queued for processing      |
+| PROVISIONING     | Starting build environment |
+| DOWNLOAD_SOURCE  | Preparing source           |
+| INSTALL          | Installing dependencies    |
+| PRE_BUILD        | Preparing build            |
+| BUILD            | Compiling                  |
+| POST_BUILD       | Finalizing                 |
+| UPLOAD_ARTIFACTS | Publishing image           |
+| FINALIZING       | Deploying to runtime       |
 
 ---
 
@@ -471,21 +472,21 @@ hs deploy rollback my-spec --to 2
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
+| Variable             | Description           |
+| -------------------- | --------------------- |
 | `HYPERSTACK_API_URL` | Override API endpoint |
 
 ---
 
 ## Error Reference
 
-| Error | Solution |
-|-------|----------|
-| `Not authenticated` | Run `hs auth login` |
-| `Spec not found` | Check `hs spec list` for available specs |
-| `AST file not found` | Run `cargo build` to generate AST |
-| `Build failed` | Check `hs build logs <id>` for details |
-| `Config invalid` | Run `hs config validate` |
+| Error                | Solution                                 |
+| -------------------- | ---------------------------------------- |
+| `Not authenticated`  | Run `hs auth login`                      |
+| `Spec not found`     | Check `hs spec list` for available specs |
+| `AST file not found` | Run `cargo build` to generate AST        |
+| `Build failed`       | Check `hs build logs <id>` for details   |
+| `Config invalid`     | Run `hs config validate`                 |
 
 ---
 
@@ -493,11 +494,11 @@ hs deploy rollback my-spec --to 2
 
 After successful deployment:
 
-| Type | Pattern |
-|------|---------|
-| Production | `wss://{spec-name}.stack.hypertek.app` |
-| Branch | `wss://{spec-name}-{branch}.stack.hypertek.app` |
-| Local | `ws://localhost:8080` |
+| Type       | Pattern                                         |
+| ---------- | ----------------------------------------------- |
+| Production | `wss://{spec-name}.stack.hypertek.app`          |
+| Branch     | `wss://{spec-name}-{branch}.stack.hypertek.app` |
+| Local      | `ws://localhost:8080`                           |
 
 Get the URL with:
 

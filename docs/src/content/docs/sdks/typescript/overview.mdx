@@ -17,6 +17,7 @@ npm install hyperstack-react zustand
 ### Peer Dependencies
 
 The SDK requires the following peer dependencies:
+
 - **React** (v19.0.0+)
 - **Zustand** (v4.0.0+) - Used for internal state management
 
@@ -27,14 +28,11 @@ The SDK requires the following peer dependencies:
 Wrap your application with the `HyperstackProvider` to initialize the runtime and provide connection context to your components.
 
 ```tsx
-import { HyperstackProvider } from 'hyperstack-react';
+import { HyperstackProvider } from "hyperstack-react";
 
 function App() {
   return (
-    <HyperstackProvider
-      network="devnet"
-      autoConnect={true}
-    >
+    <HyperstackProvider network="devnet" autoConnect={true}>
       <Dashboard />
     </HyperstackProvider>
   );
@@ -43,13 +41,13 @@ function App() {
 
 ### Provider Props
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `network` | `'mainnet' \| 'devnet' \| 'localnet' \| NetworkConfig` | `undefined` | The Solana network to connect to. |
-| `websocketUrl` | `string` | `undefined` | Overrides the network-default WebSocket URL. |
-| `apiKey` | `string` | `undefined` | Optional API key for authenticated access. |
-| `autoConnect` | `boolean` | `true` | Automatically connect to the WebSocket on mount. |
-| `wallet` | `WalletAdapter` | `undefined` | An optional wallet adapter for signing transactions. |
+| Prop           | Type                                                   | Default     | Description                                          |
+| -------------- | ------------------------------------------------------ | ----------- | ---------------------------------------------------- |
+| `network`      | `'mainnet' \| 'devnet' \| 'localnet' \| NetworkConfig` | `undefined` | The Solana network to connect to.                    |
+| `websocketUrl` | `string`                                               | `undefined` | Overrides the network-default WebSocket URL.         |
+| `apiKey`       | `string`                                               | `undefined` | Optional API key for authenticated access.           |
+| `autoConnect`  | `boolean`                                              | `true`      | Automatically connect to the WebSocket on mount.     |
+| `wallet`       | `WalletAdapter`                                        | `undefined` | An optional wallet adapter for signing transactions. |
 
 ---
 
@@ -58,30 +56,30 @@ function App() {
 A **Stack** defines the data structure and operations of your application. Use `defineStack` to create a typed definition that the SDK uses to generate hooks and helper methods.
 
 ```typescript
-import { defineStack, createStateView, createListView } from 'hyperstack-react';
+import { defineStack, createStateView, createListView } from "hyperstack-react";
 
 export const TokenStack = defineStack({
-  name: 'token-tracker',
-  
+  name: "token-tracker",
+
   // Real-time data views
   views: {
     tokens: {
-      list: createListView<Token>('Token/list'),
-      state: createStateView<Token>('Token/state'),
+      list: createListView<Token>("Token/list"),
+      state: createStateView<Token>("Token/state"),
     },
   },
-  
+
   // Transaction builders
   transactions: {
     transfer: {
       build: (params: { to: string; amount: number }) => ({
-        instruction: 'transfer',
+        instruction: "transfer",
         params,
       }),
-      refresh: [{ view: 'tokens/list' }],
+      refresh: [{ view: "tokens/list" }],
     },
   },
-  
+
   // Utility helpers
   helpers: {
     formatPrice: (price: number) => `$${price.toFixed(2)}`,
@@ -92,12 +90,16 @@ export const TokenStack = defineStack({
 ### View Factories
 
 #### `createStateView<T>(viewPath, options?)`
+
 Creates a view definition for a single entity state.
+
 - **viewPath**: The server-side path for the view (e.g., `'Entity/state'`).
 - **options**: `{ transform?: (data: any) => T }`
 
 #### `createListView<T>(viewPath, options?)`
+
 Creates a view definition for a collection of entities.
+
 - **viewPath**: The server-side path for the view (e.g., `'Entity/list'`).
 - **options**: `{ transform?: (data: any) => T }`
 
@@ -108,28 +110,28 @@ Creates a view definition for a collection of entities.
 The `useHyperstack` hook provides access to the typed interface of your stack.
 
 ```tsx
-import { useHyperstack } from 'hyperstack-react';
-import { TokenStack } from './stacks';
+import { useHyperstack } from "hyperstack-react";
+import { TokenStack } from "./stacks";
 
 function TokenList() {
   const stack = useHyperstack(TokenStack);
-  
+
   // Using a list view
   const { data: tokens, isLoading } = stack.views.tokens.list.use({
     limit: 10,
-    where: { volume: { gte: 1000 } }
+    where: { volume: { gte: 1000 } },
   });
 
   // Using a state view
-  const { data: globalStats } = stack.views.tokens.state.use({ 
-    key: 'global' 
+  const { data: globalStats } = stack.views.tokens.state.use({
+    key: "global",
   });
 
   if (isLoading) return <p>Loading...</p>;
 
   return (
     <div>
-      {tokens?.map(t => (
+      {tokens?.map((t) => (
         <div key={t.id}>{stack.helpers.formatPrice(t.price)}</div>
       ))}
     </div>
@@ -140,31 +142,35 @@ function TokenList() {
 ### View Hook Parameters
 
 The `.use()` method for views accepts:
+
 1. **Params** (`ListParams` or `key` object)
 2. **Options** (`ViewHookOptions`)
 
 #### ListParams
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `key` | `string` | Filter by partition key. |
-| `where` | `Record<string, any>` | Field-level filtering (supports `eq`, `gt`, `gte`, `lt`, `lte`). |
-| `limit` | `number` | Maximum number of records to return. |
-| `filters` | `Record<string, string>` | Custom server-side filters. |
+
+| Parameter | Type                     | Description                                                      |
+| --------- | ------------------------ | ---------------------------------------------------------------- |
+| `key`     | `string`                 | Filter by partition key.                                         |
+| `where`   | `Record<string, any>`    | Field-level filtering (supports `eq`, `gt`, `gte`, `lt`, `lte`). |
+| `limit`   | `number`                 | Maximum number of records to return.                             |
+| `filters` | `Record<string, string>` | Custom server-side filters.                                      |
 
 #### ViewHookOptions
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enabled` | `boolean` | `true` | Set to `false` to pause subscription. |
-| `initialData` | `any` | `undefined` | Data to return before the first server response. |
-| `refreshOnReconnect` | `boolean` | `false` | Force a refresh when the WebSocket reconnects. |
+
+| Option               | Type      | Default     | Description                                      |
+| -------------------- | --------- | ----------- | ------------------------------------------------ |
+| `enabled`            | `boolean` | `true`      | Set to `false` to pause subscription.            |
+| `initialData`        | `any`     | `undefined` | Data to return before the first server response. |
+| `refreshOnReconnect` | `boolean` | `false`     | Force a refresh when the WebSocket reconnects.   |
 
 ### View Hook Return Value (`ViewHookResult`)
-| Property | Type | Description |
-|----------|------|-------------|
-| `data` | `T \| T[] \| undefined` | The current state of the view data. |
-| `isLoading` | `boolean` | `true` until the first data frame is received. |
-| `error` | `Error \| undefined` | Error object if the subscription fails. |
-| `refresh` | `() => void` | Manually trigger a refresh of the view. |
+
+| Property    | Type                    | Description                                    |
+| ----------- | ----------------------- | ---------------------------------------------- |
+| `data`      | `T \| T[] \| undefined` | The current state of the view data.            |
+| `isLoading` | `boolean`               | `true` until the first data frame is received. |
+| `error`     | `Error \| undefined`    | Error object if the subscription fails.        |
+| `refresh`   | `() => void`            | Manually trigger a refresh of the view.        |
 
 ---
 
@@ -178,13 +184,13 @@ function TransferButton() {
   const { submit, status, signature, error } = stack.tx.useMutation();
 
   const handleTransfer = async () => {
-    const tx = stack.tx.transfer({ to: '...', amount: 100 });
+    const tx = stack.tx.transfer({ to: "...", amount: 100 });
     await submit(tx);
   };
 
   return (
-    <button onClick={handleTransfer} disabled={status === 'pending'}>
-      {status === 'pending' ? 'Sending...' : 'Transfer'}
+    <button onClick={handleTransfer} disabled={status === "pending"}>
+      {status === "pending" ? "Sending..." : "Transfer"}
     </button>
   );
 }
@@ -192,13 +198,13 @@ function TransferButton() {
 
 ### `useMutation` Return Value
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `submit` | `(instruction: any) => Promise<string>` | Submits the transaction to the network. |
-| `status` | `'idle' \| 'pending' \| 'success' \| 'error'` | Current status of the mutation. |
-| `signature` | `string \| undefined` | The transaction signature (available on success). |
-| `error` | `string \| undefined` | Error message if the transaction fails. |
-| `reset` | `() => void` | Resets the mutation state to `idle`. |
+| Property    | Type                                          | Description                                       |
+| ----------- | --------------------------------------------- | ------------------------------------------------- |
+| `submit`    | `(instruction: any) => Promise<string>`       | Submits the transaction to the network.           |
+| `status`    | `'idle' \| 'pending' \| 'success' \| 'error'` | Current status of the mutation.                   |
+| `signature` | `string \| undefined`                         | The transaction signature (available on success). |
+| `error`     | `string \| undefined`                         | Error message if the transaction fails.           |
+| `reset`     | `() => void`                                  | Resets the mutation state to `idle`.              |
 
 ---
 
@@ -207,20 +213,17 @@ function TransferButton() {
 Monitor the health of the WebSocket connection using the `useConnectionState` hook.
 
 ```tsx
-import { useConnectionState } from 'hyperstack-react';
+import { useConnectionState } from "hyperstack-react";
 
 function ConnectionStatus() {
   const state = useConnectionState();
-  
-  return (
-    <div className={`status-${state}`}>
-      Connection: {state}
-    </div>
-  );
+
+  return <div className={`status-${state}`}>Connection: {state}</div>;
 }
 ```
 
 ### Connection States
+
 - `disconnected`: Initial state, not connected.
 - `connecting`: Attempting to establish a connection.
 - `connected`: Active and healthy connection.
@@ -234,13 +237,13 @@ function ConnectionStatus() {
 The SDK exports several utility types to help you build typed components.
 
 ```typescript
-import type { 
-  StackDefinition, 
-  ViewDefinition, 
+import type {
+  StackDefinition,
+  ViewDefinition,
   TransactionDefinition,
   ViewHookResult,
-  ListParams
-} from 'hyperstack-react';
+  ListParams,
+} from "hyperstack-react";
 ```
 
 ---
@@ -249,12 +252,12 @@ import type {
 
 ### Exports
 
-| Export | Type | Description |
-|--------|------|-------------|
-| `HyperstackProvider` | Component | Context provider for the SDK. |
-| `useHyperstack` | Hook | Accesses stack views, transactions, and helpers. |
-| `useConnectionState` | Hook | Monitors WebSocket connection health. |
-| `defineStack` | Function | Creates a stack definition. |
-| `createStateView` | Function | View factory for single entities. |
-| `createListView` | Function | View factory for entity collections. |
-| `HyperStreamError` | Class | Custom error class for SDK errors. |
+| Export               | Type      | Description                                      |
+| -------------------- | --------- | ------------------------------------------------ |
+| `HyperstackProvider` | Component | Context provider for the SDK.                    |
+| `useHyperstack`      | Hook      | Accesses stack views, transactions, and helpers. |
+| `useConnectionState` | Hook      | Monitors WebSocket connection health.            |
+| `defineStack`        | Function  | Creates a stack definition.                      |
+| `createStateView`    | Function  | View factory for single entities.                |
+| `createListView`     | Function  | View factory for entity collections.             |
+| `HyperStreamError`   | Class     | Custom error class for SDK errors.               |

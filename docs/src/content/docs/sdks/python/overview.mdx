@@ -5,10 +5,11 @@ sidebar:
   order: 3
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside } from "@astrojs/starlight/components";
 
 <Aside type="caution" title="Work in Progress">
-The Python SDK is under active development and is currently in alpha. Features and APIs are subject to change before the stable 1.0 release.
+  The Python SDK is under active development and is currently in alpha. Features
+  and APIs are subject to change before the stable 1.0 release.
 </Aside>
 
 The HyperStack Python SDK provides an `asyncio`-based client for streaming real-time Solana program data into your Python applications. It's designed for data science, backend services, and automation scripts that require live state updates.
@@ -29,6 +30,7 @@ pip install -e .
 ```
 
 **Requirements:**
+
 - Python 3.9+
 - `websockets` library (installed automatically)
 
@@ -45,9 +47,9 @@ async def main():
     async with HyperStackClient("wss://your-hyperstack-server.com") as client:
         # Subscribe to a view
         store = client.subscribe("SettlementGame/kv")
-        
+
         print("Subscribed, waiting for updates...")
-        
+
         # Iterating over the store yields updates as they arrive
         async for update in store:
             print(f"Key: {update.key}, Data: {update.data}")
@@ -94,12 +96,12 @@ When you subscribe to a view, the client returns a `Store` object. The `Store` m
 
 HyperStack uses suffixes in the view name to determine how data is managed:
 
-| Mode | Suffix | Description |
-| :--- | :--- | :--- |
-| **KV** | `/kv` | Standard Key-Value storage. (Default if no suffix) |
-| **State** | `/state` | Single-ton state projection. |
-| **List** | `/list` | Ordered list of items. |
-| **Append** | `/append` | Write-only stream of events. |
+| Mode       | Suffix    | Description                                        |
+| :--------- | :-------- | :------------------------------------------------- |
+| **KV**     | `/kv`     | Standard Key-Value storage. (Default if no suffix) |
+| **State**  | `/state`  | Single-ton state projection.                       |
+| **List**   | `/list`   | Ordered list of items.                             |
+| **Append** | `/append` | Write-only stream of events.                       |
 
 ```python
 # Example: Subscribing to a list view

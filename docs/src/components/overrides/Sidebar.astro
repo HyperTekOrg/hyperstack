@@ -3,8 +3,8 @@
  * Custom Sidebar with glassmorphism design
  * Wraps the default Starlight sidebar with custom styling
  */
-import type { Props } from '@astrojs/starlight/props';
-import Default from '@astrojs/starlight/components/Sidebar.astro';
+import type { Props } from "@astrojs/starlight/props";
+import Default from "@astrojs/starlight/components/Sidebar.astro";
 ---
 
 <div class="custom-sidebar-wrapper">
@@ -138,7 +138,7 @@ import Default from '@astrojs/starlight/components/Sidebar.astro';
   }
 
   /* Light mode adjustments */
-  :root[data-theme='light'] .custom-sidebar {
+  :root[data-theme="light"] .custom-sidebar {
     background: rgba(249, 250, 251, 0.9);
     border-color: rgba(0, 0, 0, 0.06);
   }

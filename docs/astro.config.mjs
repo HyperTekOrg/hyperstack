@@ -1,57 +1,61 @@
-import { defineConfig } from 'astro/config';
-import starlight from '@astrojs/starlight';
+import { defineConfig } from "astro/config";
+import starlight from "@astrojs/starlight";
 
 export default defineConfig({
   integrations: [
     starlight({
-      title: 'Hyperstack',
+      title: "Hyperstack",
       social: [
-        { icon: 'github', label: 'GitHub', href: 'https://github.com/HyperTekOrg/hyperstack' },
+        {
+          icon: "github",
+          label: "GitHub",
+          href: "https://github.com/HyperTekOrg/hyperstack",
+        },
       ],
-      customCss: ['./src/styles/custom.css'],
+      customCss: ["./src/styles/custom.css"],
       // Component overrides for custom design
       components: {
-        Sidebar: './src/components/overrides/Sidebar.astro',
+        Sidebar: "./src/components/overrides/Sidebar.astro",
       },
       // Autogenerate sidebar from directory structure
       // Contributors only need to add frontmatter to control ordering
       sidebar: [
         {
-          label: 'Getting Started',
-          autogenerate: { directory: 'getting-started' },
+          label: "Getting Started",
+          autogenerate: { directory: "getting-started" },
         },
         {
-          label: 'Concepts',
-          autogenerate: { directory: 'concepts' },
+          label: "Concepts",
+          autogenerate: { directory: "concepts" },
         },
         {
-          label: 'Specs (Rust DSL)',
-          autogenerate: { directory: 'specs' },
+          label: "Specs (Rust DSL)",
+          autogenerate: { directory: "specs" },
         },
         {
-          label: 'SDKs',
+          label: "SDKs",
           items: [
             {
-              label: 'TypeScript',
-              autogenerate: { directory: 'sdks/typescript' },
+              label: "TypeScript",
+              autogenerate: { directory: "sdks/typescript" },
             },
             {
-              label: 'Rust',
-              autogenerate: { directory: 'sdks/rust' },
+              label: "Rust",
+              autogenerate: { directory: "sdks/rust" },
             },
             {
-              label: 'Python',
-              autogenerate: { directory: 'sdks/python' },
+              label: "Python",
+              autogenerate: { directory: "sdks/python" },
             },
           ],
         },
         {
-          label: 'CLI',
-          autogenerate: { directory: 'cli' },
+          label: "CLI",
+          autogenerate: { directory: "cli" },
         },
         {
-          label: 'Self-Hosting',
-          autogenerate: { directory: 'self-hosting' },
+          label: "Self-Hosting",
+          autogenerate: { directory: "self-hosting" },
         },
       ],
       // Enable search when content is ready

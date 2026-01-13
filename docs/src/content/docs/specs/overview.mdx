@@ -13,12 +13,12 @@ Hyperstack uses a declarative Rust DSL (Domain Specific Language) to define how 
 
 Building data pipelines for Solana typically involves manual account parsing, complex event handling, and managing state synchronization. Hyperstack replaces this imperative approach with a declarative model:
 
-| Imperative Approach (Traditional) | Declarative Approach (Hyperstack) |
-|----------------------------------|------------------------------------|
-| Write custom decoding logic for every account | Use `#[map]` to link IDL fields to your state |
-| Manually track and sum event values | Use `#[aggregate(strategy = Sum)]` |
-| Manage WebSocket connections and state diffs | Define entities and let Hyperstack stream updates |
-| Build custom backend services for data | Deploy a spec and use generated SDKs |
+| Imperative Approach (Traditional)             | Declarative Approach (Hyperstack)                 |
+| --------------------------------------------- | ------------------------------------------------- |
+| Write custom decoding logic for every account | Use `#[map]` to link IDL fields to your state     |
+| Manually track and sum event values           | Use `#[aggregate(strategy = Sum)]`                |
+| Manage WebSocket connections and state diffs  | Define entities and let Hyperstack stream updates |
+| Build custom backend services for data        | Deploy a spec and use generated SDKs              |
 
 ---
 
@@ -37,15 +37,15 @@ pub mod my_stream {
         /// The primary key (mint address)
         #[from_instruction(Create::mint, primary_key)]
         pub mint: String,
-        
+
         /// Real-time reserves mapped from account state
         #[map(BondingCurve::reserves)]
         pub reserves: u64,
-        
+
         /// Total volume aggregated from individual trade events
         #[aggregate(from = Trade, field = amount, strategy = Sum)]
         pub total_volume: u64,
-        
+
         /// Computed field derived from existing fields
         #[computed(reserves * price)]
         pub tvl: u64,
@@ -66,15 +66,15 @@ pub mod my_stream {
 
 Hyperstack provides several mapping attributes to populate your entity fields:
 
-| Attribute | Source | Description |
-|-----------|--------|-------------|
-| `#[map]` | Account State | Tracks fields within a Solana account. Updates whenever the account changes. |
-| `#[from_instruction]` | Instructions | Extracts arguments or account keys from a specific instruction. |
-| `#[aggregate]` | Events/Instructions | Computes running values (Sum, Count, etc.) from a stream of events. |
-| `#[event]` | Events | Captures specific instructions as a log of events within the entity. |
-| `#[snapshot]` | Account State | Captures the entire state of an account at a specific point in time. |
-| `#[computed]` | Local Fields | Derives a new value by performing calculations on other fields in the same entity. |
-| `#[derive_from]` | Instructions | Populates fields by deriving data from instruction context. |
+| Attribute             | Source              | Description                                                                        |
+| --------------------- | ------------------- | ---------------------------------------------------------------------------------- |
+| `#[map]`              | Account State       | Tracks fields within a Solana account. Updates whenever the account changes.       |
+| `#[from_instruction]` | Instructions        | Extracts arguments or account keys from a specific instruction.                    |
+| `#[aggregate]`        | Events/Instructions | Computes running values (Sum, Count, etc.) from a stream of events.                |
+| `#[event]`            | Events              | Captures specific instructions as a log of events within the entity.               |
+| `#[snapshot]`         | Account State       | Captures the entire state of an account at a specific point in time.               |
+| `#[computed]`         | Local Fields        | Derives a new value by performing calculations on other fields in the same entity. |
+| `#[derive_from]`      | Instructions        | Populates fields by deriving data from instruction context.                        |
 
 ---
 
@@ -82,14 +82,14 @@ Hyperstack provides several mapping attributes to populate your entity fields:
 
 When data arrives, **Strategies** determine how the field value is updated. This is particularly powerful for aggregations.
 
-| Strategy | Behavior |
-|----------|----------|
-| `LastWrite` | (Default) Overwrites the field with the latest value. |
-| `SetOnce` | Sets the value once and ignores subsequent updates (perfect for IDs). |
-| `Sum` | Adds the incoming value to the existing total. |
-| `Count` | Increments the total by 1 for every matching event. |
-| `Append` | Adds the incoming value to a list (creating an event log). |
-| `Max` / `Min` | Keeps only the highest or lowest value seen. |
+| Strategy      | Behavior                                                              |
+| ------------- | --------------------------------------------------------------------- |
+| `LastWrite`   | (Default) Overwrites the field with the latest value.                 |
+| `SetOnce`     | Sets the value once and ignores subsequent updates (perfect for IDs). |
+| `Sum`         | Adds the incoming value to the existing total.                        |
+| `Count`       | Increments the total by 1 for every matching event.                   |
+| `Append`      | Adds the incoming value to a list (creating an event log).            |
+| `Max` / `Min` | Keeps only the highest or lowest value seen.                          |
 
 ---
 

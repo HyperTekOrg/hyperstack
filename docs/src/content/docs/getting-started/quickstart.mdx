@@ -35,20 +35,20 @@ Wrap your app with `HyperstackProvider` to enable WebSocket connections:
 
 ```tsx
 // src/main.tsx
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import { HyperstackProvider } from 'hyperstack-react';
-import App from './App';
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { HyperstackProvider } from "hyperstack-react";
+import App from "./App";
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <HyperstackProvider 
+    <HyperstackProvider
       websocketUrl="wss://your-spec.stack.hypertek.app"
       autoConnect={true}
     >
       <App />
     </HyperstackProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );
 ```
 
@@ -62,7 +62,7 @@ Create a stack definition that matches your spec's entities:
 
 ```tsx
 // src/stack.ts
-import { defineStack, createListView, createStateView } from 'hyperstack-react';
+import { defineStack, createListView, createStateView } from "hyperstack-react";
 
 // Define types matching your spec entities
 interface Token {
@@ -75,20 +75,20 @@ interface Token {
 
 // Define the stack
 export const TokenStack = defineStack({
-  name: 'my-tokens',
-  
+  name: "my-tokens",
+
   views: {
     tokens: {
       // List view: all entities as an array
-      list: createListView<Token>('Token/list'),
+      list: createListView<Token>("Token/list"),
       // State view: single entity by key
-      state: createStateView<Token>('Token/state'),
+      state: createStateView<Token>("Token/state"),
     },
   },
 
   helpers: {
     formatPrice: (value: number) => `${value.toFixed(6)} SOL`,
-  }
+  },
 });
 ```
 
@@ -100,25 +100,27 @@ export const TokenStack = defineStack({
 
 ```tsx
 // src/App.tsx
-import { useHyperstack } from 'hyperstack-react';
-import { TokenStack } from './stack';
+import { useHyperstack } from "hyperstack-react";
+import { TokenStack } from "./stack";
 
 function TokenList() {
   const stack = useHyperstack(TokenStack);
-  
+
   // Subscribe to the token list - updates in real-time
   const { data: tokens, isLoading, error } = stack.views.tokens.list.use();
-  
+
   if (isLoading) return <div>Connecting...</div>;
   if (error) return <div>Error: {error.message}</div>;
-  
+
   return (
     <div>
       <h1>Live Tokens ({tokens?.length || 0})</h1>
       {tokens?.map((token) => (
         <div key={token.mint}>
-          <strong>{token.name || 'Unknown'}</strong> ({token.symbol})
-          {token.price && <span> - {stack.helpers.formatPrice(token.price)}</span>}
+          <strong>{token.name || "Unknown"}</strong> ({token.symbol})
+          {token.price && (
+            <span> - {stack.helpers.formatPrice(token.price)}</span>
+          )}
         </div>
       ))}
     </div>
@@ -127,12 +129,12 @@ function TokenList() {
 
 function TokenDetail({ mint }: { mint: string }) {
   const stack = useHyperstack(TokenStack);
-  
+
   // Subscribe to a single token by key
   const { data: token } = stack.views.tokens.state.use({ key: mint });
-  
+
   if (!token) return <div>Loading token...</div>;
-  
+
   return (
     <div>
       <h2>{token.name}</h2>
@@ -162,7 +164,7 @@ Your app now receives real-time updates whenever the on-chain data changes. No p
 
 1. **HyperstackProvider** establishes a WebSocket connection to your deployed spec
 2. **useHyperstack** gives you access to your stack's views and helpers
-3. **views.*.use()** creates a subscription and returns reactive data
+3. **views.\*.use()** creates a subscription and returns reactive data
 4. When on-chain data changes, Hyperstack pushes updates through the WebSocket
 5. Your React components re-render automatically with the new data
 
@@ -182,14 +184,14 @@ Your app now receives real-time updates whenever the on-chain data changes. No p
 
 ```tsx
 const TokenStack = defineStack({
-  name: 'tokens',
+  name: "tokens",
   views: {
     tokens: {
-      list: createListView<Token>('Token/list', {
+      list: createListView<Token>("Token/list", {
         transform: (raw) => ({
           ...raw,
           price: raw.virtual_sol_reserves / raw.virtual_token_reserves,
-        })
+        }),
       }),
     },
   },
@@ -208,7 +210,7 @@ const { data: recentTokens } = stack.views.tokens.list.use({
 ### Handle Connection State
 
 ```tsx
-import { useConnectionState } from 'hyperstack-react';
+import { useConnectionState } from "hyperstack-react";
 
 function ConnectionStatus() {
   const state = useConnectionState();
@@ -221,8 +223,8 @@ function ConnectionStatus() {
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
+| Issue                         | Solution                                                      |
+| ----------------------------- | ------------------------------------------------------------- |
 | "WebSocket connection failed" | Check your `websocketUrl` is correct and the spec is deployed |
-| Data not updating | Verify the view path matches your spec entity name |
-| TypeScript errors | Ensure your interface matches the spec's data shape |
+| Data not updating             | Verify the view path matches your spec entity name            |
+| TypeScript errors             | Ensure your interface matches the spec's data shape           |

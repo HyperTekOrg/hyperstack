@@ -30,16 +30,17 @@ Instead of building infrastructure, you **declare what data you need**:
 pub struct Token {
     #[from_instruction(Create::mint, primary_key)]
     pub mint: String,
-    
+
     #[map(BondingCurve::virtual_sol_reserves)]
     pub sol_reserves: u64,
-    
+
     #[aggregate(from = Buy, field = amount, strategy = Sum)]
     pub total_volume: u64,
 }
 ```
 
 Hyperstack then:
+
 - Subscribes to the relevant on-chain events
 - Transforms raw data into your entity shape
 - Streams updates to your app in real-time
@@ -97,6 +98,7 @@ pub mod my_stream {
 ```
 
 The stream defines:
+
 - **Entities** - The data structures you want
 - **Mappings** - How on-chain data maps to fields
 - **Aggregations** - How to compute derived values
@@ -123,29 +125,29 @@ pub struct Token {
 
 **Mappings** define how on-chain data flows into entity fields:
 
-| Mapping Type | Source | Example |
-|--------------|--------|---------|
-| `#[map]` | Account field | `#[map(BondingCurve::reserves)]` |
-| `#[from_instruction]` | Instruction arg/account | `#[from_instruction(Create::mint)]` |
-| `#[snapshot]` | Account snapshot | `#[snapshot(from = Account)]` |
-| `#[derive_from]` | Derive from instruction | `#[derive_from(from = Buy, field = user)]` |
-| `#[aggregate]` | Computed from events | `#[aggregate(from = Buy, strategy = Sum)]` |
-| `#[event]` | Captured instruction | `#[event(strategy = Append)]` |
-| `#[computed]` | Derived from fields | `#[computed(field_a + field_b)]` |
+| Mapping Type          | Source                  | Example                                    |
+| --------------------- | ----------------------- | ------------------------------------------ |
+| `#[map]`              | Account field           | `#[map(BondingCurve::reserves)]`           |
+| `#[from_instruction]` | Instruction arg/account | `#[from_instruction(Create::mint)]`        |
+| `#[snapshot]`         | Account snapshot        | `#[snapshot(from = Account)]`              |
+| `#[derive_from]`      | Derive from instruction | `#[derive_from(from = Buy, field = user)]` |
+| `#[aggregate]`        | Computed from events    | `#[aggregate(from = Buy, strategy = Sum)]` |
+| `#[event]`            | Captured instruction    | `#[event(strategy = Append)]`              |
+| `#[computed]`         | Derived from fields     | `#[computed(field_a + field_b)]`           |
 
 ### 4. Population Strategies
 
 **Strategies** control how field values are updated:
 
-| Strategy | Behavior |
-|----------|----------|
-| `SetOnce` | Set once, never overwrite |
-| `LastWrite` | Always use latest value |
-| `Append` | Collect into array |
-| `Sum` | Running total |
-| `Count` | Event counter |
-| `UniqueCount` | Count unique values |
-| `Max` / `Min` | Track extremes |
+| Strategy      | Behavior                  |
+| ------------- | ------------------------- |
+| `SetOnce`     | Set once, never overwrite |
+| `LastWrite`   | Always use latest value   |
+| `Append`      | Collect into array        |
+| `Sum`         | Running total             |
+| `Count`       | Event counter             |
+| `UniqueCount` | Count unique values       |
+| `Max` / `Min` | Track extremes            |
 
 ### 5. Stacks
 
@@ -157,13 +159,13 @@ A **stack** is the client-side interface to your spec. It provides:
 
 ```typescript
 const TokenStack = defineStack({
-  name: 'my-tokens',
+  name: "my-tokens",
   views: {
     tokens: {
-      list: createListView<Token>('Token/list'),
-      state: createStateView<Token>('Token/state'),
-    }
-  }
+      list: createListView<Token>("Token/list"),
+      state: createStateView<Token>("Token/state"),
+    },
+  },
 });
 ```
 
@@ -200,18 +202,18 @@ const TokenStack = defineStack({
 
 ## View Modes
 
-| Mode | Path | Returns | Use Case |
-|------|------|---------|----------|
-| `state` | `Entity/state` | Single entity | Get by key |
-| `list` | `Entity/list` | Array of entities | All entities |
-| `kv` | `Entity/kv` | Key-value map | Lookup by key |
+| Mode    | Path           | Returns           | Use Case      |
+| ------- | -------------- | ----------------- | ------------- |
+| `state` | `Entity/state` | Single entity     | Get by key    |
+| `list`  | `Entity/list`  | Array of entities | All entities  |
+| `kv`    | `Entity/kv`    | Key-value map     | Lookup by key |
 
 ```typescript
 // List - all tokens as array
-const { data: tokens } = stack.views.tokens.list.use()
+const { data: tokens } = stack.views.tokens.list.use();
 
 // State - single token by key
-const { data: token } = stack.views.tokens.state.use({ key: mintAddress })
+const { data: token } = stack.views.tokens.state.use({ key: mintAddress });
 ```
 
 ---
@@ -226,21 +228,21 @@ Hyperstack provides end-to-end type safety:
 
 ```typescript
 // TypeScript knows token.mint is string, token.volume is bigint
-const { data: token } = stack.views.tokens.state.use({ key })
-console.log(token.mint)    // string
-console.log(token.volume)  // bigint
+const { data: token } = stack.views.tokens.state.use({ key });
+console.log(token.mint); // string
+console.log(token.volume); // bigint
 ```
 
 ---
 
 ## Self-Hosting vs Managed
 
-| Aspect | Self-Hosted | Managed (Hyperstack Cloud) |
-|--------|-------------|---------------------------|
-| Setup | Bring your own Geyser gRPC | Zero config |
-| Scaling | You manage | We handle |
-| Cost | Infrastructure only | Subscription + bandwidth |
-| Best for | Single stream, experimentation | Production apps |
+| Aspect   | Self-Hosted                    | Managed (Hyperstack Cloud) |
+| -------- | ------------------------------ | -------------------------- |
+| Setup    | Bring your own Geyser gRPC     | Zero config                |
+| Scaling  | You manage                     | We handle                  |
+| Cost     | Infrastructure only            | Subscription + bandwidth   |
+| Best for | Single stream, experimentation | Production apps            |
 
 ---
 

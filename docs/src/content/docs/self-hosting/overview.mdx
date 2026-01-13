@@ -11,14 +11,14 @@ Self-hosting Hyperstack allows you to run the projection engine and WebSocket se
 
 While Hyperstack Cloud provides a zero-config experience, self-hosting is an excellent choice for local development, high-security environments, or single-stream use cases where you already have a Yellowstone Geyser setup.
 
-| Aspect | Self-Hosted | Hyperstack Cloud (Managed) |
-|--------|-------------|---------------------------|
-| **Setup** | Manual configuration | Zero config |
-| **Geyser gRPC** | You must provide (Yellowstone) | Included & managed |
-| **Scaling** | Manual scaling | Automatic global scaling |
-| **Cost** | Infrastructure costs | Subscription-based |
-| **Auth** | No built-in auth | Multi-tenant auth & API keys |
-| **Best for** | Single stream, Dev, Local | Production, Multi-stream |
+| Aspect          | Self-Hosted                    | Hyperstack Cloud (Managed)   |
+| --------------- | ------------------------------ | ---------------------------- |
+| **Setup**       | Manual configuration           | Zero config                  |
+| **Geyser gRPC** | You must provide (Yellowstone) | Included & managed           |
+| **Scaling**     | Manual scaling                 | Automatic global scaling     |
+| **Cost**        | Infrastructure costs           | Subscription-based           |
+| **Auth**        | No built-in auth               | Multi-tenant auth & API keys |
+| **Best for**    | Single stream, Dev, Local      | Production, Multi-stream     |
 
 ## Prerequisites
 
@@ -32,12 +32,12 @@ To self-host Hyperstack, you need the following components:
 
 It is important to understand the scope of the self-hosted version compared to the managed service:
 
--   **Single Stream Only**: The self-hosted server is designed to run a single program specification. Multi-stream orchestration and cross-program projections are features of the managed service.
--   **No Built-in Authentication**: The self-hosted server does not include an API key management system or user authentication layer. If you expose it to the public internet, you are responsible for securing the WebSocket endpoint.
--   **Operational Overhead**: You are responsible for monitoring, logging, and maintaining the uptime of both the Hyperstack server and the Yellowstone gRPC source.
+- **Single Stream Only**: The self-hosted server is designed to run a single program specification. Multi-stream orchestration and cross-program projections are features of the managed service.
+- **No Built-in Authentication**: The self-hosted server does not include an API key management system or user authentication layer. If you expose it to the public internet, you are responsible for securing the WebSocket endpoint.
+- **Operational Overhead**: You are responsible for monitoring, logging, and maintaining the uptime of both the Hyperstack server and the Yellowstone gRPC source.
 
 ## Why Self-host?
 
--   **Local Development**: Test your specs against a local validator or a devnet gRPC source without needing a cloud subscription.
--   **Data Sovereignty**: Keep all data processing within your own VPC or private infrastructure.
--   **Customization**: Deeply integrate the `hyperstack-server` into your existing Rust backend.
+- **Local Development**: Test your specs against a local validator or a devnet gRPC source without needing a cloud subscription.
+- **Data Sovereignty**: Keep all data processing within your own VPC or private infrastructure.
+- **Customization**: Deeply integrate the `hyperstack-server` into your existing Rust backend.

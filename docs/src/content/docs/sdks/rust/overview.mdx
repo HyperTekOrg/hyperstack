@@ -47,12 +47,12 @@ use futures_util::StreamExt;
 async fn main() -> anyhow::Result<()> {
     // 1. Connect to the Hyperstack server
     let hs = HyperStack::connect("wss://mainnet.hyperstack.xyz").await?;
-    
+
     // 2. Start watching an entity
     let mut stream = hs.watch::<TokenEntity>().await;
-    
+
     println!("Watching for token updates...");
-    
+
     // 3. Process real-time updates
     while let Some(update) = stream.next().await {
         match update {
@@ -65,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
             _ => {}
         }
     }
-    
+
     Ok(())
 }
 ```
@@ -77,6 +77,7 @@ async fn main() -> anyhow::Result<()> {
 ### Connecting
 
 #### `HyperStack::connect(url)`
+
 Simple connection with default settings.
 
 ```rust
@@ -84,6 +85,7 @@ let hs = HyperStack::connect("wss://api.hyperstack.xyz").await?;
 ```
 
 #### `HyperStack::builder()`
+
 Configure the client with custom reconnection logic and intervals.
 
 ```rust
@@ -110,6 +112,7 @@ let hs = HyperStack::builder()
 The SDK provides several ways to interact with entity data, depending on your use case.
 
 ### `get::<E>(key)`
+
 Fetch a single entity by its primary key. If the client is not yet subscribed to the entity's state view, it will automatically subscribe.
 
 ```rust
@@ -119,6 +122,7 @@ if let Some(token) = hs.get::<TokenEntity>("mint_address").await {
 ```
 
 ### `list::<E>()`
+
 Fetch all entities of type `E` currently tracked by the server.
 
 ```rust
@@ -127,6 +131,7 @@ println!("Total tokens: {}", all_tokens.len());
 ```
 
 ### `watch::<E>()`
+
 Subscribe to a stream of all updates for entity type `E`.
 
 ```rust
@@ -137,6 +142,7 @@ while let Some(update) = stream.next().await {
 ```
 
 ### `watch_key::<E>(key)`
+
 Subscribe to updates for a specific entity instance by its key.
 
 ```rust
@@ -153,10 +159,10 @@ Type safety is achieved through the `Entity` trait. While you can implement this
 pub trait Entity: Sized + Send + Sync + 'static {
     /// The data struct for this entity
     type Data: Serialize + DeserializeOwned + Clone + Send + Sync + 'static;
-    
+
     /// Unique name of the entity
     const NAME: &'static str;
-    
+
     /// Server paths for different view modes
     fn state_view() -> &'static str;
     fn list_view() -> &'static str;
@@ -169,6 +175,7 @@ pub trait Entity: Sized + Send + Sync + 'static {
 ## Data Types
 
 ### `Update<T>`
+
 The `Update` enum represents changes to an entity:
 
 ```rust
@@ -183,6 +190,7 @@ pub enum Update<T> {
 ```
 
 ### `ConnectionState`
+
 Monitor the health of your connection:
 
 ```rust
@@ -203,6 +211,7 @@ match state {
 Most users will interact with the Rust SDK using a generated crate. This ensures that all entities and their fields are fully typed.
 
 ### 1. Generate the SDK
+
 Use the Hyperstack CLI to generate a Rust crate from your spec:
 
 ```bash
@@ -210,6 +219,7 @@ hs sdk create rust my-stream-name --output ./my-sdk
 ```
 
 ### 2. Include in Cargo.toml
+
 Add the generated crate to your dependencies:
 
 ```toml
@@ -219,6 +229,7 @@ my-stream-sdk = { path = "./my-sdk" }
 ```
 
 ### 3. Usage
+
 Import the generated entities and use them with the `HyperStack` client:
 
 ```rust

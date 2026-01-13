@@ -9,6 +9,7 @@ In this tutorial, you'll build an end-to-end real-time data pipeline in 15 minut
 ## What You'll Build
 
 A full-stack streaming application consisting of:
+
 1. **A Rust Spec**: Defines how to transform on-chain Solana events into a "Counter" entity.
 2. **A Cloud Deployment**: A managed Hyperstack instance that processes the stream.
 3. **A React Frontend**: A live dashboard that updates instantly as on-chain events occur.
@@ -20,13 +21,16 @@ A full-stack streaming application consisting of:
 The "Spec" is the heart of your stack. It tells Hyperstack which on-chain data to watch and how to project it into a useful state.
 
 ### 1. Create a new Rust project
+
 ```bash
 cargo new counter-spec --lib
 cd counter-spec
 ```
 
 ### 2. Add dependencies
+
 Add `hyperstack` to your `Cargo.toml`:
+
 ```toml
 [dependencies]
 hyperstack = "0.1"
@@ -34,6 +38,7 @@ serde = { version = "1.0", features = ["derive"] }
 ```
 
 ### 3. Write your spec
+
 Open `src/lib.rs` and define your projection. For this tutorial, we'll assume a simple Solana program with a `CounterAccount` and an `Increment` instruction.
 
 ```rust
@@ -60,6 +65,7 @@ pub mod counter_stack {
 ```
 
 ### 4. Build to generate AST
+
 Hyperstack uses **AST serialization**. When you compile your code, it automatically generates a `.hyperstack/Counter.ast.json` file.
 
 ```bash
@@ -77,23 +83,29 @@ Verify that the file `.hyperstack/Counter.ast.json` exists in your project root.
 Now let's push your spec to the cloud. Hyperstack manages the infrastructure, so you don't need to worry about scaling or WebSocket servers.
 
 ### 1. Login to the CLI
+
 ```bash
 hs auth login
 ```
 
 ### 2. Initialize your project
+
 This creates a `hyperstack.toml` file that links your local AST to the cloud.
+
 ```bash
 hs config init
 ```
 
 ### 3. Push and Deploy
+
 The `up` command is a shortcut that pushes your AST, builds the container, and deploys it to a global cluster.
+
 ```bash
 hs up counter-stack
 ```
 
 **Expected Output:**
+
 ```text
 ✔ Spec pushed (v1)
 ✔ Build created (id: bld_123...)
@@ -112,6 +124,7 @@ Copy the **WebSocket URL** from the output. You'll need it for the React app.
 Finally, let's build the frontend. We'll use the Hyperstack React SDK to subscribe to live updates.
 
 ### 1. Set up your React app
+
 ```bash
 npx create-react-app my-counter-app --template typescript
 cd my-counter-app
@@ -119,26 +132,28 @@ npm install hyperstack-react zustand
 ```
 
 ### 2. Configure the Provider
+
 Wrap your app in `HyperstackProvider` using the URL you got from the previous step.
 
 ```tsx
 // src/index.tsx
-import { HyperstackProvider } from 'hyperstack-react';
+import { HyperstackProvider } from "hyperstack-react";
 
-const root = ReactDOM.createRoot(document.getElementById('root')!);
+const root = ReactDOM.createRoot(document.getElementById("root")!);
 root.render(
   <HyperstackProvider websocketUrl="wss://counter-stack.stack.hypertek.app">
     <App />
-  </HyperstackProvider>
+  </HyperstackProvider>,
 );
 ```
 
 ### 3. Define the Stack
+
 Tell the React SDK about your "Counter" entity.
 
 ```tsx
 // src/stack.ts
-import { defineStack, createListView } from 'hyperstack-react';
+import { defineStack, createListView } from "hyperstack-react";
 
 export interface Counter {
   owner: string;
@@ -147,22 +162,23 @@ export interface Counter {
 }
 
 export const CounterStack = defineStack({
-  name: 'counter-stack',
+  name: "counter-stack",
   views: {
     counters: {
-      list: createListView<Counter>('Counter/list'),
+      list: createListView<Counter>("Counter/list"),
     },
   },
 });
 ```
 
 ### 4. Build the Component
+
 Create a component that displays the live data.
 
 ```tsx
 // src/App.tsx
-import { useHyperstack } from 'hyperstack-react';
-import { CounterStack } from './stack';
+import { useHyperstack } from "hyperstack-react";
+import { CounterStack } from "./stack";
 
 export default function App() {
   const stack = useHyperstack(CounterStack);
@@ -174,10 +190,17 @@ export default function App() {
     <div>
       <h1>Live Counters</h1>
       {counters?.map((c) => (
-        <div key={c.owner} style={{ padding: '1rem', border: '1px solid #ccc' }}>
+        <div
+          key={c.owner}
+          style={{ padding: "1rem", border: "1px solid #ccc" }}
+        >
           <h3>Owner: {c.owner}</h3>
-          <p>Count: <strong>{c.total_count}</strong></p>
-          <small>Last updated: {new Date(c.last_updated * 1000).toLocaleString()}</small>
+          <p>
+            Count: <strong>{c.total_count}</strong>
+          </p>
+          <small>
+            Last updated: {new Date(c.last_updated * 1000).toLocaleString()}
+          </small>
         </div>
       ))}
     </div>
@@ -190,17 +213,21 @@ export default function App() {
 ## Troubleshooting
 
 ### "AST file not found"
+
 Ensure you ran `cargo build` in your Rust project. The `#[hyperstack]` macro generates the AST file during compilation.
 
 ### WebSocket connection fails
+
 1. Check that the URL matches the output of `hs up`.
 2. Ensure your spec is successfully deployed by running `hs deploy list`.
 
 ### Data is not appearing
+
 1. Verify that your Solana program is actually emitting the events or updating the accounts defined in your spec.
 2. Check the browser console for any subscription errors.
 
 ## Next Steps
+
 - Learn more about [Spec Macros](/specs/macros) to build complex pipelines.
 - Explore [View Strategies](/specs/strategies) for different data access patterns.
 - Check the [CLI Reference](/cli/commands) for advanced deployment options.

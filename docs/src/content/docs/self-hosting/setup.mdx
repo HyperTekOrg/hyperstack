@@ -30,6 +30,7 @@ anyhow = "1.0"
 In your `main.rs`, use the `Server::builder()` to configure your instance.
 
 ### Geyser Connection
+
 The most critical part is connecting to your data source.
 
 ```rust
@@ -42,6 +43,7 @@ let yellowstone_config = YellowstoneConfig {
 ```
 
 ### Server Specification
+
 You need a `Spec` which contains the compiled bytecode of your projections and the parser setup.
 
 ```rust
@@ -87,10 +89,10 @@ Instead of using a managed environment URL, point the SDK to your local or self-
 
 ```typescript
 // TypeScript SDK example
-import { HyperStack } from 'hyperstack-react';
+import { HyperStack } from "hyperstack-react";
 
 const stack = new HyperStack({
-  endpoint: 'ws://localhost:8877', // Your self-hosted address
+  endpoint: "ws://localhost:8877", // Your self-hosted address
 });
 ```
 
@@ -99,9 +101,11 @@ const stack = new HyperStack({
 If you are deploying this to production, consider the following:
 
 ### Graceful Shutdown
+
 `hyperstack-server` handles `SIGINT` and `SIGTERM` signals out of the box to ensure that the stream is closed gracefully.
 
 ### Health Monitoring
+
 Enable the HTTP health server to allow your orchestrator (like Kubernetes) to perform liveness and readiness checks.
 
 ```rust
@@ -112,6 +116,7 @@ Server::builder()
 ```
 
 ### Metrics
+
 If you use Prometheus or OpenTelemetry, enable the `otel` feature in `hyperstack-server` to export metrics about stream latency and connection counts.
 
 ```toml
@@ -120,4 +125,5 @@ hyperstack-server = { version = "0.1", features = ["otel"] }
 ```
 
 ### Resource Limits
+
 The Yellowstone gRPC stream can be bandwidth-intensive. Ensure your hosting environment has sufficient network throughput and CPU to handle the deserialization of Solana blocks in real-time.
