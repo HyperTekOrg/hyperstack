@@ -68,7 +68,7 @@ This repo uses [release-please](https://github.com/googleapis/release-please) fo
 3. Merge the Release PR - this:
    - Updates `CHANGELOG.md` in affected packages
    - Bumps versions in `Cargo.toml`, `package.json`, `pyproject.toml`
-   - Creates GitHub Releases with component-specific tags
+   - Creates a GitHub Release with a unified version tag
    - Triggers publish workflows to crates.io, npm, and PyPI
 
 ### Configuration
@@ -84,10 +84,7 @@ All packages (Rust and TypeScript) are kept at the same version number using the
 
 ### Tag format
 
-Tags follow the pattern `{component}-v{version}`:
-- Rust: `hyperstack-v0.2.0`, `hyperstack-cli-v0.2.0`, etc.
-- TypeScript: `hyperstack-react-v0.2.0`
-- Python: `hyperstack-sdk-python-v0.2.0`
+Tags follow the pattern `v{version}` (e.g., `v0.2.0`). Since all packages are version-synchronized, a single tag represents all packages in the release.
 
 ## Development
 
