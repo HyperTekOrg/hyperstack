@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.1.9...hyperstack-macros-v0.1.10) (2026-01-13)
+
+
+### Features
+
+* Add deterministic sorting ([e775f59](https://github.com/HyperTekOrg/hyperstack/commit/e775f598a95165b2dd5504be67d24e7b1dabc766))
+
 ## [0.1.9](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.1.8...hyperstack-macros-v0.1.9) (2026-01-13)
 
 
