@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.1.6](https://github.com/HyperTekOrg/hyperstack/compare/v0.1.5...v0.1.6) (2026-01-13)
+
+
+### Features
+
+* Add 'hs sdk create rust' command for Rust SDK generation ([baadf84](https://github.com/HyperTekOrg/hyperstack/commit/baadf84ce36053acd07eb3743ccadbb28a3df8cb))
+* Add per-language output directory configuration ([0f58344](https://github.com/HyperTekOrg/hyperstack/commit/0f58344e715b393c4d0bc14422a1baeec1dccad7))
+
+
+### Bug Fixes
+
+* Broken streams after naming refactor ([64437b4](https://github.com/HyperTekOrg/hyperstack/commit/64437b4d80c3b2ec68468ce11bbeaab49678aa8b))
+* Clippy errors/warnings ([e18fcd6](https://github.com/HyperTekOrg/hyperstack/commit/e18fcd66fb45ee33b0c6019ab65562d286c16eab))
+* Naming issues in generated sdk ([179da1f](https://github.com/HyperTekOrg/hyperstack/commit/179da1f2f6c8c75f99c35c0fb90b38576ffc19e2))
+* Remove -c short flag from --crate-name to avoid conflict ([83e1e59](https://github.com/HyperTekOrg/hyperstack/commit/83e1e59255ce070b231ac662e7af5dab7814c625))
+* Update typescript package name ([6267eae](https://github.com/HyperTekOrg/hyperstack/commit/6267eaeb19e00a3e1c1f76fca417f56170edafb9))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.1.5 to 0.1.6
+
 ## [0.1.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.1.4...hyperstack-cli-v0.1.5) (2026-01-09)
 
 
