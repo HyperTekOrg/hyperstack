@@ -517,7 +517,8 @@ pub fn build_instruction_hooks(
     aggregate_conditions: &HashMap<String, String>,
     sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
 ) -> Vec<InstructionHook> {
-    let mut instruction_hooks_map: HashMap<String, InstructionHook> = HashMap::new();
+    // Use BTreeMap for deterministic ordering in the final output
+    let mut instruction_hooks_map: BTreeMap<String, InstructionHook> = BTreeMap::new();
 
     // Process PDA registrations
     for registration in pda_registrations {
@@ -544,8 +545,10 @@ pub fn build_instruction_hooks(
             .push(action);
     }
 
-    // Process derive_from mappings
-    for (instruction_type, derive_attrs) in derive_from_mappings {
+    // Process derive_from mappings (sorted for deterministic output)
+    let mut sorted_derive_from: Vec<_> = derive_from_mappings.iter().collect();
+    sorted_derive_from.sort_by_key(|(k, _)| *k);
+    for (instruction_type, derive_attrs) in sorted_derive_from {
         let instr_type_state = format!("{}IxState", instruction_type.split("::").last().unwrap());
 
         for derive_attr in derive_attrs {
@@ -610,10 +613,14 @@ pub fn build_instruction_hooks(
         }
     }
 
-    // Process aggregate conditions
-    for (field_path, condition_str) in aggregate_conditions {
-        for (source_type, mappings) in sources_by_type {
-            for mapping in mappings {
+    // Process aggregate conditions (sorted for deterministic output)
+    let mut sorted_aggregate_conditions: Vec<_> = aggregate_conditions.iter().collect();
+    sorted_aggregate_conditions.sort_by_key(|(k, _)| *k);
+    let mut sorted_sources: Vec<_> = sources_by_type.iter().collect();
+    sorted_sources.sort_by_key(|(k, _)| *k);
+    for (field_path, condition_str) in sorted_aggregate_conditions {
+        for (source_type, mappings) in &sorted_sources {
+            for mapping in *mappings {
                 if &mapping.target_field_name == field_path
                     && mapping.is_instruction
                     && matches!(
