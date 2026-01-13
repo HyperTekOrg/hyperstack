@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.1.9...hyperstack-react-v0.1.10) (2026-01-13)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-react:** Synchronize hyperstack versions
+
 ## [0.1.9](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.1.8...hyperstack-react-v0.1.9) (2026-01-13)
 
 
