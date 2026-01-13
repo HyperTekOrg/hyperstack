@@ -1141,7 +1141,7 @@ dependencies = [
 
 [[package]]
 name = "hyperstack"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "hyperstack-interpreter",
  "hyperstack-macros",
@@ -1151,7 +1151,7 @@ dependencies = [
 
 [[package]]
 name = "hyperstack-cli"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1222,7 +1222,7 @@ dependencies = [
 
 [[package]]
 name = "hyperstack-server"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "bytes",
