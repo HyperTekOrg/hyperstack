@@ -7,6 +7,7 @@ use anyhow::Result;
 use futures_util::StreamExt;
 use std::net::SocketAddr;
 use std::sync::Arc;
+#[cfg(feature = "otel")]
 use std::time::Instant;
 
 use tokio::net::{TcpListener, TcpStream};
