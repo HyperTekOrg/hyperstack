@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.1.8](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.1.7...hyperstack-v0.1.8) (2026-01-13)
+
+
+### Bug Fixes
+
+* Add hyperstack-sdk to CI ([e5f3f4c](https://github.com/HyperTekOrg/hyperstack/commit/e5f3f4c7ac144000683297ec79efd946bf626b07))
+* Update naming ([4381946](https://github.com/HyperTekOrg/hyperstack/commit/4381946147e9c51c7de0cb0e63a052c9e9379600))
+* Update prelude to re-export HyperStack instead of HyperStackClient ([17e76be](https://github.com/HyperTekOrg/hyperstack/commit/17e76be013dc770005a15aa86dd8dfce6f97eedd))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.1.6 to 0.1.8
+    * hyperstack-macros bumped from 0.1.6 to 0.1.8
+    * hyperstack-server bumped from 0.1.7 to 0.1.8
+    * hyperstack-sdk bumped from 0.1.6 to 0.1.8
+
 ## [0.1.7](https://github.com/HyperTekOrg/hyperstack/compare/v0.1.6...v0.1.7) (2026-01-13)
 
 
