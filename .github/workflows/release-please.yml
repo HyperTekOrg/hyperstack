@@ -17,23 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created }}
-      paths_released: ${{ steps.release.outputs.paths_released }}
-
-      # Rust crates
-      hyperstack--release_created: ${{ steps.release.outputs['hyperstack--release_created'] }}
-      hyperstack-interpreter--release_created: ${{ steps.release.outputs['interpreter--release_created'] }}
-      hyperstack-macros--release_created: ${{ steps.release.outputs['hyperstack-macros--release_created'] }}
-      hyperstack-cli--release_created: ${{ steps.release.outputs['cli--release_created'] }}
-      hyperstack-server--release_created: ${{ steps.release.outputs['rust/hyperstack-server--release_created'] }}
-      hyperstack-sdk-rust--release_created: ${{ steps.release.outputs['rust/hyperstack-sdk--release_created'] }}
-
-      # TypeScript
-      hyperstack-react--release_created: ${{ steps.release.outputs['typescript--release_created'] }}
-
-      # Python
-      # TODO: Uncomment when Python SDK is ready
-      # hyperstack-sdk-python--release_created: ${{ steps.release.outputs['python/hyperstack-sdk--release_created'] }}
-
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -46,12 +29,7 @@ jobs:
     name: Publish Rust Crates to crates.io
     needs: release-please
     runs-on: ubuntu-latest
-    if: |
-      needs.release-please.outputs['hyperstack--release_created'] == 'true' ||
-      needs.release-please.outputs['hyperstack-interpreter--release_created'] == 'true' ||
-      needs.release-please.outputs['hyperstack-macros--release_created'] == 'true' ||
-      needs.release-please.outputs['hyperstack-cli--release_created'] == 'true' ||
-      needs.release-please.outputs['hyperstack-server--release_created'] == 'true'
+    if: needs.release-please.outputs.releases_created == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -67,43 +45,38 @@ jobs:
       - name: Login to crates.io
         run: cargo login ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
+      # Publish in dependency order with waits for crates.io index propagation
       - name: Publish hyperstack-macros
-        if: needs.release-please.outputs['hyperstack-macros--release_created'] == 'true'
         run: |
           cd hyperstack-macros
           cargo publish --allow-dirty || echo "Package may already be published"
           sleep 30
 
       - name: Publish hyperstack-interpreter
-        if: needs.release-please.outputs['hyperstack-interpreter--release_created'] == 'true'
         run: |
           cd interpreter
           cargo publish --allow-dirty || echo "Package may already be published"
           sleep 30
 
       - name: Publish hyperstack-server
-        if: needs.release-please.outputs['hyperstack-server--release_created'] == 'true'
         run: |
           cd rust/hyperstack-server
           cargo publish --allow-dirty || echo "Package may already be published"
           sleep 30
 
       - name: Publish hyperstack-sdk
-        if: needs.release-please.outputs['hyperstack-sdk-rust--release_created'] == 'true'
         run: |
           cd rust/hyperstack-sdk
           cargo publish --allow-dirty || echo "Package may already be published"
           sleep 30
 
       - name: Publish hyperstack (umbrella)
-        if: needs.release-please.outputs['hyperstack--release_created'] == 'true'
         run: |
           cd hyperstack
           cargo publish --allow-dirty || echo "Package may already be published"
           sleep 30
 
       - name: Publish hyperstack-cli
-        if: needs.release-please.outputs['hyperstack-cli--release_created'] == 'true'
         run: |
           cd cli
           cargo publish --allow-dirty || echo "Package may already be published"
@@ -112,7 +85,7 @@ jobs:
     name: Publish to npm
     needs: release-please
     runs-on: ubuntu-latest
-    if: needs.release-please.outputs['hyperstack-react--release_created'] == 'true'
+    if: needs.release-please.outputs.releases_created == 'true'
     defaults:
       run:
         working-directory: typescript
@@ -143,7 +116,7 @@ jobs:
   #   name: Publish to PyPI
   #   needs: release-please
   #   runs-on: ubuntu-latest
-  #   if: needs.release-please.outputs['hyperstack-sdk-python--release_created'] == 'true'
+  #   if: needs.release-please.outputs.releases_created == 'true'
   #   defaults:
   #     run:
   #       working-directory: python/hyperstack-sdk
