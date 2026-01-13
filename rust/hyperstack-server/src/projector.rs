@@ -4,6 +4,7 @@ use crate::websocket::frame::{Frame, Mode};
 use bytes::Bytes;
 use smallvec::SmallVec;
 use std::sync::Arc;
+#[cfg(feature = "otel")]
 use std::time::Instant;
 use tokio::sync::mpsc;
 use tracing::{debug, error};
@@ -53,6 +54,7 @@ impl Projector {
 
         while let Some(mutations) = self.mutations_rx.recv().await {
             for mutation in mutations.iter() {
+                #[cfg(feature = "otel")]
                 let start = Instant::now();
 
                 if let Err(e) = self.process_mutation(mutation).await {
