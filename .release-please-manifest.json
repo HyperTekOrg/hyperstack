@@ -1,9 +1,9 @@
 {
-  "hyperstack": "0.1.7",
-  "interpreter": "0.1.6",
-  "hyperstack-macros": "0.1.6",
-  "cli": "0.1.7",
-  "rust/hyperstack-sdk": "0.1.6",
-  "rust/hyperstack-server": "0.1.7",
-  "typescript": "0.1.6"
+  "hyperstack": "0.1.8",
+  "interpreter": "0.1.8",
+  "hyperstack-macros": "0.1.8",
+  "cli": "0.1.8",
+  "rust/hyperstack-sdk": "0.1.8",
+  "rust/hyperstack-server": "0.1.8",
+  "typescript": "0.1.8"
 }
