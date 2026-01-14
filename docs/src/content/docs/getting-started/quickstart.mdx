@@ -15,7 +15,7 @@ A React app that displays live data from a Solana program using Hyperstack's rea
 
 - Node.js 18+
 - A Hyperstack account ([sign up here](https://hyperstack.xyz))
-- An existing Hyperstack spec deployed (or use a public demo)
+- An existing Hyperstack stack deployed (or use a public demo)
 
 ---
 
@@ -43,7 +43,7 @@ import App from "./App";
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <HyperstackProvider
-      websocketUrl="wss://your-spec.stack.hypertek.app"
+      websocketUrl="wss://your-stack.stack.usehyperstack.com"
       autoConnect={true}
     >
       <App />
@@ -52,19 +52,19 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 );
 ```
 
-Replace `your-spec` with your deployed spec name, or use `ws://localhost:8080` for local development.
+Replace `your-stack` with your deployed stack name, or use `ws://localhost:8080` for local development.
 
 ---
 
 ## Step 3: Define Your Stack
 
-Create a stack definition that matches your spec's entities:
+Create a stack definition that matches your deployed stack's entities:
 
 ```tsx
 // src/stack.ts
 import { defineStack, createListView, createStateView } from "hyperstack-react";
 
-// Define types matching your spec entities
+// Define types matching your stack entities
 interface Token {
   mint: string;
   name?: string;
@@ -162,7 +162,7 @@ Your app now receives real-time updates whenever the on-chain data changes. No p
 
 ## What's Happening Under the Hood
 
-1. **HyperstackProvider** establishes a WebSocket connection to your deployed spec
+1. **HyperstackProvider** establishes a WebSocket connection to your deployed stack
 2. **useHyperstack** gives you access to your stack's views and helpers
 3. **views.\*.use()** creates a subscription and returns reactive data
 4. When on-chain data changes, Hyperstack pushes updates through the WebSocket
@@ -172,9 +172,9 @@ Your app now receives real-time updates whenever the on-chain data changes. No p
 
 ## Next Steps
 
-- [Creating Specs](/specs/overview) - Create custom data streams
+- [Creating Stacks](/stacks/overview) - Create custom data streams
 - [Stack API Reference](/concepts/stack-api) - Full API documentation
-- [CLI Commands](/cli/commands) - Deploy and manage specs
+- [CLI Commands](/cli/commands) - Deploy and manage stacks
 
 ---
 
@@ -223,8 +223,8 @@ function ConnectionStatus() {
 
 ## Troubleshooting
 
-| Issue                         | Solution                                                      |
-| ----------------------------- | ------------------------------------------------------------- |
-| "WebSocket connection failed" | Check your `websocketUrl` is correct and the spec is deployed |
-| Data not updating             | Verify the view path matches your spec entity name            |
-| TypeScript errors             | Ensure your interface matches the spec's data shape           |
+| Issue                         | Solution                                                       |
+| ----------------------------- | -------------------------------------------------------------- |
+| "WebSocket connection failed" | Check your `websocketUrl` is correct and the stack is deployed |
+| Data not updating             | Verify the view path matches your stack entity name            |
+| TypeScript errors             | Ensure your interface matches the stack's data shape           |

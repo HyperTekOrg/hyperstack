@@ -13,7 +13,7 @@ Complete reference for the Hyperstack CLI (`hs`).
 | Option                | Description                                          |
 | --------------------- | ---------------------------------------------------- |
 | `--config, -c <path>` | Path to hyperstack.toml (default: `hyperstack.toml`) |
-| `--json, -j`          | Output as JSON                                       |
+| `--json`              | Output as JSON                                       |
 | `--help, -h`          | Show help                                            |
 | `--version, -V`       | Show version                                         |
 
@@ -21,13 +21,14 @@ Complete reference for the Hyperstack CLI (`hs`).
 
 ## Quick Reference
 
-| Command              | Description                         |
-| -------------------- | ----------------------------------- |
-| `hs init`            | Initialize project                  |
-| `hs up [spec]`       | Deploy spec (push + build + deploy) |
-| `hs status`          | Show project overview               |
-| `hs logs [build-id]` | View build logs                     |
-| `hs auth login`      | Authenticate                        |
+| Command               | Description                          |
+| --------------------- | ------------------------------------ |
+| `hs init`             | Initialize project                   |
+| `hs up [stack]`       | Deploy stack (push + build + deploy) |
+| `hs status`           | Show project overview                |
+| `hs logs`             | View build logs                      |
+| `hs stack list`       | List all stacks                      |
+| `hs stack show`       | Show stack details                   |
 
 ---
 
@@ -41,15 +42,7 @@ Initialize a new Hyperstack project.
 hs init
 ```
 
-Creates `hyperstack.toml` with auto-discovered specs from `.hyperstack/*.ast.json`.
-
-### hs config init
-
-Create a fresh configuration file.
-
-```bash
-hs config init
-```
+Creates `hyperstack.toml` with auto-discovered stacks from `.hyperstack/*.ast.json`.
 
 ### hs config validate
 
@@ -111,23 +104,23 @@ hs auth whoami
 
 ## Deployment
 
-### hs up [spec-name]
+### hs up [stack-name]
 
-Deploy a spec: push, build, and deploy in one command.
+Deploy a stack: push, build, and deploy in one command.
 
 ```bash
-# Deploy all specs
+# Deploy all stacks
 hs up
 
-# Deploy specific spec
-hs up my-spec
+# Deploy specific stack
+hs up my-stack
 
 # Deploy to branch
-hs up my-spec --branch staging
-# Creates: my-spec-staging.stack.hypertek.app
+hs up my-stack --branch staging
+# Creates: my-stack-staging.stack.usehyperstack.com
 
 # Preview deployment
-hs up my-spec --preview
+hs up my-stack --preview
 ```
 
 **Options:**
@@ -139,7 +132,7 @@ hs up my-spec --preview
 
 ### hs status
 
-Show overview of all specs, builds, and deployments.
+Show overview of all stacks, builds, and deployments.
 
 ```bash
 hs status
@@ -160,166 +153,87 @@ hs logs 123
 
 ---
 
-## Spec Management
+## Stack Management
 
-### hs spec push [spec-name]
+### hs stack list
 
-Push local specs to remote.
+List all stacks with their deployment status.
 
 ```bash
-# Push all specs
-hs spec push
-
-# Push specific spec
-hs spec push my-spec
+hs stack list
+hs stack list --json
 ```
 
-### hs spec pull
+**Output:**
 
-Pull remote specs to local config.
-
-```bash
-hs spec pull
+```
+STACK              STATUS     VERSION  URL
+settlement-game    active     v3       wss://settlement-game.stack.usehyperstack.com
+token-tracker      active     v1       wss://token-tracker.stack.usehyperstack.com
 ```
 
-### hs spec list
+### hs stack push [stack-name]
 
-List all remote specs.
+Push local stacks to remote.
 
 ```bash
-hs spec list
-hs spec list --json
+# Push all stacks
+hs stack push
+
+# Push specific stack
+hs stack push my-stack
 ```
 
-### hs spec show \<spec-name\>
+### hs stack show \<stack-name\>
 
-Show detailed spec information.
-
-```bash
-hs spec show my-spec
-hs spec show my-spec --version 3
-```
-
-### hs spec versions \<spec-name\>
-
-Show version history.
+Show detailed stack information including deployment status and versions.
 
 ```bash
-hs spec versions my-spec
-hs spec versions my-spec --limit 10
-```
-
-### hs spec delete \<spec-name\>
-
-Delete a spec from remote.
-
-```bash
-hs spec delete my-spec
-hs spec delete my-spec --force  # Skip confirmation
-```
-
----
-
-## Build Commands
-
-### hs build create \<spec-name\>
-
-Create a new build from a spec.
-
-```bash
-hs build create my-spec
-hs build create my-spec --version 2
-hs build create my-spec --ast-file ./my-spec.ast.json
-hs build create my-spec --no-wait
-```
-
-**Options:**
-
-| Flag                | Description                            |
-| ------------------- | -------------------------------------- |
-| `--version, -v <n>` | Use specific version (default: latest) |
-| `--ast-file <path>` | Use local AST file directly            |
-| `--no-wait, -n`     | Don't wait for completion              |
-
-### hs build list
-
-List all builds.
-
-```bash
-hs build list
-hs build list --status completed
-hs build list --limit 10
-```
-
-### hs build status \<build-id\>
-
-Get detailed build status.
-
-```bash
-hs build status 123
-hs build status 123 --watch
-hs build status 123 --json
-```
-
-### hs build logs \<build-id\>
-
-View build logs.
-
-```bash
-hs build logs 123
-```
-
----
-
-## Deployment Commands
-
-### hs deploy info \<build-id\>
-
-Show deployment information for a build.
-
-```bash
-hs deploy info 123
-hs deploy info 123 --json
+hs stack show my-stack
+hs stack show my-stack --version 3
 ```
 
 **Output includes:**
 
-- WebSocket URL: `wss://my-spec.stack.hypertek.app`
-- Status, uptime, resource usage
+- Entity information
+- Deployment status and URL
+- Latest version details
+- Recent builds
 
-### hs deploy list
+### hs stack versions \<stack-name\>
 
-List all active deployments.
-
-```bash
-hs deploy list
-hs deploy list --limit 20
-```
-
-### hs deploy stop \<deployment-id\>
-
-Stop a deployment.
+Show version history.
 
 ```bash
-hs deploy stop 123
+hs stack versions my-stack
+hs stack versions my-stack --limit 10
 ```
 
-### hs deploy rollback \<spec-name\>
+### hs stack delete \<stack-name\>
+
+Delete a stack from remote.
+
+```bash
+hs stack delete my-stack
+hs stack delete my-stack --force  # Skip confirmation
+```
+
+### hs stack rollback \<stack-name\>
 
 Rollback to a previous deployment.
 
 ```bash
 # Rollback to previous version
-hs deploy rollback my-spec
+hs stack rollback my-stack
 
 # Rollback to specific version
-hs deploy rollback my-spec --to 2
+hs stack rollback my-stack --to 2
 
 # Rollback to specific build
-hs deploy rollback my-spec --build 123
+hs stack rollback my-stack --build 123
 
 # Rollback branch deployment
-hs deploy rollback my-spec --branch staging
+hs stack rollback my-stack --branch staging
 ```
 
 **Options:**
@@ -329,8 +243,32 @@ hs deploy rollback my-spec --branch staging
 | `--to <version>`  | Target version       |
 | `--build <id>`    | Target build ID      |
 | `--branch <name>` | Branch to rollback   |
-| `--rebuild, -r`   | Force full rebuild   |
-| `--no-wait, -n`   | Don't watch progress |
+| `--rebuild`       | Force full rebuild   |
+| `--no-wait`       | Don't watch progress |
+
+### hs stack stop \<stack-name\>
+
+Stop a deployment.
+
+```bash
+hs stack stop my-stack
+hs stack stop my-stack --branch staging
+```
+
+### hs stack logs \<stack-or-build-id\>
+
+View build logs for a stack.
+
+```bash
+# By stack name (shows latest build)
+hs stack logs my-stack
+
+# By build ID
+hs stack logs 123
+
+# Watch in real-time
+hs stack logs my-stack --watch
+```
 
 ---
 
@@ -338,20 +276,30 @@ hs deploy rollback my-spec --branch staging
 
 ### hs sdk list
 
-List specs available for SDK generation.
+List stacks available for SDK generation.
 
 ```bash
 hs sdk list
 ```
 
-### hs sdk create typescript \<spec-name\>
+### hs sdk create typescript \<stack-name\>
 
 Generate TypeScript SDK.
 
 ```bash
-hs sdk create typescript my-spec
-hs sdk create typescript my-spec --output ./src/generated/
-hs sdk create typescript my-spec --package-name @myorg/my-sdk
+hs sdk create typescript my-stack
+hs sdk create typescript my-stack --output ./src/generated/
+hs sdk create typescript my-stack --package-name @myorg/my-sdk
+```
+
+### hs sdk create rust \<stack-name\>
+
+Generate Rust SDK crate.
+
+```bash
+hs sdk create rust my-stack
+hs sdk create rust my-stack --output ./crates/
+hs sdk create rust my-stack --crate-name my-stack-sdk
 ```
 
 ---
@@ -373,18 +321,23 @@ typescript_package = "@myorg/my-sdk"
 [build]
 watch_by_default = true
 
-# Spec definitions
+# Stack definitions
 # Auto-discovered from .hyperstack/*.ast.json
 # Define explicitly for custom naming:
-[[specs]]
+[[stacks]]
 name = "my-game"
 ast = "SettlementGame"  # Entity name or path to .ast.json
 description = "Settlement game tracking"
-
-[[specs]]
-name = "token-tracker"
-ast = ".hyperstack/Token.ast.json"
 ```
+
+For most projects, you only need:
+
+```toml
+[project]
+name = "my-project"
+```
+
+The CLI auto-discovers stacks from `.hyperstack/*.ast.json` files.
 
 ---
 
@@ -393,8 +346,8 @@ ast = ".hyperstack/Token.ast.json"
 ### Status Flow
 
 ```
-pending -> uploading -> queued -> building -> pushing -> deploying -> completed
-                                                                   \-> failed
+pending → uploading → queued → building → pushing → deploying → completed
+                                                              ↘ failed
 ```
 
 ### Build Phases
@@ -431,11 +384,11 @@ hs config validate
 ### Development Cycle
 
 ```bash
-# Make changes to spec, rebuild Rust crate
+# Make changes to stack, rebuild Rust crate
 cargo build
 
 # Deploy
-hs up my-spec
+hs up my-stack
 
 # Check status
 hs status
@@ -448,24 +401,24 @@ hs logs
 
 ```bash
 # Deploy feature branch
-hs up my-spec --branch feature-x
-# URL: my-spec-feature-x.stack.hypertek.app
+hs up my-stack --branch feature-x
+# URL: my-stack-feature-x.stack.usehyperstack.com
 
 # Check deployment
-hs deploy list
+hs stack list
 
 # Clean up when done
-hs deploy stop <deployment-id>
+hs stack stop my-stack --branch feature-x
 ```
 
 ### Rollback
 
 ```bash
 # Quick rollback to previous version
-hs deploy rollback my-spec
+hs stack rollback my-stack
 
 # Rollback to specific version
-hs deploy rollback my-spec --to 2
+hs stack rollback my-stack --to 2
 ```
 
 ---
@@ -480,13 +433,13 @@ hs deploy rollback my-spec --to 2
 
 ## Error Reference
 
-| Error                | Solution                                 |
-| -------------------- | ---------------------------------------- |
-| `Not authenticated`  | Run `hs auth login`                      |
-| `Spec not found`     | Check `hs spec list` for available specs |
-| `AST file not found` | Run `cargo build` to generate AST        |
-| `Build failed`       | Check `hs build logs <id>` for details   |
-| `Config invalid`     | Run `hs config validate`                 |
+| Error                 | Solution                                   |
+| --------------------- | ------------------------------------------ |
+| `Not authenticated`   | Run `hs auth login`                        |
+| `Stack not found`     | Check `hs stack list` for available stacks |
+| `AST file not found`  | Run `cargo build` to generate AST          |
+| `Build failed`        | Check `hs logs` for details                |
+| `Config invalid`      | Run `hs config validate`                   |
 
 ---
 
@@ -494,14 +447,14 @@ hs deploy rollback my-spec --to 2
 
 After successful deployment:
 
-| Type       | Pattern                                         |
-| ---------- | ----------------------------------------------- |
-| Production | `wss://{spec-name}.stack.hypertek.app`          |
-| Branch     | `wss://{spec-name}-{branch}.stack.hypertek.app` |
-| Local      | `ws://localhost:8080`                           |
+| Type       | Pattern                                            |
+| ---------- | -------------------------------------------------- |
+| Production | `wss://{stack-name}.stack.usehyperstack.com`       |
+| Branch     | `wss://{stack-name}-{branch}.stack.usehyperstack.com` |
+| Local      | `ws://localhost:8080`                              |
 
 Get the URL with:
 
 ```bash
-hs deploy info <build-id>
+hs stack show <stack-name>
 ```

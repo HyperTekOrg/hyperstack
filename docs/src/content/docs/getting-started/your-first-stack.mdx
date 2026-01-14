@@ -10,21 +10,21 @@ In this tutorial, you'll build an end-to-end real-time data pipeline in 15 minut
 
 A full-stack streaming application consisting of:
 
-1. **A Rust Spec**: Defines how to transform on-chain Solana events into a "Counter" entity.
+1. **A Rust Definition**: Defines how to transform on-chain Solana events into a "Counter" entity.
 2. **A Cloud Deployment**: A managed Hyperstack instance that processes the stream.
 3. **A React Frontend**: A live dashboard that updates instantly as on-chain events occur.
 
 ---
 
-## Part 1: Create the Spec (Rust)
+## Part 1: Create the Stack (Rust)
 
-The "Spec" is the heart of your stack. It tells Hyperstack which on-chain data to watch and how to project it into a useful state.
+The stack definition is the heart of your application. It tells Hyperstack which on-chain data to watch and how to project it into a useful state.
 
 ### 1. Create a new Rust project
 
 ```bash
-cargo new counter-spec --lib
-cd counter-spec
+cargo new counter-stack --lib
+cd counter-stack
 ```
 
 ### 2. Add dependencies
@@ -37,7 +37,7 @@ hyperstack = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
-### 3. Write your spec
+### 3. Write your stack definition
 
 Open `src/lib.rs` and define your projection. For this tutorial, we'll assume a simple Solana program with a `CounterAccount` and an `Increment` instruction.
 
@@ -80,7 +80,7 @@ Verify that the file `.hyperstack/Counter.ast.json` exists in your project root.
 
 ## Part 2: Deploy to Hyperstack Cloud
 
-Now let's push your spec to the cloud. Hyperstack manages the infrastructure, so you don't need to worry about scaling or WebSocket servers.
+Now let's push your stack to the cloud. Hyperstack manages the infrastructure, so you don't need to worry about scaling or WebSocket servers.
 
 ### 1. Login to the CLI
 
@@ -93,7 +93,7 @@ hs auth login
 This creates a `hyperstack.toml` file that links your local AST to the cloud.
 
 ```bash
-hs config init
+hs init
 ```
 
 ### 3. Push and Deploy
@@ -107,10 +107,10 @@ hs up counter-stack
 **Expected Output:**
 
 ```text
-✔ Spec pushed (v1)
+✔ Stack pushed (v1)
 ✔ Build created (id: bld_123...)
 ✔ Build completed
-🚀 Deployed to: wss://counter-stack.stack.hypertek.app
+🚀 Deployed to: wss://counter-stack.stack.usehyperstack.com
 ```
 
 :::tip[Checkpoint]
@@ -141,7 +141,7 @@ import { HyperstackProvider } from "hyperstack-react";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 root.render(
-  <HyperstackProvider websocketUrl="wss://counter-stack.stack.hypertek.app">
+  <HyperstackProvider websocketUrl="wss://counter-stack.stack.usehyperstack.com">
     <App />
   </HyperstackProvider>,
 );
@@ -219,15 +219,15 @@ Ensure you ran `cargo build` in your Rust project. The `#[hyperstack]` macro gen
 ### WebSocket connection fails
 
 1. Check that the URL matches the output of `hs up`.
-2. Ensure your spec is successfully deployed by running `hs deploy list`.
+2. Ensure your stack is successfully deployed by running `hs stack list`.
 
 ### Data is not appearing
 
-1. Verify that your Solana program is actually emitting the events or updating the accounts defined in your spec.
+1. Verify that your Solana program is actually emitting the events or updating the accounts defined in your stack.
 2. Check the browser console for any subscription errors.
 
 ## Next Steps
 
-- Learn more about [Spec Macros](/specs/macros) to build complex pipelines.
-- Explore [View Strategies](/specs/strategies) for different data access patterns.
+- Learn more about [Stack Macros](/stacks/macros) to build complex pipelines.
+- Explore [View Strategies](/stacks/strategies) for different data access patterns.
 - Check the [CLI Reference](/cli/commands) for advanced deployment options.
