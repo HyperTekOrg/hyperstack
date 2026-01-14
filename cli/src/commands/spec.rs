@@ -3,7 +3,7 @@ use colored::Colorize;
 use std::collections::HashMap;
 use std::fs;
 
-use crate::api_client::{ApiClient, CreateSpecRequest, Spec as ApiSpec};
+use crate::api_client::{ApiClient, CreateSpecRequest, Spec as ApiSpec, DEFAULT_DOMAIN_SUFFIX};
 use crate::config::{resolve_specs_to_push, DiscoveredAst, HyperstackConfig, SpecConfig};
 
 /// Push specs with their AST content to remote
@@ -90,6 +90,11 @@ pub fn push(config_path: &str, spec_name: Option<&str>) -> Result<()> {
                 match create_remote_spec(&client, &ast) {
                     Ok(new_spec) => {
                         println!("{}", "✓".green());
+                        println!(
+                            "    {} {}",
+                            "URL:".dimmed(),
+                            new_spec.websocket_url(DEFAULT_DOMAIN_SUFFIX).cyan()
+                        );
                         created += 1;
                         new_spec
                     }
@@ -268,6 +273,10 @@ pub fn list_remote(json: bool) -> Result<()> {
     for spec in &specs {
         println!("  {}", spec.name.green().bold());
         println!("    Entity: {}", spec.entity_name);
+        println!(
+            "    URL: {}",
+            spec.websocket_url(DEFAULT_DOMAIN_SUFFIX).cyan()
+        );
 
         if let Some(desc) = &spec.description {
             println!("    Description: {}", desc);
@@ -410,6 +419,10 @@ pub fn show(spec_name: &str, version: Option<i32>) -> Result<()> {
 
     println!("  ID: {}", spec.id);
     println!("  Entity: {}", spec.entity_name);
+    println!(
+        "  URL: {}",
+        spec.websocket_url(DEFAULT_DOMAIN_SUFFIX).cyan()
+    );
 
     if let Some(desc) = &spec.description {
         println!("  Description: {}", desc);

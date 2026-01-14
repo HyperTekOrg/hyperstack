@@ -11,6 +11,9 @@ const DEFAULT_API_URL: &str = "https://api.usehyperstack.com";
 #[cfg(feature = "local")]
 const DEFAULT_API_URL: &str = "http://localhost:3000";
 
+/// Default domain suffix for WebSocket URLs
+pub const DEFAULT_DOMAIN_SUFFIX: &str = "stack.usehyperstack.com";
+
 #[derive(Debug, Clone)]
 pub struct ApiClient {
     base_url: String,
@@ -56,8 +59,20 @@ pub struct Spec {
     pub description: Option<String>,
     pub package_name: Option<String>,
     pub output_path: Option<String>,
+    pub url_slug: String,
     pub created_at: String,
     pub updated_at: String,
+}
+
+impl Spec {
+    pub fn websocket_url(&self, domain_suffix: &str) -> String {
+        format!(
+            "wss://{}-{}.{}",
+            self.name.to_lowercase(),
+            self.url_slug,
+            domain_suffix
+        )
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
