@@ -29,8 +29,8 @@ export default defineConfig({
           autogenerate: { directory: "concepts" },
         },
         {
-          label: "Specs (Rust DSL)",
-          autogenerate: { directory: "specs" },
+          label: "Stacks (Rust DSL)",
+          autogenerate: { directory: "stacks" },
         },
         {
           label: "SDKs",

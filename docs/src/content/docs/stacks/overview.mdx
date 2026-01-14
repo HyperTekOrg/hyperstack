@@ -1,5 +1,5 @@
 ---
-title: Creating Specs
+title: Creating Stacks
 sidebar:
   order: 1
 description: Introduction to the Hyperstack Rust DSL for defining real-time data streaming specifications.
@@ -18,13 +18,13 @@ Building data pipelines for Solana typically involves manual account parsing, co
 | Write custom decoding logic for every account | Use `#[map]` to link IDL fields to your state     |
 | Manually track and sum event values           | Use `#[aggregate(strategy = Sum)]`                |
 | Manage WebSocket connections and state diffs  | Define entities and let Hyperstack stream updates |
-| Build custom backend services for data        | Deploy a spec and use generated SDKs              |
+| Build custom backend services for data        | Deploy a stack and use generated SDKs             |
 
 ---
 
-## Anatomy of a Spec
+## Anatomy of a Stack Definition
 
-A Hyperstack spec is a Rust module annotated with `#[hyperstack]`. Inside this module, you define **Entities**—the structured data objects your application will consume.
+A Hyperstack definition is a Rust module annotated with `#[hyperstack]`. Inside this module, you define **Entities**—the structured data objects your application will consume.
 
 ```rust
 use hyperstack_macros::{hyperstack, Stream};
@@ -55,7 +55,7 @@ pub mod my_stream {
 
 ### Key Components
 
-1.  **`#[hyperstack]` Module**: The container for your specification. It links to your data sources (IDL or Protobuf files).
+1.  **`#[hyperstack]` Module**: The container for your definition. It links to your data sources (IDL or Protobuf files).
 2.  **`#[entity]` Struct**: Defines a projection of on-chain data. Each entity represents a collection of related data that will be streamed as a single unit.
 3.  **Primary Key**: Every entity must have a primary key (usually a `Pubkey` or `String`). This is how Hyperstack tracks individual instances of an entity.
 4.  **Field Mappings**: Attributes on struct fields that define where the data comes from and how it's processed.
@@ -93,13 +93,13 @@ When data arrives, **Strategies** determine how the field value is updated. This
 
 ---
 
-## How Specs Become Data Streams
+## How Definitions Become Data Streams
 
-When you build your Rust project containing a Hyperstack spec, the macros perform several steps:
+When you build your Rust project containing a Hyperstack definition, the macros perform several steps:
 
 1.  **Validation**: The macro verifies that your mappings match the provided IDL or Protobuf definitions.
 2.  **AST Generation**: It generates a JSON-based **Abstract Syntax Tree (AST)** representing your data pipeline.
-3.  **Bytecode Compilation**: When you deploy your spec (`hyperstack up`), Hyperstack Cloud compiles this AST into optimized bytecode.
+3.  **Bytecode Compilation**: When you deploy your stack (`hs up`), Hyperstack Cloud compiles this AST into optimized bytecode.
 4.  **Execution**: The Hyperstack VM executes this bytecode in real-time against the Solana transaction firehose, updating your entity state and streaming diffs to your clients.
 
 ---
@@ -108,4 +108,4 @@ When you build your Rust project containing a Hyperstack spec, the macros perfor
 
 - [Mapping Macros](./macros) — Deep dive into every mapping attribute and its parameters.
 - [Aggregation Strategies](./strategies) — Learn how to build complex metrics using different strategies.
-- [CLI Reference](/cli/commands) — Learn how to build and deploy your specs.
+- [CLI Reference](/cli/commands) — Learn how to build and deploy your stacks.
