@@ -20,9 +20,9 @@ Complete reference for the Hyperstack CLI (`hs`).
 | Command | Description |
 |---------|-------------|
 | `hs init` | Initialize project |
-| `hs up [spec]` | Deploy spec (push + build + deploy) |
+| `hs up [stack]` | Deploy stack (push + build + deploy) |
 | `hs status` | Show project overview |
-| `hs logs [build-id]` | View build logs |
+| `hs logs [name-or-id]` | View logs (by stack name or build ID) |
 | `hs auth login` | Authenticate |
 
 ---
@@ -37,15 +37,7 @@ Initialize a new Hyperstack project.
 hs init
 ```
 
-Creates `hyperstack.toml` with auto-discovered specs from `.hyperstack/*.ast.json`.
-
-### hs config init
-
-Create a fresh configuration file.
-
-```bash
-hs config init
-```
+Creates `hyperstack.toml` with auto-discovered stacks from `.hyperstack/*.ast.json`.
 
 ### hs config validate
 
@@ -107,23 +99,23 @@ hs auth whoami
 
 ## Deployment
 
-### hs up [spec-name]
+### hs up [stack-name]
 
-Deploy a spec: push, build, and deploy in one command.
+Deploy a stack: push, build, and deploy in one command.
 
 ```bash
-# Deploy all specs
+# Deploy all stacks
 hs up
 
-# Deploy specific spec
-hs up my-spec
+# Deploy specific stack
+hs up my-stack
 
 # Deploy to branch
-hs up my-spec --branch staging
-# Creates: my-spec-staging.stack.hypertek.app
+hs up my-stack --branch staging
+# Creates: my-stack-staging.stack.usehyperstack.com
 
 # Preview deployment
-hs up my-spec --preview
+hs up my-stack --preview
 ```
 
 **Options:**
@@ -135,98 +127,140 @@ hs up my-spec --preview
 
 ### hs status
 
-Show overview of all specs, builds, and deployments.
+Show overview of all stacks, builds, and deployments.
 
 ```bash
 hs status
 hs status --json
 ```
 
-### hs logs [build-id]
+### hs logs [name-or-id]
 
-View build logs.
+View logs by stack name or build ID.
 
 ```bash
 # Most recent build
 hs logs
 
-# Specific build
+# By stack name
+hs logs my-stack
+
+# By build ID
 hs logs 123
 ```
 
 ---
 
-## Spec Management
+## Stack Management
 
-### hs spec push [spec-name]
+### hs stack list
 
-Push local specs to remote.
-
-```bash
-# Push all specs
-hs spec push
-
-# Push specific spec
-hs spec push my-spec
-```
-
-### hs spec pull
-
-Pull remote specs to local config.
+List all stacks with deployment status.
 
 ```bash
-hs spec pull
+hs stack list
+hs stack list --json
 ```
 
-### hs spec list
+### hs stack push [stack-name]
 
-List all remote specs.
+Push local stacks to remote.
 
 ```bash
-hs spec list
-hs spec list --json
+# Push all stacks
+hs stack push
+
+# Push specific stack
+hs stack push my-stack
 ```
 
-### hs spec show &lt;spec-name&gt;
+### hs stack show <stack-name>
 
-Show detailed spec information.
+Show detailed stack information including deployment status and recent builds.
 
 ```bash
-hs spec show my-spec
-hs spec show my-spec --version 3
+hs stack show my-stack
+hs stack show my-stack --version 3
 ```
 
-### hs spec versions &lt;spec-name&gt;
+### hs stack versions <stack-name>
 
 Show version history.
 
 ```bash
-hs spec versions my-spec
-hs spec versions my-spec --limit 10
+hs stack versions my-stack
+hs stack versions my-stack --limit 10
 ```
 
-### hs spec delete &lt;spec-name&gt;
+### hs stack delete <stack-name>
 
-Delete a spec from remote.
+Delete a stack from remote.
 
 ```bash
-hs spec delete my-spec
-hs spec delete my-spec --force  # Skip confirmation
+hs stack delete my-stack
+hs stack delete my-stack --force  # Skip confirmation
+```
+
+### hs stack rollback <stack-name>
+
+Rollback to a previous deployment.
+
+```bash
+# Rollback to previous version
+hs stack rollback my-stack
+
+# Rollback to specific version
+hs stack rollback my-stack --to 2
+
+# Rollback to specific build
+hs stack rollback my-stack --build 123
+
+# Rollback branch deployment
+hs stack rollback my-stack --branch staging
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--to <version>` | Target version |
+| `--build <id>` | Target build ID |
+| `--branch <name>` | Branch to rollback |
+| `--rebuild, -r` | Force full rebuild |
+| `--no-wait, -n` | Don't watch progress |
+
+### hs stack stop <stack-name>
+
+Stop a running deployment.
+
+```bash
+hs stack stop my-stack
+hs stack stop my-stack --branch staging
+```
+
+### hs stack logs <stack-name>
+
+View logs for a stack.
+
+```bash
+hs stack logs my-stack
 ```
 
 ---
 
-## Build Commands
+## Build Commands (Power User)
 
-### hs build create &lt;spec-name&gt;
+These commands are for advanced users who need fine-grained control over the build process.
 
-Create a new build from a spec.
+### hs build create <stack-name>
+
+Create a new build from a stack.
 
 ```bash
-hs build create my-spec
-hs build create my-spec --version 2
-hs build create my-spec --ast-file ./my-spec.ast.json
-hs build create my-spec --no-wait
+hs build create my-stack
+hs build create my-stack --version 2
+hs build create my-stack --ast-file ./my-stack.ast.json
+hs build create my-stack --no-wait
 ```
 
 **Options:**
@@ -247,7 +281,7 @@ hs build list --status completed
 hs build list --limit 10
 ```
 
-### hs build status &lt;build-id&gt;
+### hs build status <build-id>
 
 Get detailed build status.
 
@@ -257,7 +291,7 @@ hs build status 123 --watch
 hs build status 123 --json
 ```
 
-### hs build logs &lt;build-id&gt;
+### hs build logs <build-id>
 
 View build logs.
 
@@ -267,86 +301,24 @@ hs build logs 123
 
 ---
 
-## Deployment Commands
-
-### hs deploy info &lt;build-id&gt;
-
-Show deployment information for a build.
-
-```bash
-hs deploy info 123
-hs deploy info 123 --json
-```
-
-**Output includes:**
-- WebSocket URL: `wss://my-spec.stack.hypertek.app`
-- Status, uptime, resource usage
-
-### hs deploy list
-
-List all active deployments.
-
-```bash
-hs deploy list
-hs deploy list --limit 20
-```
-
-### hs deploy stop &lt;deployment-id&gt;
-
-Stop a deployment.
-
-```bash
-hs deploy stop 123
-```
-
-### hs deploy rollback &lt;spec-name&gt;
-
-Rollback to a previous deployment.
-
-```bash
-# Rollback to previous version
-hs deploy rollback my-spec
-
-# Rollback to specific version
-hs deploy rollback my-spec --to 2
-
-# Rollback to specific build
-hs deploy rollback my-spec --build 123
-
-# Rollback branch deployment
-hs deploy rollback my-spec --branch staging
-```
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `--to <version>` | Target version |
-| `--build <id>` | Target build ID |
-| `--branch <name>` | Branch to rollback |
-| `--rebuild, -r` | Force full rebuild |
-| `--no-wait, -n` | Don't watch progress |
-
----
-
 ## SDK Generation
 
 ### hs sdk list
 
-List specs available for SDK generation.
+List stacks available for SDK generation.
 
 ```bash
 hs sdk list
 ```
 
-### hs sdk create typescript &lt;spec-name&gt;
+### hs sdk create typescript <stack-name>
 
 Generate TypeScript SDK.
 
 ```bash
-hs sdk create typescript my-spec
-hs sdk create typescript my-spec --output ./src/generated/
-hs sdk create typescript my-spec --package-name @myorg/my-sdk
+hs sdk create typescript my-stack
+hs sdk create typescript my-stack --output ./src/generated/
+hs sdk create typescript my-stack --package-name @myorg/my-sdk
 ```
 
 ---
@@ -368,15 +340,15 @@ typescript_package = "@myorg/my-sdk"
 [build]
 watch_by_default = true
 
-# Spec definitions
+# Stack definitions
 # Auto-discovered from .hyperstack/*.ast.json
 # Define explicitly for custom naming:
-[[specs]]
+[[stacks]]
 name = "my-game"
 ast = "SettlementGame"  # Entity name or path to .ast.json
 description = "Settlement game tracking"
 
-[[specs]]
+[[stacks]]
 name = "token-tracker"
 ast = ".hyperstack/Token.ast.json"
 ```
@@ -426,41 +398,41 @@ hs config validate
 ### Development Cycle
 
 ```bash
-# Make changes to spec, rebuild Rust crate
+# Make changes, rebuild Rust crate
 cargo build
 
 # Deploy
-hs up my-spec
+hs up my-stack
 
 # Check status
 hs status
 
 # View logs if issues
-hs logs
+hs logs my-stack
 ```
 
 ### Branch Deploys
 
 ```bash
 # Deploy feature branch
-hs up my-spec --branch feature-x
-# URL: my-spec-feature-x.stack.hypertek.app
+hs up my-stack --branch feature-x
+# URL: my-stack-feature-x.stack.usehyperstack.com
 
 # Check deployment
-hs deploy list
+hs stack list
 
 # Clean up when done
-hs deploy stop <deployment-id>
+hs stack stop my-stack --branch feature-x
 ```
 
 ### Rollback
 
 ```bash
 # Quick rollback to previous version
-hs deploy rollback my-spec
+hs stack rollback my-stack
 
 # Rollback to specific version
-hs deploy rollback my-spec --to 2
+hs stack rollback my-stack --to 2
 ```
 
 ---
@@ -478,7 +450,7 @@ hs deploy rollback my-spec --to 2
 | Error | Solution |
 |-------|----------|
 | `Not authenticated` | Run `hs auth login` |
-| `Spec not found` | Check `hs spec list` for available specs |
+| `Stack not found` | Check `hs stack list` for available stacks |
 | `AST file not found` | Run `cargo build` to generate AST |
 | `Build failed` | Check `hs build logs <id>` for details |
 | `Config invalid` | Run `hs config validate` |
@@ -491,12 +463,12 @@ After successful deployment:
 
 | Type | Pattern |
 |------|---------|
-| Production | `wss://{spec-name}.stack.hypertek.app` |
-| Branch | `wss://{spec-name}-{branch}.stack.hypertek.app` |
+| Production | `wss://{stack-name}.stack.usehyperstack.com` |
+| Branch | `wss://{stack-name}-{branch}.stack.usehyperstack.com` |
 | Local | `ws://localhost:8080` |
 
 Get the URL with:
 
 ```bash
-hs deploy info <build-id>
+hs stack show <stack-name>
 ```

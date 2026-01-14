@@ -6,7 +6,7 @@ Set up the Hyperstack CLI and SDKs for your project.
 
 ## CLI Installation
 
-The Hyperstack CLI (`hs`) manages specs, deployments, and SDK generation.
+The Hyperstack CLI (`hs`) manages stacks, deployments, and SDK generation.
 
 ### From Source (Recommended)
 
@@ -68,7 +68,7 @@ pip install hyperstack-sdk
 
 ## Authentication
 
-Before deploying specs, authenticate with Hyperstack:
+Before deploying stacks, authenticate with Hyperstack:
 
 ```bash
 # Create a new account
@@ -107,10 +107,10 @@ name = "my-project"
 [sdk]
 output_dir = "./generated"
 
-# Specs are auto-discovered from .hyperstack/*.ast.json
+# Stacks are auto-discovered from .hyperstack/*.ast.json
 # Define explicitly for custom naming:
-[[specs]]
-name = "my-spec"
+[[stacks]]
+name = "my-stack"
 ast = "MyEntity"
 ```
 
@@ -124,14 +124,14 @@ hs config validate
 
 ## Development Setup
 
-### For Spec Development (Rust)
+### For Stack Development (Rust)
 
-If you're writing specs, add these dependencies:
+If you're writing stacks, add these dependencies:
 
 ```toml
 [dependencies]
 hyperstack = { path = "../hyperstack-oss/main/hyperstack", features = ["full"] }
-hyperstack-spec-macros = { path = "../hyperstack-oss/main/spec-macros" }
+hyperstack-macros = { path = "../hyperstack-oss/main/hyperstack-macros" }
 hyperstack-interpreter = { path = "../hyperstack-oss/main/interpreter" }
 
 # For local server
@@ -150,7 +150,7 @@ borsh = { version = "1.5", features = ["derive"] }
 npm install hyperstack-react
 
 # For local development, use localhost WebSocket
-# For production, use your deployed spec URL
+# For production, use your deployed stack URL
 ```
 
 ---
@@ -190,7 +190,7 @@ const TestStack = defineStack({
 
 - [React Quickstart](/quickstart/react) - Build your first real-time app
 - [CLI Commands](/cli/commands) - Full command reference
-- [Defining Specs](/guides/defining-specs) - Create custom data streams
+- [Creating Stacks](/guides/defining-stacks) - Create custom data streams
 
 ---
 
