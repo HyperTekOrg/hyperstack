@@ -7,18 +7,9 @@ use std::time::Duration;
 use crate::api_client::{ApiClient, BuildStatus, CreateBuildRequest};
 use crate::config::find_ast_file;
 
-/// Create a new build from a spec
-///
-/// Modes:
-/// 1. From spec name: Looks up spec by name, uses latest version
-/// 2. From spec name + version: Uses specific version
-/// 3. From AST file: Uploads AST directly
-///
-/// Config is now OPTIONAL - will auto-discover ASTs if not present
-/// By default, watches build progress until completion.
 pub fn create(
     _config_path: &str,
-    spec_name: &str,
+    stack_name: &str,
     version: Option<i32>,
     ast_file: Option<&str>,
     watch: bool,
@@ -26,7 +17,6 @@ pub fn create(
     let client = ApiClient::new()?;
 
     if let Some(ast_path) = ast_file {
-        // Mode 3: Direct AST upload
         println!("{} Loading AST from file...", "→".blue().bold());
         let ast_json = fs::read_to_string(ast_path)
             .with_context(|| format!("Failed to read AST file: {}", ast_path))?;
@@ -34,8 +24,7 @@ pub fn create(
         let ast_payload: serde_json::Value = serde_json::from_str(&ast_json)
             .with_context(|| format!("Failed to parse AST JSON: {}", ast_path))?;
 
-        // Try to get spec ID from name for association
-        let spec_id = client.get_spec_by_name(spec_name)?.map(|s| s.id);
+        let spec_id = client.get_spec_by_name(stack_name)?.map(|s| s.id);
 
         println!("{} Creating build from AST file...", "→".blue().bold());
         let req = CreateBuildRequest {
@@ -61,23 +50,20 @@ pub fn create(
         println!();
         println!(
             "Track progress with: {}",
-            format!("hyperstack build status {} --watch", response.build_id).cyan()
+            format!("hs build status {} --watch", response.build_id).cyan()
         );
 
         return Ok(());
     }
 
-    // Mode 1/2: From spec name (optionally with version)
-    println!("{} Looking up spec '{}'...", "→".blue().bold(), spec_name);
+    println!("{} Looking up stack '{}'...", "→".blue().bold(), stack_name);
 
-    // Get remote spec first
-    let remote_spec = client.get_spec_by_name(spec_name)?;
+    let remote_spec = client.get_spec_by_name(stack_name)?;
 
     let (spec_id, spec_version_id) = match (&remote_spec, version) {
         (Some(spec), Some(v)) => {
-            // Specific version requested - we need to find the version ID
             println!(
-                "{} Found spec (id={}), looking up version {}...",
+                "{} Found stack (id={}), looking up version {}...",
                 "✓".green().bold(),
                 spec.id,
                 v
@@ -89,9 +75,9 @@ pub fn create(
                 .find(|ver| ver.version_number == v)
                 .ok_or_else(|| {
                     anyhow::anyhow!(
-                        "Version {} not found for spec '{}'. Available versions: {:?}",
+                        "Version {} not found for stack '{}'. Available versions: {:?}",
                         v,
-                        spec_name,
+                        stack_name,
                         versions
                             .iter()
                             .map(|v| v.version_number)
@@ -103,9 +89,8 @@ pub fn create(
             (Some(spec.id), Some(ver.id))
         }
         (Some(spec), None) => {
-            // Latest version
             println!(
-                "{} Found spec (id={}), using latest version...",
+                "{} Found stack (id={}), using latest version...",
                 "✓".green().bold(),
                 spec.id
             );
@@ -118,9 +103,10 @@ pub fn create(
                 .map(|v| v.id)
                 .ok_or_else(|| {
                     anyhow::anyhow!(
-                    "Spec '{}' has no versions. Push a version first with: hyperstack spec push {}",
-                    spec_name, spec_name
-                )
+                        "Stack '{}' has no versions. Push a version first with: hs stack push {}",
+                        stack_name,
+                        stack_name
+                    )
                 })?;
 
             if let Some(ver) = &spec_with_version.latest_version {
@@ -134,14 +120,12 @@ pub fn create(
             (Some(spec.id), Some(version_id))
         }
         (None, _) => {
-            // Spec not found remotely - try to use local AST via auto-discovery
             println!(
-                "{} Spec not found remotely, searching for local AST...",
+                "{} Stack not found remotely, searching for local AST...",
                 "!".yellow().bold()
             );
 
-            // Try to find AST by spec name
-            if let Some(ast) = find_ast_file(spec_name, None)? {
+            if let Some(ast) = find_ast_file(stack_name, None)? {
                 println!(
                     "{} Found local AST: {}",
                     "✓".green().bold(),
@@ -174,21 +158,21 @@ pub fn create(
                 println!();
                 println!(
                     "Track progress with: {}",
-                    format!("hyperstack build status {} --watch", response.build_id).cyan()
+                    format!("hs build status {} --watch", response.build_id).cyan()
                 );
 
                 return Ok(());
             }
 
             bail!(
-                "Spec '{}' not found remotely and no local AST file found.\n\n\
+                "Stack '{}' not found remotely and no local AST file found.\n\n\
                  To fix this:\n\
-                 1. Build your spec crate to generate the AST file: cargo build\n\
-                 2. Push your spec: hyperstack spec push {}\n\
-                 3. Then create a build: hyperstack build create {}",
-                spec_name,
-                spec_name,
-                spec_name
+                 1. Build your stack crate to generate the AST file: cargo build\n\
+                 2. Push your stack: hs stack push {}\n\
+                 3. Then create a build: hs build create {}",
+                stack_name,
+                stack_name,
+                stack_name
             );
         }
     };
@@ -217,13 +201,12 @@ pub fn create(
     println!();
     println!(
         "Track progress with: {}",
-        format!("hyperstack build status {} --watch", response.build_id).cyan()
+        format!("hs build status {} --watch", response.build_id).cyan()
     );
 
     Ok(())
 }
 
-/// List builds for the authenticated user
 pub fn list(limit: i64, status_filter: Option<&str>, json: bool) -> Result<()> {
     let client = ApiClient::new()?;
 
@@ -232,7 +215,6 @@ pub fn list(limit: i64, status_filter: Option<&str>, json: bool) -> Result<()> {
     }
     let builds = client.list_builds(Some(limit), None)?;
 
-    // Filter by status if requested
     let filtered_builds: Vec<_> = if let Some(filter) = status_filter {
         let filter_lower = filter.to_lowercase();
         builds
@@ -260,10 +242,7 @@ pub fn list(limit: i64, status_filter: Option<&str>, json: bool) -> Result<()> {
             );
         } else {
             println!("{}", "No builds found.".yellow());
-            println!(
-                "Create a build with: {}",
-                "hyperstack build create <spec-name>".cyan()
-            );
+            println!("Create a build with: {}", "hs up <stack-name>".cyan());
         }
         return Ok(());
     }
@@ -302,7 +281,6 @@ pub fn list(limit: i64, status_filter: Option<&str>, json: bool) -> Result<()> {
     Ok(())
 }
 
-/// Get detailed status for a specific build
 pub fn status(build_id: i32, watch: bool, json_output: bool) -> Result<()> {
     let client = ApiClient::new()?;
 
@@ -338,11 +316,11 @@ pub fn status(build_id: i32, watch: bool, json_output: bool) -> Result<()> {
     println!("  {} Metadata", "•".dimmed());
 
     if let Some(spec_id) = build.spec_id {
-        println!("    Spec ID: {}", spec_id);
+        println!("    Stack ID: {}", spec_id);
     }
 
     if let Some(ver_id) = build.spec_version_id {
-        println!("    Spec Version ID: {}", ver_id);
+        println!("    Stack Version ID: {}", ver_id);
     }
 
     println!("    Created: {}", build.created_at);
@@ -355,14 +333,12 @@ pub fn status(build_id: i32, watch: bool, json_output: bool) -> Result<()> {
         println!("    Completed: {}", completed);
     }
 
-    // Deployment info (only show if we have a WebSocket URL)
     if let Some(ws_url) = &build.websocket_url {
         println!();
         println!("  {} Deployment", "•".dimmed());
         println!("    WebSocket: {}", ws_url.cyan().bold());
     }
 
-    // Events
     if !response.events.is_empty() {
         println!();
         println!("  {} Recent Events", "•".dimmed());
@@ -386,9 +362,6 @@ pub fn status(build_id: i32, watch: bool, json_output: bool) -> Result<()> {
     Ok(())
 }
 
-/// Open or display logs URL for a build
-/// Note: logs_url is no longer exposed in the sanitized API response
-/// This function now displays a message directing users to AWS console
 pub fn logs(build_id: i32) -> Result<()> {
     let client = ApiClient::new()?;
     let response = client.get_build(build_id)?;
@@ -412,7 +385,6 @@ pub fn logs(build_id: i32) -> Result<()> {
     Ok(())
 }
 
-/// Watch a build until it reaches a terminal state
 fn watch_build(client: &ApiClient, build_id: i32) -> Result<()> {
     println!("{} Watching build #{}...\n", "→".blue().bold(), build_id);
 
@@ -423,7 +395,6 @@ fn watch_build(client: &ApiClient, build_id: i32) -> Result<()> {
         let response = client.get_build(build_id)?;
         let build = &response.build;
 
-        // Print status change
         if last_status != Some(build.status) {
             println!(
                 "  {} Status: {}",
@@ -433,7 +404,6 @@ fn watch_build(client: &ApiClient, build_id: i32) -> Result<()> {
             last_status = Some(build.status);
         }
 
-        // Print phase change
         if last_phase != build.phase {
             if let Some(phase) = &build.phase {
                 println!("  {} Phase: {}", chrono_now().dimmed(), phase);
@@ -441,14 +411,12 @@ fn watch_build(client: &ApiClient, build_id: i32) -> Result<()> {
             last_phase = build.phase.clone();
         }
 
-        // Print status message if changed
         if let Some(msg) = &build.status_message {
             if !msg.is_empty() {
                 println!("  {} {}", chrono_now().dimmed(), msg.dimmed());
             }
         }
 
-        // Check for terminal state
         if build.status.is_terminal() {
             println!();
 
@@ -477,14 +445,11 @@ fn watch_build(client: &ApiClient, build_id: i32) -> Result<()> {
             break;
         }
 
-        // Poll interval
         thread::sleep(Duration::from_secs(3));
     }
 
     Ok(())
 }
-
-// Helper functions
 
 fn format_status(status: BuildStatus) -> String {
     match status {

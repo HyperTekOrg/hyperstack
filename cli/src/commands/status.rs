@@ -1,7 +1,3 @@
-//! The `hyperstack status` command - overview of specs and deployments.
-//!
-//! Shows a high-level view of what's deployed and running.
-
 use anyhow::Result;
 use colored::Colorize;
 use serde::Serialize;
@@ -10,19 +6,18 @@ use crate::api_client::{
     ApiClient, Build, BuildStatus, DeploymentResponse, DeploymentStatus, Spec,
 };
 
-/// Status overview data for JSON output
 #[derive(Serialize)]
 struct StatusOutput {
     deployments: Vec<DeploymentInfo>,
     in_progress: Vec<BuildInfo>,
     failed: Vec<BuildInfo>,
-    undeployed_specs: Vec<String>,
+    undeployed_stacks: Vec<String>,
 }
 
 #[derive(Serialize)]
 struct DeploymentInfo {
     id: i32,
-    spec_name: String,
+    stack_name: String,
     branch: Option<String>,
     websocket_url: String,
     current_version: Option<i32>,
@@ -33,23 +28,20 @@ struct DeploymentInfo {
 #[derive(Serialize)]
 struct BuildInfo {
     build_id: i32,
-    spec_name: String,
+    stack_name: String,
     status: String,
     current_phase: Option<String>,
     phase_progress: Option<i32>,
     status_message: Option<String>,
 }
 
-/// Show overview of specs, builds, and deployments
 pub fn status(json: bool) -> Result<()> {
     let client = ApiClient::new()?;
 
-    // Fetch data
     let specs = client.list_specs()?;
     let builds = client.list_builds(Some(50), None)?;
     let deployments = client.list_deployments(50)?;
 
-    // Filter active deployments
     let active_deployments: Vec<_> = deployments
         .iter()
         .filter(|d| d.status == DeploymentStatus::Active || d.status == DeploymentStatus::Updating)
@@ -63,12 +55,10 @@ pub fn status(json: bool) -> Result<()> {
         .take(3)
         .collect();
 
-    // Header
     println!();
     println!("{}", "Hyperstack Status".bold());
     println!("{}", "─".repeat(50).dimmed());
 
-    // Active Deployments
     println!();
     if active_deployments.is_empty() {
         println!("{} No active deployments", "○".dimmed());
@@ -89,7 +79,6 @@ pub fn status(json: bool) -> Result<()> {
         }
     }
 
-    // In-Progress Builds
     if !in_progress.is_empty() {
         println!();
         println!(
@@ -104,7 +93,6 @@ pub fn status(json: bool) -> Result<()> {
         }
     }
 
-    // Failed Builds (recent)
     if !failed_recent.is_empty() {
         println!();
         println!(
@@ -119,23 +107,21 @@ pub fn status(json: bool) -> Result<()> {
         }
     }
 
-    // Specs without deployments
     let deployed_spec_ids: std::collections::HashSet<_> =
         active_deployments.iter().map(|d| d.spec_id).collect();
 
-    let undeployed_specs: Vec<_> = specs
+    let undeployed_stacks: Vec<_> = specs
         .iter()
         .filter(|s| !deployed_spec_ids.contains(&s.id))
         .collect();
 
-    // JSON output mode
     if json {
         let output = StatusOutput {
             deployments: active_deployments
                 .iter()
                 .map(|d| DeploymentInfo {
                     id: d.id,
-                    spec_name: d.spec_name.clone(),
+                    stack_name: d.spec_name.clone(),
                     branch: d.branch.clone(),
                     websocket_url: d.websocket_url.clone(),
                     current_version: d.current_version,
@@ -146,14 +132,14 @@ pub fn status(json: bool) -> Result<()> {
             in_progress: in_progress
                 .iter()
                 .map(|b| {
-                    let spec_name = b
+                    let stack_name = b
                         .spec_id
                         .and_then(|id| specs.iter().find(|s| s.id == id))
                         .map(|s| s.name.clone())
                         .unwrap_or_else(|| "unknown".to_string());
                     BuildInfo {
                         build_id: b.id,
-                        spec_name,
+                        stack_name,
                         status: b.status.to_string(),
                         current_phase: b.phase.clone(),
                         phase_progress: b.progress,
@@ -164,14 +150,14 @@ pub fn status(json: bool) -> Result<()> {
             failed: failed_recent
                 .iter()
                 .map(|b| {
-                    let spec_name = b
+                    let stack_name = b
                         .spec_id
                         .and_then(|id| specs.iter().find(|s| s.id == id))
                         .map(|s| s.name.clone())
                         .unwrap_or_else(|| "unknown".to_string());
                     BuildInfo {
                         build_id: b.id,
-                        spec_name,
+                        stack_name,
                         status: b.status.to_string(),
                         current_phase: b.phase.clone(),
                         phase_progress: b.progress,
@@ -179,33 +165,36 @@ pub fn status(json: bool) -> Result<()> {
                     }
                 })
                 .collect(),
-            undeployed_specs: undeployed_specs.iter().map(|s| s.name.clone()).collect(),
+            undeployed_stacks: undeployed_stacks.iter().map(|s| s.name.clone()).collect(),
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
         return Ok(());
     }
 
-    if !undeployed_specs.is_empty() {
+    if !undeployed_stacks.is_empty() {
         println!();
         println!(
-            "{} {} spec{} not deployed",
+            "{} {} stack{} not deployed",
             "○".dimmed(),
-            undeployed_specs.len(),
-            if undeployed_specs.len() == 1 { "" } else { "s" }
+            undeployed_stacks.len(),
+            if undeployed_stacks.len() == 1 {
+                ""
+            } else {
+                "s"
+            }
         );
 
-        for spec in undeployed_specs {
-            println!("    {} {}", "·".dimmed(), spec.name.dimmed());
+        for stack in undeployed_stacks {
+            println!("    {} {}", "·".dimmed(), stack.name.dimmed());
         }
     }
 
-    // Quick actions
     println!();
     println!("{}", "─".repeat(50).dimmed());
     println!("{}", "Quick commands:".dimmed());
-    println!("  {}  Deploy a spec", "hyperstack up".cyan());
-    println!("  {}  View build logs", "hyperstack logs <build-id>".cyan());
-    println!("  {}  List all builds", "hyperstack build list".cyan());
+    println!("  {}  Deploy a stack", "hs up".cyan());
+    println!("  {}  View build logs", "hs logs <build-id>".cyan());
+    println!("  {}  List all stacks", "hs stack list".cyan());
 
     println!();
 
@@ -234,7 +223,6 @@ fn print_deployment(deployment: &DeploymentResponse) {
         print!("      v{}", version);
     }
 
-    // Show how long ago it was deployed
     if let Some(deployed) = &deployment.last_deployed_at {
         if let Some(age) = format_relative_time(deployed) {
             println!(" - deployed {}", age.dimmed());
@@ -247,7 +235,7 @@ fn print_deployment(deployment: &DeploymentResponse) {
 }
 
 fn print_in_progress_build(build: &Build, specs: &[Spec]) {
-    let spec_name = build
+    let stack_name = build
         .spec_id
         .and_then(|id| specs.iter().find(|s| s.id == id))
         .map(|s| s.name.as_str())
@@ -264,7 +252,7 @@ fn print_in_progress_build(build: &Build, specs: &[Spec]) {
         "    {} #{} {} - {} {}",
         "→".blue(),
         build.id,
-        spec_name,
+        stack_name,
         status,
         phase.dimmed()
     );
@@ -275,16 +263,15 @@ fn print_in_progress_build(build: &Build, specs: &[Spec]) {
 }
 
 fn print_failed_build(build: &Build, specs: &[Spec]) {
-    let spec_name = build
+    let stack_name = build
         .spec_id
         .and_then(|id| specs.iter().find(|s| s.id == id))
         .map(|s| s.name.as_str())
         .unwrap_or("unknown");
 
-    println!("    {} #{} {}", "→".red(), build.id, spec_name);
+    println!("    {} #{} {}", "→".red(), build.id, stack_name);
 
     if let Some(msg) = &build.status_message {
-        // Truncate long messages
         let display_msg = if msg.len() > 60 {
             format!("{}...", &msg[..57])
         } else {
@@ -324,7 +311,6 @@ fn humanize_phase(phase: &str) -> &str {
 }
 
 fn format_relative_time(timestamp: &str) -> Option<String> {
-    // Parse ISO 8601 timestamp
     let parsed = chrono::DateTime::parse_from_rfc3339(timestamp).ok()?;
     let now = chrono::Utc::now();
     let duration = now.signed_duration_since(parsed);
@@ -365,6 +351,5 @@ fn format_relative_time(timestamp: &str) -> Option<String> {
         ));
     }
 
-    // Fall back to showing the date
     Some(parsed.format("%Y-%m-%d").to_string())
 }

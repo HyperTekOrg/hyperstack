@@ -1,67 +1,58 @@
-//! The `hyperstack up` command - the happy path for deploying specs.
-//!
-//! This command combines: push + build + watch into a single workflow.
-
 use anyhow::Result;
 use colored::Colorize;
 use std::thread;
 use std::time::Duration;
 
 use crate::api_client::{ApiClient, BuildStatus, CreateBuildRequest};
-use crate::config::{resolve_specs_to_push, HyperstackConfig};
+use crate::config::{resolve_stacks_to_push, HyperstackConfig};
 
-/// Generate a short UUID for preview branches
 fn generate_short_uuid() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
-    // Take last 8 hex chars of timestamp for uniqueness
     format!("{:08x}", (timestamp & 0xFFFFFFFF) as u32)
 }
 
-/// Deploy a spec: push AST, create build, watch until completion
 pub fn up(
     config_path: &str,
-    spec_name: Option<&str>,
+    stack_name: Option<&str>,
     branch: Option<String>,
     preview: bool,
 ) -> Result<()> {
     let config = HyperstackConfig::load_optional(config_path)?;
     let client = ApiClient::new()?;
 
-    // Determine the branch to use
     let branch = if preview {
         Some(format!("preview-{}", generate_short_uuid()))
     } else {
         branch
     };
 
-    // Resolve which spec to deploy
-    let specs = resolve_specs_to_push(config.as_ref(), spec_name)?;
+    let stacks = resolve_stacks_to_push(config.as_ref(), stack_name)?;
 
-    if specs.is_empty() {
-        anyhow::bail!("No specs found to deploy");
+    if stacks.is_empty() {
+        anyhow::bail!("No stacks found to deploy");
     }
 
-    if specs.len() > 1 && spec_name.is_none() {
+    if stacks.len() > 1 && stack_name.is_none() {
         println!(
-            "{} Found {} specs. Deploying all...\n",
+            "{} Found {} stacks. Deploying all...\n",
             "→".blue().bold(),
-            specs.len()
+            stacks.len()
         );
     }
 
-    for ast in specs {
-        deploy_single_spec(&client, &ast, branch.as_deref())?;
+    for ast in stacks {
+        deploy_single_stack(&client, &ast, branch.as_deref())?;
         println!();
     }
 
     Ok(())
 }
 
-fn deploy_single_spec(
+fn deploy_single_stack(
     client: &ApiClient,
     ast: &crate::config::DiscoveredAst,
     branch: Option<&str>,
@@ -71,28 +62,25 @@ fn deploy_single_spec(
         println!(
             "{} Deploying {} (branch: {})",
             "→".blue().bold(),
-            ast.spec_name.bold(),
+            ast.stack_name.bold(),
             branch_name.cyan()
         );
     } else {
-        println!("{} Deploying {}", "→".blue().bold(), ast.spec_name.bold());
+        println!("{} Deploying {}", "→".blue().bold(), ast.stack_name.bold());
     }
     println!("{}", "━".repeat(50).dimmed());
 
-    // Step 1: Push the spec
-    println!("\n{} Pushing spec...", "1".blue().bold());
+    println!("\n{} Pushing stack...", "1".blue().bold());
 
-    // Check if spec exists remotely
-    let remote_spec = client.get_spec_by_name(&ast.spec_name)?;
+    let remote_spec = client.get_spec_by_name(&ast.stack_name)?;
 
     let spec_id = if let Some(spec) = remote_spec {
-        println!("  {} Spec exists (id={})", "✓".green(), spec.id);
+        println!("  {} Stack exists (id={})", "✓".green(), spec.id);
         spec.id
     } else {
-        // Create the spec
-        print!("  Creating spec... ");
+        print!("  Creating stack... ");
         let req = crate::api_client::CreateSpecRequest {
-            name: ast.spec_name.clone(),
+            name: ast.stack_name.clone(),
             entity_name: ast.entity_name.clone(),
             crate_name: String::new(),
             module_path: String::new(),
@@ -105,7 +93,6 @@ fn deploy_single_spec(
         new_spec.id
     };
 
-    // Upload AST version
     print!("  Uploading AST... ");
     let ast_payload = ast.load_ast()?;
     let version_response = client.create_spec_version(spec_id, ast_payload)?;
@@ -126,7 +113,6 @@ fn deploy_single_spec(
         );
     }
 
-    // Step 2: Create build
     println!("\n{} Creating build...", "2".blue().bold());
 
     let req = CreateBuildRequest {
@@ -142,7 +128,6 @@ fn deploy_single_spec(
         println!("  Branch: {}", branch_name.cyan());
     }
 
-    // Step 3: Watch build
     println!("\n{} Building & deploying...\n", "3".blue().bold());
 
     watch_build_progress(client, build_response.build_id)?;
@@ -160,11 +145,9 @@ fn watch_build_progress(client: &ApiClient, build_id: i32) -> Result<()> {
         let response = client.get_build(build_id)?;
         let build = &response.build;
 
-        // Update spinner
         spinner_idx = (spinner_idx + 1) % spinner_chars.len();
         let spinner = spinner_chars[spinner_idx];
 
-        // Show phase changes
         if last_phase != build.phase {
             if let Some(phase) = &build.phase {
                 let phase_display = humanize_phase(phase);
@@ -173,7 +156,6 @@ fn watch_build_progress(client: &ApiClient, build_id: i32) -> Result<()> {
             last_phase = build.phase.clone();
         }
 
-        // Show progress bar if we have progress
         if let Some(progress) = build.progress {
             if last_progress != Some(progress) {
                 let bar = render_progress_bar(progress, 30);
@@ -183,9 +165,8 @@ fn watch_build_progress(client: &ApiClient, build_id: i32) -> Result<()> {
             }
         }
 
-        // Check for terminal state
         if build.status.is_terminal() {
-            println!(); // Clear progress line
+            println!();
             println!();
 
             match build.status {

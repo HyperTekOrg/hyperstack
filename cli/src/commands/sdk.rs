@@ -5,41 +5,34 @@ use std::path::Path;
 
 use crate::config::{discover_ast_files, find_ast_file, DiscoveredAst, HyperstackConfig};
 
-/// List all available specs from the configuration or auto-discovered ASTs
 pub fn list(config_path: &str) -> Result<()> {
-    // Try to load config
     let config = HyperstackConfig::load_optional(config_path)?;
 
-    // Also discover local AST files
     let discovered = discover_ast_files(None)?;
 
-    let has_config_specs = config
+    let has_config_stacks = config
         .as_ref()
-        .map(|c| !c.specs.is_empty())
+        .map(|c| !c.stacks.is_empty())
         .unwrap_or(false);
 
-    if !has_config_specs && discovered.is_empty() {
-        println!("{}", "No specs found.".yellow());
+    if !has_config_stacks && discovered.is_empty() {
+        println!("{}", "No stacks found.".yellow());
         println!();
-        println!("To add specs:");
-        println!("  1. Build your spec crate to generate .hyperstack/*.ast.json files");
-        println!(
-            "  2. Run {} to create a configuration",
-            "hyperstack init".cyan()
-        );
+        println!("To add stacks:");
+        println!("  1. Build your stack crate to generate .hyperstack/*.ast.json files");
+        println!("  2. Run {} to create a configuration", "hs init".cyan());
         return Ok(());
     }
 
-    println!("{} Available specs:\n", "→".blue().bold());
+    println!("{} Available stacks:\n", "→".blue().bold());
 
-    // Show config-based specs
     if let Some(ref cfg) = config {
-        for spec in &cfg.specs {
-            let name = spec.name.as_deref().unwrap_or(&spec.ast);
+        for stack in &cfg.stacks {
+            let name = stack.name.as_deref().unwrap_or(&stack.ast);
             println!("  {}", name.green().bold());
-            println!("    AST: {}", spec.ast);
+            println!("    AST: {}", stack.ast);
 
-            if let Some(desc) = &spec.description {
+            if let Some(desc) = &stack.description {
                 println!("    Description: {}", desc);
             }
 
@@ -51,15 +44,14 @@ pub fn list(config_path: &str) -> Result<()> {
         }
     }
 
-    // Show discovered ASTs not in config
     let config_asts: std::collections::HashSet<_> = config
         .as_ref()
-        .map(|c| c.specs.iter().map(|s| s.ast.clone()).collect())
+        .map(|c| c.stacks.iter().map(|s| s.ast.clone()).collect())
         .unwrap_or_default();
 
     for ast in discovered {
         if !config_asts.contains(&ast.entity_name) {
-            println!("  {} {}", "•".dimmed(), ast.spec_name.green().bold());
+            println!("  {} {}", "•".dimmed(), ast.stack_name.green().bold());
             println!("    Entity: {}", ast.entity_name);
             println!("    Path: {}", ast.path.display());
             if let Some(pid) = &ast.program_id {
@@ -71,37 +63,37 @@ pub fn list(config_path: &str) -> Result<()> {
     }
 
     println!(
-        "Use {} <spec-name> to generate SDK",
-        "hyperstack sdk create typescript".cyan()
+        "Use {} to generate SDK",
+        "hs sdk create typescript <stack-name>".cyan()
     );
 
     Ok(())
 }
 
-/// Create TypeScript SDK from a spec
 pub fn create_typescript(
     config_path: &str,
-    spec_name: &str,
+    stack_name: &str,
     output_override: Option<String>,
     package_name_override: Option<String>,
 ) -> Result<()> {
-    println!("{} Looking for spec '{}'...", "→".blue().bold(), spec_name);
+    println!(
+        "{} Looking for stack '{}'...",
+        "→".blue().bold(),
+        stack_name
+    );
 
-    // Try to load config
     let config = HyperstackConfig::load_optional(config_path)?;
 
-    // Try to find the AST - either via config or auto-discovery
     let (ast, output_path, package_name) = if let Some(ref cfg) = config {
-        if let Some(spec_config) = cfg.find_spec(spec_name) {
-            // Found in config - use config settings
-            let ast = find_ast_file(&spec_config.ast, None)?.ok_or_else(|| {
+        if let Some(stack_config) = cfg.find_stack(stack_name) {
+            let ast = find_ast_file(&stack_config.ast, None)?.ok_or_else(|| {
                 anyhow::anyhow!(
-                    "AST file not found for '{}'. Build your spec crate first.",
-                    spec_config.ast
+                    "AST file not found for '{}'. Build your stack crate first.",
+                    stack_config.ast
                 )
             })?;
 
-            let name = spec_config.name.as_deref().unwrap_or(&spec_config.ast);
+            let name = stack_config.name.as_deref().unwrap_or(&stack_config.ast);
             let output = output_override
                 .map(|p| p.into())
                 .unwrap_or_else(|| cfg.get_typescript_output_path(name, None));
@@ -112,16 +104,14 @@ pub fn create_typescript(
 
             (ast, output, pkg)
         } else {
-            // Not in config - try auto-discovery
-            find_spec_by_name(spec_name, output_override, package_name_override)?
+            find_stack_by_name(stack_name, output_override, package_name_override)?
         }
     } else {
-        // No config - use auto-discovery
-        find_spec_by_name(spec_name, output_override, package_name_override)?
+        find_stack_by_name(stack_name, output_override, package_name_override)?
     };
 
     println!(
-        "{} Found spec: {}",
+        "{} Found stack: {}",
         "✓".green().bold(),
         ast.entity_name.bold()
     );
@@ -131,7 +121,6 @@ pub fn create_typescript(
     }
     println!("  Output: {}", output_path.display());
 
-    // Create output directory if it doesn't exist
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create output directory: {}", parent.display()))?;
@@ -139,7 +128,6 @@ pub fn create_typescript(
 
     println!("\n{} Generating TypeScript SDK...", "→".blue().bold());
 
-    // Generate SDK from AST
     generate_sdk_from_ast(&ast, &output_path, &package_name)?;
 
     println!(
@@ -151,22 +139,21 @@ pub fn create_typescript(
     Ok(())
 }
 
-/// Find a spec by name using auto-discovery
-fn find_spec_by_name(
-    spec_name: &str,
+fn find_stack_by_name(
+    stack_name: &str,
     output_override: Option<String>,
     package_name_override: Option<String>,
 ) -> Result<(DiscoveredAst, std::path::PathBuf, String)> {
-    let ast = find_ast_file(spec_name, None)?.ok_or_else(|| {
+    let ast = find_ast_file(stack_name, None)?.ok_or_else(|| {
         anyhow::anyhow!(
-            "Spec '{}' not found.\n\
-             Make sure you've built your spec crate to generate .hyperstack/*.ast.json files.",
-            spec_name
+            "Stack '{}' not found.\n\
+             Make sure you've built your stack crate to generate .hyperstack/*.ast.json files.",
+            stack_name
         )
     })?;
 
     let output = output_override.map(|p| p.into()).unwrap_or_else(|| {
-        std::path::PathBuf::from(format!("./generated/{}-stack.ts", ast.spec_name))
+        std::path::PathBuf::from(format!("./generated/{}-stack.ts", ast.stack_name))
     });
 
     let pkg = package_name_override.unwrap_or_else(|| "hyperstack-react".to_string());
@@ -215,23 +202,27 @@ fn generate_sdk_from_ast(
 
 pub fn create_rust(
     config_path: &str,
-    spec_name: &str,
+    stack_name: &str,
     output_override: Option<String>,
     crate_name_override: Option<String>,
 ) -> Result<()> {
-    println!("{} Looking for spec '{}'...", "→".blue().bold(), spec_name);
+    println!(
+        "{} Looking for stack '{}'...",
+        "→".blue().bold(),
+        stack_name
+    );
 
     let config = HyperstackConfig::load_optional(config_path)?;
 
-    let (ast, output_dir, crate_name) = find_spec_for_rust(
-        spec_name,
+    let (ast, output_dir, crate_name) = find_stack_for_rust(
+        stack_name,
         config.as_ref(),
         output_override,
         crate_name_override,
     )?;
 
     println!(
-        "{} Found spec: {}",
+        "{} Found stack: {}",
         "✓".green().bold(),
         ast.entity_name.bold()
     );
@@ -278,35 +269,35 @@ pub fn create_rust(
     Ok(())
 }
 
-fn find_spec_for_rust(
-    spec_name: &str,
+fn find_stack_for_rust(
+    stack_name: &str,
     config: Option<&HyperstackConfig>,
     output_override: Option<String>,
     crate_name_override: Option<String>,
 ) -> Result<(DiscoveredAst, std::path::PathBuf, String)> {
     let ast = if let Some(cfg) = config {
-        if let Some(spec_config) = cfg.find_spec(spec_name) {
-            find_ast_file(&spec_config.ast, None)?.ok_or_else(|| {
+        if let Some(stack_config) = cfg.find_stack(stack_name) {
+            find_ast_file(&stack_config.ast, None)?.ok_or_else(|| {
                 anyhow::anyhow!(
-                    "AST file not found for '{}'. Build your spec crate first.",
-                    spec_config.ast
+                    "AST file not found for '{}'. Build your stack crate first.",
+                    stack_config.ast
                 )
             })?
         } else {
-            find_ast_file(spec_name, None)?.ok_or_else(|| {
+            find_ast_file(stack_name, None)?.ok_or_else(|| {
                 anyhow::anyhow!(
-                    "Spec '{}' not found.\n\
-                     Make sure you've built your spec crate to generate .hyperstack/*.ast.json files.",
-                    spec_name
+                    "Stack '{}' not found.\n\
+                     Make sure you've built your stack crate to generate .hyperstack/*.ast.json files.",
+                    stack_name
                 )
             })?
         }
     } else {
-        find_ast_file(spec_name, None)?.ok_or_else(|| {
+        find_ast_file(stack_name, None)?.ok_or_else(|| {
             anyhow::anyhow!(
-                "Spec '{}' not found.\n\
-                 Make sure you've built your spec crate to generate .hyperstack/*.ast.json files.",
-                spec_name
+                "Stack '{}' not found.\n\
+                 Make sure you've built your stack crate to generate .hyperstack/*.ast.json files.",
+                stack_name
             )
         })?
     };
@@ -319,7 +310,7 @@ fn find_spec_for_rust(
                 .unwrap_or_else(|| std::path::PathBuf::from("./generated"))
         });
 
-    let crate_name = crate_name_override.unwrap_or_else(|| format!("{}-stack", ast.spec_name));
+    let crate_name = crate_name_override.unwrap_or_else(|| format!("{}-stack", ast.stack_name));
 
     Ok((ast, output_dir, crate_name))
 }

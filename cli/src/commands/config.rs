@@ -4,11 +4,8 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 
-use crate::config::{discover_ast_files, HyperstackConfig, ProjectConfig, SdkConfig, SpecConfig};
+use crate::config::{discover_ast_files, HyperstackConfig, ProjectConfig, SdkConfig, StackConfig};
 
-/// Initialize a new hyperstack.toml configuration file
-///
-/// Now smarter - auto-detects AST files and prompts for project name
 pub fn init(config_path: &str) -> Result<()> {
     let path = Path::new(config_path);
 
@@ -21,13 +18,12 @@ pub fn init(config_path: &str) -> Result<()> {
 
     println!("{} Initializing Hyperstack project...\n", "→".blue().bold());
 
-    // Auto-discover AST files
     println!("{} Scanning for AST files...", "→".blue().bold());
     let discovered = discover_ast_files(None)?;
 
     if discovered.is_empty() {
         println!("  {}", "No AST files found.".yellow());
-        println!("  Build your spec crate first to generate .hyperstack/*.ast.json files.\n");
+        println!("  Build your stack crate first to generate .hyperstack/*.ast.json files.\n");
     } else {
         println!("  {} Found {} AST file(s):", "✓".green(), discovered.len());
         for ast in &discovered {
@@ -41,14 +37,12 @@ pub fn init(config_path: &str) -> Result<()> {
         println!();
     }
 
-    // Prompt for project name
     let project_name = prompt_project_name()?;
 
-    // Build config
-    let specs: Vec<SpecConfig> = discovered
+    let stacks: Vec<StackConfig> = discovered
         .iter()
-        .map(|ast| SpecConfig {
-            name: Some(ast.spec_name.clone()),
+        .map(|ast| StackConfig {
+            name: Some(ast.stack_name.clone()),
             ast: ast.entity_name.clone(),
             description: None,
         })
@@ -58,7 +52,7 @@ pub fn init(config_path: &str) -> Result<()> {
         project: ProjectConfig {
             name: project_name.clone(),
         },
-        specs,
+        stacks,
         sdk: Some(SdkConfig {
             output_dir: "./generated".to_string(),
             typescript_output_dir: None,
@@ -69,7 +63,6 @@ pub fn init(config_path: &str) -> Result<()> {
         build: None,
     };
 
-    // Write config
     let config_toml = toml::to_string_pretty(&config)?;
     fs::write(path, &config_toml)
         .with_context(|| format!("Failed to write config file: {}", path.display()))?;
@@ -77,30 +70,25 @@ pub fn init(config_path: &str) -> Result<()> {
     println!("{} Created {}", "✓".green().bold(), path.display());
     println!();
 
-    if config.specs.is_empty() {
+    if config.stacks.is_empty() {
         println!("{}", "Next steps:".bold());
-        println!("  1. Build your spec crate: {}", "cargo build".cyan());
-        println!("  2. Run init again or manually add specs to hyperstack.toml");
-        println!("  3. Push your spec: {}", "hyperstack spec push".cyan());
+        println!("  1. Build your stack crate: {}", "cargo build".cyan());
+        println!("  2. Run init again or manually add stacks to hyperstack.toml");
+        println!("  3. Push your stack: {}", "hs stack push".cyan());
     } else {
         println!("{}", "Next steps:".bold());
         println!(
             "  {} to verify your configuration",
-            "hyperstack config validate".cyan()
+            "hs config validate".cyan()
         );
-        println!(
-            "  {} to push your specs to remote",
-            "hyperstack spec push".cyan()
-        );
-        println!("  {} to deploy (push + build)", "hyperstack up".cyan());
+        println!("  {} to push your stacks to remote", "hs stack push".cyan());
+        println!("  {} to deploy (push + build)", "hs up".cyan());
     }
 
     Ok(())
 }
 
-/// Prompt user for project name
 fn prompt_project_name() -> Result<String> {
-    // Try to derive from current directory
     let default_name = std::env::current_dir()
         .ok()
         .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
@@ -120,13 +108,11 @@ fn prompt_project_name() -> Result<String> {
     }
 }
 
-/// Validate the hyperstack.toml configuration file
 pub fn validate(config_path: &str) -> Result<()> {
     println!("{} Validating configuration...", "→".blue().bold());
 
-    let config = HyperstackConfig::load(config_path).context(
-        "Failed to load configuration. Run `hyperstack init` to create a configuration file.",
-    )?;
+    let config = HyperstackConfig::load(config_path)
+        .context("Failed to load configuration. Run `hs init` to create a configuration file.")?;
 
     println!("{} Configuration is valid!", "✓".green().bold());
     println!();
@@ -141,17 +127,17 @@ pub fn validate(config_path: &str) -> Result<()> {
 
     println!();
 
-    if config.specs.is_empty() {
-        println!("  {} No specs defined", "!".yellow());
+    if config.stacks.is_empty() {
+        println!("  {} No stacks defined", "!".yellow());
         println!(
-            "  Add specs to hyperstack.toml or run {} to auto-detect",
-            "hyperstack init".cyan()
+            "  Add stacks to hyperstack.toml or run {} to auto-detect",
+            "hs init".cyan()
         );
     } else {
-        println!("  {} Specs ({}):", "•".dimmed(), config.specs.len());
-        for spec in &config.specs {
-            let name = spec.name.as_deref().unwrap_or(&spec.ast);
-            println!("    {} {} (ast: {})", "•".dimmed(), name.bold(), spec.ast);
+        println!("  {} Stacks ({}):", "•".dimmed(), config.stacks.len());
+        for stack in &config.stacks {
+            let name = stack.name.as_deref().unwrap_or(&stack.ast);
+            println!("    {} {} (ast: {})", "•".dimmed(), name.bold(), stack.ast);
         }
     }
 
