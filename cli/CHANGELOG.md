@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.11](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.1.10...hyperstack-cli-v0.1.11) (2026-01-14)
+
+
+### Bug Fixes
+
+* Display url in cli ([4b18925](https://github.com/HyperTekOrg/hyperstack/commit/4b189253e8a182674048044b7303ee1f8822ff30))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.1.10 to 0.1.11
+
 ## [0.1.10](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.1.9...hyperstack-cli-v0.1.10) (2026-01-13)
 
 
