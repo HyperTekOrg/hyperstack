@@ -268,21 +268,6 @@ match state {
 | List | `Entity/list` | All entities, key-value lookups |
 | Append | `Entity/append` | Append-only event log |
 
-## Examples
-
-See the `examples/` directory for complete examples:
-
-- **flip/** - Flip game state tracking
-- **pump/** - Token launch and trade monitoring
-
-Run examples with:
-
-```bash
-cargo run --example flip
-cargo run --example pump_new
-cargo run --example pump_trades
-```
-
 ## License
 
 MIT

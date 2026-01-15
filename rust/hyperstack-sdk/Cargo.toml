@@ -11,18 +11,6 @@ documentation = "https://docs.rs/hyperstack-sdk"
 keywords = ["hyperstack", "streaming", "sdk", "client", "websocket"]
 categories = ["api-bindings", "asynchronous"]
 
-[[example]]
-name = "flip"
-path = "examples/flip/flip_demo.rs"
-
-[[example]]
-name = "pump_new"
-path = "examples/pump/new_launches.rs"
-
-[[example]]
-name = "pump_trades"
-path = "examples/pump/token_trades.rs"
-
 [features]
 default = ["rustls"]
 rustls = ["tokio-tungstenite/rustls-tls-webpki-roots"]
