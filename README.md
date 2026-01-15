@@ -15,6 +15,7 @@ Real-time streaming data pipelines for Solana - transform on-chain events into t
 | hyperstack-server | Rust | crates.io | WebSocket server and projection handlers |
 | hyperstack-sdk | Rust | crates.io | Rust client SDK |
 | hyperstack-cli | Rust | crates.io | CLI tool for SDK generation |
+| hyperstack-typescript | TypeScript | npm | Pure TypeScript SDK (framework-agnostic) |
 | hyperstack-react | TypeScript | npm | React SDK with hooks |
 | hyperstack-sdk | Python | PyPI | Python client SDK *(work in progress - not yet published)* |
 
@@ -25,6 +26,11 @@ Add to your `Cargo.toml`:
 ```toml
 [dependencies]
 hyperstack = "0.1"
+```
+
+### TypeScript (Core)
+```bash
+npm install hyperstack-typescript
 ```
 
 ### TypeScript / React
@@ -48,7 +54,8 @@ pip install hyperstack-sdk
 - `rust/hyperstack-server/`: WebSocket server and projection handlers
 - `rust/hyperstack-sdk/`: Rust client SDK
 - `cli/`: CLI tool for SDK generation
-- `typescript/`: React SDK with hooks
+- `typescript/core/`: Pure TypeScript SDK
+- `typescript/react/`: React SDK with hooks
 - `python/hyperstack-sdk/`: Python client SDK
 
 ## Releasing
@@ -104,8 +111,9 @@ cd hyperstack
 # Build all Rust packages
 cargo build --workspace
 
-# Build TypeScript SDK
-cd typescript && npm install && npm run build
+# Build TypeScript SDKs
+cd typescript/core && npm install && npm run build
+cd ../react && npm install && npm run build
 
 # Install Python SDK in development mode
 cd python/hyperstack-sdk && pip install -e .
@@ -121,7 +129,8 @@ cargo test --workspace
 cargo clippy --workspace -- -D warnings
 
 # TypeScript tests
-cd typescript && npm test
+cd typescript/core && npm test
+cd ../react && npm test
 
 # Python tests
 cd python/hyperstack-sdk && pytest
@@ -138,7 +147,9 @@ hyperstack/
 ├── rust/
 │   ├── hyperstack-sdk/      # Rust client SDK
 │   └── hyperstack-server/   # WebSocket server
-├── typescript/          # React SDK (hyperstack-react)
+├── typescript/
+│   ├── core/            # Pure TypeScript SDK (hyperstack-typescript)
+│   └── react/           # React SDK (hyperstack-react)
 ├── python/hyperstack-sdk/   # Python client SDK
 └── docs/                # Documentation (MDX)
 ```
@@ -187,4 +198,4 @@ We use conventional commits for automated releases:
 This project uses a dual license approach:
 
 - **Rust infrastructure** (hyperstack, interpreter, hyperstack-macros, server, cli): [Apache-2.0](hyperstack/LICENSE)
-- **Client SDKs** (TypeScript, Python, Rust SDK): [MIT](typescript/LICENSE)
+- **Client SDKs** (TypeScript, Python, Rust SDK): [MIT](typescript/react/LICENSE)
