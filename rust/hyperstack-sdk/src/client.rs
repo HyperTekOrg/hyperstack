@@ -1,10 +1,10 @@
 use crate::config::{ConnectionConfig, HyperStackConfig};
 use crate::connection::{ConnectionManager, ConnectionState};
-use crate::entity::Entity;
+use crate::entity::{Entity, EntityData};
 use crate::error::HyperStackError;
 use crate::frame::Frame;
 use crate::store::SharedStore;
-use crate::stream::EntityStream;
+use crate::stream::{EntityStream, RichEntityStream};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -28,7 +28,9 @@ impl HyperStack {
         self.connection
             .ensure_subscription(E::state_view(), Some(key))
             .await;
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        self.store
+            .wait_for_view_ready(E::NAME, self.config.initial_data_timeout)
+            .await;
         self.store.get::<E::Data>(E::NAME, key).await
     }
 
@@ -36,7 +38,9 @@ impl HyperStack {
         self.connection
             .ensure_subscription(E::list_view(), None)
             .await;
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        self.store
+            .wait_for_view_ready(E::NAME, self.config.initial_data_timeout)
+            .await;
         self.store.list::<E::Data>(E::NAME).await
     }
 
@@ -52,6 +56,47 @@ impl HyperStack {
             .ensure_subscription(E::kv_view(), Some(key))
             .await;
         EntityStream::new_filtered(self.store.subscribe(), E::NAME.to_string(), key.to_string())
+    }
+
+    pub async fn watch_keys<E: Entity>(&self, keys: &[&str]) -> EntityStream<E::Data> {
+        self.connection
+            .ensure_subscription(E::list_view(), None)
+            .await;
+        EntityStream::new_multi_filtered(
+            self.store.subscribe(),
+            E::NAME.to_string(),
+            keys.iter().map(|s| s.to_string()).collect(),
+        )
+    }
+
+    pub async fn watch_rich<E: Entity>(&self) -> RichEntityStream<E::Data> {
+        self.connection
+            .ensure_subscription(E::list_view(), None)
+            .await;
+        RichEntityStream::new(self.store.subscribe(), E::NAME.to_string())
+    }
+
+    pub async fn watch_key_rich<E: Entity>(&self, key: &str) -> RichEntityStream<E::Data> {
+        self.connection
+            .ensure_subscription(E::kv_view(), Some(key))
+            .await;
+        RichEntityStream::new_filtered(self.store.subscribe(), E::NAME.to_string(), key.to_string())
+    }
+
+    pub async fn get_data<D: EntityData>(&self, key: &str) -> Option<D> {
+        self.get::<D::Entity>(key).await
+    }
+
+    pub async fn list_data<D: EntityData>(&self) -> Vec<D> {
+        self.list::<D::Entity>().await
+    }
+
+    pub async fn watch_data<D: EntityData>(&self) -> EntityStream<D> {
+        self.watch::<D::Entity>().await
+    }
+
+    pub async fn watch_key_data<D: EntityData>(&self, key: &str) -> EntityStream<D> {
+        self.watch_key::<D::Entity>(key).await
     }
 
     pub async fn connection_state(&self) -> ConnectionState {
@@ -96,6 +141,11 @@ impl HyperStackBuilder {
 
     pub fn ping_interval(mut self, interval: Duration) -> Self {
         self.config.ping_interval = interval;
+        self
+    }
+
+    pub fn initial_data_timeout(mut self, timeout: Duration) -> Self {
+        self.config.initial_data_timeout = timeout;
         self
     }
 

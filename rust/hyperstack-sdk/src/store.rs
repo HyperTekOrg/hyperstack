@@ -1,8 +1,8 @@
 use crate::frame::{Frame, Operation};
 use serde::de::DeserializeOwned;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, watch, RwLock};
 
 #[derive(Debug, Clone)]
 pub struct StoreUpdate {
@@ -10,19 +10,27 @@ pub struct StoreUpdate {
     pub key: String,
     pub operation: Operation,
     pub data: Option<serde_json::Value>,
+    pub previous: Option<serde_json::Value>,
 }
 
 pub struct SharedStore {
     entities: Arc<RwLock<HashMap<String, HashMap<String, serde_json::Value>>>>,
     updates_tx: broadcast::Sender<StoreUpdate>,
+    ready_views: Arc<RwLock<HashSet<String>>>,
+    ready_tx: watch::Sender<HashSet<String>>,
+    ready_rx: watch::Receiver<HashSet<String>>,
 }
 
 impl SharedStore {
     pub fn new() -> Self {
         let (updates_tx, _) = broadcast::channel(1000);
+        let (ready_tx, ready_rx) = watch::channel(HashSet::new());
         Self {
             entities: Arc::new(RwLock::new(HashMap::new())),
             updates_tx,
+            ready_views: Arc::new(RwLock::new(HashSet::new())),
+            ready_tx,
+            ready_rx,
         }
     }
 
@@ -43,6 +51,8 @@ impl SharedStore {
             .or_insert_with(HashMap::new);
 
         let operation = frame.operation();
+
+        let previous = view_map.get(&frame.key).cloned();
 
         match operation {
             Operation::Upsert | Operation::Create => {
@@ -68,7 +78,49 @@ impl SharedStore {
             key: frame.key,
             operation,
             data: Some(data),
+            previous,
         });
+
+        self.mark_view_ready(entity_name).await;
+    }
+
+    pub async fn mark_view_ready(&self, view: &str) {
+        let mut ready = self.ready_views.write().await;
+        if ready.insert(view.to_string()) {
+            let _ = self.ready_tx.send(ready.clone());
+        }
+    }
+
+    pub async fn wait_for_view_ready(&self, view: &str, timeout: std::time::Duration) -> bool {
+        let entity_name = extract_entity_name(view);
+
+        if self.ready_views.read().await.contains(entity_name) {
+            return true;
+        }
+
+        let mut rx = self.ready_rx.clone();
+        let deadline = tokio::time::Instant::now() + timeout;
+
+        loop {
+            let timeout_remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if timeout_remaining.is_zero() {
+                return false;
+            }
+
+            tokio::select! {
+                result = rx.changed() => {
+                    if result.is_err() {
+                        return false;
+                    }
+                    if rx.borrow().contains(entity_name) {
+                        return true;
+                    }
+                }
+                _ = tokio::time::sleep(timeout_remaining) => {
+                    return false;
+                }
+            }
+        }
     }
 
     pub async fn get<T: DeserializeOwned>(&self, view: &str, key: &str) -> Option<T> {
@@ -124,6 +176,9 @@ impl Clone for SharedStore {
         Self {
             entities: self.entities.clone(),
             updates_tx: self.updates_tx.clone(),
+            ready_views: self.ready_views.clone(),
+            ready_tx: self.ready_tx.clone(),
+            ready_rx: self.ready_rx.clone(),
         }
     }
 }

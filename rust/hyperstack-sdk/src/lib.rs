@@ -1,8 +1,7 @@
 //! Rust client SDK for connecting to HyperStack streaming servers.
 //!
 //! ```rust,ignore
-//! use hyperstack_sdk::{HyperStack, Entity, Update};
-//! use futures_util::StreamExt;
+//! use hyperstack_sdk::prelude::*;
 //! use my_stack::{PumpfunToken, PumpfunTokenEntity};
 //!
 //! #[tokio::main]
@@ -32,6 +31,7 @@ mod connection;
 mod entity;
 mod error;
 mod frame;
+pub mod prelude;
 mod store;
 mod stream;
 mod subscription;
@@ -39,11 +39,11 @@ mod subscription;
 pub use client::{HyperStack, HyperStackBuilder};
 pub use config::HyperStackConfig;
 pub use connection::ConnectionState;
-pub use entity::{Entity, Filterable};
+pub use entity::{Entity, EntityData, Filterable};
 pub use error::HyperStackError;
 pub use frame::{Frame, Mode, Operation};
 pub use store::{SharedStore, StoreUpdate};
-pub use stream::{EntityStream, Update};
+pub use stream::{EntityStream, RichEntityStream, RichUpdate, Update};
 pub use subscription::Subscription;
 
 pub use serde_json::Value;

@@ -14,4 +14,3 @@ VIEW=SettlementGame/list cargo run --example flip
 ```
 
 prints full json with wallets, bets, settlement, payouts
-

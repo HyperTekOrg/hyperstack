@@ -6,6 +6,7 @@ pub struct HyperStackConfig {
     pub reconnect_intervals: Vec<Duration>,
     pub max_reconnect_attempts: u32,
     pub ping_interval: Duration,
+    pub initial_data_timeout: Duration,
 }
 
 impl Default for HyperStackConfig {
@@ -21,6 +22,7 @@ impl Default for HyperStackConfig {
             ],
             max_reconnect_attempts: 5,
             ping_interval: Duration::from_secs(15),
+            initial_data_timeout: Duration::from_secs(5),
         }
     }
 }

@@ -25,8 +25,7 @@ hyperstack-sdk = { version = "0.1", default-features = false, features = ["nativ
 ## Quick Start
 
 ```rust
-use hyperstack_sdk::{HyperStack, Entity, Update};
-use futures_util::StreamExt;
+use hyperstack_sdk::prelude::*;
 
 // Import from your generated SDK crate
 use my_stack::{PumpfunToken, PumpfunTokenEntity};
@@ -59,6 +58,8 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
+The `prelude` module re-exports all commonly needed types including `StreamExt`, so you don't need separate imports from `futures_util`.
+
 ## API Reference
 
 ### HyperStack Client
@@ -75,6 +76,7 @@ let hs = HyperStack::builder()
     .auto_reconnect(true)
     .max_reconnect_attempts(10)
     .ping_interval(Duration::from_secs(30))
+    .initial_data_timeout(Duration::from_secs(5))  // Timeout for get()/list()
     .connect()
     .await?;
 ```
@@ -87,6 +89,9 @@ let hs = HyperStack::builder()
 | `list::<E>()` | Get all entities of type E |
 | `watch::<E>()` | Stream all updates for entity type E |
 | `watch_key::<E>(key)` | Stream updates for a specific key |
+| `watch_keys::<E>(&[keys])` | Stream updates for multiple keys efficiently |
+| `watch_rich::<E>()` | Stream rich updates with before/after values |
+| `watch_key_rich::<E>(key)` | Stream rich updates for a specific key |
 | `connection_state()` | Get current connection state |
 | `disconnect()` | Close the connection |
 
@@ -121,9 +126,75 @@ pub enum Update<T> {
 Helper methods:
 
 ```rust
-update.key()       // Get the entity key
-update.data()      // Get data (Some for Upsert/Patch, None for Delete)
-update.is_delete() // Check if this is a deletion
+update.key()        // Get the entity key (borrowed)
+update.data()       // Get data reference (Some for Upsert/Patch, None for Delete)
+update.is_delete()  // Check if this is a deletion
+update.has_data()   // Check if this update has data (true for Upsert/Patch)
+update.into_data()  // Consume and get owned data (Some for Upsert/Patch, None for Delete)
+update.into_key()   // Consume and get owned key
+update.map(|d| ..)  // Transform the data type while preserving the variant
+```
+
+### Rich Updates (Before/After Diffs)
+
+For tracking changes over time, use `RichUpdate<T>` via `watch_rich()`:
+
+```rust
+pub enum RichUpdate<T> {
+    Created { key: String, data: T },
+    Updated { key: String, before: T, after: T },
+    Deleted { key: String, last_known: Option<T> },
+}
+```
+
+Example:
+
+```rust
+let mut stream = hs.watch_rich::<PumpfunTokenEntity>().await;
+while let Some(update) = stream.next().await {
+    match update {
+        RichUpdate::Created { key, data } => {
+            println!("New entity {}: {:?}", key, data);
+        }
+        RichUpdate::Updated { key, before, after } => {
+            println!("Entity {} changed from {:?} to {:?}", key, before, after);
+        }
+        RichUpdate::Deleted { key, last_known } => {
+            println!("Entity {} deleted, was: {:?}", key, last_known);
+        }
+    }
+}
+```
+
+### Batch Key Watching
+
+Watch multiple specific keys efficiently with a single subscription:
+
+```rust
+// Watch specific tokens instead of all tokens
+let keys = &["mint1", "mint2", "mint3"];
+let mut stream = hs.watch_keys::<PumpfunTokenEntity>(keys).await;
+
+while let Some(update) = stream.next().await {
+    // Only receives updates for the specified keys
+    println!("{}: {:?}", update.key(), update.data());
+}
+```
+
+This is more efficient than calling `watch_key()` multiple times as it uses a single underlying subscription with client-side filtering.
+
+### Type Inference with EntityData
+
+If your generated SDK implements the `EntityData` trait, you can use type inference instead of turbofish syntax:
+
+```rust
+// With EntityData trait implemented:
+let token: PumpfunToken = hs.get_data("mint").await.unwrap();
+let tokens: Vec<PumpfunToken> = hs.list_data().await;
+let stream: EntityStream<PumpfunToken> = hs.watch_data().await;
+
+// Original turbofish syntax still works:
+let token = hs.get::<PumpfunTokenEntity>("mint").await;
 ```
 
 ## Generating a Rust SDK

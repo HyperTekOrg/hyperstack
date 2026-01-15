@@ -75,3 +75,23 @@ pub trait Filterable: Entity {
     /// Convert filter to query parameters.
     fn filter_to_params(filter: &Self::Filter) -> std::collections::HashMap<String, String>;
 }
+
+/// Trait that maps a Data type back to its Entity type.
+///
+/// This enables type inference from return type instead of requiring turbofish syntax.
+///
+/// # Example
+///
+/// ```ignore
+/// // With EntityData implemented:
+/// let token: PumpfunToken = hs.get_data("mint").await?;
+///
+/// // Without EntityData (original API still works):
+/// let token = hs.get::<PumpfunTokenEntity>("mint").await;
+/// ```
+///
+/// The generated SDK code automatically implements this trait for each entity's data type.
+pub trait EntityData: Serialize + DeserializeOwned + Clone + Send + Sync + 'static {
+    /// The Entity type that produces this Data type.
+    type Entity: Entity<Data = Self>;
+}
