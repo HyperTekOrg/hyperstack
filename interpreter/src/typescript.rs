@@ -101,10 +101,33 @@ impl<S> TypeScriptCompiler<S> {
     }
 
     fn generate_imports(&self) -> String {
-        format!(
-            "import {{ defineStack, createStateView, createListView }} from '{}';",
-            self.config.package_name
-        )
+        // No imports needed - generated file is self-contained
+        String::new()
+    }
+
+    fn generate_view_helpers(&self) -> String {
+        r#"// ============================================================================
+// View Definition Types (framework-agnostic)
+// ============================================================================
+
+/** View definition with embedded entity type */
+export interface ViewDef<T, TMode extends 'state' | 'list'> {
+  readonly mode: TMode;
+  readonly view: string;
+  /** Phantom field for type inference - not present at runtime */
+  readonly _entity?: T;
+}
+
+/** Helper to create typed state view definitions */
+function stateView<T>(view: string): ViewDef<T, 'state'> {
+  return { mode: 'state', view } as const;
+}
+
+/** Helper to create typed list view definitions */
+function listView<T>(view: string): ViewDef<T, 'list'> {
+  return { mode: 'list', view } as const;
+}"#
+        .to_string()
     }
 
     fn generate_interfaces(&self) -> String {
@@ -403,29 +426,30 @@ impl<S> TypeScriptCompiler<S> {
             self.config.export_const_name
         );
 
-        let _views = self.generate_view_definitions();
-        let helpers = if self.config.generate_helpers {
-            self.generate_helper_functions()
-        } else {
-            String::new()
-        };
-
-        let helpers_section = if helpers.is_empty() {
-            String::new()
-        } else {
-            format!(",\n  helpers: {{\n{}\n  }}", helpers)
-        };
+        let view_helpers = self.generate_view_helpers();
 
         format!(
-            r#"export const {} = defineStack({{
+            r#"{}
+
+// ============================================================================
+// Stack Definition
+// ============================================================================
+
+/** Stack definition for {} */
+export const {} = {{
   name: '{}',
   views: {{
     {}: {{
-      state: createStateView<{}>('{}/state'),
-      list: createListView<{}>('{}/list')
-    }}
-  }}{}
-}});"#,
+      state: stateView<{}>('{}/state'),
+      list: listView<{}>('{}/list'),
+    }},
+  }},
+}} as const;
+
+/** Type alias for the stack */
+export type {}Stack = typeof {};"#,
+            view_helpers,
+            entity_pascal,
             export_name,
             stack_name,
             to_camel_case(&self.entity_name),
@@ -433,60 +457,9 @@ impl<S> TypeScriptCompiler<S> {
             self.entity_name,
             entity_pascal,
             self.entity_name,
-            helpers_section
+            entity_pascal,
+            export_name
         )
-    }
-
-    fn generate_view_definitions(&self) -> String {
-        // For now, generate basic state and list views
-        // This can be enhanced to generate specific views based on the spec
-        to_camel_case(&self.entity_name)
-    }
-
-    fn generate_helper_functions(&self) -> String {
-        let mut helpers = Vec::new();
-
-        // Generate helpers based on field types and transformations
-        for handler in &self.spec.handlers {
-            for mapping in &handler.mappings {
-                if let Some(helper) = self.generate_helper_for_mapping(mapping) {
-                    helpers.push(helper);
-                }
-            }
-        }
-
-        helpers.join(",\n")
-    }
-
-    fn generate_helper_for_mapping(&self, mapping: &TypedFieldMapping<S>) -> Option<String> {
-        // Generate helpers based on transformations or field types
-        if let Some(transform) = &mapping.transform {
-            match transform {
-                Transformation::HexEncode => {
-                    let helper_name = format!(
-                        "format{}",
-                        to_pascal_case(&mapping.target_path.replace(".", ""))
-                    );
-                    Some(format!(
-                        "    {}: (value: string) => value.startsWith('0x') ? value : `0x${{value}}`",
-                        helper_name
-                    ))
-                }
-                Transformation::HexDecode => {
-                    let helper_name = format!(
-                        "decode{}",
-                        to_pascal_case(&mapping.target_path.replace(".", ""))
-                    );
-                    Some(format!(
-                        "    {}: (value: string) => value.startsWith('0x') ? value.slice(2) : value",
-                        helper_name
-                    ))
-                }
-                _ => None,
-            }
-        } else {
-            None
-        }
     }
 
     fn mapping_to_typescript_type(&self, mapping: &TypedFieldMapping<S>) -> String {
