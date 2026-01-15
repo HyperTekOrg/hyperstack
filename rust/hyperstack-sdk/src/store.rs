@@ -1,8 +1,27 @@
 use crate::frame::{Frame, Operation};
 use serde::de::DeserializeOwned;
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{broadcast, watch, RwLock};
+
+fn deep_merge(target: &mut Value, patch: &Value) {
+    match (target, patch) {
+        (Value::Object(target_map), Value::Object(patch_map)) => {
+            for (key, patch_value) in patch_map {
+                match target_map.get_mut(key) {
+                    Some(target_value) => deep_merge(target_value, patch_value),
+                    None => {
+                        target_map.insert(key.clone(), patch_value.clone());
+                    }
+                }
+            }
+        }
+        (target, patch) => {
+            *target = patch.clone();
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct StoreUpdate {
@@ -11,6 +30,9 @@ pub struct StoreUpdate {
     pub operation: Operation,
     pub data: Option<serde_json::Value>,
     pub previous: Option<serde_json::Value>,
+    /// The raw patch data for Patch operations (before merging into full state).
+    /// This allows consumers to see exactly what fields changed without diffing.
+    pub patch: Option<serde_json::Value>,
 }
 
 pub struct SharedStore {
@@ -52,31 +74,32 @@ impl SharedStore {
 
         let previous = view_map.get(&frame.key).cloned();
 
-        match operation {
+        let (current, patch) = match operation {
             Operation::Upsert | Operation::Create => {
                 view_map.insert(frame.key.clone(), frame.data.clone());
+                (Some(frame.data), None)
             }
             Operation::Patch => {
+                let raw_patch = frame.data.clone();
                 let entry = view_map
                     .entry(frame.key.clone())
                     .or_insert_with(|| serde_json::json!({}));
-                if let (Some(obj), Some(patch)) = (entry.as_object_mut(), frame.data.as_object()) {
-                    for (k, v) in patch {
-                        obj.insert(k.clone(), v.clone());
-                    }
-                }
+                deep_merge(entry, &frame.data);
+                (Some(entry.clone()), Some(raw_patch))
             }
             Operation::Delete => {
                 view_map.remove(&frame.key);
+                (None, None)
             }
-        }
+        };
 
         let _ = self.updates_tx.send(StoreUpdate {
             view: entity_name.to_string(),
             key: frame.key,
             operation,
-            data: Some(frame.data),
+            data: current,
             previous,
+            patch,
         });
 
         self.mark_view_ready(entity_name).await;

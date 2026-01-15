@@ -18,9 +18,20 @@ pub enum Update<T> {
 
 #[derive(Debug, Clone)]
 pub enum RichUpdate<T> {
-    Created { key: String, data: T },
-    Updated { key: String, before: T, after: T },
-    Deleted { key: String, last_known: Option<T> },
+    Created {
+        key: String,
+        data: T,
+    },
+    Updated {
+        key: String,
+        before: T,
+        after: T,
+        patch: Option<serde_json::Value>,
+    },
+    Deleted {
+        key: String,
+        last_known: Option<T>,
+    },
 }
 
 impl<T> Update<T> {
@@ -116,6 +127,20 @@ impl<T> RichUpdate<T> {
 
     pub fn is_deleted(&self) -> bool {
         matches!(self, RichUpdate::Deleted { .. })
+    }
+
+    pub fn patch(&self) -> Option<&serde_json::Value> {
+        match self {
+            RichUpdate::Updated { patch, .. } => patch.as_ref(),
+            _ => None,
+        }
+    }
+
+    pub fn has_patch_field(&self, field: &str) -> bool {
+        self.patch()
+            .and_then(|p| p.as_object())
+            .map(|obj| obj.contains_key(field))
+            .unwrap_or(false)
     }
 }
 
@@ -315,6 +340,7 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for RichEntity
                                                 key: update.key,
                                                 before,
                                                 after,
+                                                patch: update.patch,
                                             }));
                                         } else {
                                             return Poll::Ready(Some(RichUpdate::Created {
