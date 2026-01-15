@@ -23,7 +23,7 @@ pub enum ConnectionCommand {
     Disconnect,
 }
 
-pub struct ConnectionManager {
+struct ConnectionManagerInner {
     #[allow(dead_code)]
     url: String,
     state: Arc<RwLock<ConnectionState>>,
@@ -33,13 +33,18 @@ pub struct ConnectionManager {
     command_tx: mpsc::Sender<ConnectionCommand>,
 }
 
+#[derive(Clone)]
+pub struct ConnectionManager {
+    inner: Arc<ConnectionManagerInner>,
+}
+
 impl ConnectionManager {
     pub async fn new(url: String, config: ConnectionConfig, frame_tx: mpsc::Sender<Frame>) -> Self {
         let (command_tx, command_rx) = mpsc::channel(100);
         let state = Arc::new(RwLock::new(ConnectionState::Disconnected));
         let subscriptions = Arc::new(RwLock::new(SubscriptionRegistry::new()));
 
-        let manager = Self {
+        let inner = ConnectionManagerInner {
             url: url.clone(),
             state: state.clone(),
             subscriptions: subscriptions.clone(),
@@ -49,11 +54,13 @@ impl ConnectionManager {
 
         spawn_connection_loop(url, state, subscriptions, config, frame_tx, command_rx);
 
-        manager
+        Self {
+            inner: Arc::new(inner),
+        }
     }
 
     pub async fn state(&self) -> ConnectionState {
-        *self.state.read().await
+        *self.inner.state.read().await
     }
 
     pub async fn ensure_subscription(&self, view: &str, key: Option<&str>) {
@@ -64,8 +71,9 @@ impl ConnectionManager {
             filters: None,
         };
 
-        if !self.subscriptions.read().await.contains(&sub) {
+        if !self.inner.subscriptions.read().await.contains(&sub) {
             let _ = self
+                .inner
                 .command_tx
                 .send(ConnectionCommand::Subscribe(sub))
                 .await;
@@ -75,13 +83,18 @@ impl ConnectionManager {
     #[allow(dead_code)]
     pub async fn subscribe(&self, sub: Subscription) {
         let _ = self
+            .inner
             .command_tx
             .send(ConnectionCommand::Subscribe(sub))
             .await;
     }
 
     pub async fn disconnect(&self) {
-        let _ = self.command_tx.send(ConnectionCommand::Disconnect).await;
+        let _ = self
+            .inner
+            .command_tx
+            .send(ConnectionCommand::Disconnect)
+            .await;
     }
 }
 

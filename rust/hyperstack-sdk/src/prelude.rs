@@ -15,8 +15,9 @@
 //! ```
 
 pub use crate::{
-    Entity, EntityData, EntityStream, Filterable, HyperStack, HyperStackBuilder, HyperStackConfig,
-    HyperStackError, RichEntityStream, RichUpdate, Update,
+    Entity, EntityData, EntityStream, FilterMapStream, Filterable, FilteredStream, HyperStack,
+    HyperStackBuilder, HyperStackConfig, HyperStackError, MapStream, RichEntityStream, RichUpdate,
+    Update,
 };
 
 pub use futures_util::StreamExt;

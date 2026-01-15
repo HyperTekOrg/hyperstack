@@ -43,7 +43,10 @@ pub use entity::{Entity, EntityData, Filterable};
 pub use error::HyperStackError;
 pub use frame::{Frame, Mode, Operation};
 pub use store::{SharedStore, StoreUpdate};
-pub use stream::{EntityStream, RichEntityStream, RichUpdate, Update};
+pub use stream::{
+    EntityStream, FilterMapStream, FilteredStream, KeyFilter, MapStream, RichEntityStream,
+    RichUpdate, Update,
+};
 pub use subscription::Subscription;
 
 pub use serde_json::Value;

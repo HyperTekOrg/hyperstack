@@ -4,7 +4,7 @@ use crate::entity::{Entity, EntityData};
 use crate::error::HyperStackError;
 use crate::frame::Frame;
 use crate::store::SharedStore;
-use crate::stream::{EntityStream, RichEntityStream};
+use crate::stream::{EntityStream, KeyFilter, RichEntityStream};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -44,43 +44,59 @@ impl HyperStack {
         self.store.list::<E::Data>(E::NAME).await
     }
 
-    pub async fn watch<E: Entity>(&self) -> EntityStream<E::Data> {
-        self.connection
-            .ensure_subscription(E::list_view(), None)
-            .await;
-        EntityStream::new(self.store.subscribe(), E::NAME.to_string())
-    }
-
-    pub async fn watch_key<E: Entity>(&self, key: &str) -> EntityStream<E::Data> {
-        self.connection
-            .ensure_subscription(E::list_view(), Some(key))
-            .await;
-        EntityStream::new_filtered(self.store.subscribe(), E::NAME.to_string(), key.to_string())
-    }
-
-    pub async fn watch_keys<E: Entity>(&self, keys: &[&str]) -> EntityStream<E::Data> {
-        self.connection
-            .ensure_subscription(E::list_view(), None)
-            .await;
-        EntityStream::new_multi_filtered(
-            self.store.subscribe(),
+    pub fn watch<E: Entity>(&self) -> EntityStream<E::Data> {
+        EntityStream::new_lazy(
+            self.connection.clone(),
+            self.store.clone(),
             E::NAME.to_string(),
-            keys.iter().map(|s| s.to_string()).collect(),
+            E::list_view().to_string(),
+            KeyFilter::None,
+            None,
         )
     }
 
-    pub async fn watch_rich<E: Entity>(&self) -> RichEntityStream<E::Data> {
-        self.connection
-            .ensure_subscription(E::list_view(), None)
-            .await;
-        RichEntityStream::new(self.store.subscribe(), E::NAME.to_string())
+    pub fn watch_key<E: Entity>(&self, key: &str) -> EntityStream<E::Data> {
+        EntityStream::new_lazy(
+            self.connection.clone(),
+            self.store.clone(),
+            E::NAME.to_string(),
+            E::list_view().to_string(),
+            KeyFilter::Single(key.to_string()),
+            Some(key.to_string()),
+        )
     }
 
-    pub async fn watch_key_rich<E: Entity>(&self, key: &str) -> RichEntityStream<E::Data> {
-        self.connection
-            .ensure_subscription(E::list_view(), Some(key))
-            .await;
-        RichEntityStream::new_filtered(self.store.subscribe(), E::NAME.to_string(), key.to_string())
+    pub fn watch_keys<E: Entity>(&self, keys: &[&str]) -> EntityStream<E::Data> {
+        EntityStream::new_lazy(
+            self.connection.clone(),
+            self.store.clone(),
+            E::NAME.to_string(),
+            E::list_view().to_string(),
+            KeyFilter::Multiple(keys.iter().map(|s| s.to_string()).collect()),
+            None,
+        )
+    }
+
+    pub fn watch_rich<E: Entity>(&self) -> RichEntityStream<E::Data> {
+        RichEntityStream::new_lazy(
+            self.connection.clone(),
+            self.store.clone(),
+            E::NAME.to_string(),
+            E::list_view().to_string(),
+            KeyFilter::None,
+            None,
+        )
+    }
+
+    pub fn watch_key_rich<E: Entity>(&self, key: &str) -> RichEntityStream<E::Data> {
+        RichEntityStream::new_lazy(
+            self.connection.clone(),
+            self.store.clone(),
+            E::NAME.to_string(),
+            E::list_view().to_string(),
+            KeyFilter::Single(key.to_string()),
+            Some(key.to_string()),
+        )
     }
 
     pub async fn get_data<D: EntityData>(&self, key: &str) -> Option<D> {
@@ -91,12 +107,12 @@ impl HyperStack {
         self.list::<D::Entity>().await
     }
 
-    pub async fn watch_data<D: EntityData>(&self) -> EntityStream<D> {
-        self.watch::<D::Entity>().await
+    pub fn watch_data<D: EntityData>(&self) -> EntityStream<D> {
+        self.watch::<D::Entity>()
     }
 
-    pub async fn watch_key_data<D: EntityData>(&self, key: &str) -> EntityStream<D> {
-        self.watch_key::<D::Entity>(key).await
+    pub fn watch_key_data<D: EntityData>(&self, key: &str) -> EntityStream<D> {
+        self.watch_key::<D::Entity>(key)
     }
 
     pub async fn connection_state(&self) -> ConnectionState {
