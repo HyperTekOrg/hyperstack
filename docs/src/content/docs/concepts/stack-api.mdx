@@ -317,11 +317,10 @@ stack.views.tokens.list.use({
 
 View paths follow the pattern: `{EntityName}/{mode}`
 
-| Mode    | Returns             | Example       |
-| ------- | ------------------- | ------------- |
-| `list`  | `T[]`               | `Token/list`  |
-| `state` | `T`                 | `Token/state` |
-| `kv`    | `Record<string, T>` | `Token/kv`    |
+| Mode    | Returns | Example       |
+| ------- | ------- | ------------- |
+| `list`  | `T[]`   | `Token/list`  |
+| `state` | `T`     | `Token/state` |
 
 The entity name must match the `#[entity(name = "EntityName")]` in your Rust definition.
 

@@ -53,7 +53,7 @@ impl HyperStack {
 
     pub async fn watch_key<E: Entity>(&self, key: &str) -> EntityStream<E::Data> {
         self.connection
-            .ensure_subscription(E::kv_view(), Some(key))
+            .ensure_subscription(E::list_view(), Some(key))
             .await;
         EntityStream::new_filtered(self.store.subscribe(), E::NAME.to_string(), key.to_string())
     }
@@ -78,7 +78,7 @@ impl HyperStack {
 
     pub async fn watch_key_rich<E: Entity>(&self, key: &str) -> RichEntityStream<E::Data> {
         self.connection
-            .ensure_subscription(E::kv_view(), Some(key))
+            .ensure_subscription(E::list_view(), Some(key))
             .await;
         RichEntityStream::new_filtered(self.store.subscribe(), E::NAME.to_string(), key.to_string())
     }

@@ -3,10 +3,12 @@ from hyperstack import HyperStackClient
 from dataclasses import dataclass
 from typing import Optional, Any, Dict
 
+
 @dataclass
 class GameId:
     global_count: int
     account_id: int
+
 
 @dataclass
 class GameStatus:
@@ -14,6 +16,7 @@ class GameStatus:
     created_at: int
     activated_at: Optional[int] = None
     settled_at: Optional[int] = None
+
 
 @dataclass
 class GameMetrics:
@@ -25,6 +28,7 @@ class GameMetrics:
     house_profit_loss: Optional[int] = None
     total_payouts_distributed: Optional[int] = None
     unique_players: Optional[int] = None
+
 
 @dataclass
 class Game:
@@ -42,13 +46,13 @@ def parse_game(data: Dict[str, Any]) -> Game:
     return Game(
         id=GameId(
             global_count=id_data.get("global_count", 0),
-            account_id=id_data.get("account_id", 0)
+            account_id=id_data.get("account_id", 0),
         ),
         status=GameStatus(
             current=status_data.get("current", ""),
             created_at=status_data.get("created_at", 0),
             activated_at=status_data.get("activated_at"),
-            settled_at=status_data.get("settled_at")
+            settled_at=status_data.get("settled_at"),
         ),
         metrics=GameMetrics(
             bet_count=metrics_data.get("bet_count", 0),
@@ -58,18 +62,15 @@ def parse_game(data: Dict[str, Any]) -> Game:
             claim_rate=metrics_data.get("claim_rate"),
             house_profit_loss=metrics_data.get("house_profit_loss"),
             total_payouts_distributed=metrics_data.get("total_payouts_distributed"),
-            unique_players=metrics_data.get("unique_players")
+            unique_players=metrics_data.get("unique_players"),
         ),
-        events=data.get("events")
+        events=data.get("events"),
     )
 
 
 async def main():
     async with HyperStackClient("ws://localhost:8080") as client:
-        game_store = client.subscribe(
-            view="SettlementGame/kv",
-            parser=parse_game
-        )
+        game_store = client.subscribe(view="SettlementGame/list", parser=parse_game)
 
         print(f"connected, watching {game_store.view}\n")
 

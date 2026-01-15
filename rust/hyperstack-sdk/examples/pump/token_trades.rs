@@ -37,9 +37,6 @@ impl Entity for PumpTokenEntity {
     fn list_view() -> &'static str {
         "PumpToken/list"
     }
-    fn kv_view() -> &'static str {
-        "PumpToken/kv"
-    }
 }
 
 #[tokio::main]

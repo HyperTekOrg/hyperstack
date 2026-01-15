@@ -10,7 +10,7 @@ from hyperstack.types import Subscription, Frame
 logger = logging.getLogger(__name__)
 
 
-def parse_mode(view: str) -> Mode: 
+def parse_mode(view: str) -> Mode:
     if view.endswith("/state"):
         return Mode.STATE
     elif view.endswith("/list"):
@@ -18,12 +18,10 @@ def parse_mode(view: str) -> Mode:
     elif view.endswith("/append"):
         return Mode.APPEND
     else:
-        return Mode.KV
+        return Mode.LIST  # Default to list mode
 
 
 class HyperStackClient:
-
-
     def __init__(
         self,
         url: str,
@@ -63,7 +61,9 @@ class HyperStackClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.disconnect()
 
-    def subscribe(self, view: str, key: Optional[str] = None, parser: Optional[Callable] = None) -> Store:
+    def subscribe(
+        self, view: str, key: Optional[str] = None, parser: Optional[Callable] = None
+    ) -> Store:
         """
         # Subscribes to updates for the specified view (and optional key) on the HyperStack server.
         #
@@ -129,7 +129,9 @@ class HyperStackClient:
             text = message.decode("utf-8") if isinstance(message, bytes) else message
 
             frame = Frame.from_dict(json.loads(text))
-            logger.debug(f"Frame: entity={frame.entity}, op={frame.op}, key={frame.key}")
+            logger.debug(
+                f"Frame: entity={frame.entity}, op={frame.op}, key={frame.key}"
+            )
 
             view = frame.entity
             store_keys = [f"{view}:{frame.key}", f"{view}:*"]

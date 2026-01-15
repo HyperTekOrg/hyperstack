@@ -36,7 +36,7 @@ pip install -e .
 
 ## Quick Start
 
-The following example connects to a HyperStack server and subscribes to a Key-Value view.
+The following example connects to a HyperStack server and subscribes to a list view.
 
 ```python
 import asyncio
@@ -46,7 +46,7 @@ async def main():
     # Use the async context manager for automatic connection/disconnection
     async with HyperStackClient("wss://your-hyperstack-server.com") as client:
         # Subscribe to a view
-        store = client.subscribe("SettlementGame/kv")
+        store = client.subscribe("SettlementGame/list")
 
         print("Subscribed, waiting for updates...")
 
@@ -96,12 +96,11 @@ When you subscribe to a view, the client returns a `Store` object. The `Store` m
 
 HyperStack uses suffixes in the view name to determine how data is managed:
 
-| Mode       | Suffix    | Description                                        |
-| :--------- | :-------- | :------------------------------------------------- |
-| **KV**     | `/kv`     | Standard Key-Value storage. (Default if no suffix) |
-| **State**  | `/state`  | Single-ton state projection.                       |
-| **List**   | `/list`   | Ordered list of items.                             |
-| **Append** | `/append` | Write-only stream of events.                       |
+| Mode       | Suffix    | Description                                      |
+| :--------- | :-------- | :----------------------------------------------- |
+| **State**  | `/state`  | Single-ton state projection.                     |
+| **List**   | `/list`   | Key-value storage for entities. (Default)        |
+| **Append** | `/append` | Write-only stream of events.                     |
 
 ```python
 # Example: Subscribing to a list view

@@ -22,7 +22,6 @@ use serde::{de::DeserializeOwned, Serialize};
 ///     
 ///     fn state_view() -> &'static str { "PumpfunToken/state" }
 ///     fn list_view() -> &'static str { "PumpfunToken/list" }
-///     fn kv_view() -> &'static str { "PumpfunToken/kv" }
 /// }
 /// ```
 ///
@@ -57,12 +56,6 @@ pub trait Entity: Sized + Send + Sync + 'static {
     /// Returns a path like "EntityName/list" for subscribing to
     /// all entities of this type.
     fn list_view() -> &'static str;
-
-    /// View path for key-value lookups.
-    ///
-    /// Returns a path like "EntityName/kv" for subscribing to
-    /// specific entities by key with efficient updates.
-    fn kv_view() -> &'static str;
 }
 
 /// Optional trait for entities that support server-side filtering.

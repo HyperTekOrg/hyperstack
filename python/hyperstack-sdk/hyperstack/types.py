@@ -5,7 +5,6 @@ from dataclasses import dataclass
 
 class Mode(str, Enum):
     STATE = "state"
-    KV = "kv"
     APPEND = "append"
     LIST = "list"
 
@@ -40,7 +39,7 @@ class Frame:
             entity=data.get("export") or data.get("entity", ""),
             op=data["op"],
             key=data["key"],
-            data=data.get("data", {})
+            data=data.get("data", {}),
         )
 
 

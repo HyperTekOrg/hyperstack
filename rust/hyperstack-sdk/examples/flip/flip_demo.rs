@@ -71,9 +71,6 @@ impl Entity for SettlementGameEntity {
     fn list_view() -> &'static str {
         "SettlementGame/list"
     }
-    fn kv_view() -> &'static str {
-        "SettlementGame/kv"
-    }
 }
 
 #[tokio::main]

@@ -1,6 +1,16 @@
 import asyncio
 import logging
-from typing import Any, Dict, Optional, TypeVar, AsyncIterator, Generic, Callable, List, Union
+from typing import (
+    Any,
+    Dict,
+    Optional,
+    TypeVar,
+    AsyncIterator,
+    Generic,
+    Callable,
+    List,
+    Union,
+)
 from dataclasses import dataclass
 from enum import Enum
 
@@ -10,7 +20,6 @@ T = TypeVar("T")
 
 
 class Mode(Enum):
-    KV = "kv"
     STATE = "state"
     LIST = "list"
     APPEND = "append"
@@ -23,8 +32,12 @@ class Update(Generic[T]):
 
 
 class Store(Generic[T]):
-
-    def __init__(self, mode: Mode = Mode.KV, parser: Optional[Callable[[Dict[str, Any]], T]] = None, view: Optional[str] = None):
+    def __init__(
+        self,
+        mode: Mode = Mode.LIST,
+        parser: Optional[Callable[[Dict[str, Any]], T]] = None,
+        view: Optional[str] = None,
+    ):
         self.mode = mode
         self.parser = parser
         self.view = view
@@ -32,7 +45,7 @@ class Store(Generic[T]):
         self._callbacks: List[Callable[[Update[T]], None]] = []
         self._update_queue: asyncio.Queue[Update[T]] = asyncio.Queue()
 
-        if mode in (Mode.KV, Mode.STATE):
+        if mode in (Mode.LIST, Mode.STATE):
             self._data: Union[Dict[str, T], List[T]] = {}
         else:
             self._data: Union[Dict[str, T], List[T]] = []
@@ -90,7 +103,7 @@ class Store(Generic[T]):
     async def apply_patch(self, key: str, patch: Dict[str, Any]) -> None:
         async with self._lock:
             if isinstance(self._data, dict):
-                # KV/State mode: merge patch into dict entry
+                # List/State mode: merge patch into dict entry
                 current = self._data.get(key, {})
                 if isinstance(current, dict):
                     merged = {**current, **patch}
@@ -100,7 +113,7 @@ class Store(Generic[T]):
                 self._data[key] = parsed_data
                 await self._notify_update(key, parsed_data)
             else:
-                # List/Append mode: just append
+                # Append mode: just append
                 parsed_data = self._parse_data(patch)
                 self._data.append(parsed_data)
                 await self._notify_update(key, parsed_data)
@@ -109,10 +122,10 @@ class Store(Generic[T]):
         async with self._lock:
             parsed_data = self._parse_data(value)
             if isinstance(self._data, dict):
-                # KV/State mode: direct insert/update
+                # List/State mode: direct insert/update
                 self._data[key] = parsed_data
             else:
-                # List/Append mode: just append
+                # Append mode: just append
                 self._data.append(parsed_data)
 
             await self._notify_update(key, parsed_data)

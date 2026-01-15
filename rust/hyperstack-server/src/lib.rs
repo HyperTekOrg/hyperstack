@@ -7,7 +7,7 @@
 //! - Process Solana blockchain data via Yellowstone gRPC
 //! - Transform data using the HyperStack VM
 //! - Stream entity updates over WebSockets to connected clients
-//! - Support multiple streaming modes (State, KV, List, Append)
+//! - Support multiple streaming modes (State, List, Append)
 //!
 //! ## Quick Start
 //!

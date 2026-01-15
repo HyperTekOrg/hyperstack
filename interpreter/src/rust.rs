@@ -347,16 +347,25 @@ impl Entity for {entity_name}Entity {{
     fn list_view() -> &'static str {{
         "{entity_name}/list"
     }}
-    
-    fn kv_view() -> &'static str {{
-        "{entity_name}/kv"
-    }}
 }}
 "#,
             entity_name = entity_name
         )
     }
 
+    /// Generate Rust type for a field.
+    ///
+    /// All fields are wrapped in Option<T> because we receive partial patches,
+    /// so any field may not yet be present.
+    ///
+    /// - Non-optional spec fields become `Option<T>`:
+    ///   - `None` = not yet received in any patch
+    ///   - `Some(value)` = has value
+    ///
+    /// - Optional spec fields become `Option<Option<T>>`:
+    ///   - `None` = not yet received in any patch
+    ///   - `Some(None)` = explicitly set to null
+    ///   - `Some(Some(value))` = has value
     fn field_type_to_rust(&self, field: &FieldTypeInfo) -> String {
         let base = self.base_type_to_rust(&field.base_type, &field.rust_type_name);
 
@@ -366,10 +375,12 @@ impl Entity for {entity_name}Entity {{
             base
         };
 
+        // All fields wrapped in Option since we receive patches
+        // Optional spec fields get Option<Option<T>> to distinguish "not received" from "explicitly null"
         if field.is_optional {
-            format!("Option<{}>", typed)
+            format!("Option<Option<{}>>", typed)
         } else {
-            typed
+            format!("Option<{}>", typed)
         }
     }
 
@@ -410,9 +421,9 @@ impl Entity for {entity_name}Entity {{
         };
 
         if field.is_optional {
-            format!("Option<{}>", typed)
+            format!("Option<Option<{}>>", typed)
         } else {
-            typed
+            format!("Option<{}>", typed)
         }
     }
 }

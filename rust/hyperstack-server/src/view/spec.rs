@@ -6,7 +6,7 @@ use crate::websocket::frame::Mode;
 // enabling sophisticated filtering and organization:
 //
 // ## View ID Structure
-// - Basic views: `EntityName/mode` (e.g., `SettlementGame/kv`, `SettlementGame/list`)
+// - Basic views: `EntityName/mode` (e.g., `SettlementGame/list`, `SettlementGame/state`)
 // - Filtered views: `EntityName/mode/filter1/filter2/...` (e.g., `SettlementGame/list/active/large`)
 //
 // ## Subscription Model
@@ -20,7 +20,7 @@ use crate::websocket::frame::Mode;
 // ## Future Filter Examples
 // - `SettlementGame/list/active/large` - Active games with large bets
 // - `SettlementGame/list/user/123` - Games for specific user
-// - `SettlementGame/kv/recent` - Recently created games only
+// - `SettlementGame/list/recent` - Recently created games only
 
 #[derive(Clone, Debug)]
 pub struct ViewSpec {

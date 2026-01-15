@@ -32,12 +32,12 @@ mod tests {
     #[test]
     fn test_subscription_parse() {
         let json = json!({
-            "view": "SettlementGame/kv",
+            "view": "SettlementGame/list",
             "key": "835"
         });
 
         let sub: Subscription = serde_json::from_value(json).unwrap();
-        assert_eq!(sub.view, "SettlementGame/kv");
+        assert_eq!(sub.view, "SettlementGame/list");
         assert_eq!(sub.key, Some("835".to_string()));
     }
 
@@ -55,26 +55,26 @@ mod tests {
     #[test]
     fn test_subscription_matches() {
         let sub = Subscription {
-            view: "SettlementGame/kv".to_string(),
+            view: "SettlementGame/list".to_string(),
             key: Some("835".to_string()),
             partition: None,
         };
 
-        assert!(sub.matches("SettlementGame/kv", "835"));
-        assert!(!sub.matches("SettlementGame/kv", "836"));
-        assert!(!sub.matches("SettlementGame/list", "835"));
+        assert!(sub.matches("SettlementGame/list", "835"));
+        assert!(!sub.matches("SettlementGame/list", "836"));
+        assert!(!sub.matches("SettlementGame/state", "835"));
     }
 
     #[test]
     fn test_subscription_matches_all_keys() {
         let sub = Subscription {
-            view: "SettlementGame/kv".to_string(),
+            view: "SettlementGame/list".to_string(),
             key: None,
             partition: None,
         };
 
-        assert!(sub.matches("SettlementGame/kv", "835"));
-        assert!(sub.matches("SettlementGame/kv", "836"));
-        assert!(!sub.matches("SettlementGame/list", "835"));
+        assert!(sub.matches("SettlementGame/list", "835"));
+        assert!(sub.matches("SettlementGame/list", "836"));
+        assert!(!sub.matches("SettlementGame/state", "835"));
     }
 }

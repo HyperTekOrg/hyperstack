@@ -1,8 +1,9 @@
 import asyncio
 from hyperstack import HyperStackClient
 
+
 async def basic_subscribe():
-    view = "SettlementGame/kv"
+    view = "SettlementGame/list"
 
     async with HyperStackClient("wss://flip.stack.hypertek.app") as client:
         store = client.subscribe(view=view)
@@ -16,22 +17,20 @@ async def basic_subscribe():
 
 async def multiple_subscriptions():
     async with HyperStackClient("wss://flip.stack.hypertek.app") as client:
-
-        games_store = client.subscribe("SettlementGame/kv")
-        games_store_list = client.subscribe("SettlementGame/list")
+        games_store = client.subscribe("SettlementGame/list")
+        games_store_state = client.subscribe("SettlementGame/state")
 
         print("Subscribed to multiple views\n")
 
-
         async def handle_games():
             async for update in games_store:
-                print(f"[GAME] {update.key} updated")
-
-        async def handle_games_list():
-            async for update in games_store_list:
                 print(f"[GAME LIST] {update.key} updated")
 
-        await asyncio.gather(handle_games(), handle_games_list())
+        async def handle_games_state():
+            async for update in games_store_state:
+                print(f"[GAME STATE] {update.key} updated")
+
+        await asyncio.gather(handle_games(), handle_games_state())
 
 
 if __name__ == "__main__":
