@@ -31,6 +31,7 @@
 //! - `otel` - OpenTelemetry integration for metrics and distributed tracing
 
 pub mod bus;
+pub mod cache;
 pub mod config;
 pub mod health;
 pub mod http_health;
@@ -42,6 +43,7 @@ pub mod view;
 pub mod websocket;
 
 pub use bus::{BusManager, BusMessage};
+pub use cache::{EntityCache, EntityCacheConfig};
 pub use config::{
     HealthConfig, HttpHealthConfig, ServerConfig, WebSocketConfig, YellowstoneConfig,
 };

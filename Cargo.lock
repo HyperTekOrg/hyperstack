@@ -1232,6 +1232,7 @@ dependencies = [
  "hyper 1.8.1",
  "hyper-util",
  "hyperstack-interpreter",
+ "lru",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",

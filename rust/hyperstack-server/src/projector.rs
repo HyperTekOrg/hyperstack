@@ -1,4 +1,5 @@
 use crate::bus::{BusManager, BusMessage};
+use crate::cache::EntityCache;
 use crate::view::{ViewIndex, ViewSpec};
 use crate::websocket::frame::{Frame, Mode};
 use bytes::Bytes;
@@ -15,6 +16,7 @@ use crate::metrics::Metrics;
 pub struct Projector {
     view_index: Arc<ViewIndex>,
     bus_manager: BusManager,
+    entity_cache: EntityCache,
     mutations_rx: mpsc::Receiver<SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
     #[cfg(feature = "otel")]
     metrics: Option<Arc<Metrics>>,
@@ -25,12 +27,14 @@ impl Projector {
     pub fn new(
         view_index: Arc<ViewIndex>,
         bus_manager: BusManager,
+        entity_cache: EntityCache,
         mutations_rx: mpsc::Receiver<SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
         metrics: Option<Arc<Metrics>>,
     ) -> Self {
         Self {
             view_index,
             bus_manager,
+            entity_cache,
             mutations_rx,
             metrics,
         }
@@ -40,11 +44,13 @@ impl Projector {
     pub fn new(
         view_index: Arc<ViewIndex>,
         bus_manager: BusManager,
+        entity_cache: EntityCache,
         mutations_rx: mpsc::Receiver<SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
     ) -> Self {
         Self {
             view_index,
             bus_manager,
+            entity_cache,
             mutations_rx,
         }
     }
@@ -92,7 +98,6 @@ impl Projector {
                 .or_else(|| mutation.key.as_u64().map(|n| n.to_string()))
                 .or_else(|| mutation.key.as_i64().map(|n| n.to_string()))
                 .or_else(|| {
-                    // Handle byte arrays by converting to hex string
                     mutation.key.as_array().and_then(|arr| {
                         let bytes: Vec<u8> = arr
                             .iter()
@@ -106,6 +111,8 @@ impl Projector {
                     })
                 })
                 .unwrap_or_else(|| mutation.key.to_string());
+
+            self.entity_cache.upsert(&spec.id, &key, &frame.data).await;
 
             let message = Arc::new(BusMessage {
                 key: key.clone(),

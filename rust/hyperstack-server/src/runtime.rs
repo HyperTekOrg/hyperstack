@@ -1,4 +1,5 @@
 use crate::bus::BusManager;
+use crate::cache::EntityCache;
 use crate::config::ServerConfig;
 use crate::health::HealthMonitor;
 use crate::http_health::HttpHealthServer;
@@ -85,8 +86,8 @@ impl Runtime {
             mpsc::channel::<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>(1024);
 
         let bus_manager = BusManager::new();
+        let entity_cache = EntityCache::new();
 
-        // Initialize health monitor if configured
         let health_monitor = if let Some(health_config) = &self.config.health {
             let monitor = HealthMonitor::new(health_config.clone());
             let _health_task = monitor.start().await;
@@ -96,27 +97,32 @@ impl Runtime {
             None
         };
 
-        // Start Projector task
         #[cfg(feature = "otel")]
         let projector = Projector::new(
             self.view_index.clone(),
             bus_manager.clone(),
+            entity_cache.clone(),
             mutations_rx,
             self.metrics.clone(),
         );
         #[cfg(not(feature = "otel"))]
-        let projector = Projector::new(self.view_index.clone(), bus_manager.clone(), mutations_rx);
+        let projector = Projector::new(
+            self.view_index.clone(),
+            bus_manager.clone(),
+            entity_cache.clone(),
+            mutations_rx,
+        );
 
         let projector_handle = tokio::spawn(async move {
             projector.run().await;
         });
 
-        // Start WebSocket server (if configured)
         let ws_handle = if let Some(ws_config) = &self.config.websocket {
             #[cfg(feature = "otel")]
             let ws_server = WebSocketServer::new(
                 ws_config.bind_address,
                 bus_manager.clone(),
+                entity_cache.clone(),
                 self.view_index.clone(),
                 self.metrics.clone(),
             );
@@ -124,6 +130,7 @@ impl Runtime {
             let ws_server = WebSocketServer::new(
                 ws_config.bind_address,
                 bus_manager.clone(),
+                entity_cache.clone(),
                 self.view_index.clone(),
             );
 

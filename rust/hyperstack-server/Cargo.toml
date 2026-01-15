@@ -35,6 +35,7 @@ hyperstack-interpreter = { version = "0.1.11", path = "../../interpreter" }
 # Async utilities
 smallvec = "1.15"
 hex = "0.4"
+lru = "0.12"
 
 # HTTP server for health endpoint
 hyper = { version = "1.6", features = ["server", "http1"] }
