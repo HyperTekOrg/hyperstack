@@ -1,8 +1,0 @@
-{
-  "name": "hyperstack-typescript-packages",
-  "private": true,
-  "workspaces": [
-    "core",
-    "react"
-  ]
-}
