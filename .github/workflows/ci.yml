@@ -43,12 +43,12 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace -- -D warnings
 
-  typescript:
-    name: TypeScript
+  typescript-core:
+    name: TypeScript Core
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: typescript
+        working-directory: typescript/core
     steps:
       - uses: actions/checkout@v4
 
@@ -57,7 +57,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: typescript/package-lock.json
+          cache-dependency-path: typescript/core/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -67,7 +67,31 @@ jobs:
 
       - name: Test
         run: npm test
-        # continue-on-error: true
+
+  typescript-react:
+    name: TypeScript React
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: typescript/react
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: typescript/react/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
 
   python:
     name: Python
