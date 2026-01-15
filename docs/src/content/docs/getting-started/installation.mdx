@@ -66,9 +66,10 @@ npm install react zustand
 ```
 
 :::note[Which package should I use?]
+
 - **React/Next.js apps** → `hyperstack-react` (includes hooks, providers, automatic re-rendering)
 - **Everything else** → `hyperstack-typescript` (pure TypeScript, framework-agnostic)
-:::
+  :::
 
 ### Rust
 
@@ -197,10 +198,10 @@ hs auth status
 ### TypeScript Core SDK
 
 ```typescript
-import { HyperStack } from 'hyperstack-typescript';
+import { HyperStack } from "hyperstack-typescript";
 
 // If this compiles, you're ready to go
-const hs = await HyperStack.connect('wss://your-stack.stack.usehyperstack.com');
+const hs = await HyperStack.connect("wss://your-stack.stack.usehyperstack.com");
 ```
 
 ### React SDK
@@ -231,10 +232,10 @@ const TestStack = defineStack({
 
 ## Troubleshooting
 
-| Issue                                   | Solution                                   |
-| --------------------------------------- | ------------------------------------------ |
-| `hs: command not found`                 | Ensure `~/.cargo/bin` is in your PATH      |
-| `Cannot find module 'hyperstack-react'` | Run `npm install hyperstack-react`         |
-| `Cannot find module 'hyperstack-typescript'` | Run `npm install hyperstack-typescript` |
-| `Peer dependency warnings`              | Install `react` and `zustand` explicitly   |
-| `Authentication failed`                 | Run `hs auth login` to refresh credentials |
+| Issue                                        | Solution                                   |
+| -------------------------------------------- | ------------------------------------------ |
+| `hs: command not found`                      | Ensure `~/.cargo/bin` is in your PATH      |
+| `Cannot find module 'hyperstack-react'`      | Run `npm install hyperstack-react`         |
+| `Cannot find module 'hyperstack-typescript'` | Run `npm install hyperstack-typescript`    |
+| `Peer dependency warnings`                   | Install `react` and `zustand` explicitly   |
+| `Authentication failed`                      | Run `hs auth login` to refresh credentials |

@@ -6,12 +6,13 @@ sidebar:
 
 Hyperstack provides two TypeScript packages for building real-time Solana applications:
 
-| Package | npm | Description |
-|---------|-----|-------------|
+| Package                 | npm                                                        | Description                                                                      |
+| ----------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | `hyperstack-typescript` | [npm](https://www.npmjs.com/package/hyperstack-typescript) | Pure TypeScript SDK - framework-agnostic core with AsyncIterable-based streaming |
-| `hyperstack-react` | [npm](https://www.npmjs.com/package/hyperstack-react) | React SDK - hooks and providers built on top of the core SDK |
+| `hyperstack-react`      | [npm](https://www.npmjs.com/package/hyperstack-react)      | React SDK - hooks and providers built on top of the core SDK                     |
 
 **Choose based on your needs:**
+
 - **Building a React app?** → Use `hyperstack-react` (includes the core SDK)
 - **Using Vue, Svelte, Node.js, or vanilla JS?** → Use `hyperstack-typescript`
 
@@ -30,20 +31,20 @@ npm install hyperstack-typescript
 ### Basic Usage
 
 ```typescript
-import { HyperStack } from 'hyperstack-typescript';
-import { MY_STACK } from './generated/my-stack';
+import { HyperStack } from "hyperstack-typescript";
+import { MY_STACK } from "./generated/my-stack";
 
 // Connect to your deployed stack
-const hs = await HyperStack.connect('wss://my-stack.stack.usehyperstack.com', {
+const hs = await HyperStack.connect("wss://my-stack.stack.usehyperstack.com", {
   stack: MY_STACK,
 });
 
 // Stream updates using AsyncIterable
 for await (const update of hs.views.tokens.list.watch()) {
-  if (update.type === 'upsert') {
-    console.log('Token updated:', update.key, update.data);
-  } else if (update.type === 'delete') {
-    console.log('Token deleted:', update.key);
+  if (update.type === "upsert") {
+    console.log("Token updated:", update.key, update.data);
+  } else if (update.type === "delete") {
+    console.log("Token deleted:", update.key);
   }
 }
 ```
@@ -53,15 +54,15 @@ for await (const update of hs.views.tokens.list.watch()) {
 ```typescript
 // Get before/after diffs for each update
 for await (const update of hs.views.tokens.list.watchRich()) {
-  if (update.type === 'updated') {
-    console.log('Changed from:', update.before);
-    console.log('Changed to:', update.after);
+  if (update.type === "updated") {
+    console.log("Changed from:", update.before);
+    console.log("Changed to:", update.after);
   }
 }
 
 // Watch a single entity by key
-for await (const update of hs.views.tokens.state.watch('token-123')) {
-  console.log('Token 123 updated:', update.data);
+for await (const update of hs.views.tokens.state.watch("token-123")) {
+  console.log("Token 123 updated:", update.data);
 }
 ```
 
@@ -72,7 +73,7 @@ for await (const update of hs.views.tokens.state.watch('token-123')) {
 const tokens = await hs.views.tokens.list.get();
 
 // Get a single token by key
-const token = await hs.views.tokens.state.get('token-123');
+const token = await hs.views.tokens.state.get("token-123");
 ```
 
 ### Connection Management
@@ -83,7 +84,7 @@ console.log(hs.connectionState); // 'connected' | 'connecting' | 'disconnected' 
 
 // Listen for connection changes
 const unsubscribe = hs.onConnectionStateChange((state) => {
-  console.log('Connection state:', state);
+  console.log("Connection state:", state);
 });
 
 // Disconnect when done
@@ -106,7 +107,7 @@ import {
   parseFrame,
   parseFrameFromBlob,
   isValidFrame,
-} from 'hyperstack-typescript';
+} from "hyperstack-typescript";
 
 import type {
   ConnectionState,
@@ -114,7 +115,7 @@ import type {
   RichUpdate,
   StackDefinition,
   HyperStackOptions,
-} from 'hyperstack-typescript';
+} from "hyperstack-typescript";
 ```
 
 ---
@@ -381,18 +382,18 @@ import type {
 
 ## Choosing Between SDKs
 
-| Use Case | Recommended SDK |
-|----------|-----------------|
-| React/Next.js applications | `hyperstack-react` |
-| Vue, Svelte, Solid, etc. | `hyperstack-typescript` |
-| Node.js backend/scripts | `hyperstack-typescript` |
-| Custom state management | `hyperstack-typescript` |
-| Need React hooks & providers | `hyperstack-react` |
+| Use Case                           | Recommended SDK         |
+| ---------------------------------- | ----------------------- |
+| React/Next.js applications         | `hyperstack-react`      |
+| Vue, Svelte, Solid, etc.           | `hyperstack-typescript` |
+| Node.js backend/scripts            | `hyperstack-typescript` |
+| Custom state management            | `hyperstack-typescript` |
+| Need React hooks & providers       | `hyperstack-react`      |
 | Maximum control over subscriptions | `hyperstack-typescript` |
 
 The React SDK re-exports everything from the core SDK, so you can always access low-level APIs if needed:
 
 ```typescript
 // Access core SDK features from React SDK
-import { HyperStack, ConnectionManager } from 'hyperstack-react';
+import { HyperStack, ConnectionManager } from "hyperstack-react";
 ```

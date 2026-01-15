@@ -21,14 +21,14 @@ Complete reference for the Hyperstack CLI (`hs`).
 
 ## Quick Reference
 
-| Command               | Description                          |
-| --------------------- | ------------------------------------ |
-| `hs init`             | Initialize project                   |
-| `hs up [stack]`       | Deploy stack (push + build + deploy) |
-| `hs status`           | Show project overview                |
-| `hs logs`             | View build logs                      |
-| `hs stack list`       | List all stacks                      |
-| `hs stack show`       | Show stack details                   |
+| Command         | Description                          |
+| --------------- | ------------------------------------ |
+| `hs init`       | Initialize project                   |
+| `hs up [stack]` | Deploy stack (push + build + deploy) |
+| `hs status`     | Show project overview                |
+| `hs logs`       | View build logs                      |
+| `hs stack list` | List all stacks                      |
+| `hs stack show` | Show stack details                   |
 
 ---
 
@@ -433,13 +433,13 @@ hs stack rollback my-stack --to 2
 
 ## Error Reference
 
-| Error                 | Solution                                   |
-| --------------------- | ------------------------------------------ |
-| `Not authenticated`   | Run `hs auth login`                        |
-| `Stack not found`     | Check `hs stack list` for available stacks |
-| `AST file not found`  | Run `cargo build` to generate AST          |
-| `Build failed`        | Check `hs logs` for details                |
-| `Config invalid`      | Run `hs config validate`                   |
+| Error                | Solution                                   |
+| -------------------- | ------------------------------------------ |
+| `Not authenticated`  | Run `hs auth login`                        |
+| `Stack not found`    | Check `hs stack list` for available stacks |
+| `AST file not found` | Run `cargo build` to generate AST          |
+| `Build failed`       | Check `hs logs` for details                |
+| `Config invalid`     | Run `hs config validate`                   |
 
 ---
 
@@ -447,11 +447,11 @@ hs stack rollback my-stack --to 2
 
 After successful deployment:
 
-| Type       | Pattern                                            |
-| ---------- | -------------------------------------------------- |
-| Production | `wss://{stack-name}.stack.usehyperstack.com`       |
+| Type       | Pattern                                               |
+| ---------- | ----------------------------------------------------- |
+| Production | `wss://{stack-name}.stack.usehyperstack.com`          |
 | Branch     | `wss://{stack-name}-{branch}.stack.usehyperstack.com` |
-| Local      | `ws://localhost:8080`                              |
+| Local      | `ws://localhost:8080`                                 |
 
 Get the URL with:
 

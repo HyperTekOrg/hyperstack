@@ -123,7 +123,7 @@ Copy the **WebSocket URL** from the output. You'll need it for the React app.
 
 Finally, let's build the frontend. You can use either the React SDK or the pure TypeScript SDK.
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 <Tabs>
 <TabItem label="React">
@@ -228,7 +228,7 @@ npm install hyperstack-typescript typescript
 
 ```typescript
 // src/index.ts
-import { HyperStack } from 'hyperstack-typescript';
+import { HyperStack } from "hyperstack-typescript";
 
 interface Counter {
   owner: string;
@@ -238,19 +238,23 @@ interface Counter {
 
 async function main() {
   // Connect to your deployed stack
-  const hs = await HyperStack.connect('wss://counter-stack.stack.usehyperstack.com');
+  const hs = await HyperStack.connect(
+    "wss://counter-stack.stack.usehyperstack.com",
+  );
 
-  console.log('Connected! Streaming counters...\n');
+  console.log("Connected! Streaming counters...\n");
 
   // Stream updates using AsyncIterable
   for await (const update of hs.views.counters.list.watch()) {
-    if (update.type === 'upsert') {
+    if (update.type === "upsert") {
       const counter = update.data as Counter;
       console.log(`Counter updated:`);
       console.log(`  Owner: ${counter.owner}`);
       console.log(`  Count: ${counter.total_count}`);
-      console.log(`  Last updated: ${new Date(counter.last_updated * 1000).toLocaleString()}`);
-      console.log('');
+      console.log(
+        `  Last updated: ${new Date(counter.last_updated * 1000).toLocaleString()}`,
+      );
+      console.log("");
     }
   }
 }

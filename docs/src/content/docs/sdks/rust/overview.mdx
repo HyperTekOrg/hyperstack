@@ -44,11 +44,11 @@ use my_stack::{PumpfunToken, PumpfunTokenEntity};
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let hs = HyperStack::connect("wss://mainnet.hyperstack.xyz").await?;
-    
+
     // List all entities
     let tokens = hs.list::<PumpfunTokenEntity>().await;
     println!("Found {} tokens", tokens.len());
-    
+
     // Watch for real-time updates (lazy - no .await needed)
     let mut stream = hs.watch::<PumpfunTokenEntity>();
     while let Some(update) = stream.next().await {
@@ -58,7 +58,7 @@ async fn main() -> anyhow::Result<()> {
             Update::Delete { key } => println!("Deleted {}", key),
         }
     }
-    
+
     Ok(())
 }
 ```
@@ -101,11 +101,11 @@ while let Some((name, pct)) = price_alerts.next().await {
 
 ### Available Stream Operators
 
-| Operator | Description |
-|----------|-------------|
+| Operator             | Description                              |
+| -------------------- | ---------------------------------------- |
 | `.filter(predicate)` | Keep only updates matching the predicate |
-| `.filter_map(f)` | Filter and transform in one step |
-| `.map(f)` | Transform each update |
+| `.filter_map(f)`     | Filter and transform in one step         |
+| `.map(f)`            | Transform each update                    |
 
 All operators are chainable and return streams that support the same operators.
 
@@ -149,17 +149,17 @@ let hs = HyperStack::builder()
 
 ## Core Methods
 
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `get::<E>(key).await` | `Option<T>` | Get a single entity by key |
-| `list::<E>().await` | `Vec<T>` | Get all entities of type E |
-| `watch::<E>()` | `EntityStream<T>` | Stream all updates (lazy) |
-| `watch_key::<E>(key)` | `EntityStream<T>` | Stream updates for a specific key (lazy) |
-| `watch_keys::<E>(&[keys])` | `EntityStream<T>` | Stream updates for multiple keys (lazy) |
-| `watch_rich::<E>()` | `RichEntityStream<T>` | Stream with before/after values (lazy) |
-| `watch_key_rich::<E>(key)` | `RichEntityStream<T>` | Rich stream for specific key (lazy) |
-| `connection_state().await` | `ConnectionState` | Get current connection state |
-| `disconnect().await` | `()` | Close the connection |
+| Method                     | Returns               | Description                              |
+| -------------------------- | --------------------- | ---------------------------------------- |
+| `get::<E>(key).await`      | `Option<T>`           | Get a single entity by key               |
+| `list::<E>().await`        | `Vec<T>`              | Get all entities of type E               |
+| `watch::<E>()`             | `EntityStream<T>`     | Stream all updates (lazy)                |
+| `watch_key::<E>(key)`      | `EntityStream<T>`     | Stream updates for a specific key (lazy) |
+| `watch_keys::<E>(&[keys])` | `EntityStream<T>`     | Stream updates for multiple keys (lazy)  |
+| `watch_rich::<E>()`        | `RichEntityStream<T>` | Stream with before/after values (lazy)   |
+| `watch_key_rich::<E>(key)` | `RichEntityStream<T>` | Rich stream for specific key (lazy)      |
+| `connection_state().await` | `ConnectionState`     | Get current connection state             |
+| `disconnect().await`       | `()`                  | Close the connection                     |
 
 ---
 
@@ -203,11 +203,11 @@ if update.has_patch_field("trading") {
 
 Generated entity types often have fields typed as `Option<Option<T>>`. This represents the **patch semantics** of HyperStack updates:
 
-| Value | Meaning |
-|-------|---------|
-| `None` | Field was **not included** in this update (no change) |
-| `Some(None)` | Field was **explicitly set to null** |
-| `Some(Some(value))` | Field has a **concrete value** |
+| Value               | Meaning                                               |
+| ------------------- | ----------------------------------------------------- |
+| `None`              | Field was **not included** in this update (no change) |
+| `Some(None)`        | Field was **explicitly set to null**                  |
+| `Some(Some(value))` | Field has a **concrete value**                        |
 
 This distinction matters for partial updates (patches). When the server sends a patch, only changed fields are included. An absent field means "keep the previous value", while an explicit `null` means "clear this field".
 

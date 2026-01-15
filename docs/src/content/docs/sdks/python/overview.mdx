@@ -96,11 +96,11 @@ When you subscribe to a view, the client returns a `Store` object. The `Store` m
 
 HyperStack uses suffixes in the view name to determine how data is managed:
 
-| Mode       | Suffix    | Description                                      |
-| :--------- | :-------- | :----------------------------------------------- |
-| **State**  | `/state`  | Single-ton state projection.                     |
-| **List**   | `/list`   | Key-value storage for entities. (Default)        |
-| **Append** | `/append` | Write-only stream of events.                     |
+| Mode       | Suffix    | Description                               |
+| :--------- | :-------- | :---------------------------------------- |
+| **State**  | `/state`  | Single-ton state projection.              |
+| **List**   | `/list`   | Key-value storage for entities. (Default) |
+| **Append** | `/append` | Write-only stream of events.              |
 
 ```python
 # Example: Subscribing to a list view

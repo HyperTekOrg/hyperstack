@@ -18,7 +18,7 @@ Hyperstack is **data infrastructure as code** for Solana. Define a schema that c
 
 ## Quick Example
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 <Tabs>
 <TabItem label="React">
@@ -27,9 +27,10 @@ function TokenList() {
   const stack = useHyperstack(MY_PROGRAM_STACK);
   const { data: tokens } = stack.views.tokens.list.use();
 
-  return tokens?.map(token => <TokenCard key={token.mint} {...token} />);
+return tokens?.map(token => <TokenCard key={token.mint} {...token} />);
 }
-```
+
+````
 </TabItem>
 <TabItem label="TypeScript">
 ```typescript
@@ -38,7 +39,8 @@ const hs = await HyperStack.connect('wss://my-stack.stack.usehyperstack.com');
 for await (const update of hs.views.tokens.list.watch()) {
   console.log('Token:', update.data);
 }
-```
+````
+
 </TabItem>
 </Tabs>
 
