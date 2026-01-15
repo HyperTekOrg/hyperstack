@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.2.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.1.11...hyperstack-server-v0.2.0) (2026-01-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* Wire protocol simplified - list frames no longer wrap data in {id, order, item}. Data is now sent directly.
+
+### Features
+
+* **server:** add entity cache for snapshot-on-subscribe ([5342720](https://github.com/HyperTekOrg/hyperstack/commit/53427201fb1dbd69f918b07dfc5355c89c2a7694))
+
+
+### Bug Fixes
+
+* remove deprecated kv mode from SDKs and documentation ([2097af0](https://github.com/HyperTekOrg/hyperstack/commit/2097af05165eed4a7d9b6ef4ede1b5722ab90215))
+
+
+### Code Refactoring
+
+* remove Mode::Kv and simplify websocket frame structure ([f1a2b81](https://github.com/HyperTekOrg/hyperstack/commit/f1a2b81f24eeda9a81b5fc0738ef78a5741b687b))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.1.11 to 0.2.0
+
 ## [0.1.11](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.1.10...hyperstack-server-v0.1.11) (2026-01-14)
 
 
