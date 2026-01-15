@@ -14,8 +14,9 @@ Add `hyperstack-sdk` to your `Cargo.toml`. The SDK is currently available via Gi
 [dependencies]
 hyperstack-sdk = { git = "https://github.com/HyperTekOrg/hyperstack.git" }
 tokio = { version = "1.0", features = ["full"] }
-futures-util = "0.3"
 ```
+
+The SDK includes a `prelude` module that re-exports `StreamExt` from `futures-util`, so you typically don't need to add it as a direct dependency.
 
 ### TLS Options
 
@@ -37,8 +38,7 @@ The SDK requires the [Tokio](https://tokio.rs/) runtime. Ensure you have it enab
 The following example shows how to connect to a Hyperstack server and watch for updates on a specific entity type.
 
 ```rust
-use hyperstack_sdk::{HyperStack, Update};
-use futures_util::StreamExt;
+use hyperstack_sdk::prelude::*;
 
 // These types are typically imported from your generated SDK crate
 // use my_stack_sdk::{TokenEntity, Token};
@@ -69,6 +69,8 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 ```
+
+The `prelude` module re-exports all commonly needed types including `StreamExt`, so you don't need separate imports.
 
 ---
 
@@ -101,6 +103,7 @@ let hs = HyperStack::builder()
         Duration::from_secs(5),
     ])
     .ping_interval(Duration::from_secs(30))
+    .initial_data_timeout(Duration::from_secs(5))  // Timeout for get()/list()
     .connect()
     .await?;
 ```
@@ -149,6 +152,24 @@ Subscribe to updates for a specific entity instance by its key.
 let mut stream = hs.watch_key::<TokenEntity>("mint_address").await;
 ```
 
+### `watch_keys::<E>(&[keys])`
+
+Subscribe to updates for multiple specific keys efficiently. Uses a single underlying subscription with client-side filtering, which is more efficient than calling `watch_key()` multiple times.
+
+```rust
+let keys = &["mint1", "mint2", "mint3"];
+let mut stream = hs.watch_keys::<TokenEntity>(keys).await;
+
+while let Some(update) = stream.next().await {
+    // Only receives updates for the specified keys
+    println!("{}: {:?}", update.key(), update.data());
+}
+```
+
+### `watch_rich::<E>()` and `watch_key_rich::<E>(key)`
+
+Subscribe to rich updates that include before/after values for tracking changes over time. See [Rich Updates](#rich-updates) below.
+
 ---
 
 ## Entity Trait
@@ -189,6 +210,52 @@ pub enum Update<T> {
 }
 ```
 
+#### Helper Methods
+
+```rust
+update.key()        // Get the entity key (borrowed)
+update.data()       // Get data reference (Some for Upsert/Patch, None for Delete)
+update.is_delete()  // Check if this is a deletion
+update.has_data()   // Check if this update has data (true for Upsert/Patch)
+update.into_data()  // Consume and get owned data (Some for Upsert/Patch, None for Delete)
+update.into_key()   // Consume and get owned key
+update.map(|d| ..)  // Transform the data type while preserving the variant
+```
+
+### Rich Updates
+
+For tracking changes over time with before/after values, use `RichUpdate<T>` via `watch_rich()` or `watch_key_rich()`:
+
+```rust
+pub enum RichUpdate<T> {
+    /// Entity was created (no previous value)
+    Created { key: String, data: T },
+    /// Entity was updated (has before and after values)
+    Updated { key: String, before: T, after: T },
+    /// Entity was deleted (includes last known value if available)
+    Deleted { key: String, last_known: Option<T> },
+}
+```
+
+Example usage:
+
+```rust
+let mut stream = hs.watch_rich::<TokenEntity>().await;
+while let Some(update) = stream.next().await {
+    match update {
+        RichUpdate::Created { key, data } => {
+            println!("New entity {}: {:?}", key, data);
+        }
+        RichUpdate::Updated { key, before, after } => {
+            println!("Entity {} changed from {:?} to {:?}", key, before, after);
+        }
+        RichUpdate::Deleted { key, last_known } => {
+            println!("Entity {} deleted, was: {:?}", key, last_known);
+        }
+    }
+}
+```
+
 ### `ConnectionState`
 
 Monitor the health of your connection:
@@ -202,6 +269,30 @@ match state {
     ConnectionState::Disconnected => { println!("Offline"); },
     ConnectionState::Failed { error } => { println!("Error: {}", error); },
 }
+```
+
+---
+
+## Type Inference with EntityData
+
+If your generated SDK implements the `EntityData` trait, you can use type inference instead of turbofish syntax:
+
+```rust
+pub trait EntityData: Serialize + DeserializeOwned + Clone + Send + Sync + 'static {
+    type Entity: Entity<Data = Self>;
+}
+```
+
+This allows for cleaner code when the return type is annotated:
+
+```rust
+// With EntityData trait implemented:
+let token: Token = hs.get_data("mint").await.unwrap();
+let tokens: Vec<Token> = hs.list_data().await;
+let stream: EntityStream<Token> = hs.watch_data().await;
+
+// Original turbofish syntax still works:
+let token = hs.get::<TokenEntity>("mint").await;
 ```
 
 ---
