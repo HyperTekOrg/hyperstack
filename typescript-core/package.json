@@ -1,0 +1,65 @@
+{
+  "name": "hyperstack-typescript",
+  "version": "0.1.11",
+  "type": "module",
+  "description": "Pure TypeScript SDK for the Hyperstack Solana streaming platform",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HyperTekOrg/hyperstack.git",
+    "directory": "typescript-core"
+  },
+  "homepage": "https://github.com/HyperTekOrg/hyperstack.git#readme",
+  "bugs": {
+    "url": "https://github.com/HyperTekOrg/hyperstack.git/issues"
+  },
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/**/*.ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "typescript",
+    "solana",
+    "streaming",
+    "websockets",
+    "hyperstack"
+  ],
+  "author": "Hypertek",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-typescript": "^11.0.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "rollup": "^3.0.0",
+    "rollup-plugin-dts": "^6.0.0",
+    "tslib": "^2.8.1",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}
