@@ -3,71 +3,51 @@ import { createStateViewHook, createListViewHook } from './view-hooks';
 import { createTxMutationHook } from './tx-hooks';
 import {
   StackDefinition,
-  ViewDefinition,
+  ViewDef,
   TransactionDefinition,
   ViewHookOptions,
   ViewHookResult,
   ListParams,
-  UseMutationReturn
+  UseMutationReturn,
+  ViewGroup
 } from './types';
 import { HyperstackRuntime } from './runtime';
 
-export function defineStack<
-  TViews extends Record<string, any>,
-  TTxs extends Record<string, TransactionDefinition>,
-  THelpers extends Record<string, (...args: any[]) => any>
->(definition: {
-  name: string;
-  views: TViews;
-  transactions?: TTxs;
-  helpers?: THelpers;
-}): StackDefinition & { views: TViews; transactions?: TTxs; helpers?: THelpers } {
-  if (!definition.name) {
-    throw new Error('[Hyperstack] Stack definition must have a name');
-  }
-  if (!definition.views || typeof definition.views !== 'object') {
-    throw new Error('[Hyperstack] Stack definition must have views');
-  }
-  return definition as any;
-}
-
-type InferViewType<T> = T extends ViewDefinition<infer U> ? U : never;
-
-type BuildViewInterface<TViews extends Record<string, any>> = {
-  [K in keyof TViews]: TViews[K] extends { state: ViewDefinition<any>; list: ViewDefinition<any> }
+type BuildViewInterface<TViews extends Record<string, ViewGroup>> = {
+  [K in keyof TViews]: TViews[K] extends { state: ViewDef<infer S, 'state'>; list: ViewDef<infer L, 'list'> }
     ? {
         state: {
           use: (
             key: Record<string, string>,
             options?: ViewHookOptions
-          ) => ViewHookResult<InferViewType<TViews[K]['state']>>;
+          ) => ViewHookResult<S>;
         };
         list: {
           use: (
             params?: ListParams,
             options?: ViewHookOptions
-          ) => ViewHookResult<InferViewType<TViews[K]['list']>[]>;
+          ) => ViewHookResult<L[]>;
         };
       }
-    : TViews[K] extends { state: ViewDefinition<any> }
+    : TViews[K] extends { state: ViewDef<infer S, 'state'> }
     ? {
         state: {
           use: (
             key: Record<string, string>,
             options?: ViewHookOptions
-          ) => ViewHookResult<InferViewType<TViews[K]['state']>>;
+          ) => ViewHookResult<S>;
         };
       }
-    : TViews[K] extends { list: ViewDefinition<any> }
+    : TViews[K] extends { list: ViewDef<infer L, 'list'> }
     ? {
         list: {
           use: (
             params?: ListParams,
             options?: ViewHookOptions
-          ) => ViewHookResult<InferViewType<TViews[K]['list']>[]>;
+          ) => ViewHookResult<L[]>;
         };
       }
-    : never;
+    : object;
 };
 
 type StackClient<TStack extends StackDefinition> = {
@@ -79,9 +59,6 @@ type StackClient<TStack extends StackDefinition> = {
         useMutation: () => UseMutationReturn;
       }
     : { useMutation: () => UseMutationReturn };
-  helpers: TStack['helpers'] extends Record<string, (...args: any[]) => any>
-    ? TStack['helpers']
-    : {};
   store: HyperstackRuntime['store'];
   runtime: HyperstackRuntime;
 };
@@ -95,51 +72,37 @@ export function useHyperstack<TStack extends StackDefinition>(
 
   const { runtime } = useHyperstackContext();
 
-  const views = {} as any;
-  
-  try {
-    for (const [viewName, viewGroup] of Object.entries(stack.views)) {
-      views[viewName] = {};
-      
-      if (typeof viewGroup === 'object' && viewGroup !== null) {
-        if ('state' in viewGroup && viewGroup.state) {
-          views[viewName].state = createStateViewHook(viewGroup.state, runtime);
-        }
-        
-        if ('list' in viewGroup && viewGroup.list) {
-          views[viewName].list = createListViewHook(viewGroup.list, runtime);
-        }
+  const views: Record<string, Record<string, unknown>> = {};
+
+  for (const [viewName, viewGroup] of Object.entries(stack.views)) {
+    views[viewName] = {};
+
+    if (typeof viewGroup === 'object' && viewGroup !== null) {
+      const group = viewGroup as ViewGroup;
+
+      if (group.state) {
+        views[viewName]!.state = createStateViewHook(group.state, runtime);
+      }
+
+      if (group.list) {
+        views[viewName]!.list = createListViewHook(group.list, runtime);
       }
     }
-  } catch (err) {
-    console.error('[Hyperstack] Error creating view hooks:', err);
-    throw err;
   }
 
-  const tx = {} as any;
-  try {
-    if (stack.transactions) {
-      for (const [txName, txDef] of Object.entries(stack.transactions)) {
-        tx[txName] = txDef.build;
-      }
+  const tx: Record<string, unknown> = {};
+
+  if (stack.transactions) {
+    for (const [txName, txDef] of Object.entries(stack.transactions)) {
+      tx[txName] = txDef.build;
     }
-
-    tx.useMutation = createTxMutationHook(runtime, stack.transactions);
-  } catch (err) {
-    console.error('[Hyperstack] Error creating transaction hooks:', err);
-    tx.useMutation = () => ({
-      submit: async () => {},
-      status: 'idle' as const,
-      error: 'Failed to initialize transaction hooks',
-      signature: undefined,
-      reset: () => {}
-    });
   }
+
+  tx.useMutation = createTxMutationHook(runtime, stack.transactions);
 
   return {
     views,
     tx,
-    helpers: stack.helpers || {},
     store: runtime.store,
     runtime
   } as StackClient<TStack>;

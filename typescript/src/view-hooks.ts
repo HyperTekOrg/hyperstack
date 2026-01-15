@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback, useSyncExternalStore, useRef, useMemo } from 'react';
-import { ViewDefinition, ViewHookOptions, ViewHookResult, ListParams } from './types';
+import { ViewDef, ViewHookOptions, ViewHookResult, ListParams } from './types';
 import { HyperstackRuntime } from './runtime';
 
 export function createStateViewHook<T>(
-  viewDef: ViewDefinition<T>,
+  viewDef: ViewDef<T, 'state'>,
   runtime: HyperstackRuntime
 ) {
   return {
@@ -64,15 +64,6 @@ export function createStateViewHook<T>(
         },
         () => {
           const rawData = runtime.store.getState().entities.get(viewDef.view)?.get(keyString);
-
-          if (rawData && viewDef.transform) {
-            try {
-              return viewDef.transform(rawData) as T;
-            } catch (err) {
-              return undefined;
-            }
-          }
-
           return rawData as T | undefined;
         }
       );
@@ -84,7 +75,7 @@ export function createStateViewHook<T>(
       }, [data, isLoading]);
 
       return {
-        data: options?.initialData ?? data,
+        data: (options?.initialData ?? data) as T | undefined,
         isLoading,
         error,
         refresh
@@ -94,7 +85,7 @@ export function createStateViewHook<T>(
 }
 
 export function createListViewHook<T>(
-  viewDef: ViewDefinition<T>,
+  viewDef: ViewDef<T, 'list'>,
   runtime: HyperstackRuntime
 ) {
   return {
@@ -102,13 +93,11 @@ export function createListViewHook<T>(
       const [isLoading, setIsLoading] = useState(!options?.initialData);
       const [error, setError] = useState<Error | undefined>();
       const cachedDataRef = useRef<T[] | undefined>(undefined);
-      const lastMapRef = useRef<Map<string, any> | undefined>(undefined);
+      const lastMapRef = useRef<Map<string, unknown> | undefined>(undefined);
 
       const enabled = options?.enabled !== false;
       const key = params?.key;
 
-      // Stabilize filters object to prevent unnecessary re-subscriptions
-      // We use a JSON string as the dependency to detect actual value changes
       const filtersJson = params?.filters ? JSON.stringify(params.filters) : undefined;
       const filters = useMemo(() => params?.filters, [filtersJson]);
 
@@ -161,7 +150,7 @@ export function createListViewHook<T>(
           return unsubscribe;
         },
         () => {
-          let baseMap = runtime.store.getState().entities.get(viewDef.view) as Map<string, any> | undefined;
+          const baseMap = runtime.store.getState().entities.get(viewDef.view) as Map<string, unknown> | undefined;
 
           if (!baseMap) {
             if (cachedDataRef.current !== undefined) {
@@ -175,29 +164,19 @@ export function createListViewHook<T>(
             return cachedDataRef.current;
           }
 
-          let items = Array.from(baseMap.values()).map((value: any) => {
-            if (viewDef.transform) {
-              try {
-                return viewDef.transform(value) as T;
-              } catch (err) {
-                console.log("Error transforming", err);
-                return value;
-              }
-            }
-
-            return value;
-          });
+          let items = Array.from(baseMap.values()) as T[];
 
           if (params?.where) {
             items = items.filter((item) => {
-              return Object.entries(params.where!).every(([key, condition]) => {
-                const value = (item as any)[key];
+              return Object.entries(params.where!).every(([fieldKey, condition]) => {
+                const value = (item as Record<string, unknown>)[fieldKey];
 
                 if (typeof condition === 'object' && condition !== null) {
-                  if ('gte' in condition) return value >= condition.gte;
-                  if ('lte' in condition) return value <= condition.lte;
-                  if ('gt' in condition) return value > condition.gt;
-                  if ('lt' in condition) return value < condition.lt;
+                  const cond = condition as Record<string, unknown>;
+                  if ('gte' in cond) return (value as number) >= (cond.gte as number);
+                  if ('lte' in cond) return (value as number) <= (cond.lte as number);
+                  if ('gt' in cond) return (value as number) > (cond.gt as number);
+                  if ('lt' in cond) return (value as number) < (cond.lt as number);
                 }
 
                 return value === condition;
@@ -209,7 +188,7 @@ export function createListViewHook<T>(
             items = items.slice(0, params.limit);
           }
 
-          lastMapRef.current = runtime.store.getState().entities.get(viewDef.view) as Map<string, any> | undefined;
+          lastMapRef.current = runtime.store.getState().entities.get(viewDef.view) as Map<string, unknown> | undefined;
           cachedDataRef.current = items;
           return items;
         }
@@ -222,7 +201,7 @@ export function createListViewHook<T>(
       }, [data, isLoading]);
 
       return {
-        data: options?.initialData ?? data,
+        data: (options?.initialData ?? data) as T[] | undefined,
         isLoading,
         error,
         refresh

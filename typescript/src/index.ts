@@ -1,12 +1,10 @@
 export { HyperstackProvider, useHyperstackContext, useConnectionState } from './provider';
-export { defineStack, useHyperstack } from './stack';
-export { createStateView, createListView } from './view-factory';
+export { useHyperstack } from './stack';
 export { createRuntime } from './runtime';
 export { ConnectionManager } from './connection';
 
 export type {
   NetworkConfig,
-  ViewDefinition,
   TransactionDefinition,
   StackDefinition,
   HyperstackConfig,
