@@ -52,6 +52,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Debug - list files
+        run: |
+          echo "PWD: $(pwd)"
+          echo "Checking for package-lock.json:"
+          ls -la package-lock.json || echo "Not found in current dir"
+          ls -la ../../typescript/core/package-lock.json || echo "Not found with full path"
+          echo "Listing typescript/core from repo root:"
+          ls -la $GITHUB_WORKSPACE/typescript/core/ || echo "Failed"
+        working-directory: ${{ github.workspace }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -76,6 +86,16 @@ jobs:
         working-directory: typescript/react
     steps:
       - uses: actions/checkout@v4
+
+      - name: Debug - list files
+        run: |
+          echo "PWD: $(pwd)"
+          echo "Checking for package-lock.json:"
+          ls -la package-lock.json || echo "Not found in current dir"
+          ls -la ../../typescript/react/package-lock.json || echo "Not found with full path"
+          echo "Listing typescript/react from repo root:"
+          ls -la $GITHUB_WORKSPACE/typescript/react/ || echo "Failed"
+        working-directory: ${{ github.workspace }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
