@@ -1,14 +1,129 @@
 ---
-title: TypeScript SDK
+title: TypeScript SDKs
 sidebar:
   order: 1
 ---
 
-The Hyperstack TypeScript SDK (`hyperstack-react`) provides a high-level React integration for building real-time Solana applications. It features a type-safe API for data streaming, transaction management, and state synchronization.
+Hyperstack provides two TypeScript packages for building real-time Solana applications:
 
-## Installation
+| Package | npm | Description |
+|---------|-----|-------------|
+| `hyperstack-typescript` | [npm](https://www.npmjs.com/package/hyperstack-typescript) | Pure TypeScript SDK - framework-agnostic core with AsyncIterable-based streaming |
+| `hyperstack-react` | [npm](https://www.npmjs.com/package/hyperstack-react) | React SDK - hooks and providers built on top of the core SDK |
 
-Install the SDK and its peer dependencies using your preferred package manager:
+**Choose based on your needs:**
+- **Building a React app?** → Use `hyperstack-react` (includes the core SDK)
+- **Using Vue, Svelte, Node.js, or vanilla JS?** → Use `hyperstack-typescript`
+
+---
+
+## TypeScript Core SDK (`hyperstack-typescript`)
+
+The core SDK provides a framework-agnostic client for Hyperstack with AsyncIterable-based streaming. Use this if you're not using React or need direct control over subscriptions.
+
+### Installation
+
+```bash
+npm install hyperstack-typescript
+```
+
+### Basic Usage
+
+```typescript
+import { HyperStack } from 'hyperstack-typescript';
+import { MY_STACK } from './generated/my-stack';
+
+// Connect to your deployed stack
+const hs = await HyperStack.connect('wss://my-stack.stack.usehyperstack.com', {
+  stack: MY_STACK,
+});
+
+// Stream updates using AsyncIterable
+for await (const update of hs.views.tokens.list.watch()) {
+  if (update.type === 'upsert') {
+    console.log('Token updated:', update.key, update.data);
+  } else if (update.type === 'delete') {
+    console.log('Token deleted:', update.key);
+  }
+}
+```
+
+### Streaming with Rich Diffs
+
+```typescript
+// Get before/after diffs for each update
+for await (const update of hs.views.tokens.list.watchRich()) {
+  if (update.type === 'updated') {
+    console.log('Changed from:', update.before);
+    console.log('Changed to:', update.after);
+  }
+}
+
+// Watch a single entity by key
+for await (const update of hs.views.tokens.state.watch('token-123')) {
+  console.log('Token 123 updated:', update.data);
+}
+```
+
+### One-Shot Queries
+
+```typescript
+// Get all tokens (snapshot, not streaming)
+const tokens = await hs.views.tokens.list.get();
+
+// Get a single token by key
+const token = await hs.views.tokens.state.get('token-123');
+```
+
+### Connection Management
+
+```typescript
+// Check connection state
+console.log(hs.connectionState); // 'connected' | 'connecting' | 'disconnected' | ...
+
+// Listen for connection changes
+const unsubscribe = hs.onConnectionStateChange((state) => {
+  console.log('Connection state:', state);
+});
+
+// Disconnect when done
+await hs.disconnect();
+```
+
+### Core SDK Exports
+
+```typescript
+import {
+  HyperStack,
+  ConnectionManager,
+  EntityStore,
+  HyperStackError,
+  // View factories for typed views
+  createTypedStateView,
+  createTypedListView,
+  createTypedViews,
+  // Frame parsing utilities
+  parseFrame,
+  parseFrameFromBlob,
+  isValidFrame,
+} from 'hyperstack-typescript';
+
+import type {
+  ConnectionState,
+  Update,
+  RichUpdate,
+  StackDefinition,
+  HyperStackOptions,
+} from 'hyperstack-typescript';
+```
+
+---
+
+## React SDK (`hyperstack-react`)
+
+The React SDK provides a high-level hooks-based API for building real-time Solana applications. It's built on top of `hyperstack-typescript` and adds React-specific features like providers, hooks, and automatic re-rendering.
+
+### Installation
 
 ```bash
 npm install hyperstack-react zustand
@@ -261,3 +376,23 @@ import type {
 | `createStateView`    | Function  | View factory for single entities.                |
 | `createListView`     | Function  | View factory for entity collections.             |
 | `HyperStreamError`   | Class     | Custom error class for SDK errors.               |
+
+---
+
+## Choosing Between SDKs
+
+| Use Case | Recommended SDK |
+|----------|-----------------|
+| React/Next.js applications | `hyperstack-react` |
+| Vue, Svelte, Solid, etc. | `hyperstack-typescript` |
+| Node.js backend/scripts | `hyperstack-typescript` |
+| Custom state management | `hyperstack-typescript` |
+| Need React hooks & providers | `hyperstack-react` |
+| Maximum control over subscriptions | `hyperstack-typescript` |
+
+The React SDK re-exports everything from the core SDK, so you can always access low-level APIs if needed:
+
+```typescript
+// Access core SDK features from React SDK
+import { HyperStack, ConnectionManager } from 'hyperstack-react';
+```

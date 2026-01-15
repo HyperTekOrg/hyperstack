@@ -1,12 +1,16 @@
 # Hyperstack React SDK
 
-TypeScript React SDK for real-time Solana program data streaming from hyperstack
+React SDK for real-time Solana program data streaming from Hyperstack.
+
+Built on top of [`hyperstack-typescript`](https://www.npmjs.com/package/hyperstack-typescript), the pure TypeScript core SDK.
 
 ## Installation
 
 ```bash
 npm install hyperstack-react
 ```
+
+> **Not using React?** Use [`hyperstack-typescript`](../core/README.md) directly for Vue, Svelte, Node.js, or vanilla JavaScript.
 
 ## Usage
 
@@ -63,6 +67,30 @@ function MyComponent() {
 #### Utilities
 
 - `ConnectionManager` - Manage WebSocket connections
+
+## Relationship with hyperstack-typescript
+
+This package depends on and re-exports the core `hyperstack-typescript` package. The core SDK provides:
+
+- `HyperStack` - Main client class
+- `ConnectionManager` - WebSocket connection handling
+- `EntityStore` - State management
+- AsyncIterable-based streaming APIs
+
+The React SDK adds:
+
+- `HyperstackProvider` - React context provider
+- `useHyperstack` - Main hook for accessing stacks
+- `useConnectionState` - Connection monitoring hook
+- `defineStack`, `createStateView`, `createListView` - React-friendly factories
+
+If you need low-level access, you can import directly from the core:
+
+```typescript
+import { HyperStack, ConnectionManager } from 'hyperstack-react';
+// or
+import { HyperStack, ConnectionManager } from 'hyperstack-typescript';
+```
 
 ## License
 

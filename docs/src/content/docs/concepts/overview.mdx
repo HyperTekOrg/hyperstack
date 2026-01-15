@@ -157,6 +157,11 @@ A **stack** is the client-side interface to your deployed stream. It provides:
 - **Transactions** - Instruction builders
 - **Helpers** - Utility functions
 
+Hyperstack offers two TypeScript SDKs:
+- **`hyperstack-typescript`** - Pure TypeScript with AsyncIterable streaming (framework-agnostic)
+- **`hyperstack-react`** - React hooks and providers (built on the core SDK)
+
+**React SDK:**
 ```typescript
 const TokenStack = defineStack({
   name: "my-tokens",
@@ -167,6 +172,16 @@ const TokenStack = defineStack({
     },
   },
 });
+```
+
+**TypeScript Core SDK:**
+```typescript
+const hs = await HyperStack.connect('wss://my-stack.stack.usehyperstack.com');
+
+// AsyncIterable-based streaming
+for await (const update of hs.views.tokens.list.watch()) {
+  console.log(update.type, update.key, update.data);
+}
 ```
 
 ---

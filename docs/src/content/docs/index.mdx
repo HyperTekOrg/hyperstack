@@ -18,7 +18,11 @@ Hyperstack is **data infrastructure as code** for Solana. Define a schema that c
 
 ## Quick Example
 
-```typescript
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+<Tabs>
+<TabItem label="React">
+```tsx
 function TokenList() {
   const stack = useHyperstack(MY_PROGRAM_STACK);
   const { data: tokens } = stack.views.tokens.list.use();
@@ -26,6 +30,17 @@ function TokenList() {
   return tokens?.map(token => <TokenCard key={token.mint} {...token} />);
 }
 ```
+</TabItem>
+<TabItem label="TypeScript">
+```typescript
+const hs = await HyperStack.connect('wss://my-stack.stack.usehyperstack.com');
+
+for await (const update of hs.views.tokens.list.watch()) {
+  console.log('Token:', update.data);
+}
+```
+</TabItem>
+</Tabs>
 
 ## Start Here
 
@@ -37,9 +52,15 @@ function TokenList() {
 
   </Card>
   <Card title="React Quickstart" icon="rocket">
-    Build your first real-time app in 5 minutes.
+    Build your first real-time React app in 5 minutes.
 
     [Start building →](/getting-started/quickstart/)
+
+  </Card>
+  <Card title="TypeScript SDK" icon="seti:typescript">
+    Pure TypeScript for Node.js, Vue, Svelte, etc.
+
+    [View SDK →](/sdks/typescript/overview/)
 
   </Card>
   <Card title="How It Works" icon="information">

@@ -119,9 +119,14 @@ Copy the **WebSocket URL** from the output. You'll need it for the React app.
 
 ---
 
-## Part 3: Connect from React
+## Part 3: Connect from Your App
 
-Finally, let's build the frontend. We'll use the Hyperstack React SDK to subscribe to live updates.
+Finally, let's build the frontend. You can use either the React SDK or the pure TypeScript SDK.
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+<Tabs>
+<TabItem label="React">
 
 ### 1. Set up your React app
 
@@ -207,6 +212,60 @@ export default function App() {
   );
 }
 ```
+
+</TabItem>
+<TabItem label="TypeScript (Non-React)">
+
+### 1. Set up your project
+
+```bash
+mkdir my-counter-app && cd my-counter-app
+npm init -y
+npm install hyperstack-typescript typescript
+```
+
+### 2. Connect and stream data
+
+```typescript
+// src/index.ts
+import { HyperStack } from 'hyperstack-typescript';
+
+interface Counter {
+  owner: string;
+  total_count: number;
+  last_updated: number;
+}
+
+async function main() {
+  // Connect to your deployed stack
+  const hs = await HyperStack.connect('wss://counter-stack.stack.usehyperstack.com');
+
+  console.log('Connected! Streaming counters...\n');
+
+  // Stream updates using AsyncIterable
+  for await (const update of hs.views.counters.list.watch()) {
+    if (update.type === 'upsert') {
+      const counter = update.data as Counter;
+      console.log(`Counter updated:`);
+      console.log(`  Owner: ${counter.owner}`);
+      console.log(`  Count: ${counter.total_count}`);
+      console.log(`  Last updated: ${new Date(counter.last_updated * 1000).toLocaleString()}`);
+      console.log('');
+    }
+  }
+}
+
+main().catch(console.error);
+```
+
+### 3. Run your app
+
+```bash
+npx tsx src/index.ts
+```
+
+</TabItem>
+</Tabs>
 
 ---
 
