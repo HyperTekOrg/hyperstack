@@ -190,7 +190,7 @@ const TokenStack = defineStack({
 1. Connect to WebSocket
 2. Subscribe to views
 3. Receive real-time updates
-4. React components re-render automatically
+4. UI components update automatically (React) or stream yields items (Rust)
 
 ---
 
@@ -241,9 +241,38 @@ console.log(token.volume)  // bigint
 
 ---
 
+## SDK Examples
+
+### TypeScript/React
+
+```tsx
+const { data: tokens } = stack.views.tokens.list.use();
+```
+
+### Rust
+
+```rust
+// Lazy streams with chainable operators
+let mut alerts = hs.watch_rich::<TokenEntity>()
+    .filter(|u| watchlist.contains(u.key()))
+    .filter_map(|update| match update {
+        RichUpdate::Updated { before, after, .. } => {
+            let change = calculate_change(&before, &after);
+            (change.abs() > 5.0).then_some(Alert { token: after, change })
+        }
+        _ => None,
+    });
+
+while let Some(alert) = alerts.next().await {
+    println!("Price alert: {} changed {}%", alert.token.name, alert.change);
+}
+```
+
+---
+
 ## Next Steps
 
-- [React Quickstart](/quickstart/react) - Build your first app
-- [Stack API](/concepts/stack-api) - Client-side API reference
-- [Stack Macros](/stacks/macros) - Full macro reference
+- [React Quickstart](/quickstart/react) - Build your first React app
+- [Rust SDK](https://github.com/HyperTekOrg/hyperstack-oss/tree/main/rust/hyperstack-sdk) - Rust client documentation
+- [Stack API](/concepts/stack-api) - Client-side API reference (TypeScript)
 - [CLI Commands](/cli/commands) - Deployment and management

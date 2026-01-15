@@ -39,38 +39,75 @@ The following example shows how to connect to a Hyperstack server and watch for 
 
 ```rust
 use hyperstack_sdk::prelude::*;
-
-// These types are typically imported from your generated SDK crate
-// use my_stack_sdk::{TokenEntity, Token};
+use my_stack::{PumpfunToken, PumpfunTokenEntity};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // 1. Connect to the Hyperstack server
     let hs = HyperStack::connect("wss://mainnet.hyperstack.xyz").await?;
-
-    // 2. Start watching an entity
-    let mut stream = hs.watch::<TokenEntity>().await;
-
-    println!("Watching for token updates...");
-
-    // 3. Process real-time updates
+    
+    // List all entities
+    let tokens = hs.list::<PumpfunTokenEntity>().await;
+    println!("Found {} tokens", tokens.len());
+    
+    // Watch for real-time updates (lazy - no .await needed)
+    let mut stream = hs.watch::<PumpfunTokenEntity>();
     while let Some(update) = stream.next().await {
         match update {
-            Update::Upsert { key, data } => {
-                println!("Entity {} updated: {:?}", key, data);
-            }
-            Update::Delete { key } => {
-                println!("Entity {} deleted", key);
-            }
-            _ => {}
+            Update::Upsert { key, data } => println!("Updated {}", key),
+            Update::Patch { key, data } => println!("Patched {}", key),
+            Update::Delete { key } => println!("Deleted {}", key),
         }
     }
-
+    
     Ok(())
 }
 ```
 
 The `prelude` module re-exports all commonly needed types including `StreamExt`, so you don't need separate imports.
+
+---
+
+## Lazy Streams with Chainable Operators
+
+Streams are **lazy** - calling `watch()` returns immediately without subscribing. The subscription happens automatically on first poll. This enables ergonomic method chaining:
+
+```rust
+use std::collections::HashSet;
+
+let watchlist: HashSet<String> = /* tokens to watch */;
+
+let mut price_alerts = hs
+    .watch_rich::<PumpfunTokenEntity>()
+    .filter(move |u| watchlist.contains(u.key()))
+    .filter_map(|update| match update {
+        RichUpdate::Updated { before, after, .. } => {
+            let prev = before.trading.last_trade_price.flatten().unwrap_or(0.0);
+            let curr = after.trading.last_trade_price.flatten().unwrap_or(0.0);
+            if prev > 0.0 {
+                let pct = (curr - prev) / prev * 100.0;
+                if pct.abs() > 0.1 {
+                    return Some((after.info.name.clone(), pct));
+                }
+            }
+            None
+        }
+        _ => None,
+    });
+
+while let Some((name, pct)) = price_alerts.next().await {
+    println!("[PRICE] {:?} changed by {:.2}%", name, pct);
+}
+```
+
+### Available Stream Operators
+
+| Operator | Description |
+|----------|-------------|
+| `.filter(predicate)` | Keep only updates matching the predicate |
+| `.filter_map(f)` | Filter and transform in one step |
+| `.map(f)` | Transform each update |
+
+All operators are chainable and return streams that support the same operators.
 
 ---
 
@@ -110,232 +147,176 @@ let hs = HyperStack::builder()
 
 ---
 
-## Subscriptions
+## Core Methods
 
-The SDK provides several ways to interact with entity data, depending on your use case.
-
-### `get::<E>(key)`
-
-Fetch a single entity by its primary key. If the client is not yet subscribed to the entity's state view, it will automatically subscribe.
-
-```rust
-if let Some(token) = hs.get::<TokenEntity>("mint_address").await {
-    println!("Found token: {:?}", token);
-}
-```
-
-### `list::<E>()`
-
-Fetch all entities of type `E` currently tracked by the server.
-
-```rust
-let all_tokens = hs.list::<TokenEntity>().await;
-println!("Total tokens: {}", all_tokens.len());
-```
-
-### `watch::<E>()`
-
-Subscribe to a stream of all updates for entity type `E`.
-
-```rust
-let mut stream = hs.watch::<TokenEntity>().await;
-while let Some(update) = stream.next().await {
-    // Handle Update<E::Data>
-}
-```
-
-### `watch_key::<E>(key)`
-
-Subscribe to updates for a specific entity instance by its key.
-
-```rust
-let mut stream = hs.watch_key::<TokenEntity>("mint_address").await;
-```
-
-### `watch_keys::<E>(&[keys])`
-
-Subscribe to updates for multiple specific keys efficiently. Uses a single underlying subscription with client-side filtering, which is more efficient than calling `watch_key()` multiple times.
-
-```rust
-let keys = &["mint1", "mint2", "mint3"];
-let mut stream = hs.watch_keys::<TokenEntity>(keys).await;
-
-while let Some(update) = stream.next().await {
-    // Only receives updates for the specified keys
-    println!("{}: {:?}", update.key(), update.data());
-}
-```
-
-### `watch_rich::<E>()` and `watch_key_rich::<E>(key)`
-
-Subscribe to rich updates that include before/after values for tracking changes over time. See [Rich Updates](#rich-updates) below.
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `get::<E>(key).await` | `Option<T>` | Get a single entity by key |
+| `list::<E>().await` | `Vec<T>` | Get all entities of type E |
+| `watch::<E>()` | `EntityStream<T>` | Stream all updates (lazy) |
+| `watch_key::<E>(key)` | `EntityStream<T>` | Stream updates for a specific key (lazy) |
+| `watch_keys::<E>(&[keys])` | `EntityStream<T>` | Stream updates for multiple keys (lazy) |
+| `watch_rich::<E>()` | `RichEntityStream<T>` | Stream with before/after values (lazy) |
+| `watch_key_rich::<E>(key)` | `RichEntityStream<T>` | Rich stream for specific key (lazy) |
+| `connection_state().await` | `ConnectionState` | Get current connection state |
+| `disconnect().await` | `()` | Close the connection |
 
 ---
 
-## Entity Trait
+## Update Types
 
-Type safety is achieved through the `Entity` trait. While you can implement this manually, it is designed to be implemented by code generated by the Hyperstack CLI.
-
-```rust
-pub trait Entity: Sized + Send + Sync + 'static {
-    /// The data struct for this entity
-    type Data: Serialize + DeserializeOwned + Clone + Send + Sync + 'static;
-
-    /// Unique name of the entity
-    const NAME: &'static str;
-
-    /// Server paths for different view modes
-    fn state_view() -> &'static str;
-    fn list_view() -> &'static str;
-    fn kv_view() -> &'static str;
-}
-```
-
----
-
-## Data Types
-
-### `Update<T>`
-
-The `Update` enum represents changes to an entity:
+When streaming with `watch()`, you receive `Update<T>` variants:
 
 ```rust
 pub enum Update<T> {
-    /// Full entity data or partial update that resulted in a new state
-    Upsert { key: String, data: T },
-    /// Partial update (merged into current state)
-    Patch { key: String, data: T },
-    /// Entity was removed
-    Delete { key: String },
+    Upsert { key: String, data: T },  // Full entity update
+    Patch { key: String, data: T },   // Partial update (merged)
+    Delete { key: String },           // Entity removed
 }
 ```
 
-#### Helper Methods
+Helper methods: `key()`, `data()`, `is_delete()`, `has_data()`, `into_data()`, `into_key()`, `map(f)`
 
-```rust
-update.key()        // Get the entity key (borrowed)
-update.data()       // Get data reference (Some for Upsert/Patch, None for Delete)
-update.is_delete()  // Check if this is a deletion
-update.has_data()   // Check if this update has data (true for Upsert/Patch)
-update.into_data()  // Consume and get owned data (Some for Upsert/Patch, None for Delete)
-update.into_key()   // Consume and get owned key
-update.map(|d| ..)  // Transform the data type while preserving the variant
-```
+### Rich Updates (Before/After Diffs)
 
-### Rich Updates
-
-For tracking changes over time with before/after values, use `RichUpdate<T>` via `watch_rich()` or `watch_key_rich()`:
+For tracking changes over time, use `watch_rich()`:
 
 ```rust
 pub enum RichUpdate<T> {
-    /// Entity was created (no previous value)
     Created { key: String, data: T },
-    /// Entity was updated (has before and after values)
-    Updated { key: String, before: T, after: T },
-    /// Entity was deleted (includes last known value if available)
+    Updated { key: String, before: T, after: T, patch: Option<Value> },
     Deleted { key: String, last_known: Option<T> },
 }
 ```
 
-Example usage:
+The `Updated` variant includes `patch` - the raw JSON of changed fields, useful for checking what specifically changed:
 
 ```rust
-let mut stream = hs.watch_rich::<TokenEntity>().await;
-while let Some(update) = stream.next().await {
-    match update {
-        RichUpdate::Created { key, data } => {
-            println!("New entity {}: {:?}", key, data);
-        }
-        RichUpdate::Updated { key, before, after } => {
-            println!("Entity {} changed from {:?} to {:?}", key, before, after);
-        }
-        RichUpdate::Deleted { key, last_known } => {
-            println!("Entity {} deleted, was: {:?}", key, last_known);
-        }
-    }
+if update.has_patch_field("trading") {
+    // The trading field was modified
 }
 ```
 
-### `ConnectionState`
+---
 
-Monitor the health of your connection:
+## Understanding `Option<Option<T>>` Fields
+
+Generated entity types often have fields typed as `Option<Option<T>>`. This represents the **patch semantics** of HyperStack updates:
+
+| Value | Meaning |
+|-------|---------|
+| `None` | Field was **not included** in this update (no change) |
+| `Some(None)` | Field was **explicitly set to null** |
+| `Some(Some(value))` | Field has a **concrete value** |
+
+This distinction matters for partial updates (patches). When the server sends a patch, only changed fields are included. An absent field means "keep the previous value", while an explicit `null` means "clear this field".
+
+### Working with `Option<Option<T>>`
+
+```rust
+// Access a nested optional field
+let price = token.trading.last_trade_price.flatten().unwrap_or(0.0);
+
+// Check if field was explicitly set (vs absent from patch)
+match &token.reserves.current_price_sol {
+    None => println!("Price not in this update"),
+    Some(None) => println!("Price explicitly cleared"),
+    Some(Some(price)) => println!("Price: {}", price),
+}
+
+// Compare values in before/after
+if before.trading.last_trade_price != after.trading.last_trade_price {
+    println!("Price changed!");
+}
+```
+
+---
+
+## Connection State
 
 ```rust
 let state = hs.connection_state().await;
 match state {
-    ConnectionState::Connected => { println!("Online"); },
-    ConnectionState::Connecting => { println!("Connecting..."); },
-    ConnectionState::Reconnecting { attempt } => { println!("Retrying attempt {}", attempt); },
-    ConnectionState::Disconnected => { println!("Offline"); },
-    ConnectionState::Failed { error } => { println!("Error: {}", error); },
+    ConnectionState::Connected => println!("Connected"),
+    ConnectionState::Connecting => println!("Connecting..."),
+    ConnectionState::Reconnecting { attempt } => println!("Reconnecting (attempt {})", attempt),
+    ConnectionState::Disconnected => println!("Disconnected"),
+    ConnectionState::Error => println!("Error"),
 }
 ```
 
 ---
 
-## Type Inference with EntityData
+## Generating a Rust SDK
 
-If your generated SDK implements the `EntityData` trait, you can use type inference instead of turbofish syntax:
-
-```rust
-pub trait EntityData: Serialize + DeserializeOwned + Clone + Send + Sync + 'static {
-    type Entity: Entity<Data = Self>;
-}
-```
-
-This allows for cleaner code when the return type is annotated:
-
-```rust
-// With EntityData trait implemented:
-let token: Token = hs.get_data("mint").await.unwrap();
-let tokens: Vec<Token> = hs.list_data().await;
-let stream: EntityStream<Token> = hs.watch_data().await;
-
-// Original turbofish syntax still works:
-let token = hs.get::<TokenEntity>("mint").await;
-```
-
----
-
-## Generated SDKs
-
-Most users will interact with the Rust SDK using a generated crate. This ensures that all entities and their fields are fully typed.
-
-### 1. Generate the SDK
-
-Use the Hyperstack CLI to generate a Rust crate from your stack:
+Use the HyperStack CLI to generate a typed Rust SDK from your spec:
 
 ```bash
-hs sdk create rust my-stream-name --output ./my-sdk
+# Generate SDK crate
+hs sdk create rust settlement-game
+
+# With custom output directory
+hs sdk create rust settlement-game --output ./crates/game-sdk
+
+# With custom crate name
+hs sdk create rust settlement-game --crate-name game-sdk
 ```
 
-### 2. Include in Cargo.toml
+This generates a crate with:
 
-Add the generated crate to your dependencies:
+```
+generated/settlement-game-stack/
+├── Cargo.toml
+└── src/
+    ├── lib.rs      # Re-exports
+    ├── types.rs    # Data structs (with Option<Option<T>> for patchable fields)
+    └── entity.rs   # Entity trait implementations
+```
+
+Add the generated crate to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hyperstack-sdk = { git = "https://github.com/HyperTekOrg/hyperstack.git" }
-my-stream-sdk = { path = "./my-sdk" }
+hyperstack-sdk = "0.1"
+settlement-game-stack = { path = "./generated/settlement-game-stack" }
 ```
 
-### 3. Usage
+---
 
-Import the generated entities and use them with the `HyperStack` client:
+## Connection Management
+
+### Auto-Reconnection
+
+The SDK automatically reconnects on connection loss with configurable backoff:
 
 ```rust
-use my_stream_sdk::{PoolEntity, Pool};
-
-let hs = HyperStack::connect("wss://example.com").await?;
-let pool = hs.get::<PoolEntity>("pool_address").await;
+let hs = HyperStack::builder()
+    .url("wss://example.com")
+    .auto_reconnect(true)
+    .reconnect_intervals(vec![
+        Duration::from_secs(1),
+        Duration::from_secs(2),
+        Duration::from_secs(5),
+        Duration::from_secs(10),
+    ])
+    .max_reconnect_attempts(20)
+    .connect()
+    .await?;
 ```
 
 ---
 
 ## Examples
 
-For real-world usage patterns, check the `examples/` directory in the [Hyperstack repository](https://github.com/HyperTekOrg/hyperstack):
+See the `examples/` directory for complete examples:
 
-- **Flip Demo**: Tracking game state for a coin flip program.
-- **Pump New Launches**: Monitoring new token launches on Pumpfun.
-- **Pump Trades**: Real-time trade monitoring for specific tokens.
+- **flip/** - Flip game state tracking
+- **pump/** - Token launch and trade monitoring
+
+Run examples with:
+
+```bash
+cargo run --example flip
+cargo run --example pump_new
+cargo run --example pump_trades
+```

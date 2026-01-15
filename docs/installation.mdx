@@ -54,9 +54,36 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hyperstack-sdk = { git = "https://github.com/HyperTekOrg/hyperstack-oss", branch = "main" }
+hyperstack-sdk = "0.1"
 tokio = { version = "1.0", features = ["full"] }
 ```
+
+Quick example:
+
+```rust
+use hyperstack_sdk::prelude::*;
+use my_stack::{Token, TokenEntity};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let hs = HyperStack::connect("wss://your-stack.hyperstack.xyz").await?;
+    
+    // List all entities
+    let tokens = hs.list::<TokenEntity>().await;
+    
+    // Watch for real-time updates (lazy - no await needed)
+    let mut stream = hs.watch::<TokenEntity>()
+        .filter(|u| u.data().map(|t| t.volume > 1000).unwrap_or(false));
+    
+    while let Some(update) = stream.next().await {
+        println!("Update: {}", update.key());
+    }
+    
+    Ok(())
+}
+```
+
+See the [Rust SDK README](https://github.com/HyperTekOrg/hyperstack-oss/tree/main/rust/hyperstack-sdk) for full documentation.
 
 ### Python
 
