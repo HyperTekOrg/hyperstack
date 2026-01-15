@@ -14,7 +14,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! hyperstack = "0.1"
+//! hyperstack = "0.2"
 //! ```
 //!
 //! Or with specific features:

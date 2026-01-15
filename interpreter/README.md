@@ -19,7 +19,7 @@ This crate provides the core components for processing Solana blockchain events 
 
 ```toml
 [dependencies]
-hyperstack-interpreter = "0.1"
+hyperstack-interpreter = "0.2"
 ```
 
 ## Usage

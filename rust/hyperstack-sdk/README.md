@@ -10,7 +10,7 @@ Rust client SDK for connecting to HyperStack streaming servers.
 
 ```toml
 [dependencies]
-hyperstack-sdk = "0.1"
+hyperstack-sdk = "0.2"
 ```
 
 ### TLS Options
@@ -222,7 +222,7 @@ Add the generated crate to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hyperstack-sdk = "0.1"
+hyperstack-sdk = "0.2"
 settlement-game-stack = { path = "./generated/settlement-game-stack" }
 ```
 

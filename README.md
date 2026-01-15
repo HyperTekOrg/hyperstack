@@ -25,7 +25,7 @@ Real-time streaming data pipelines for Solana - transform on-chain events into t
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-hyperstack = "0.1"
+hyperstack = "0.2"
 ```
 
 ### TypeScript (Core)

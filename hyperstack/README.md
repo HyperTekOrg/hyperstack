@@ -10,7 +10,7 @@ Real-time streaming data pipelines for Solana - transform on-chain events into t
 
 ```toml
 [dependencies]
-hyperstack = "0.1"
+hyperstack = "0.2"
 ```
 
 Or with all features:

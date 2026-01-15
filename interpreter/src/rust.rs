@@ -28,7 +28,7 @@ impl Default for RustConfig {
     fn default() -> Self {
         Self {
             crate_name: "generated-stack".to_string(),
-            sdk_version: "0.1".to_string(),
+            sdk_version: "0.2".to_string(),
         }
     }
 }

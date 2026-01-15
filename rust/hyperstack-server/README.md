@@ -20,7 +20,7 @@ This crate provides a builder API for creating HyperStack servers that:
 
 ```toml
 [dependencies]
-hyperstack-server = "0.1"
+hyperstack-server = "0.2"
 ```
 
 ## Quick Start

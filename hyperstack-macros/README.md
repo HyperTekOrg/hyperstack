@@ -19,7 +19,7 @@ This crate provides the `#[hyperstack]` attribute macro that transforms annotate
 
 ```toml
 [dependencies]
-hyperstack-macros = "0.1"
+hyperstack-macros = "0.2"
 ```
 
 ## Usage
