@@ -6,11 +6,9 @@ use serde::{Deserialize, Serialize};
 pub enum Mode {
     /// Latest value only (watch semantics)
     State,
-    /// Key-value with updates (map semantics)
-    Kv,
     /// Append-only stream
     Append,
-    /// Collection/list view
+    /// Collection/list view (also used for key-value lookups)
     List,
 }
 
@@ -42,22 +40,22 @@ mod tests {
     #[test]
     fn test_frame_entity_key_accessors() {
         let frame = Frame {
-            mode: Mode::Kv,
-            export: "SettlementGame/kv".to_string(),
+            mode: Mode::List,
+            export: "SettlementGame/list".to_string(),
             op: "upsert",
             key: "123".to_string(),
             data: serde_json::json!({}),
         };
 
-        assert_eq!(frame.entity(), "SettlementGame/kv");
+        assert_eq!(frame.entity(), "SettlementGame/list");
         assert_eq!(frame.key(), "123");
     }
 
     #[test]
     fn test_frame_serialization() {
         let frame = Frame {
-            mode: Mode::Kv,
-            export: "SettlementGame/kv".to_string(),
+            mode: Mode::List,
+            export: "SettlementGame/list".to_string(),
             op: "upsert",
             key: "123".to_string(),
             data: serde_json::json!({"gameId": "123"}),
@@ -65,8 +63,8 @@ mod tests {
 
         let json = serde_json::to_value(&frame).unwrap();
         assert_eq!(json["op"], "upsert");
-        assert_eq!(json["mode"], "kv");
-        assert_eq!(json["entity"], "SettlementGame/kv");
+        assert_eq!(json["mode"], "list");
+        assert_eq!(json["entity"], "SettlementGame/list");
         assert_eq!(json["key"], "123");
     }
 }

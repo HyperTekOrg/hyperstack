@@ -13,7 +13,7 @@ This crate provides a builder API for creating HyperStack servers that:
 - Process Solana blockchain data via Yellowstone gRPC
 - Parse and transform data using generated IDL parsers and the HyperStack VM
 - Stream entity updates over WebSockets to connected clients
-- Support multiple streaming modes (State, KV, List, Append)
+- Support multiple streaming modes (State, List, Append)
 - Monitor stream health and connectivity status
 
 ## Installation

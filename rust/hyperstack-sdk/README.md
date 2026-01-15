@@ -107,7 +107,6 @@ pub trait Entity: Sized + Send + Sync + 'static {
     
     fn state_view() -> &'static str;
     fn list_view() -> &'static str;
-    fn kv_view() -> &'static str;
 }
 ```
 
@@ -282,8 +281,7 @@ match state {
 | Mode | View | Description |
 |------|------|-------------|
 | State | `Entity/state` | Single shared state object |
-| KV | `Entity/kv` | Key-value lookups by entity key |
-| List | `Entity/list` | All entities matching filters |
+| List | `Entity/list` | All entities, key-value lookups |
 | Append | `Entity/append` | Append-only event log |
 
 ## Examples

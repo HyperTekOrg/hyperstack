@@ -1,18 +1,16 @@
-// The fundamental data structure that comes from WebSocket
 export interface EntityFrame<T = unknown> {
-  mode: 'state' | 'kv' | 'append' | 'list';     // different data storage modes
-  entity: string;                               // entity type (e.g., "Settlement.Game", "User", etc.)
-  op: 'create' | 'upsert' | 'patch' | 'delete'; // operation type - see typescript_sdk_updates.md "Operations" section
-  key: string;                                  // unique identifier for this entity instance
-  data: T;                                      // generic payload - actual entity data (type-safe!)
+  mode: 'state' | 'append' | 'list';
+  entity: string;
+  op: 'create' | 'upsert' | 'patch' | 'delete';
+  key: string;
+  data: T;
 }
 
-// this is what clients send to subscribe to data streams
 export interface Subscription {
-  view: string;                             // view identifier (e.g., "SettlementGame/kv", "SettlementGame/list")
-  key?: string;                             // optional - subscribe to specific instance, omit for all instances
-  partition?: string;                       // optional - for sharding/partitioning (?)
-  filters?: Record<string, string>;         // optional - server-side filters for list views
+  view: string;
+  key?: string;
+  partition?: string;
+  filters?: Record<string, string>;
 }
 
 // WebSocket connection lifecycle states

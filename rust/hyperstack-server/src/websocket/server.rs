@@ -355,31 +355,7 @@ async fn attach_client_to_bus(
                 }
             });
         }
-        Mode::Kv | Mode::Append => {
-            let mut rx = bus_manager.get_or_create_kv_bus(view_id).await;
-
-            let client_mgr = client_manager.clone();
-            let sub = subscription.clone();
-            let metrics_clone = metrics.clone();
-            tokio::spawn(async move {
-                while let Ok(envelope) = rx.recv().await {
-                    // Filter messages based on subscription
-                    if sub.matches(&envelope.entity, &envelope.key) {
-                        if client_mgr
-                            .send_to_client(client_id, envelope.payload.clone())
-                            .await
-                            .is_err()
-                        {
-                            break; // Client disconnected
-                        }
-                        if let Some(ref m) = metrics_clone {
-                            m.record_ws_message_sent();
-                        }
-                    }
-                }
-            });
-        }
-        Mode::List => {
+        Mode::List | Mode::Append => {
             let mut rx = bus_manager.get_or_create_list_bus(view_id).await;
 
             let client_mgr = client_manager.clone();
@@ -387,14 +363,13 @@ async fn attach_client_to_bus(
             let metrics_clone = metrics.clone();
             tokio::spawn(async move {
                 while let Ok(envelope) = rx.recv().await {
-                    // Filter messages based on subscription
                     if sub.matches(&envelope.entity, &envelope.key) {
                         if client_mgr
                             .send_to_client(client_id, envelope.payload.clone())
                             .await
                             .is_err()
                         {
-                            break; // Client disconnected
+                            break;
                         }
                         if let Some(ref m) = metrics_clone {
                             m.record_ws_message_sent();
@@ -452,40 +427,20 @@ async fn attach_client_to_bus(
                 }
             });
         }
-        Mode::Kv | Mode::Append => {
-            let mut rx = bus_manager.get_or_create_kv_bus(view_id).await;
-
-            let client_mgr = client_manager.clone();
-            let sub = subscription.clone();
-            tokio::spawn(async move {
-                while let Ok(envelope) = rx.recv().await {
-                    // Filter messages based on subscription
-                    if sub.matches(&envelope.entity, &envelope.key)
-                        && client_mgr
-                            .send_to_client(client_id, envelope.payload.clone())
-                            .await
-                            .is_err()
-                    {
-                        break; // Client disconnected
-                    }
-                }
-            });
-        }
-        Mode::List => {
+        Mode::List | Mode::Append => {
             let mut rx = bus_manager.get_or_create_list_bus(view_id).await;
 
             let client_mgr = client_manager.clone();
             let sub = subscription.clone();
             tokio::spawn(async move {
                 while let Ok(envelope) = rx.recv().await {
-                    // Filter messages based on subscription
                     if sub.matches(&envelope.entity, &envelope.key)
                         && client_mgr
                             .send_to_client(client_id, envelope.payload.clone())
                             .await
                             .is_err()
                     {
-                        break; // Client disconnected
+                        break;
                     }
                 }
             });

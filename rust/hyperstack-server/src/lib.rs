@@ -213,20 +213,8 @@ impl ServerBuilder {
         let view_index = self.views.unwrap_or_else(|| {
             let mut index = ViewIndex::new();
 
-            // Auto-register default views for each entity in the spec
             if let Some(ref spec) = self.spec {
                 for entity_name in spec.bytecode.entities.keys() {
-                    // Register kv view (key-value lookups)
-                    index.add_spec(ViewSpec {
-                        id: format!("{}/kv", entity_name),
-                        export: entity_name.clone(),
-                        mode: Mode::Kv,
-                        projection: Projection::all(),
-                        filters: Filters::all(),
-                        delivery: Delivery::default(),
-                    });
-
-                    // Register list view (all entities)
                     index.add_spec(ViewSpec {
                         id: format!("{}/list", entity_name),
                         export: entity_name.clone(),
@@ -236,7 +224,6 @@ impl ServerBuilder {
                         delivery: Delivery::default(),
                     });
 
-                    // Register state view (single shared state)
                     index.add_spec(ViewSpec {
                         id: format!("{}/state", entity_name),
                         export: entity_name.clone(),
@@ -246,7 +233,6 @@ impl ServerBuilder {
                         delivery: Delivery::default(),
                     });
 
-                    // Register append view (append-only log)
                     index.add_spec(ViewSpec {
                         id: format!("{}/append", entity_name),
                         export: entity_name.clone(),
@@ -284,20 +270,8 @@ impl ServerBuilder {
         let view_index = self.views.unwrap_or_else(|| {
             let mut index = ViewIndex::new();
 
-            // Auto-register default views for each entity in the spec
             if let Some(ref spec) = self.spec {
                 for entity_name in spec.bytecode.entities.keys() {
-                    // Register kv view
-                    index.add_spec(ViewSpec {
-                        id: format!("{}/kv", entity_name),
-                        export: entity_name.clone(),
-                        mode: Mode::Kv,
-                        projection: Projection::all(),
-                        filters: Filters::all(),
-                        delivery: Delivery::default(),
-                    });
-
-                    // Register list view
                     index.add_spec(ViewSpec {
                         id: format!("{}/list", entity_name),
                         export: entity_name.clone(),
@@ -307,7 +281,6 @@ impl ServerBuilder {
                         delivery: Delivery::default(),
                     });
 
-                    // Register state view
                     index.add_spec(ViewSpec {
                         id: format!("{}/state", entity_name),
                         export: entity_name.clone(),
@@ -317,7 +290,6 @@ impl ServerBuilder {
                         delivery: Delivery::default(),
                     });
 
-                    // Register append view
                     index.add_spec(ViewSpec {
                         id: format!("{}/append", entity_name),
                         export: entity_name.clone(),

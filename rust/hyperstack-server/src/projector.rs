@@ -118,7 +118,6 @@ impl Projector {
             #[cfg(feature = "otel")]
             if let Some(ref metrics) = self.metrics {
                 let mode_str = match spec.mode {
-                    Mode::Kv => "kv",
                     Mode::List => "list",
                     Mode::State => "state",
                     Mode::Append => "append",
@@ -147,18 +146,6 @@ impl Projector {
         spec: &ViewSpec,
         mutation: &hyperstack_interpreter::Mutation,
     ) -> anyhow::Result<Frame> {
-        match spec.mode {
-            Mode::Kv | Mode::State => self.create_kv_frame(spec, mutation),
-            Mode::List => self.create_list_frame(spec, mutation),
-            Mode::Append => self.create_append_frame(spec, mutation),
-        }
-    }
-
-    fn create_kv_frame(
-        &self,
-        spec: &ViewSpec,
-        mutation: &hyperstack_interpreter::Mutation,
-    ) -> anyhow::Result<Frame> {
         let key = mutation
             .key
             .as_str()
@@ -178,44 +165,6 @@ impl Projector {
         })
     }
 
-    fn create_list_frame(
-        &self,
-        spec: &ViewSpec,
-        mutation: &hyperstack_interpreter::Mutation,
-    ) -> anyhow::Result<Frame> {
-        let key = mutation
-            .key
-            .as_str()
-            .map(|s| s.to_string())
-            .or_else(|| mutation.key.as_u64().map(|n| n.to_string()))
-            .or_else(|| mutation.key.as_i64().map(|n| n.to_string()))
-            .unwrap_or_else(|| mutation.key.to_string());
-
-        let projected = spec.projection.apply(mutation.patch.clone());
-
-        let list_item = serde_json::json!({
-            "id": key,
-            "order": 0,
-            "item": projected,
-        });
-
-        Ok(Frame {
-            mode: spec.mode,
-            export: spec.id.clone(),
-            op: "patch",
-            key: key.clone(),
-            data: list_item,
-        })
-    }
-
-    fn create_append_frame(
-        &self,
-        spec: &ViewSpec,
-        mutation: &hyperstack_interpreter::Mutation,
-    ) -> anyhow::Result<Frame> {
-        self.create_kv_frame(spec, mutation)
-    }
-
     async fn publish_frame(
         &self,
         spec: &ViewSpec,
@@ -228,10 +177,7 @@ impl Projector {
                     .publish_state(&spec.id, &message.key, message.payload.clone())
                     .await;
             }
-            Mode::Kv | Mode::Append => {
-                self.bus_manager.publish_kv(&spec.id, message).await;
-            }
-            Mode::List => {
+            Mode::List | Mode::Append => {
                 self.bus_manager.publish_list(&spec.id, message).await;
             }
         }

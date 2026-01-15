@@ -176,18 +176,16 @@ export function createListViewHook<T>(
           }
 
           let items = Array.from(baseMap.values()).map((value: any) => {
-            const item = value?.item ?? value;
-
             if (viewDef.transform) {
               try {
-                return viewDef.transform(item) as T;
+                return viewDef.transform(value) as T;
               } catch (err) {
                 console.log("Error transforming", err);
-                return item;
+                return value;
               }
             }
 
-            return item;
+            return value;
           });
 
           if (params?.where) {
