@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.1.11...hyperstack-interpreter-v0.2.0) (2026-01-15)
+
+
+### Bug Fixes
+
+* **interpreter:** make all TypeScript interface fields optional for patch semantics ([d2d959c](https://github.com/HyperTekOrg/hyperstack/commit/d2d959c2d02ceff4c2cf0c76d147df770222cf25))
+* remove deprecated kv mode from SDKs and documentation ([2097af0](https://github.com/HyperTekOrg/hyperstack/commit/2097af05165eed4a7d9b6ef4ede1b5722ab90215))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-macros bumped from 0.1.11 to 0.2.0
+
 ## [0.1.11](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.1.10...hyperstack-interpreter-v0.1.11) (2026-01-14)
 
 
