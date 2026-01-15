@@ -86,9 +86,6 @@ jobs:
     needs: release-please
     runs-on: ubuntu-latest
     if: needs.release-please.outputs.releases_created == 'true'
-    defaults:
-      run:
-        working-directory: typescript
     steps:
       - uses: actions/checkout@v4
 
@@ -97,17 +94,38 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
-          cache-dependency-path: typescript/package-lock.json
 
-      - name: Install dependencies
+      # Publish hyperstack-typescript (core) first since react depends on it
+      - name: Install core dependencies
         run: npm ci
+        working-directory: typescript/core
 
-      - name: Build
+      - name: Build core
         run: npm run build
+        working-directory: typescript/core
 
-      - name: Publish
-        run: npm publish --access public
+      - name: Publish core
+        run: npm publish --access public || echo "Package may already be published"
+        working-directory: typescript/core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Wait for npm registry to propagate
+      - name: Wait for npm propagation
+        run: sleep 30
+
+      # Publish hyperstack-react
+      - name: Install react dependencies
+        run: npm ci
+        working-directory: typescript/react
+
+      - name: Build react
+        run: npm run build
+        working-directory: typescript/react
+
+      - name: Publish react
+        run: npm publish --access public || echo "Package may already be published"
+        working-directory: typescript/react
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

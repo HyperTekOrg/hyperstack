@@ -42,6 +42,11 @@
       "merge": false
     },
     {
+      "type": "node-workspace",
+      "merge": false,
+      "updatePeerDependencies": false
+    },
+    {
       "type": "linked-versions",
       "groupName": "hyperstack",
       "components": [

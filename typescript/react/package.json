@@ -42,7 +42,7 @@
     "zustand": "^4.0.0"
   },
   "dependencies": {
-    "hyperstack-typescript": "^0.1.11",
+    "hyperstack-typescript": "0.1.11",
     "zustand": "^4.0.0"
   },
   "devDependencies": {
