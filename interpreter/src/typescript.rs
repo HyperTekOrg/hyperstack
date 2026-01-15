@@ -293,13 +293,19 @@ impl<S> TypeScriptCompiler<S> {
             )
         };
 
+        // All fields are optional (?) since we receive patches - field may not yet exist
+        // For spec-optional fields, we use `T | null` to distinguish "explicitly null" from "not received"
         let field_definitions: Vec<String> = fields
             .iter()
             .map(|field| {
-                let optional_marker = if field.optional { "?" } else { "" };
-                // Convert snake_case to camelCase for field names
                 let field_name = to_camel_case(&field.name);
-                format!("  {}{}: {};", field_name, optional_marker, field.ts_type)
+                let ts_type = if field.optional {
+                    // Spec-optional: can be explicitly null
+                    format!("{} | null", field.ts_type)
+                } else {
+                    field.ts_type.clone()
+                };
+                format!("  {}?: {};", field_name, ts_type)
             })
             .collect();
 
@@ -343,6 +349,7 @@ impl<S> TypeScriptCompiler<S> {
         let mut fields = Vec::new();
 
         // Add non-root sections as nested interface references
+        // All fields are optional since we receive patches
         for section in sections.keys() {
             if !is_root_section(section) {
                 let base_name = if self.entity_name.contains("Game") {
@@ -352,7 +359,7 @@ impl<S> TypeScriptCompiler<S> {
                 };
                 let section_interface_name = format!("{}{}", base_name, to_pascal_case(section));
                 fields.push(format!(
-                    "  {}: {};",
+                    "  {}?: {};",
                     to_camel_case(section),
                     section_interface_name
                 ));
@@ -360,13 +367,18 @@ impl<S> TypeScriptCompiler<S> {
         }
 
         // Flatten root section fields directly into main interface
+        // All fields are optional (?) since we receive patches
         for section in &self.spec.sections {
             if is_root_section(&section.name) {
                 for field in &section.fields {
                     let field_name = to_camel_case(&field.field_name);
-                    let ts_type = self.field_type_info_to_typescript(field);
-                    let optional_marker = if field.is_optional { "?" } else { "" };
-                    fields.push(format!("  {}{}: {};", field_name, optional_marker, ts_type));
+                    let base_ts_type = self.field_type_info_to_typescript(field);
+                    let ts_type = if field.is_optional {
+                        format!("{} | null", base_ts_type)
+                    } else {
+                        base_ts_type
+                    };
+                    fields.push(format!("  {}?: {};", field_name, ts_type));
                 }
             }
         }
@@ -912,14 +924,19 @@ impl<S> TypeScriptCompiler<S> {
         }
 
         // Handle structs as interfaces
+        // All fields are optional since we receive patches
         let fields: Vec<String> = resolved
             .fields
             .iter()
             .map(|field| {
                 let field_name = to_camel_case(&field.field_name);
-                let optional_marker = if field.is_optional { "?" } else { "" };
-                let ts_type = self.resolved_field_to_typescript(field);
-                format!("  {}{}: {};", field_name, optional_marker, ts_type)
+                let base_ts_type = self.resolved_field_to_typescript(field);
+                let ts_type = if field.is_optional {
+                    format!("{} | null", base_ts_type)
+                } else {
+                    base_ts_type
+                };
+                format!("  {}?: {};", field_name, ts_type)
             })
             .collect();
 
