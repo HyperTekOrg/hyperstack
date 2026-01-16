@@ -45,9 +45,10 @@ pub mod websocket;
 pub use bus::{BusManager, BusMessage};
 pub use cache::{EntityCache, EntityCacheConfig};
 pub use config::{
-    HealthConfig, HttpHealthConfig, ServerConfig, WebSocketConfig, YellowstoneConfig,
+    HealthConfig, HttpHealthConfig, ReconnectionConfig, ServerConfig, WebSocketConfig,
+    YellowstoneConfig,
 };
-pub use health::{HealthMonitor, StreamStatus};
+pub use health::{HealthMonitor, SlotTracker, StreamStatus};
 pub use http_health::HttpHealthServer;
 #[cfg(feature = "otel")]
 pub use metrics::Metrics;
@@ -60,12 +61,13 @@ use anyhow::Result;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-/// Type alias for a parser setup function
-/// This function receives a mutations sender and optional health monitor, then sets up the Vixen runtime
+/// Type alias for a parser setup function.
+/// Receives mutations sender, optional health monitor, and reconnection config.
 pub type ParserSetupFn = Arc<
     dyn Fn(
             tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
             Option<HealthMonitor>,
+            ReconnectionConfig,
         ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send>>
         + Send
         + Sync,
@@ -184,6 +186,18 @@ impl ServerBuilder {
     /// Configure health monitoring
     pub fn health_config(mut self, config: HealthConfig) -> Self {
         self.config.health = Some(config);
+        self
+    }
+
+    /// Enable reconnection with default configuration
+    pub fn reconnection(mut self) -> Self {
+        self.config.reconnection = Some(ReconnectionConfig::default());
+        self
+    }
+
+    /// Configure reconnection behavior
+    pub fn reconnection_config(mut self, config: ReconnectionConfig) -> Self {
+        self.config.reconnection = Some(config);
         self
     }
 

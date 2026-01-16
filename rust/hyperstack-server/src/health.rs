@@ -1,8 +1,37 @@
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::RwLock;
 use tokio::time::interval;
 use tracing::{error, info, warn};
+
+/// Tracks the last processed slot for stream resumption after reconnection
+#[derive(Clone)]
+pub struct SlotTracker {
+    last_slot: Arc<AtomicU64>,
+}
+
+impl SlotTracker {
+    pub fn new() -> Self {
+        Self {
+            last_slot: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    pub fn record(&self, slot: u64) {
+        self.last_slot.fetch_max(slot, Ordering::Relaxed);
+    }
+
+    pub fn get(&self) -> u64 {
+        self.last_slot.load(Ordering::Relaxed)
+    }
+}
+
+impl Default for SlotTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum StreamStatus {

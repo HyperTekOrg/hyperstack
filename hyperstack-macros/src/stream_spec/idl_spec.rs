@@ -280,7 +280,7 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                 }
             }
 
-            // Generate resolver registries once (shared between runtime and spec)
+            // Generate resolver registries (used by spec function)
             let resolver_registries =
                 idl_vixen_gen::generate_resolver_registries(&all_resolver_hooks);
             if let Ok(generated_items) = syn::parse::<syn::File>(resolver_registries.into()) {
@@ -289,16 +289,7 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                 }
             }
 
-            // Generate vixen runtime function (without duplicate resolver hooks)
-            let vixen_runtime =
-                idl_vixen_gen::generate_vixen_runtime_without_registries(&idl, program_id);
-            if let Ok(generated_items) = syn::parse::<syn::File>(vixen_runtime.into()) {
-                for gen_item in generated_items.items {
-                    items.push(gen_item);
-                }
-            }
-
-            // Generate spec function for hyperstack-server integration (without duplicate resolver hooks)
+            // Generate spec function for hyperstack-server integration
             let spec_function =
                 idl_vixen_gen::generate_spec_function_without_registries(&idl, program_id);
             if let Ok(generated_items) = syn::parse::<syn::File>(spec_function.into()) {

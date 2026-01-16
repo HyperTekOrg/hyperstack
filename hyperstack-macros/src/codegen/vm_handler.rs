@@ -24,13 +24,13 @@ pub fn generate_vm_handler(
     let entity_name_lit = entity_name;
 
     quote! {
-        /// Handler that routes Vixen parser outputs to the bytecode VM
         #[derive(Clone)]
         pub struct VmHandler {
             vm: std::sync::Arc<std::sync::Mutex<hyperstack_interpreter::vm::VmContext>>,
             bytecode: std::sync::Arc<hyperstack_interpreter::compiler::MultiEntityBytecode>,
             mutations_tx: tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
             health_monitor: Option<hyperstack_server::HealthMonitor>,
+            slot_tracker: hyperstack_server::SlotTracker,
         }
 
         impl std::fmt::Debug for VmHandler {
@@ -47,12 +47,14 @@ pub fn generate_vm_handler(
                 bytecode: hyperstack_interpreter::compiler::MultiEntityBytecode,
                 mutations_tx: tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
                 health_monitor: Option<hyperstack_server::HealthMonitor>,
+                slot_tracker: hyperstack_server::SlotTracker,
             ) -> Self {
                 Self {
                     vm: std::sync::Arc::new(std::sync::Mutex::new(hyperstack_interpreter::vm::VmContext::new())),
                     bytecode: std::sync::Arc::new(bytecode),
                     mutations_tx,
                     health_monitor,
+                    slot_tracker,
                 }
             }
         }
@@ -155,6 +157,7 @@ pub fn generate_vm_handler(
 
                 match mutations_result {
                     Ok(mutations) => {
+                        self.slot_tracker.record(slot);
                         if !mutations.is_empty() {
                             let _ = self.mutations_tx.send(smallvec::SmallVec::from_vec(mutations)).await;
                         }
@@ -164,13 +167,12 @@ pub fn generate_vm_handler(
                         if let Some(ref health) = self.health_monitor {
                             health.record_error(format!("VM error for {}: {}", event_type, e)).await;
                         }
-                        Ok(()) // Don't fail the stream
+                        Ok(())
                     }
                 }
             }
         }
 
-        // Instruction handler implementation
         impl yellowstone_vixen::Handler<parsers::#instruction_enum, yellowstone_vixen_core::instruction::InstructionUpdate> for VmHandler {
             async fn handle(
                 &self,
@@ -382,6 +384,7 @@ pub fn generate_vm_handler(
 
                 match mutations_result {
                     Ok(mutations) => {
+                        self.slot_tracker.record(slot);
                         if !mutations.is_empty() {
                             let _ = self.mutations_tx.send(smallvec::SmallVec::from_vec(mutations)).await;
                         }
@@ -391,7 +394,7 @@ pub fn generate_vm_handler(
                         if let Some(ref health) = self.health_monitor {
                             health.record_error(format!("VM error for {}: {}", event_type, e)).await;
                         }
-                        Ok(()) // Don't fail the stream
+                        Ok(())
                     }
                 }
             }

@@ -152,8 +152,9 @@ impl Runtime {
                 );
                 let tx = mutations_tx.clone();
                 let health = health_monitor.clone();
+                let reconnection_config = self.config.reconnection.clone().unwrap_or_default();
                 Some(tokio::spawn(async move {
-                    if let Err(e) = parser_setup(tx, health).await {
+                    if let Err(e) = parser_setup(tx, health, reconnection_config).await {
                         error!("Vixen parser runtime error: {}", e);
                     }
                 }))

@@ -133,437 +133,7 @@ fn generate_instruction_hook_registry(resolver_hooks: &[ResolverHookSpec]) -> To
     }
 }
 
-/// Generates the vixen runtime setup function (with registries - for backward compatibility)
-pub fn generate_vixen_runtime(
-    idl: &IdlSpec,
-    program_id: &str,
-    resolver_hooks: &[ResolverHookSpec],
-) -> TokenStream {
-    let registries = generate_resolver_registries(resolver_hooks);
-    let runtime = generate_vixen_runtime_without_registries(idl, program_id);
-
-    quote! {
-        #registries
-        #runtime
-    }
-}
-
-/// Generates the vixen runtime setup function without resolver registries
-pub fn generate_vixen_runtime_without_registries(idl: &IdlSpec, _program_id: &str) -> TokenStream {
-    let program_name = idl.get_name();
-    let state_enum_name = format_ident!("{}State", to_pascal_case(program_name));
-    let instruction_enum_name = format_ident!("{}Instruction", to_pascal_case(program_name));
-
-    quote! {
-
-        /// Creates and runs a yellowstone-vixen runtime with the generated parsers
-        ///
-        /// # Environment Variables
-        /// - `YELLOWSTONE_ENDPOINT` (required): The gRPC endpoint URL
-        /// - `YELLOWSTONE_X_TOKEN` (optional): Authentication token
-        /// - `RUST_LOG` (optional): Log level (default: info)
-        pub async fn run_vixen_runtime() -> anyhow::Result<()> {
-            use yellowstone_vixen::config::{BufferConfig, VixenConfig};
-            use yellowstone_vixen_yellowstone_grpc_source::YellowstoneGrpcConfig;
-            use yellowstone_vixen_yellowstone_grpc_source::YellowstoneGrpcSource;
-            use yellowstone_vixen::Pipeline;
-            use std::collections::HashMap;
-
-            // Try loading .env file from common locations
-            let env_loaded = dotenvy::from_filename(".env.local").is_ok()
-                || dotenvy::from_filename("backend/tenant-runtime/.env").is_ok()
-                || dotenvy::from_filename(".env").is_ok()
-                || dotenvy::dotenv().is_ok();
-
-            if !env_loaded {
-                // No .env file found. Make sure environment variables are set.
-            }
-
-            let endpoint = std::env::var("YELLOWSTONE_ENDPOINT")
-                .map_err(|_| anyhow::anyhow!(
-                    "YELLOWSTONE_ENDPOINT environment variable must be set.\n\
-                     Example: export YELLOWSTONE_ENDPOINT=http://localhost:10000"
-                ))?;
-            let x_token = std::env::var("YELLOWSTONE_X_TOKEN").ok();
-
-            let vixen_config = VixenConfig {
-                source: YellowstoneGrpcConfig {
-                    endpoint,
-                    x_token,
-                    timeout: 60,
-                    commitment_level: None,
-                    from_slot: None,
-                    accept_compression: None,
-                    max_decoding_message_size: None,
-                },
-                buffer: BufferConfig::default(),
-            };
-
-            // Create bytecode VM handler
-            use hyperstack_interpreter::vm::VmContext;
-            use hyperstack_interpreter::compiler::MultiEntityBytecode;
-            use std::sync::{Arc, Mutex};
-
-            let bytecode = create_multi_entity_bytecode();
-
-            let vm = Arc::new(Mutex::new(VmContext::new()));
-            let bytecode_arc = Arc::new(bytecode);
-
-            #[derive(Clone)]
-            struct VmHandler {
-                vm: Arc<Mutex<VmContext>>,
-                bytecode: Arc<MultiEntityBytecode>,
-            }
-
-            impl std::fmt::Debug for VmHandler {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    f.debug_struct("VmHandler")
-                        .field("vm", &"<VmContext>")
-                        .field("bytecode", &"<MultiEntityBytecode>")
-                        .finish()
-                }
-            }
-
-            impl yellowstone_vixen::Handler<parsers::#state_enum_name, yellowstone_vixen_core::AccountUpdate> for VmHandler {
-                async fn handle(&self, value: &parsers::#state_enum_name, raw_update: &yellowstone_vixen_core::AccountUpdate)
-                    -> yellowstone_vixen::HandlerResult<()>
-                {
-                    let event_type = value.event_type();
-                    let mut event_value = value.to_value();
-
-                    // Extract slot and signature for context
-                    let slot = raw_update.slot;
-                    let account = raw_update.account.as_ref();
-                    let signature = account
-                        .and_then(|a| a.txn_signature.as_ref())
-                        .map(|s| bs58::encode(s).into_string())
-                        .unwrap_or_default();
-
-                    // Extract account address from raw_update
-                    let account_address = bs58::encode(
-                        &raw_update.account.as_ref().unwrap().pubkey
-                    ).into_string();
-
-                    // Add account address to event value for potential use in resolvers
-                    if let Some(obj) = event_value.as_object_mut() {
-                        obj.insert("__account_address".to_string(), serde_json::json!(account_address));
-                    }
-
-                    // println!("🔍 Account update: type={}, address={}", event_type, account_address);
-
-                    // Check if this account type has a resolver and handle the resolution
-                    let resolver_result = {
-                        let mut vm = self.vm.lock().unwrap();
-
-                        // Get state table to access reverse lookups
-                        if let Some(state_table) = vm.get_state_table_mut(0) {
-                            let mut ctx = hyperstack_interpreter::resolvers::ResolveContext::new(
-                                0,
-                                slot,
-                                signature.clone(),
-                                &mut state_table.pda_reverse_lookups,
-                            );
-
-                            // Call the resolver if one exists for this account type
-                            if let Some(resolver_fn) = get_resolver_for_account_type(event_type) {
-                                resolver_fn(&account_address, &event_value, &mut ctx)
-                            } else {
-                                // No resolver defined, process normally
-                                hyperstack_interpreter::resolvers::KeyResolution::Found(String::new())
-                            }
-                        } else {
-                            // No state table, process normally
-                            hyperstack_interpreter::resolvers::KeyResolution::Found(String::new())
-                        }
-                    };
-
-                    // Handle the resolution result
-                    match resolver_result {
-                        hyperstack_interpreter::resolvers::KeyResolution::Found(resolved_key) => {
-                            // If a primary key was resolved, override it in the event value
-                                 if !resolved_key.is_empty() {
-                                if let Some(obj) = event_value.as_object_mut() {
-                                    obj.insert("__resolved_primary_key".to_string(), serde_json::json!(resolved_key));
-                                }
-                            }
-                            // Continue with normal processing
-                        }
-                        hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(discriminators) => {
-                            // Queue this update for later processing
-                            let mut vm = self.vm.lock().unwrap();
-
-                            if let Err(e) = vm.queue_account_update(
-                                0, // state_id
-                                account_address,
-                                event_type.to_string(),
-                                event_value,
-                                slot,
-                                signature,
-                            ) {
-                            }
-                            return Ok(()); // Don't process now, wait for queue flush
-                        }
-                        hyperstack_interpreter::resolvers::KeyResolution::Skip => {
-                            // Skip this update entirely
-                            return Ok(());
-                        }
-                    }
-
-                    let mut vm = self.vm.lock().unwrap();
-
-                    // Create update context with slot and signature
-                    let context = hyperstack_interpreter::UpdateContext::new(slot, signature);
-
-                    match vm.process_event_with_context(&self.bytecode, event_value, event_type, Some(&context)) {
-                        Ok(mutations) => {
-                            // Computed fields are now evaluated by the VM via the registered evaluator
-                            Ok(())
-                        }
-                        Err(e) => {
-                            Ok(()) // Don't fail the stream
-                        }
-                    }
-                }
-            }
-
-            impl yellowstone_vixen::Handler<parsers::#instruction_enum_name, yellowstone_vixen_core::instruction::InstructionUpdate> for VmHandler {
-                async fn handle(&self, value: &parsers::#instruction_enum_name, raw_update: &yellowstone_vixen_core::instruction::InstructionUpdate)
-                    -> yellowstone_vixen::HandlerResult<()>
-                {
-                    // Extract and log slot, signature, and accounts from shared field in raw_update
-                    let slot = raw_update.shared.slot;
-                    let signature = bs58::encode(&raw_update.shared.signature).into_string();
-
-                    // println!("📦 Instruction Update:");
-                    // println!("   Slot: {}", slot);
-                    // println!("   Signature: {}", signature);
-
-                    // raw_update.accounts are already KeyBytes<32>, no conversion needed
-                    let static_keys_vec = &raw_update.accounts;
-                    let event_type = value.event_type();
-
-                    // Use to_value_with_accounts to get event value with named accounts from IDL
-                    // Pass the inner instruction accounts from raw_update
-                    let event_value = value.to_value_with_accounts(static_keys_vec);
-
-                    // println!("   Event Type: {}", event_type);
-                    // println!("   Event Value with Named Accounts:");
-                    // println!("{}", serde_json::to_string_pretty(&event_value).unwrap_or_default());
-
-                    let bytecode = self.bytecode.clone();
-                    let mut vm = self.vm.lock().unwrap();
-
-                    // Debug: Log event structure for IxState types
-                    if std::env::var("HYPERSTACK_DEBUG_EVENTS").is_ok() && event_type.ends_with("IxState") {
-                        tracing::debug!("📋 Processing {}", event_type);
-                        tracing::debug!("   raw_update.accounts.len() = {}", static_keys_vec.len());
-                        if let Some(accounts) = event_value.get("accounts") {
-                            tracing::debug!("   event_value.accounts keys: {:?}", accounts.as_object().map(|o| o.keys().collect::<Vec<_>>()));
-                        } else {
-                            tracing::warn!("   ⚠️ event_value has NO 'accounts' key!");
-                        }
-                    }
-
-                    // Create update context with slot and signature
-                    let context = hyperstack_interpreter::UpdateContext::new(slot, signature.clone());
-
-                    // Process instruction through VM
-                    match vm.process_event_with_context(&bytecode, event_value.clone(), event_type, Some(&context)) {
-                        Ok(mut mutations) => {
-                            // Computed fields are now evaluated by the VM via the registered evaluator
-
-                            // After processing instruction, call any registered after-instruction hooks
-                            let hooks = get_instruction_hooks(event_type);
-                            if !hooks.is_empty() {
-
-                                // Extract accounts map from event_value
-                                let accounts = event_value.get("accounts")
-                                    .and_then(|a| a.as_object())
-                                    .map(|obj| {
-                                        obj.iter()
-                                            .filter_map(|(k, v)| {
-                                                if let Some(s) = v.as_str() {
-                                                    Some((k.clone(), s.to_string()))
-                                                 } else {
-                                                    // Debug: Account value is not a string
-                                                    None
-                                                }
-                                            })
-                                            .collect::<std::collections::HashMap<String, String>>()
-                                    })
-                                    .unwrap_or_default();
-
-                                // Extract instruction data (the "data.data" field from event_value for instruction args)
-                                // The structure is: event_value = { accounts: {...}, data: { amount, ... } }
-                                let instruction_data = event_value.get("data")
-                                    .and_then(|d| d.get("data"))
-                                    .or_else(|| event_value.get("data"))
-                                    .unwrap_or(&serde_json::Value::Null);
-
-                                // Get timestamp from context (defaults to current time if not set)
-                                let timestamp = vm.current_context()
-                                    .map(|ctx| ctx.timestamp())
-                                    .unwrap_or_else(|| std::time::SystemTime::now()
-                                        .duration_since(std::time::UNIX_EPOCH)
-                                        .unwrap()
-                                        .as_secs() as i64);
-
-                                // SAFETY: We're carefully splitting the mutable borrow of vm into disjoint parts.
-                                // vm.registers_mut() and vm.path_cache() access different fields than the
-                                // ReverseLookupUpdater trait methods (which access pda_reverse_lookups).
-                                // This is safe because we know these fields don't overlap.
-                                let vm_ptr: *mut hyperstack_interpreter::vm::VmContext = &mut *vm as *mut hyperstack_interpreter::vm::VmContext;
-
-                                // Build InstructionContext with metrics support
-                                // We use unsafe to split the borrow - passing raw pointer-derived references
-                                let mut ctx = hyperstack_interpreter::resolvers::InstructionContext::with_metrics(
-                                    accounts,
-                                    0, // state_id
-                                    &mut *vm,
-                                    unsafe { (*vm_ptr).registers_mut() },
-                                    0, // state_reg - typically register 0 holds the state
-                                    unsafe { (*vm_ptr).path_cache() },
-                                    instruction_data,
-                                    Some(slot),
-                                    Some(signature.clone()),
-                                    timestamp,
-                                );
-
-                                // Call each registered hook
-                                for (idx, hook_fn) in hooks.iter().enumerate() {
-                                    hook_fn(&mut ctx);
-                                }
-
-                                // Collect data from ctx before dropping it
-                                let dirty_fields: std::collections::HashSet<String> = ctx.dirty_fields().clone();
-                                let pending_updates = ctx.take_pending_updates();
-
-                                // Drop ctx to release the mutable borrows before we use vm again
-                                drop(ctx);
-
-                                // Generate additional mutations from fields modified by hooks
-                                if !dirty_fields.is_empty() {
-                                    // Extract the dirty fields from state to create a patch
-                                    if let Ok(patch) = vm.extract_partial_state(0, &dirty_fields) {
-                                        // Find or create mutation for the current entity
-                                        // The primary key should be in the state - extract it from event_value
-                                        if let Some(mint) = event_value.get("accounts").and_then(|a| a.get("mint")).and_then(|m| m.as_str()) {
-                                            // Find existing mutation or create new one
-                                            if let Some(existing_mutation) = mutations.iter_mut().find(|m| {
-                                                m.key.as_str() == Some(mint)
-                                            }) {
-                                                // Deep merge patch into existing mutation
-                                                if let (Some(existing_patch_obj), Some(new_patch_obj)) =
-                                                    (existing_mutation.patch.as_object_mut(), patch.as_object()) {
-                                                    for (section_key, new_section_value) in new_patch_obj {
-                                                        if let Some(existing_section) = existing_patch_obj.get_mut(section_key) {
-                                                            // Section exists - deep merge objects
-                                                            if let (Some(existing_obj), Some(new_obj)) =
-                                                                (existing_section.as_object_mut(), new_section_value.as_object()) {
-                                                                // Merge field by field within the section
-                                                                for (field_key, field_value) in new_obj {
-                                                                    existing_obj.insert(field_key.clone(), field_value.clone());
-                                                                }
-                                                            } else {
-                                                                // Not both objects - replace entirely
-                                                                *existing_section = new_section_value.clone();
-                                                            }
-                                                        } else {
-                                                            // Section doesn't exist - insert it
-                                                            existing_patch_obj.insert(section_key.clone(), new_section_value.clone());
-                                                        }
-                                                    }
-                                                }
-
-                                                // Computed fields were already evaluated by the VM
-                                            } else {
-                                                // Create new mutation
-                                                mutations.push(hyperstack_interpreter::Mutation {
-                                                    export: "PumpfunToken".to_string(), // TODO: Get from entity name
-                                                    key: serde_json::Value::String(mint.to_string()),
-                                                    patch,
-                                                });
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Reprocess any pending updates that were queued
-                                if !pending_updates.is_empty() {
-                                    for (idx, update) in pending_updates.into_iter().enumerate() {
-                                        // Resolve the primary key using PDA reverse lookup
-                                        let resolved_key = vm.try_pda_reverse_lookup(0, "default_pda_lookup", &update.pda_address);
-
-                                        // Inject the resolved key into the account data
-                                        let mut account_data = update.account_data;
-                                        if let Some(key) = resolved_key {
-                                            if let Some(obj) = account_data.as_object_mut() {
-                                                obj.insert("__resolved_primary_key".to_string(), serde_json::json!(key));
-                                            }
-                                        }
-
-                                        // Create update context with slot and signature
-                                        let update_context = hyperstack_interpreter::UpdateContext::with_timestamp(
-                                            update.slot,
-                                            update.signature.clone(),
-                                            update.queued_at
-                                        );
-
-                                        match vm.process_event_with_context(&bytecode, account_data, &update.account_type, Some(&update_context)) {
-                                            Ok(pending_mutations) => {
-                                                if !pending_mutations.is_empty() {
-                                                    // Note: In standalone mode without mutations channel, these are lost
-                                                    // Users should use hyperstack-server integration for full functionality
-                                                } else {
-                                                }
-                                            }
-                                            Err(e) => {
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Periodically clean up expired pending updates (every 1000 instructions)
-                            if vm.instructions_executed % 1000 == 0 {
-                                let removed = vm.cleanup_expired_pending_updates(0);
-
-                                // Log stats if queue is large
-                                if let Some(stats) = vm.get_pending_queue_stats(0) {
-                                    // Stats available for monitoring if needed
-                                }
-                            }
-
-                            Ok(())
-                        }
-                        Err(e) => {
-                            Ok(()) // Don't fail the stream
-                        }
-                    }
-                }
-            }
-
-            let handler = VmHandler {
-                vm: vm.clone(),
-                bytecode: bytecode_arc.clone(),
-            };
-
-            let account_parser = parsers::AccountParser;
-            let instruction_parser = parsers::InstructionParser;
-
-            yellowstone_vixen::Runtime::<YellowstoneGrpcSource>::builder()
-                .account(Pipeline::new(account_parser, [handler.clone()]))
-                .instruction(Pipeline::new(instruction_parser, [handler]))
-                .build(vixen_config)
-                .run_async()
-                .await;
-
-            Ok(())
-        }
-    }
-}
-
-/// Generates the spec function for hyperstack-server integration (with registries - for backward compatibility)
+/// Generates the spec function for hyperstack-server integration (with registries)
 pub fn generate_spec_function(
     idl: &IdlSpec,
     program_id: &str,
@@ -617,17 +187,18 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
         fn create_parser_setup() -> hyperstack_server::ParserSetupFn {
             use std::sync::Arc;
 
-            Arc::new(|mutations_tx, health_monitor| {
+            Arc::new(|mutations_tx, health_monitor, reconnection_config| {
                 Box::pin(async move {
-                    run_vixen_runtime_with_channel(mutations_tx, health_monitor).await
+                    run_vixen_runtime_with_channel(mutations_tx, health_monitor, reconnection_config).await
                 })
             })
         }
 
-        /// Runs the Vixen runtime and sends mutations to the provided channel
+        /// Runs the Vixen runtime with reconnection support
         async fn run_vixen_runtime_with_channel(
             mutations_tx: tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
             health_monitor: Option<hyperstack_server::HealthMonitor>,
+            reconnection_config: hyperstack_server::ReconnectionConfig,
         ) -> anyhow::Result<()> {
             use yellowstone_vixen::config::{BufferConfig, VixenConfig};
             use yellowstone_vixen_yellowstone_grpc_source::YellowstoneGrpcConfig;
@@ -635,7 +206,6 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
             use yellowstone_vixen::Pipeline;
             use std::sync::{Arc, Mutex};
 
-            // Try loading .env file from common locations
             let env_loaded = dotenvy::from_filename(".env.local").is_ok()
                 || dotenvy::from_filename("backend/tenant-runtime/.env").is_ok()
                 || dotenvy::from_filename(".env").is_ok()
@@ -652,39 +222,53 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 ))?;
             let x_token = std::env::var("YELLOWSTONE_X_TOKEN").ok();
 
-            let vixen_config = VixenConfig {
-                source: YellowstoneGrpcConfig {
-                    endpoint,
-                    x_token,
-                    timeout: 60,
-                    commitment_level: None,
-                    from_slot: None,
-                    accept_compression: None,
-                    max_decoding_message_size: None,
-                },
-                buffer: BufferConfig::default(),
-            };
+            let slot_tracker = hyperstack_server::SlotTracker::new();
+            let mut attempt = 0u32;
+            let mut backoff = reconnection_config.initial_delay;
 
-            // Create bytecode VM handler
-            let bytecode = create_multi_entity_bytecode();
+            loop {
+                let from_slot = {
+                    let last = slot_tracker.get();
+                    if last > 0 { Some(last) } else { None }
+                };
 
-            // Debug: Print handler details
-            tracing::info!("🔍 Bytecode Handler Details:");
-            for (entity_name, entity_bytecode) in &bytecode.entities {
-                tracing::info!("   Entity: {}", entity_name);
-                for (event_type, handler_opcodes) in &entity_bytecode.handlers {
-                    tracing::info!("      {} -> {} opcodes", event_type, handler_opcodes.len());
-                    if event_type == "BuyIxState" {
-                        tracing::info!("         Opcode types:");
-                        for (idx, opcode) in handler_opcodes.iter().enumerate() {
-                            tracing::info!("            [{}] {:?}", idx, opcode);
+                if from_slot.is_some() {
+                    tracing::info!("Resuming from slot {}", from_slot.unwrap());
+                }
+
+                let vixen_config = VixenConfig {
+                    source: YellowstoneGrpcConfig {
+                        endpoint: endpoint.clone(),
+                        x_token: x_token.clone(),
+                        timeout: 60,
+                        commitment_level: None,
+                        from_slot,
+                        accept_compression: None,
+                        max_decoding_message_size: None,
+                    },
+                    buffer: BufferConfig::default(),
+                };
+
+                let bytecode = create_multi_entity_bytecode();
+
+                if attempt == 0 {
+                    tracing::info!("🔍 Bytecode Handler Details:");
+                    for (entity_name, entity_bytecode) in &bytecode.entities {
+                        tracing::info!("   Entity: {}", entity_name);
+                        for (event_type, handler_opcodes) in &entity_bytecode.handlers {
+                            tracing::info!("      {} -> {} opcodes", event_type, handler_opcodes.len());
+                            if event_type == "BuyIxState" {
+                                tracing::info!("         Opcode types:");
+                                for (idx, opcode) in handler_opcodes.iter().enumerate() {
+                                    tracing::info!("            [{}] {:?}", idx, opcode);
+                                }
+                            }
                         }
                     }
                 }
-            }
 
-            let vm = Arc::new(Mutex::new(hyperstack_interpreter::vm::VmContext::new()));
-            let bytecode_arc = Arc::new(bytecode);
+                let vm = Arc::new(Mutex::new(hyperstack_interpreter::vm::VmContext::new()));
+                let bytecode_arc = Arc::new(bytecode);
 
             #[derive(Clone)]
             struct VmHandler {
@@ -692,6 +276,19 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 bytecode: Arc<hyperstack_interpreter::compiler::MultiEntityBytecode>,
                 mutations_tx: tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
                 health_monitor: Option<hyperstack_server::HealthMonitor>,
+                slot_tracker: hyperstack_server::SlotTracker,
+            }
+
+            impl VmHandler {
+                fn new(
+                    vm: Arc<Mutex<hyperstack_interpreter::vm::VmContext>>,
+                    bytecode: Arc<hyperstack_interpreter::compiler::MultiEntityBytecode>,
+                    mutations_tx: tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
+                    health_monitor: Option<hyperstack_server::HealthMonitor>,
+                    slot_tracker: hyperstack_server::SlotTracker,
+                ) -> Self {
+                    Self { vm, bytecode, mutations_tx, health_monitor, slot_tracker }
+                }
             }
 
             impl std::fmt::Debug for VmHandler {
@@ -803,6 +400,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
 
                     match mutations_result {
                         Ok(mutations) => {
+                            self.slot_tracker.record(slot);
                             if !mutations.is_empty() {
                                 for (i, m) in mutations.iter().enumerate() {
                                     tracing::info!("      Mutation {}: key={}, patch_keys={:?}",
@@ -819,7 +417,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                             if let Some(ref health) = self.health_monitor {
                                 health.record_error(format!("VM error for {}: {}", event_type, e)).await;
                             }
-                            Ok(()) // Don't fail the stream
+                            Ok(())
                         }
                     }
                 }
@@ -1091,6 +689,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
 
                     match mutations_result {
                         Ok(mutations) => {
+                            self.slot_tracker.record(slot);
                             if !mutations.is_empty() {
                                 for (i, m) in mutations.iter().enumerate() {
                                     tracing::info!("      Mutation {}: key={}, patch_keys={:?}",
@@ -1100,7 +699,6 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                     );
                                 }
                                 let _ = self.mutations_tx.send(smallvec::SmallVec::from_vec(mutations)).await;
-                            } else {
                             }
                             Ok(())
                         }
@@ -1108,54 +706,75 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                             if let Some(ref health) = self.health_monitor {
                                 health.record_error(format!("VM error for {}: {}", event_type, e)).await;
                             }
-                            Ok(()) // Don't fail the stream
+                            Ok(())
                         }
                     }
                 }
             }
 
-            let handler = VmHandler {
-                vm: vm.clone(),
-                bytecode: bytecode_arc.clone(),
-                mutations_tx,
-                health_monitor: health_monitor.clone(),
-            };
+            let handler = VmHandler::new(
+                vm.clone(),
+                bytecode_arc.clone(),
+                mutations_tx.clone(),
+                health_monitor.clone(),
+                slot_tracker.clone(),
+            );
 
             let account_parser = parsers::AccountParser;
             let instruction_parser = parsers::InstructionParser;
 
-            tracing::info!("🚀 Starting yellowstone-vixen runtime for {} program", #program_name);
-            tracing::info!("📍 Program ID: {}", parsers::PROGRAM_ID_STR);
-            tracing::info!("📊 Registering parsers:");
-            tracing::info!("   - Account Parser ID: {}", yellowstone_vixen_core::Parser::id(&account_parser));
-            tracing::info!("   - Instruction Parser ID: {}", yellowstone_vixen_core::Parser::id(&instruction_parser));
+            if attempt == 0 {
+                tracing::info!("🚀 Starting yellowstone-vixen runtime for {} program", #program_name);
+                tracing::info!("📍 Program ID: {}", parsers::PROGRAM_ID_STR);
+                tracing::info!("📊 Registering parsers:");
+                tracing::info!("   - Account Parser ID: {}", yellowstone_vixen_core::Parser::id(&account_parser));
+                tracing::info!("   - Instruction Parser ID: {}", yellowstone_vixen_core::Parser::id(&instruction_parser));
+            }
 
-            // Record connection attempt
             if let Some(ref health) = health_monitor {
                 health.record_reconnecting().await;
             }
 
             let account_pipeline = Pipeline::new(account_parser, [handler.clone()]);
-
             let instruction_pipeline = Pipeline::new(instruction_parser, [handler]);
 
-            let runtime_builder = yellowstone_vixen::Runtime::<YellowstoneGrpcSource>::builder()
-                .account(account_pipeline);
+            if let Some(ref health) = health_monitor {
+                health.record_connection().await;
+            }
 
-
-            let runtime_builder = runtime_builder.instruction(instruction_pipeline);
-
-            runtime_builder
+            yellowstone_vixen::Runtime::<YellowstoneGrpcSource>::builder()
+                .account(account_pipeline)
+                .instruction(instruction_pipeline)
                 .build(vixen_config)
                 .run_async()
                 .await;
 
-            // Record disconnection
+            attempt += 1;
+
+            if let Some(max) = reconnection_config.max_attempts {
+                if attempt >= max {
+                    tracing::error!("Max reconnection attempts ({}) reached, giving up", max);
+                    if let Some(ref health) = health_monitor {
+                        health.record_error("Max reconnection attempts reached".into()).await;
+                    }
+                    return Err(anyhow::anyhow!("Max reconnection attempts reached"));
+                }
+            }
+
+            tracing::warn!(
+                "gRPC stream disconnected. Reconnecting in {:?} (attempt {})",
+                backoff,
+                attempt
+            );
+
             if let Some(ref health) = health_monitor {
                 health.record_disconnection().await;
             }
 
-            Ok(())
+            tokio::time::sleep(backoff).await;
+
+            backoff = reconnection_config.next_backoff(backoff);
+            }
         }
     }
 }
