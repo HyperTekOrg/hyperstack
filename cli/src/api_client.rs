@@ -648,7 +648,7 @@ impl ApiClient {
     fn require_api_key(&self) -> Result<&str> {
         self.api_key
             .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("Not authenticated. Run 'hyperstack auth login' first."))
+            .ok_or_else(|| anyhow::anyhow!("Not authenticated. Run 'hs auth login' first."))
     }
 
     fn handle_response<T: for<'de> Deserialize<'de>>(
@@ -690,7 +690,7 @@ impl ApiClient {
     pub fn load_api_key() -> Result<String> {
         let path = Self::credentials_path()?;
         let content = fs::read_to_string(&path)
-            .context("Failed to read credentials file. Have you run 'hyperstack auth login'?")?;
+            .context("Failed to read credentials file. Have you run 'hs auth login'?")?;
 
         #[derive(Deserialize)]
         struct Credentials {

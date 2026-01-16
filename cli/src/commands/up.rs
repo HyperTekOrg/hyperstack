@@ -1,10 +1,11 @@
 use anyhow::Result;
 use colored::Colorize;
-use std::thread;
+use indicatif::{ProgressBar, ProgressStyle};
 use std::time::Duration;
 
-use crate::api_client::{ApiClient, BuildStatus, CreateBuildRequest};
+use crate::api_client::{ApiClient, BuildStatus, CreateBuildRequest, DEFAULT_DOMAIN_SUFFIX};
 use crate::config::{resolve_stacks_to_push, HyperstackConfig};
+use crate::ui;
 
 fn generate_short_uuid() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -20,9 +21,9 @@ pub fn up(
     stack_name: Option<&str>,
     branch: Option<String>,
     preview: bool,
+    dry_run: bool,
 ) -> Result<()> {
     let config = HyperstackConfig::load_optional(config_path)?;
-    let client = ApiClient::new()?;
 
     let branch = if preview {
         Some(format!("preview-{}", generate_short_uuid()))
@@ -36,10 +37,16 @@ pub fn up(
         anyhow::bail!("No stacks found to deploy");
     }
 
+    if dry_run {
+        return show_dry_run(&stacks, branch.as_deref());
+    }
+
+    let client = ApiClient::new()?;
+
     if stacks.len() > 1 && stack_name.is_none() {
         println!(
             "{} Found {} stacks. Deploying all...\n",
-            "→".blue().bold(),
+            ui::symbols::ARROW.blue().bold(),
             stacks.len()
         );
     }
@@ -52,33 +59,115 @@ pub fn up(
     Ok(())
 }
 
+fn show_dry_run(stacks: &[crate::config::DiscoveredAst], branch: Option<&str>) -> Result<()> {
+    ui::print_section("Dry Run - No changes will be made");
+    println!();
+
+    println!(
+        "{} Would deploy {} stack(s):",
+        ui::symbols::ARROW.blue().bold(),
+        stacks.len()
+    );
+    println!();
+
+    let client = ApiClient::new().ok();
+
+    for ast in stacks {
+        println!(
+            "  {} {}",
+            ui::symbols::BULLET.dimmed(),
+            ast.stack_name.green().bold()
+        );
+        println!("    Entity: {}", ast.entity_name);
+        println!("    AST: {}", ast.path.display());
+        if let Some(pid) = &ast.program_id {
+            println!("    Program ID: {}", pid);
+        }
+
+        let url = get_expected_url(&client, &ast.stack_name, branch);
+        println!("    URL: {}", url.cyan());
+        println!();
+    }
+
+    if let Some(branch_name) = branch {
+        println!("  Branch: {}", branch_name.cyan());
+    }
+
+    println!();
+    println!("{}", "Run without --dry-run to deploy.".dimmed());
+
+    Ok(())
+}
+
+fn get_expected_url(client: &Option<ApiClient>, stack_name: &str, branch: Option<&str>) -> String {
+    let existing_slug = client
+        .as_ref()
+        .and_then(|c| c.get_spec_by_name(stack_name).ok())
+        .flatten()
+        .map(|spec| spec.url_slug);
+
+    let name_lower = stack_name.to_lowercase();
+
+    match (existing_slug, branch) {
+        (Some(slug), Some(b)) => {
+            format!(
+                "wss://{}-{}-{}.{}",
+                name_lower, slug, b, DEFAULT_DOMAIN_SUFFIX
+            )
+        }
+        (Some(slug), None) => {
+            format!("wss://{}-{}.{}", name_lower, slug, DEFAULT_DOMAIN_SUFFIX)
+        }
+        (None, Some(b)) => {
+            format!(
+                "wss://{}-<slug>-{}.{} (slug assigned on first deploy)",
+                name_lower, b, DEFAULT_DOMAIN_SUFFIX
+            )
+        }
+        (None, None) => {
+            format!(
+                "wss://{}-<slug>.{} (slug assigned on first deploy)",
+                name_lower, DEFAULT_DOMAIN_SUFFIX
+            )
+        }
+    }
+}
+
 fn deploy_single_stack(
     client: &ApiClient,
     ast: &crate::config::DiscoveredAst,
     branch: Option<&str>,
 ) -> Result<()> {
-    println!("{}", "━".repeat(50).dimmed());
+    ui::print_divider();
     if let Some(branch_name) = branch {
         println!(
             "{} Deploying {} (branch: {})",
-            "→".blue().bold(),
+            ui::symbols::ARROW.blue().bold(),
             ast.stack_name.bold(),
             branch_name.cyan()
         );
     } else {
-        println!("{} Deploying {}", "→".blue().bold(), ast.stack_name.bold());
+        println!(
+            "{} Deploying {}",
+            ui::symbols::ARROW.blue().bold(),
+            ast.stack_name.bold()
+        );
     }
-    println!("{}", "━".repeat(50).dimmed());
+    ui::print_divider();
 
-    println!("\n{} Pushing stack...", "1".blue().bold());
+    ui::print_numbered_step(1, "Pushing stack...");
 
     let remote_spec = client.get_spec_by_name(&ast.stack_name)?;
 
     let spec_id = if let Some(spec) = remote_spec {
-        println!("  {} Stack exists (id={})", "✓".green(), spec.id);
+        println!(
+            "  {} Stack exists (id={})",
+            ui::symbols::SUCCESS.green(),
+            spec.id
+        );
         spec.id
     } else {
-        print!("  Creating stack... ");
+        let spinner = ui::create_spinner("Creating stack...");
         let req = crate::api_client::CreateSpecRequest {
             name: ast.stack_name.clone(),
             entity_name: ast.entity_name.clone(),
@@ -89,31 +178,31 @@ fn deploy_single_stack(
             output_path: None,
         };
         let new_spec = client.create_spec(req)?;
-        println!("{}", "✓".green());
+        spinner.finish_with_message(format!("{} Stack created", ui::symbols::SUCCESS.green()));
         new_spec.id
     };
 
-    print!("  Uploading AST... ");
+    let spinner = ui::create_spinner("Uploading AST...");
     let ast_payload = ast.load_ast()?;
     let version_response = client.create_spec_version(spec_id, ast_payload)?;
 
     let hash_short = &version_response.version.content_hash[..12];
     if version_response.version_is_new {
-        println!(
+        spinner.finish_with_message(format!(
             "{} v{} ({})",
-            "✓".green(),
+            ui::symbols::SUCCESS.green(),
             version_response.version.version_number,
             hash_short
-        );
+        ));
     } else {
-        println!(
+        spinner.finish_with_message(format!(
             "{} v{} (up to date)",
-            "=".blue(),
+            ui::symbols::EQUALS.blue(),
             version_response.version.version_number
-        );
+        ));
     }
 
-    println!("\n{} Creating build...", "2".blue().bold());
+    ui::print_numbered_step(2, "Creating build...");
 
     let req = CreateBuildRequest {
         spec_id: Some(spec_id),
@@ -128,7 +217,8 @@ fn deploy_single_stack(
         println!("  Branch: {}", branch_name.cyan());
     }
 
-    println!("\n{} Building & deploying...\n", "3".blue().bold());
+    ui::print_numbered_step(3, "Building & deploying...");
+    println!();
 
     watch_build_progress(client, build_response.build_id)?;
 
@@ -137,41 +227,50 @@ fn deploy_single_stack(
 
 fn watch_build_progress(client: &ApiClient, build_id: i32) -> Result<()> {
     let mut last_phase: Option<String> = None;
-    let mut last_progress: Option<i32> = None;
-    let spinner_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-    let mut spinner_idx = 0;
+    let progress_bar = ProgressBar::new(100);
+    progress_bar.set_style(
+        ProgressStyle::default_bar()
+            .template("  {spinner:.blue} [{bar:30.green/dim}] {pos}% {msg}")
+            .expect("Invalid progress bar template")
+            .progress_chars("█░░"),
+    );
+    progress_bar.enable_steady_tick(Duration::from_millis(80));
+
+    let start_time = std::time::Instant::now();
+    let timeout = Duration::from_secs(ui::DEFAULT_POLL_TIMEOUT_SECS);
 
     loop {
+        if start_time.elapsed() > timeout {
+            progress_bar.finish_and_clear();
+            anyhow::bail!(
+                "Build timed out after {} minutes. Check build status with: hs build status {}",
+                timeout.as_secs() / 60,
+                build_id
+            );
+        }
+
         let response = client.get_build(build_id)?;
         let build = &response.build;
 
-        spinner_idx = (spinner_idx + 1) % spinner_chars.len();
-        let spinner = spinner_chars[spinner_idx];
-
         if last_phase != build.phase {
             if let Some(phase) = &build.phase {
-                let phase_display = humanize_phase(phase);
-                println!("  {} {}", "→".blue(), phase_display);
+                let phase_display = ui::humanize_phase(phase);
+                progress_bar.set_message(phase_display.to_string());
             }
             last_phase = build.phase.clone();
         }
 
         if let Some(progress) = build.progress {
-            if last_progress != Some(progress) {
-                let bar = render_progress_bar(progress, 30);
-                print!("\r  {} {} {}%  ", spinner.to_string().blue(), bar, progress);
-                std::io::Write::flush(&mut std::io::stdout())?;
-                last_progress = Some(progress);
-            }
+            progress_bar.set_position(progress as u64);
         }
 
         if build.status.is_terminal() {
-            println!();
+            progress_bar.finish_and_clear();
             println!();
 
             match build.status {
                 BuildStatus::Completed => {
-                    println!("{} Deployed successfully!", "✓".green().bold());
+                    ui::print_success("Deployed successfully!");
 
                     if let Some(ws_url) = &build.websocket_url {
                         println!();
@@ -179,7 +278,7 @@ fn watch_build_progress(client: &ApiClient, build_id: i32) -> Result<()> {
                     }
                 }
                 BuildStatus::Failed => {
-                    println!("{} Build failed!", "✗".red().bold());
+                    ui::print_error("Build failed!");
 
                     if let Some(msg) = &build.status_message {
                         println!("  {}", msg);
@@ -188,7 +287,7 @@ fn watch_build_progress(client: &ApiClient, build_id: i32) -> Result<()> {
                     anyhow::bail!("Deployment failed");
                 }
                 BuildStatus::Cancelled => {
-                    println!("{} Build was cancelled.", "!".yellow().bold());
+                    ui::print_warning("Build was cancelled.");
                     anyhow::bail!("Deployment cancelled");
                 }
                 _ => {}
@@ -197,34 +296,8 @@ fn watch_build_progress(client: &ApiClient, build_id: i32) -> Result<()> {
             break;
         }
 
-        thread::sleep(Duration::from_millis(500));
+        std::thread::sleep(Duration::from_millis(ui::DEFAULT_POLL_INTERVAL_MS));
     }
 
     Ok(())
-}
-
-fn render_progress_bar(progress: i32, width: usize) -> String {
-    let filled = (progress as usize * width) / 100;
-    let empty = width - filled;
-    format!(
-        "[{}{}]",
-        "█".repeat(filled).green(),
-        "░".repeat(empty).dimmed()
-    )
-}
-
-fn humanize_phase(phase: &str) -> &str {
-    match phase.to_uppercase().as_str() {
-        "SUBMITTED" => "Queued",
-        "PROVISIONING" => "Starting build environment",
-        "DOWNLOAD_SOURCE" => "Preparing",
-        "INSTALL" => "Installing dependencies",
-        "PRE_BUILD" => "Preparing build",
-        "BUILD" => "Building",
-        "POST_BUILD" => "Finalizing build",
-        "UPLOAD_ARTIFACTS" => "Publishing image",
-        "FINALIZING" => "Deploying",
-        "COMPLETED" => "Completed",
-        _ => phase,
-    }
 }
