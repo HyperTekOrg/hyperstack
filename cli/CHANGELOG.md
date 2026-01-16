@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.2.1...hyperstack-cli-v0.2.2) (2026-01-16)
+
+
+### Features
+
+* improve CLI UI/UX with indicatif, dry-run, and shell completions ([8565eae](https://github.com/HyperTekOrg/hyperstack/commit/8565eaeae01206b128b522008b5f45d78e1242e1))
+* remove logs commands from CLI ([d1418eb](https://github.com/HyperTekOrg/hyperstack/commit/d1418eb968bbdef3a21e5e370b89d2d9ff2c53f6))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.2.1 to 0.2.2
+
 ## [0.2.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.2.0...hyperstack-cli-v0.2.1) (2026-01-16)
 
 

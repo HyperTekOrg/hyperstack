@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.2.1...hyperstack-typescript-v0.2.2) (2026-01-16)
+
+
+### Features
+
+* **interpreter:** add memory limits and LRU eviction to prevent unbounded growth ([33198a6](https://github.com/HyperTekOrg/hyperstack/commit/33198a69833de6e57f0c5fe568b0714a2105e987))
+
 ## [0.2.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.2.0...hyperstack-typescript-v0.2.1) (2026-01-16)
 
 
