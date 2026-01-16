@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.2.1...hyperstack-macros-v0.2.2) (2026-01-16)
+
+
+### Features
+
+* **interpreter:** add memory limits and LRU eviction to prevent unbounded growth ([33198a6](https://github.com/HyperTekOrg/hyperstack/commit/33198a69833de6e57f0c5fe568b0714a2105e987))
+* **interpreter:** add staleness detection to reject out-of-order gRPC updates ([d693f42](https://github.com/HyperTekOrg/hyperstack/commit/d693f421742258bbbd3528ffbbd4731d638c992b))
+
+
+### Bug Fixes
+
+* Clippy errors ([d6a9f4d](https://github.com/HyperTekOrg/hyperstack/commit/d6a9f4d27f619d05189f421e214f6eacb8c19542))
+
 ## [0.2.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.2.0...hyperstack-macros-v0.2.1) (2026-01-16)
 
 
