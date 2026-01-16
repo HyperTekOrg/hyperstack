@@ -9,7 +9,9 @@ Complete reference for the Hyperstack CLI (`hs`).
 | Option | Description |
 |--------|-------------|
 | `--config, -c <path>` | Path to hyperstack.toml (default: `hyperstack.toml`) |
-| `--json, -j` | Output as JSON |
+| `--json` | Output as JSON |
+| `--verbose` | Enable verbose output |
+| `--completions <shell>` | Generate shell completions (bash, zsh, fish, powershell, elvish) |
 | `--help, -h` | Show help |
 | `--version, -V` | Show version |
 
@@ -22,7 +24,6 @@ Complete reference for the Hyperstack CLI (`hs`).
 | `hs init` | Initialize project |
 | `hs up [stack]` | Deploy stack (push + build + deploy) |
 | `hs status` | Show project overview |
-| `hs logs [name-or-id]` | View logs (by stack name or build ID) |
 | `hs auth login` | Authenticate |
 
 ---
@@ -124,6 +125,7 @@ hs up my-stack --preview
 |------|-------------|
 | `--branch, -b <name>` | Deploy to named branch |
 | `--preview` | Create preview deployment |
+| `--dry-run` | Show what would be deployed without deploying |
 
 ### hs status
 
@@ -132,21 +134,6 @@ Show overview of all stacks, builds, and deployments.
 ```bash
 hs status
 hs status --json
-```
-
-### hs logs [name-or-id]
-
-View logs by stack name or build ID.
-
-```bash
-# Most recent build
-hs logs
-
-# By stack name
-hs logs my-stack
-
-# By build ID
-hs logs 123
 ```
 
 ---
@@ -238,14 +225,6 @@ hs stack stop my-stack
 hs stack stop my-stack --branch staging
 ```
 
-### hs stack logs <stack-name>
-
-View logs for a stack.
-
-```bash
-hs stack logs my-stack
-```
-
 ---
 
 ## Build Commands (Power User)
@@ -289,14 +268,6 @@ Get detailed build status.
 hs build status 123
 hs build status 123 --watch
 hs build status 123 --json
-```
-
-### hs build logs <build-id>
-
-View build logs.
-
-```bash
-hs build logs 123
 ```
 
 ---
@@ -406,9 +377,6 @@ hs up my-stack
 
 # Check status
 hs status
-
-# View logs if issues
-hs logs my-stack
 ```
 
 ### Branch Deploys
@@ -452,7 +420,7 @@ hs stack rollback my-stack --to 2
 | `Not authenticated` | Run `hs auth login` |
 | `Stack not found` | Check `hs stack list` for available stacks |
 | `AST file not found` | Run `cargo build` to generate AST |
-| `Build failed` | Check `hs build logs <id>` for details |
+| `Build failed` | Check `hs build status <id>` for details |
 | `Config invalid` | Run `hs config validate` |
 
 ---

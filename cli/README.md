@@ -42,7 +42,6 @@ That's it! Your stack is deployed and you'll see the WebSocket URL.
 | `hs init` | Initialize project |
 | `hs up [stack]` | Deploy (push + build + deploy) |
 | `hs status` | Show project overview |
-| `hs logs` | View build logs |
 | `hs stack list` | List all stacks |
 | `hs stack show <name>` | Show stack details |
 | `hs stack rollback <name>` | Rollback to previous version |
@@ -58,9 +57,6 @@ hs up
 
 # Check status
 hs status
-
-# View logs if something went wrong
-hs logs
 ```
 
 ## Stack Commands
@@ -198,7 +194,7 @@ The CLI auto-discovers stacks from `.hyperstack/*.ast.json` files.
 | `Not authenticated` | Run `hs auth login` |
 | `Stack not found` | Check `hs stack list` |
 | `AST file not found` | Run `cargo build` to generate AST |
-| `Build failed` | Check `hs logs` |
+| `Build failed` | Check `hs status` for build details |
 
 ## License
 

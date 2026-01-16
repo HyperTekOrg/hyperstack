@@ -695,63 +695,6 @@ pub fn stop(stack_name: &str, _branch: Option<&str>, _force: bool) -> Result<()>
     );
 }
 
-pub fn logs(stack_or_build_id: &str, watch: bool) -> Result<()> {
-    let client = ApiClient::new()?;
-
-    let build_id = if let Ok(id) = stack_or_build_id.parse::<i32>() {
-        id
-    } else {
-        println!(
-            "{} Looking up latest build for '{}'...",
-            "→".blue().bold(),
-            stack_or_build_id
-        );
-
-        let spec = client
-            .get_spec_by_name(stack_or_build_id)?
-            .ok_or_else(|| anyhow::anyhow!("Stack '{}' not found", stack_or_build_id))?;
-
-        let builds = client.list_builds_filtered(Some(1), None, Some(spec.id))?;
-
-        builds
-            .first()
-            .map(|b| b.id)
-            .ok_or_else(|| anyhow::anyhow!("No builds found for stack '{}'", stack_or_build_id))?
-    };
-
-    if watch {
-        return watch_build(&client, build_id);
-    }
-
-    let response = client.get_build(build_id)?;
-    let build = &response.build;
-
-    println!("{} Build #{} logs:", "→".blue().bold(), build_id);
-    println!();
-    println!("  Build status: {}", format_build_status(build.status));
-
-    if let Some(ws_url) = &build.websocket_url {
-        println!("  WebSocket URL: {}", ws_url.cyan());
-    }
-
-    println!();
-    println!(
-        "  {} Logs are available in the AWS Console.",
-        "!".yellow().bold()
-    );
-    println!("  Check CodeBuild logs for detailed build output.");
-
-    if !build.status.is_terminal() {
-        println!();
-        println!(
-            "  Watch build progress: {}",
-            format!("hs stack logs {} --watch", build_id).cyan()
-        );
-    }
-
-    Ok(())
-}
-
 fn load_and_upload_ast(
     client: &ApiClient,
     spec_id: i32,

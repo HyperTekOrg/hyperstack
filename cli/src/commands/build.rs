@@ -362,29 +362,6 @@ pub fn status(build_id: i32, watch: bool, json_output: bool) -> Result<()> {
     Ok(())
 }
 
-pub fn logs(build_id: i32) -> Result<()> {
-    let client = ApiClient::new()?;
-    let response = client.get_build(build_id)?;
-    let build = &response.build;
-
-    println!("{} Build #{} logs:", "→".blue().bold(), build_id);
-    println!();
-    println!("  Build status: {}", format_status(build.status));
-
-    if let Some(ws_url) = &build.websocket_url {
-        println!("  WebSocket URL: {}", ws_url.cyan());
-    }
-
-    println!();
-    println!(
-        "  {} Logs are available in the AWS Console.",
-        "!".yellow().bold()
-    );
-    println!("  Check CodeBuild logs for detailed build output.");
-
-    Ok(())
-}
-
 fn watch_build(client: &ApiClient, build_id: i32) -> Result<()> {
     println!("{} Watching build #{}...\n", "→".blue().bold(), build_id);
 

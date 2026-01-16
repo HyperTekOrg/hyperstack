@@ -19,21 +19,24 @@
 //!
 //! See `hs --help` for the full command reference.
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::{generate, Shell};
 use colored::Colorize;
+use std::io;
 use std::process;
 
 mod api_client;
 mod commands;
 mod config;
+mod ui;
 
 #[derive(Parser)]
-#[command(name = "hyperstack")]
+#[command(name = "hs")]
 #[command(about = "Hyperstack CLI - Build, deploy, and manage stream stacks", long_about = None)]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 
     /// Path to hyperstack.toml configuration file
     #[arg(short, long, global = true, default_value = "hyperstack.toml")]
@@ -42,6 +45,14 @@ struct Cli {
     /// Output as JSON (machine-readable format)
     #[arg(long, global = true)]
     json: bool,
+
+    /// Enable verbose output
+    #[arg(long, global = true)]
+    verbose: bool,
+
+    /// Generate shell completions
+    #[arg(long, value_name = "SHELL")]
+    completions: Option<Shell>,
 }
 
 #[derive(Subcommand)]
@@ -61,6 +72,10 @@ enum Commands {
         /// Create a preview deployment with auto-generated branch name
         #[arg(long, conflicts_with = "branch")]
         preview: bool,
+
+        /// Show what would be deployed without actually deploying
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Show overview of stacks, builds, and deployments
@@ -70,12 +85,6 @@ enum Commands {
     Push {
         /// Name of specific stack to push (pushes all if not specified)
         stack_name: Option<String>,
-    },
-
-    /// View build logs (alias for 'stack logs')
-    Logs {
-        /// Build ID to show logs for (uses last build if not specified)
-        build_id: Option<i32>,
     },
 
     /// SDK generation commands
@@ -244,16 +253,6 @@ enum StackCommands {
         #[arg(short, long)]
         force: bool,
     },
-
-    /// View build logs for a stack
-    Logs {
-        /// Stack name or build ID
-        stack_or_build_id: String,
-
-        /// Watch logs in real-time
-        #[arg(short, long)]
-        watch: bool,
-    },
 }
 
 /// Build commands - advanced low-level build management
@@ -302,16 +301,16 @@ enum BuildCommands {
         #[arg(long)]
         json: bool,
     },
-
-    /// View build logs
-    Logs {
-        /// Build ID
-        build_id: i32,
-    },
 }
 
 fn main() {
     let cli = Cli::parse();
+
+    if let Some(shell) = cli.completions {
+        let mut cmd = Cli::command();
+        generate(shell, &mut cmd, "hs", &mut io::stdout());
+        return;
+    }
 
     if let Err(e) = run(cli) {
         eprintln!("{} {}", "Error:".red().bold(), e);
@@ -320,58 +319,21 @@ fn main() {
 }
 
 fn run(cli: Cli) -> anyhow::Result<()> {
-    match cli.command {
+    let Some(command) = cli.command else {
+        Cli::command().print_help()?;
+        return Ok(());
+    };
+
+    match command {
         Commands::Init => commands::config::init(&cli.config),
         Commands::Up {
             stack_name,
             branch,
             preview,
-        } => commands::up::up(&cli.config, stack_name.as_deref(), branch, preview),
+            dry_run,
+        } => commands::up::up(&cli.config, stack_name.as_deref(), branch, preview, dry_run),
         Commands::Status => commands::status::status(cli.json),
         Commands::Push { stack_name } => commands::stack::push(&cli.config, stack_name.as_deref()),
-        Commands::Logs { build_id } => {
-            let id = match build_id {
-                Some(id) => id,
-                None => {
-                    // Fetch most recent build scoped to this project's stacks
-                    let client = api_client::ApiClient::new()?;
-
-                    // Try to scope to local stacks
-                    let config = config::HyperstackConfig::load_optional(&cli.config)?;
-                    let local_stacks =
-                        config::resolve_stacks_to_push(config.as_ref(), None).unwrap_or_default();
-
-                    let builds = if local_stacks.is_empty() {
-                        // No local stacks found, fall back to all builds
-                        client.list_builds(Some(1), None)?
-                    } else {
-                        // Find spec IDs for local stacks
-                        let mut all_builds = Vec::new();
-                        for ast in &local_stacks {
-                            if let Ok(Some(spec)) = client.get_spec_by_name(&ast.stack_name) {
-                                if let Ok(builds) =
-                                    client.list_builds_filtered(Some(1), None, Some(spec.id))
-                                {
-                                    all_builds.extend(builds);
-                                }
-                            }
-                        }
-                        // Sort by created_at descending to get most recent
-                        all_builds.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-                        all_builds.truncate(1);
-                        all_builds
-                    };
-
-                    builds.first().map(|b| b.id).ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "No build ID specified and no builds found for this project.\n\
-                             Usage: hs logs <build-id>"
-                        )
-                    })?
-                }
-            };
-            commands::build::logs(id)
-        }
         Commands::Sdk(sdk_cmd) => match sdk_cmd {
             SdkCommands::Create(create_cmd) => match create_cmd {
                 CreateCommands::Typescript {
@@ -427,10 +389,6 @@ fn run(cli: Cli) -> anyhow::Result<()> {
                 branch,
                 force,
             } => commands::stack::stop(&stack_name, branch.as_deref(), force),
-            StackCommands::Logs {
-                stack_or_build_id,
-                watch,
-            } => commands::stack::logs(&stack_or_build_id, watch),
         },
         Commands::Build(build_cmd) => match build_cmd {
             BuildCommands::Create {
@@ -453,7 +411,6 @@ fn run(cli: Cli) -> anyhow::Result<()> {
                 watch,
                 json,
             } => commands::build::status(build_id, watch, json || cli.json),
-            BuildCommands::Logs { build_id } => commands::build::logs(build_id),
         },
     }
 }

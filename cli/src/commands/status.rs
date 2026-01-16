@@ -193,8 +193,8 @@ pub fn status(json: bool) -> Result<()> {
     println!("{}", "─".repeat(50).dimmed());
     println!("{}", "Quick commands:".dimmed());
     println!("  {}  Deploy a stack", "hs up".cyan());
-    println!("  {}  View build logs", "hs logs <build-id>".cyan());
     println!("  {}  List all stacks", "hs stack list".cyan());
+    println!("  {}  Show stack details", "hs stack show <name>".cyan());
 
     println!();
 
