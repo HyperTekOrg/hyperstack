@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.2.0...hyperstack-v0.2.1) (2026-01-16)
+
+
+### Miscellaneous Chores
+
+* **hyperstack:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.2.0 to 0.2.1
+    * hyperstack-macros bumped from 0.2.0 to 0.2.1
+    * hyperstack-server bumped from 0.2.0 to 0.2.1
+    * hyperstack-sdk bumped from 0.2.0 to 0.2.1
+
 ## [0.2.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.1.11...hyperstack-v0.2.0) (2026-01-15)
 
 

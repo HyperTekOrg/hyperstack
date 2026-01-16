@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.2.0...hyperstack-macros-v0.2.1) (2026-01-16)
+
+
+### Features
+
+* add gRPC stream reconnection with exponential backoff ([48e3ec7](https://github.com/HyperTekOrg/hyperstack/commit/48e3ec7a952399135a84323da78cdc499804bce9))
+
 ## [0.2.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.1.11...hyperstack-macros-v0.2.0) (2026-01-15)
 
 
