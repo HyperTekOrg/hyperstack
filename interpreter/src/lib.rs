@@ -39,8 +39,8 @@ pub use metrics_context::{FieldAccessor, FieldRef, MetricsContext};
 pub use resolvers::{InstructionContext, KeyResolution, ResolveContext, ReverseLookupUpdater};
 pub use typescript::{write_typescript_to_file, TypeScriptCompiler, TypeScriptConfig};
 pub use vm::{
-    CapacityWarning, CleanupResult, PendingAccountUpdate, PendingQueueStats, StateTableConfig,
-    UpdateContext, VmMemoryStats,
+    CapacityWarning, CleanupResult, PendingAccountUpdate, PendingQueueStats, QueuedAccountUpdate,
+    StateTableConfig, UpdateContext, VmMemoryStats,
 };
 
 // Re-export macros for convenient use

@@ -130,12 +130,14 @@ pub fn generate_vm_handler(
 
                         if let Err(_e) = vm.queue_account_update(
                             0, // state_id
-                            account_address.clone(),
-                            event_type.to_string(),
-                            event_value,
-                            slot,
-                            write_version,
-                            signature,
+                            hyperstack_interpreter::QueuedAccountUpdate {
+                                pda_address: account_address.clone(),
+                                account_type: event_type.to_string(),
+                                account_data: event_value,
+                                slot,
+                                write_version,
+                                signature,
+                            },
                         ) {
                             // Silently ignore queue errors
                         }

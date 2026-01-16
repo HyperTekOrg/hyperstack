@@ -297,6 +297,10 @@ impl TemporalIndex {
         self.index.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.index.is_empty()
+    }
+
     pub fn total_entries(&self) -> usize {
         self.index.iter().map(|entry| entry.value().len()).sum()
     }
@@ -333,8 +337,24 @@ impl PdaReverseLookup {
     pub fn len(&self) -> usize {
         self.index.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.index.is_empty()
+    }
 }
 
+/// Input for queueing an account update.
+#[derive(Debug, Clone)]
+pub struct QueuedAccountUpdate {
+    pub pda_address: String,
+    pub account_type: String,
+    pub account_data: Value,
+    pub slot: u64,
+    pub write_version: u64,
+    pub signature: String,
+}
+
+/// Internal representation of a pending account update with queue metadata.
 #[derive(Debug, Clone)]
 pub struct PendingAccountUpdate {
     pub account_type: String,
@@ -2324,24 +2344,18 @@ impl VmContext {
     /// * `signature` - The transaction signature
     #[cfg_attr(feature = "otel", instrument(
         name = "vm.queue_account_update",
-        skip(self, account_data),
+        skip(self, update),
         fields(
-            pda = %pda_address,
-            account_type = %account_type,
-            slot = slot,
+            pda = %update.pda_address,
+            account_type = %update.account_type,
+            slot = update.slot,
         )
     ))]
     pub fn queue_account_update(
         &mut self,
         state_id: u32,
-        pda_address: String,
-        account_type: String,
-        account_data: Value,
-        slot: u64,
-        write_version: u64,
-        signature: String,
+        update: QueuedAccountUpdate,
     ) -> Result<()> {
-        // Check if we've exceeded the global limit
         if self.pending_queue_size >= MAX_PENDING_UPDATES_TOTAL as u64 {
             tracing::warn!(
                 "Pending queue size limit reached ({}), cleaning up expired updates",
@@ -2349,7 +2363,6 @@ impl VmContext {
             );
             let removed = self.cleanup_expired_pending_updates(state_id);
 
-            // If still at limit after cleanup, drop the oldest update
             if self.pending_queue_size >= MAX_PENDING_UPDATES_TOTAL as u64 {
                 tracing::warn!(
                     "Still at limit after cleanup (removed {}), will drop oldest update",
@@ -2366,64 +2379,58 @@ impl VmContext {
 
         tracing::debug!(
             "📋 Queued account update for PDA {} (type: {}, slot: {})",
-            pda_address,
-            account_type,
-            slot
+            update.pda_address,
+            update.account_type,
+            update.slot
         );
         let pending = PendingAccountUpdate {
-            account_type,
-            pda_address: pda_address.clone(),
-            account_data,
-            slot,
-            write_version,
-            signature,
+            account_type: update.account_type,
+            pda_address: update.pda_address.clone(),
+            account_data: update.account_data,
+            slot: update.slot,
+            write_version: update.write_version,
+            signature: update.signature,
             queued_at: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs() as i64,
         };
 
-        // Get or create the vector for this PDA and enforce limits
-        {
-            let mut updates = state
-                .pending_updates
-                .entry(pda_address.clone())
-                .or_insert_with(Vec::new);
+        let pda_address = pending.pda_address.clone();
+        let slot = pending.slot;
 
-            // Deduplication: Remove any updates with the same or older slot
-            // Keep only updates with newer slots than the incoming one
-            let original_len = updates.len();
-            updates.retain(|existing| {
-                // Keep if existing has a newer slot
-                existing.slot > slot
-            });
-            let removed_by_dedup = original_len - updates.len();
+        let mut updates = state
+            .pending_updates
+            .entry(pda_address.clone())
+            .or_insert_with(Vec::new);
 
-            if removed_by_dedup > 0 {
-                self.pending_queue_size = self
-                    .pending_queue_size
-                    .saturating_sub(removed_by_dedup as u64);
-                tracing::debug!(
-                    "Deduplicated {} older update(s) for PDA {} (new slot: {})",
-                    removed_by_dedup,
-                    pda_address,
-                    slot
-                );
-            }
+        let original_len = updates.len();
+        updates.retain(|existing| existing.slot > slot);
+        let removed_by_dedup = original_len - updates.len();
 
-            // Enforce per-PDA limit after deduplication
-            if updates.len() >= MAX_PENDING_UPDATES_PER_PDA {
-                tracing::warn!(
-                    "Per-PDA limit reached for {} ({} updates), dropping oldest",
-                    pda_address,
-                    updates.len()
-                );
-                updates.remove(0);
-                self.pending_queue_size = self.pending_queue_size.saturating_sub(1);
-            }
-
-            updates.push(pending);
+        if removed_by_dedup > 0 {
+            self.pending_queue_size = self
+                .pending_queue_size
+                .saturating_sub(removed_by_dedup as u64);
+            tracing::debug!(
+                "Deduplicated {} older update(s) for PDA {} (new slot: {})",
+                removed_by_dedup,
+                pda_address,
+                slot
+            );
         }
+
+        if updates.len() >= MAX_PENDING_UPDATES_PER_PDA {
+            tracing::warn!(
+                "Per-PDA limit reached for {} ({} updates), dropping oldest",
+                pda_address,
+                updates.len()
+            );
+            updates.remove(0);
+            self.pending_queue_size = self.pending_queue_size.saturating_sub(1);
+        }
+
+        updates.push(pending);
 
         Ok(())
     }

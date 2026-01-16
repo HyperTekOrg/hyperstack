@@ -373,12 +373,14 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
 
                             if let Err(e) = vm.queue_account_update(
                                 0, // state_id
-                                account_address.clone(),
-                                event_type.to_string(),
-                                event_value,
-                                slot,
-                                write_version,
-                                signature,
+                                hyperstack_interpreter::QueuedAccountUpdate {
+                                    pda_address: account_address.clone(),
+                                    account_type: event_type.to_string(),
+                                    account_data: event_value,
+                                    slot,
+                                    write_version,
+                                    signature,
+                                },
                             ) {
                                 tracing::warn!("Failed to queue account update: {}", e);
                             }
