@@ -373,9 +373,35 @@ pub fn generate_vm_handler(
                             }
                         }
 
-                        // Periodically clean up expired pending updates
                         if vm.instructions_executed % 1000 == 0 {
-                            let _ = vm.cleanup_expired_pending_updates(0);
+                            let cleanup_result = vm.cleanup_all_expired(0);
+                            if cleanup_result.pending_updates_removed > 0 || cleanup_result.temporal_entries_removed > 0 {
+                                tracing::info!(
+                                    "Cleanup: {} pending updates, {} temporal entries removed",
+                                    cleanup_result.pending_updates_removed,
+                                    cleanup_result.temporal_entries_removed
+                                );
+                            }
+
+                            let stats = vm.get_memory_stats(0);
+                            if stats.state_table_at_capacity {
+                                tracing::warn!(
+                                    "State table at capacity: {}/{} entities",
+                                    stats.state_table_entity_count,
+                                    stats.state_table_max_entries
+                                );
+                            }
+                            if let Some(ref pending) = stats.pending_queue_stats {
+                                if pending.total_updates > 100 {
+                                    tracing::warn!(
+                                        "Large pending queue: {} updates across {} PDAs (oldest: {}s, est memory: {}KB)",
+                                        pending.total_updates,
+                                        pending.unique_pdas,
+                                        pending.oldest_age_seconds,
+                                        pending.estimated_memory_bytes / 1024
+                                    );
+                                }
+                            }
                         }
                     }
 

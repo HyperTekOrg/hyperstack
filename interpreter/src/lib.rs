@@ -38,7 +38,10 @@ pub mod vm;
 pub use metrics_context::{FieldAccessor, FieldRef, MetricsContext};
 pub use resolvers::{InstructionContext, KeyResolution, ResolveContext, ReverseLookupUpdater};
 pub use typescript::{write_typescript_to_file, TypeScriptCompiler, TypeScriptConfig};
-pub use vm::{PendingAccountUpdate, PendingQueueStats, UpdateContext};
+pub use vm::{
+    CapacityWarning, CleanupResult, PendingAccountUpdate, PendingQueueStats, StateTableConfig,
+    UpdateContext, VmMemoryStats,
+};
 
 // Re-export macros for convenient use
 // The field! macro is the new recommended way to create field references

@@ -662,22 +662,32 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                 }
                             }
 
-                            // Periodically clean up expired pending updates (every 1000 instructions)
                             if vm.instructions_executed % 1000 == 0 {
-                                let removed = vm.cleanup_expired_pending_updates(0);
-                                if removed > 0 {
-                                    tracing::info!("Cleaned up {} expired pending updates", removed);
+                                let cleanup_result = vm.cleanup_all_expired(0);
+                                if cleanup_result.pending_updates_removed > 0 || cleanup_result.temporal_entries_removed > 0 {
+                                    tracing::info!(
+                                        "Cleanup: {} pending updates, {} temporal entries removed",
+                                        cleanup_result.pending_updates_removed,
+                                        cleanup_result.temporal_entries_removed
+                                    );
                                 }
 
-                                // Log stats if queue is large
-                                if let Some(stats) = vm.get_pending_queue_stats(0) {
-                                    if stats.total_updates > 100 {
+                                let stats = vm.get_memory_stats(0);
+                                if stats.state_table_at_capacity {
+                                    tracing::warn!(
+                                        "State table at capacity: {}/{} entities",
+                                        stats.state_table_entity_count,
+                                        stats.state_table_max_entries
+                                    );
+                                }
+                                if let Some(ref pending) = stats.pending_queue_stats {
+                                    if pending.total_updates > 100 {
                                         tracing::warn!(
                                             "Large pending queue: {} updates across {} PDAs (oldest: {}s, est memory: {}KB)",
-                                            stats.total_updates,
-                                            stats.unique_pdas,
-                                            stats.oldest_age_seconds,
-                                            stats.estimated_memory_bytes / 1024
+                                            pending.total_updates,
+                                            pending.unique_pdas,
+                                            pending.oldest_age_seconds,
+                                            pending.estimated_memory_bytes / 1024
                                         );
                                     }
                                 }

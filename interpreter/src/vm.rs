@@ -108,6 +108,14 @@ const MAX_PENDING_UPDATES_TOTAL: usize = 10_000;
 const MAX_PENDING_UPDATES_PER_PDA: usize = 10;
 const PENDING_UPDATE_TTL_SECONDS: i64 = 300; // 5 minutes
 
+// Temporal index configuration - prevents unbounded history growth
+const TEMPORAL_HISTORY_TTL_SECONDS: i64 = 300; // 5 minutes, matches pending queue TTL
+const MAX_TEMPORAL_ENTRIES_PER_KEY: usize = 1000; // Hard cap as safety net
+
+// State table configuration
+const DEFAULT_MAX_STATE_TABLE_ENTRIES: usize = 100_000;
+const DEFAULT_MAX_ARRAY_LENGTH: usize = 100;
+
 /// Estimate the size of a JSON value in bytes
 fn estimate_json_size(value: &Value) -> usize {
     match value {
@@ -240,7 +248,23 @@ impl TemporalIndex {
 
         if let Some(mut entries) = self.index.get_mut(&lookup_key) {
             entries.sort_by_key(|(_, ts)| *ts);
+
+            let cutoff = timestamp - TEMPORAL_HISTORY_TTL_SECONDS;
+            entries.retain(|(_, ts)| *ts >= cutoff);
+
+            if entries.len() > MAX_TEMPORAL_ENTRIES_PER_KEY {
+                let excess = entries.len() - MAX_TEMPORAL_ENTRIES_PER_KEY;
+                entries.drain(0..excess);
+            }
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.index.len()
+    }
+
+    pub fn total_entries(&self) -> usize {
+        self.index.iter().map(|entry| entry.value().len()).sum()
     }
 }
 
@@ -262,9 +286,7 @@ impl PdaReverseLookup {
     }
 
     pub fn insert(&mut self, pda_address: String, seed_value: String) -> Option<String> {
-        // Check if we're at capacity and will evict
         let evicted = if self.index.len() >= self.index.cap().get() {
-            // Get the LRU key that will be evicted
             self.index.peek_lru().map(|(k, _)| k.clone())
         } else {
             None
@@ -272,6 +294,10 @@ impl PdaReverseLookup {
 
         self.index.put(pda_address, seed_value);
         evicted
+    }
+
+    pub fn len(&self) -> usize {
+        self.index.len()
     }
 }
 
@@ -294,13 +320,126 @@ pub struct PendingQueueStats {
     pub estimated_memory_bytes: usize,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct VmMemoryStats {
+    pub state_table_entity_count: usize,
+    pub state_table_max_entries: usize,
+    pub state_table_at_capacity: bool,
+    pub lookup_index_count: usize,
+    pub lookup_index_total_entries: usize,
+    pub temporal_index_count: usize,
+    pub temporal_index_total_entries: usize,
+    pub pda_reverse_lookup_count: usize,
+    pub pda_reverse_lookup_total_entries: usize,
+    pub pending_queue_stats: Option<PendingQueueStats>,
+    pub path_cache_size: usize,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct CleanupResult {
+    pub pending_updates_removed: usize,
+    pub temporal_entries_removed: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct CapacityWarning {
+    pub current_entries: usize,
+    pub max_entries: usize,
+    pub entries_over_limit: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct StateTableConfig {
+    pub max_entries: usize,
+    pub max_array_length: usize,
+}
+
+impl Default for StateTableConfig {
+    fn default() -> Self {
+        Self {
+            max_entries: DEFAULT_MAX_STATE_TABLE_ENTRIES,
+            max_array_length: DEFAULT_MAX_ARRAY_LENGTH,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct StateTable {
     pub data: DashMap<Value, Value>,
+    access_times: DashMap<Value, i64>,
     pub lookup_indexes: HashMap<String, LookupIndex>,
     pub temporal_indexes: HashMap<String, TemporalIndex>,
     pub pda_reverse_lookups: HashMap<String, PdaReverseLookup>,
     pub pending_updates: DashMap<String, Vec<PendingAccountUpdate>>,
+    config: StateTableConfig,
+}
+
+impl StateTable {
+    pub fn is_at_capacity(&self) -> bool {
+        self.data.len() >= self.config.max_entries
+    }
+
+    pub fn entries_over_limit(&self) -> usize {
+        self.data.len().saturating_sub(self.config.max_entries)
+    }
+
+    pub fn max_array_length(&self) -> usize {
+        self.config.max_array_length
+    }
+
+    fn touch(&self, key: &Value) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        self.access_times.insert(key.clone(), now);
+    }
+
+    fn evict_lru(&self, count: usize) -> usize {
+        if count == 0 || self.data.is_empty() {
+            return 0;
+        }
+
+        let mut entries: Vec<(Value, i64)> = self
+            .access_times
+            .iter()
+            .map(|entry| (entry.key().clone(), *entry.value()))
+            .collect();
+
+        entries.sort_by_key(|(_, ts)| *ts);
+
+        let to_evict: Vec<Value> = entries.iter().take(count).map(|(k, _)| k.clone()).collect();
+
+        let mut evicted = 0;
+        for key in to_evict {
+            self.data.remove(&key);
+            self.access_times.remove(&key);
+            evicted += 1;
+        }
+
+        if evicted > 0 {
+            tracing::info!("Evicted {} LRU entries from state table", evicted);
+        }
+
+        evicted
+    }
+
+    pub fn insert_with_eviction(&self, key: Value, value: Value) {
+        if self.data.len() >= self.config.max_entries && !self.data.contains_key(&key) {
+            let to_evict = (self.data.len() + 1).saturating_sub(self.config.max_entries);
+            self.evict_lru(to_evict.max(1));
+        }
+        self.data.insert(key.clone(), value);
+        self.touch(&key);
+    }
+
+    pub fn get_and_touch(&self, key: &Value) -> Option<Value> {
+        let result = self.data.get(key).map(|v| v.clone());
+        if result.is_some() {
+            self.touch(key);
+        }
+        result
+    }
 }
 
 impl VmContext {
@@ -320,10 +459,39 @@ impl VmContext {
             0,
             StateTable {
                 data: DashMap::new(),
+                access_times: DashMap::new(),
                 lookup_indexes: HashMap::new(),
                 temporal_indexes: HashMap::new(),
                 pda_reverse_lookups: HashMap::new(),
                 pending_updates: DashMap::new(),
+                config: StateTableConfig::default(),
+            },
+        );
+        vm
+    }
+
+    pub fn new_with_config(state_config: StateTableConfig) -> Self {
+        let mut vm = VmContext {
+            registers: vec![Value::Null; 256],
+            states: HashMap::new(),
+            instructions_executed: 0,
+            cache_hits: 0,
+            path_cache: HashMap::new(),
+            pda_cache_hits: 0,
+            pda_cache_misses: 0,
+            pending_queue_size: 0,
+            current_context: None,
+        };
+        vm.states.insert(
+            0,
+            StateTable {
+                data: DashMap::new(),
+                access_times: DashMap::new(),
+                lookup_indexes: HashMap::new(),
+                temporal_indexes: HashMap::new(),
+                pda_reverse_lookups: HashMap::new(),
+                pending_updates: DashMap::new(),
+                config: state_config,
             },
         );
         vm
@@ -350,8 +518,6 @@ impl VmContext {
         self.current_context.as_ref()
     }
 
-    /// Update the state table with the current value in a register
-    /// This allows imperative hooks to persist their changes to the state table
     pub fn update_state_from_register(
         &mut self,
         state_id: u32,
@@ -360,7 +526,7 @@ impl VmContext {
     ) -> Result<()> {
         let state = self.states.get(&state_id).ok_or("State table not found")?;
         let value = self.registers[register].clone();
-        state.data.insert(key, value);
+        state.insert_with_eviction(key, value);
         Ok(())
     }
 
@@ -667,10 +833,12 @@ impl VmContext {
                         .entry(actual_state_id)
                         .or_insert_with(|| StateTable {
                             data: DashMap::new(),
+                            access_times: DashMap::new(),
                             lookup_indexes: HashMap::new(),
                             temporal_indexes: HashMap::new(),
                             pda_reverse_lookups: HashMap::new(),
                             pending_updates: DashMap::new(),
+                            config: StateTableConfig::default(),
                         });
                     let state = self
                         .states
@@ -695,9 +863,7 @@ impl VmContext {
                         }
                     }
                     let value = state
-                        .data
-                        .get(key_value)
-                        .map(|v| v.clone())
+                        .get_and_touch(key_value)
                         .unwrap_or_else(|| default.clone());
 
                     self.registers[*dest] = value;
@@ -716,7 +882,7 @@ impl VmContext {
                     let key_value = self.registers[*key].clone();
                     let value_data = self.registers[*value].clone();
 
-                    state.data.insert(key_value, value_data);
+                    state.insert_with_eviction(key_value, value_data);
                     pc += 1;
                 }
                 OpCode::AppendToArray {
@@ -729,7 +895,12 @@ impl VmContext {
                         path,
                         self.registers[*value]
                     );
-                    self.append_to_array(*object, path, *value)?;
+                    let max_len = self
+                        .states
+                        .get(&override_state_id)
+                        .map(|s| s.max_array_length())
+                        .unwrap_or(DEFAULT_MAX_ARRAY_LENGTH);
+                    self.append_to_array(*object, path, *value, max_len)?;
                     dirty_fields.insert(path.to_string());
                     pc += 1;
                 }
@@ -1715,6 +1886,7 @@ impl VmContext {
         object_reg: Register,
         path: &str,
         value_reg: Register,
+        max_length: usize,
     ) -> Result<()> {
         let compiled = self.get_compiled_path(path);
         let segments = compiled.segments();
@@ -1739,6 +1911,11 @@ impl VmContext {
                     .and_then(|v| v.as_array_mut())
                     .ok_or("Path is not an array")?;
                 arr.push(value.clone());
+
+                if arr.len() > max_length {
+                    let excess = arr.len() - max_length;
+                    arr.drain(0..excess);
+                }
             } else {
                 current
                     .entry(segment.to_string())
@@ -2190,6 +2367,99 @@ impl VmContext {
             largest_pda_queue_size: largest_pda_queue,
             estimated_memory_bytes: estimated_memory,
         })
+    }
+
+    pub fn get_memory_stats(&self, state_id: u32) -> VmMemoryStats {
+        let mut stats = VmMemoryStats {
+            path_cache_size: self.path_cache.len(),
+            ..Default::default()
+        };
+
+        if let Some(state) = self.states.get(&state_id) {
+            stats.state_table_entity_count = state.data.len();
+            stats.state_table_max_entries = state.config.max_entries;
+            stats.state_table_at_capacity = state.is_at_capacity();
+
+            stats.lookup_index_count = state.lookup_indexes.len();
+            stats.lookup_index_total_entries =
+                state.lookup_indexes.values().map(|idx| idx.len()).sum();
+
+            stats.temporal_index_count = state.temporal_indexes.len();
+            stats.temporal_index_total_entries = state
+                .temporal_indexes
+                .values()
+                .map(|idx| idx.total_entries())
+                .sum();
+
+            stats.pda_reverse_lookup_count = state.pda_reverse_lookups.len();
+            stats.pda_reverse_lookup_total_entries = state
+                .pda_reverse_lookups
+                .values()
+                .map(|lookup| lookup.len())
+                .sum();
+
+            stats.pending_queue_stats = self.get_pending_queue_stats(state_id);
+        }
+
+        stats
+    }
+
+    pub fn cleanup_all_expired(&mut self, state_id: u32) -> CleanupResult {
+        let pending_removed = self.cleanup_expired_pending_updates(state_id);
+        let temporal_removed = self.cleanup_temporal_indexes(state_id);
+
+        CleanupResult {
+            pending_updates_removed: pending_removed,
+            temporal_entries_removed: temporal_removed,
+        }
+    }
+
+    fn cleanup_temporal_indexes(&mut self, state_id: u32) -> usize {
+        let state = match self.states.get_mut(&state_id) {
+            Some(s) => s,
+            None => return 0,
+        };
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        let cutoff = now - TEMPORAL_HISTORY_TTL_SECONDS;
+        let mut total_removed = 0;
+
+        for (_, index) in state.temporal_indexes.iter_mut() {
+            for mut entry in index.index.iter_mut() {
+                let original_len = entry.value().len();
+                entry.value_mut().retain(|(_, ts)| *ts >= cutoff);
+                total_removed += original_len - entry.value().len();
+            }
+            index.index.retain(|_, entries| !entries.is_empty());
+        }
+
+        if total_removed > 0 {
+            tracing::info!(
+                "Cleaned up {} expired temporal index entries (TTL: {}s)",
+                total_removed,
+                TEMPORAL_HISTORY_TTL_SECONDS
+            );
+        }
+
+        total_removed
+    }
+
+    pub fn check_state_table_capacity(&self, state_id: u32) -> Option<CapacityWarning> {
+        let state = self.states.get(&state_id)?;
+
+        if state.is_at_capacity() {
+            Some(CapacityWarning {
+                current_entries: state.data.len(),
+                max_entries: state.config.max_entries,
+                entries_over_limit: state.entries_over_limit(),
+            })
+        } else {
+            None
+        }
     }
 
     /// Drop the oldest pending update across all PDAs

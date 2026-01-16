@@ -2,6 +2,8 @@ import type { Update, RichUpdate, Subscription, UnsubscribeFn } from './types';
 import type { EntityStore } from './store';
 import type { SubscriptionRegistry } from './subscription';
 
+const MAX_QUEUE_SIZE = 1000;
+
 type UpdateQueueItem<T> = {
   update: Update<T>;
   resolve: () => void;
@@ -37,6 +39,9 @@ export function createUpdateStream<T>(
           waitingResolve = null;
           resolve({ value: typedUpdate, done: false });
         } else {
+          if (queue.length >= MAX_QUEUE_SIZE) {
+            queue.shift();
+          }
           queue.push({
             update: typedUpdate,
             resolve: () => {},
@@ -112,6 +117,9 @@ export function createRichUpdateStream<T>(
           waitingResolve = null;
           resolve({ value: typedUpdate, done: false });
         } else {
+          if (queue.length >= MAX_QUEUE_SIZE) {
+            queue.shift();
+          }
           queue.push({
             update: typedUpdate,
             resolve: () => {},
