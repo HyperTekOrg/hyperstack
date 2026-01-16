@@ -306,6 +306,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 {
                     let slot = raw_update.slot;
                     let account = raw_update.account.as_ref().unwrap();
+                    let write_version = account.write_version;
                     let signature = bs58::encode(account.txn_signature.as_ref().unwrap()).into_string();
                     // Record event received for health monitoring
                     if let Some(ref health) = self.health_monitor {
@@ -376,6 +377,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                 event_type.to_string(),
                                 event_value,
                                 slot,
+                                write_version,
                                 signature,
                             ) {
                                 tracing::warn!("Failed to queue account update: {}", e);
@@ -391,8 +393,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                     let mutations_result = {
                         let mut vm = self.vm.lock().unwrap();
 
-                        // Create update context with slot and signature
-                        let context = hyperstack_interpreter::UpdateContext::new(slot, signature.clone());
+                        let context = hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
 
                         vm.process_event_with_context(&self.bytecode, event_value, event_type, Some(&context))
                             .map_err(|e| e.to_string())
@@ -427,8 +428,8 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 async fn handle(&self, value: &parsers::#instruction_enum_name, raw_update: &yellowstone_vixen_core::instruction::InstructionUpdate)
                     -> yellowstone_vixen::HandlerResult<()>
                 {
-                    // Extract and log slot, signature, and accounts from shared field in raw_update
                     let slot = raw_update.shared.slot;
+                    let txn_index = raw_update.shared.txn_index;
                     let signature = bs58::encode(&raw_update.shared.signature).into_string();
 
                     // Record event received for health monitoring
@@ -460,8 +461,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                     let mutations_result = {
                         let mut vm = self.vm.lock().unwrap();
 
-                        // Create update context with slot and signature
-                        let context = hyperstack_interpreter::UpdateContext::new(slot, signature.clone());
+                        let context = hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
 
                         let mut result = vm.process_event_with_context(&bytecode, event_value.clone(), event_type, Some(&context))
                             .map_err(|e| e.to_string());
@@ -626,11 +626,9 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
 
                                 // Reprocess any pending updates that were queued
                                 if !pending_updates.is_empty() {
-                                    for (idx, update) in pending_updates.into_iter().enumerate() {
-                                        // Resolve the primary key using PDA reverse lookup
+                                    for (_idx, update) in pending_updates.into_iter().enumerate() {
                                         let resolved_key = vm.try_pda_reverse_lookup(0, "default_pda_lookup", &update.pda_address);
 
-                                        // Inject the resolved key into the account data
                                         let mut account_data = update.account_data;
                                         if let Some(key) = resolved_key {
                                             if let Some(obj) = account_data.as_object_mut() {
@@ -638,24 +636,21 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                             }
                                         }
 
-                                        // Create update context with slot and signature
-                                        let update_context = hyperstack_interpreter::UpdateContext::with_timestamp(
+                                        let update_context = hyperstack_interpreter::UpdateContext::new_account(
                                             update.slot,
                                             update.signature.clone(),
-                                            update.queued_at
+                                            update.write_version,
                                         );
 
                                         match vm.process_event_with_context(&bytecode, account_data, &update.account_type, Some(&update_context)) {
                                             Ok(pending_mutations) => {
                                                 if !pending_mutations.is_empty() {
-                                                    // Merge pending mutations into the main result
                                                     if let Ok(ref mut mutations) = result {
                                                         mutations.extend(pending_mutations);
                                                     }
-                                                } else {
                                                 }
                                             }
-                                            Err(e) => {
+                                            Err(_e) => {
                                             }
                                         }
                                     }

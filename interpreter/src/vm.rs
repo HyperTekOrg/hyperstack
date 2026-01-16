@@ -23,6 +23,12 @@ pub struct UpdateContext {
     /// Unix timestamp (seconds since epoch)
     /// If not provided, will default to current system time when accessed
     pub timestamp: Option<i64>,
+    /// Write version for account updates (monotonically increasing per account within a slot)
+    /// Used for staleness detection to reject out-of-order updates
+    pub write_version: Option<u64>,
+    /// Transaction index for instruction updates (orders transactions within a slot)
+    /// Used for staleness detection to reject out-of-order updates
+    pub txn_index: Option<u64>,
     /// Additional custom metadata that can be added without breaking changes
     pub metadata: HashMap<String, Value>,
 }
@@ -34,6 +40,8 @@ impl UpdateContext {
             slot: Some(slot),
             signature: Some(signature),
             timestamp: None,
+            write_version: None,
+            txn_index: None,
             metadata: HashMap::new(),
         }
     }
@@ -44,6 +52,32 @@ impl UpdateContext {
             slot: Some(slot),
             signature: Some(signature),
             timestamp: Some(timestamp),
+            write_version: None,
+            txn_index: None,
+            metadata: HashMap::new(),
+        }
+    }
+
+    /// Create context for account updates with write_version for staleness detection
+    pub fn new_account(slot: u64, signature: String, write_version: u64) -> Self {
+        Self {
+            slot: Some(slot),
+            signature: Some(signature),
+            timestamp: None,
+            write_version: Some(write_version),
+            txn_index: None,
+            metadata: HashMap::new(),
+        }
+    }
+
+    /// Create context for instruction updates with txn_index for staleness detection
+    pub fn new_instruction(slot: u64, signature: String, txn_index: u64) -> Self {
+        Self {
+            slot: Some(slot),
+            signature: Some(signature),
+            timestamp: None,
+            write_version: None,
+            txn_index: Some(txn_index),
             metadata: HashMap::new(),
         }
     }
@@ -307,6 +341,7 @@ pub struct PendingAccountUpdate {
     pub pda_address: String,
     pub account_data: Value,
     pub slot: u64,
+    pub write_version: u64,
     pub signature: String,
     pub queued_at: i64,
 }
@@ -363,6 +398,12 @@ impl Default for StateTableConfig {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct VersionKey {
+    primary_key: String,
+    event_type: String,
+}
+
 #[derive(Debug)]
 pub struct StateTable {
     pub data: DashMap<Value, Value>,
@@ -371,6 +412,8 @@ pub struct StateTable {
     pub temporal_indexes: HashMap<String, TemporalIndex>,
     pub pda_reverse_lookups: HashMap<String, PdaReverseLookup>,
     pub pending_updates: DashMap<String, Vec<PendingAccountUpdate>>,
+    /// Tracks (slot, ordering_value) per (primary_key, event_type) for staleness detection
+    version_tracker: DashMap<VersionKey, (u64, u64)>,
     config: StateTableConfig,
 }
 
@@ -440,6 +483,41 @@ impl StateTable {
         }
         result
     }
+
+    /// Check if an update is fresh and update the version tracker.
+    /// Returns true if the update should be processed (is fresh).
+    /// Returns false if the update is stale and should be skipped.
+    ///
+    /// Comparison is lexicographic on (slot, ordering_value):
+    /// (100, 5) > (100, 3) > (99, 999)
+    pub fn is_fresh_update(
+        &self,
+        primary_key: &Value,
+        event_type: &str,
+        slot: u64,
+        ordering_value: u64,
+    ) -> bool {
+        let key = VersionKey {
+            primary_key: primary_key.to_string(),
+            event_type: event_type.to_string(),
+        };
+
+        let dominated = self
+            .version_tracker
+            .get(&key)
+            .map(|entry| {
+                let (last_slot, last_version) = *entry;
+                (slot, ordering_value) <= (last_slot, last_version)
+            })
+            .unwrap_or(false);
+
+        if dominated {
+            return false;
+        }
+
+        self.version_tracker.insert(key, (slot, ordering_value));
+        true
+    }
 }
 
 impl VmContext {
@@ -464,6 +542,7 @@ impl VmContext {
                 temporal_indexes: HashMap::new(),
                 pda_reverse_lookups: HashMap::new(),
                 pending_updates: DashMap::new(),
+                version_tracker: DashMap::new(),
                 config: StateTableConfig::default(),
             },
         );
@@ -491,6 +570,7 @@ impl VmContext {
                 temporal_indexes: HashMap::new(),
                 pda_reverse_lookups: HashMap::new(),
                 pending_updates: DashMap::new(),
+                version_tracker: DashMap::new(),
                 config: state_config,
             },
         );
@@ -838,6 +918,7 @@ impl VmContext {
                             temporal_indexes: HashMap::new(),
                             pda_reverse_lookups: HashMap::new(),
                             pending_updates: DashMap::new(),
+                            version_tracker: DashMap::new(),
                             config: StateTableConfig::default(),
                         });
                     let state = self
@@ -860,6 +941,21 @@ impl VmContext {
                                 key,
                                 event_type
                             );
+                        }
+                    } else if let Some(ctx) = &self.current_context {
+                        // Check for staleness if we have a valid key and version info
+                        let ordering_value = ctx.write_version.or(ctx.txn_index);
+                        if let (Some(slot), Some(version)) = (ctx.slot, ordering_value) {
+                            if !state.is_fresh_update(key_value, event_type, slot, version) {
+                                tracing::debug!(
+                                    "Skipping stale update for key={}, event_type={}, slot={}, version={}",
+                                    key_value,
+                                    event_type,
+                                    slot,
+                                    version
+                                );
+                                return Ok(Vec::new());
+                            }
                         }
                     }
                     let value = state
@@ -2242,6 +2338,7 @@ impl VmContext {
         account_type: String,
         account_data: Value,
         slot: u64,
+        write_version: u64,
         signature: String,
     ) -> Result<()> {
         // Check if we've exceeded the global limit
@@ -2278,6 +2375,7 @@ impl VmContext {
             pda_address: pda_address.clone(),
             account_data,
             slot,
+            write_version,
             signature,
             queued_at: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

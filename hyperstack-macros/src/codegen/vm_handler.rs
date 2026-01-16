@@ -68,6 +68,7 @@ pub fn generate_vm_handler(
             ) -> yellowstone_vixen::HandlerResult<()> {
                 let slot = raw_update.slot;
                 let account = raw_update.account.as_ref().unwrap();
+                let write_version = account.write_version;
                 let signature = bs58::encode(account.txn_signature.as_ref().unwrap()).into_string();
 
                 // Record event received for health monitoring
@@ -133,6 +134,7 @@ pub fn generate_vm_handler(
                             event_type.to_string(),
                             event_value,
                             slot,
+                            write_version,
                             signature,
                         ) {
                             // Silently ignore queue errors
@@ -148,8 +150,7 @@ pub fn generate_vm_handler(
                 let mutations_result = {
                     let mut vm = self.vm.lock().unwrap();
 
-                    // Create update context with slot and signature
-                    let context = hyperstack_interpreter::UpdateContext::new(slot, signature.clone());
+                    let context = hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
 
                     vm.process_event_with_context(&self.bytecode, event_value, event_type, Some(&context))
                         .map_err(|e| e.to_string())
@@ -179,8 +180,8 @@ pub fn generate_vm_handler(
                 value: &parsers::#instruction_enum,
                 raw_update: &yellowstone_vixen_core::instruction::InstructionUpdate,
             ) -> yellowstone_vixen::HandlerResult<()> {
-                // Extract and log slot, signature, and accounts from shared field in raw_update
                 let slot = raw_update.shared.slot;
+                let txn_index = raw_update.shared.txn_index;
                 let signature = bs58::encode(&raw_update.shared.signature).into_string();
 
                 // Record event received for health monitoring
@@ -199,8 +200,7 @@ pub fn generate_vm_handler(
                 let mutations_result = {
                     let mut vm = self.vm.lock().unwrap();
 
-                    // Create update context with slot and signature
-                    let context = hyperstack_interpreter::UpdateContext::new(slot, signature.clone());
+                    let context = hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
 
                     let mut result = vm.process_event_with_context(&bytecode, event_value.clone(), event_type, Some(&context))
                         .map_err(|e| e.to_string());
@@ -353,10 +353,10 @@ pub fn generate_vm_handler(
                                         }
                                     }
 
-                                    let update_context = hyperstack_interpreter::UpdateContext::with_timestamp(
+                                    let update_context = hyperstack_interpreter::UpdateContext::new_account(
                                         update.slot,
                                         update.signature.clone(),
-                                        update.queued_at,
+                                        update.write_version,
                                     );
 
                                     match vm.process_event_with_context(&bytecode, account_data, &update.account_type, Some(&update_context)) {
