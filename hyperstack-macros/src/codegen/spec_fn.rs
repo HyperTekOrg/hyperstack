@@ -60,6 +60,11 @@ pub fn generate_spec_function(
             let mut attempt = 0u32;
             let mut backoff = reconnection_config.initial_delay;
 
+            // Create bytecode and VM once, outside the reconnection loop
+            // This preserves VM cache state across reconnections
+            let bytecode = std::sync::Arc::new(create_multi_entity_bytecode());
+            let vm = std::sync::Arc::new(std::sync::Mutex::new(hyperstack_interpreter::vm::VmContext::new()));
+
             loop {
                 let from_slot = {
                     let last = slot_tracker.get();
@@ -83,9 +88,9 @@ pub fn generate_spec_function(
                     buffer: BufferConfig::default(),
                 };
 
-                let bytecode = create_multi_entity_bytecode();
                 let handler = VmHandler::new(
-                    bytecode,
+                    vm.clone(),
+                    bytecode.clone(),
                     mutations_tx.clone(),
                     health_monitor.clone(),
                     slot_tracker.clone(),
@@ -110,12 +115,16 @@ pub fn generate_spec_function(
                     health.record_connection().await;
                 }
 
-                yellowstone_vixen::Runtime::<YellowstoneGrpcSource>::builder()
+                let result = yellowstone_vixen::Runtime::<YellowstoneGrpcSource>::builder()
                     .account(account_pipeline)
                     .instruction(instruction_pipeline)
                     .build(vixen_config)
-                    .run_async()
+                    .try_run_async()
                     .await;
+
+                if let Err(e) = result {
+                    tracing::error!("Vixen runtime error: {:?}", e);
+                }
 
                 attempt += 1;
 

@@ -44,14 +44,15 @@ pub fn generate_vm_handler(
 
         impl VmHandler {
             pub fn new(
-                bytecode: hyperstack_interpreter::compiler::MultiEntityBytecode,
+                vm: std::sync::Arc<std::sync::Mutex<hyperstack_interpreter::vm::VmContext>>,
+                bytecode: std::sync::Arc<hyperstack_interpreter::compiler::MultiEntityBytecode>,
                 mutations_tx: tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
                 health_monitor: Option<hyperstack_server::HealthMonitor>,
                 slot_tracker: hyperstack_server::SlotTracker,
             ) -> Self {
                 Self {
-                    vm: std::sync::Arc::new(std::sync::Mutex::new(hyperstack_interpreter::vm::VmContext::new())),
-                    bytecode: std::sync::Arc::new(bytecode),
+                    vm,
+                    bytecode,
                     mutations_tx,
                     health_monitor,
                     slot_tracker,
@@ -386,17 +387,29 @@ pub fn generate_vm_handler(
                             }
 
                             let stats = vm.get_memory_stats(0);
+                            eprintln!(
+                                "📊 [VM] entities: {}/{} | lookup: {}({}) | temporal: {}({}) | pda_rev: {}({}) | path_cache: {}",
+                                stats.state_table_entity_count,
+                                stats.state_table_max_entries,
+                                stats.lookup_index_count,
+                                stats.lookup_index_total_entries,
+                                stats.temporal_index_count,
+                                stats.temporal_index_total_entries,
+                                stats.pda_reverse_lookup_count,
+                                stats.pda_reverse_lookup_total_entries,
+                                stats.path_cache_size
+                            );
                             if stats.state_table_at_capacity {
-                                tracing::warn!(
-                                    "State table at capacity: {}/{} entities",
+                                eprintln!(
+                                    "⚠️  State table at capacity: {}/{} entities",
                                     stats.state_table_entity_count,
                                     stats.state_table_max_entries
                                 );
                             }
                             if let Some(ref pending) = stats.pending_queue_stats {
-                                if pending.total_updates > 100 {
-                                    tracing::warn!(
-                                        "Large pending queue: {} updates across {} PDAs (oldest: {}s, est memory: {}KB)",
+                                if pending.total_updates > 0 {
+                                    eprintln!(
+                                        "📊 [VM PENDING] {} updates across {} PDAs (oldest: {}s, est memory: {}KB)",
                                         pending.total_updates,
                                         pending.unique_pdas,
                                         pending.oldest_age_seconds,

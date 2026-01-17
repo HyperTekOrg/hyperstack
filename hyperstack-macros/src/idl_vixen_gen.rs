@@ -226,49 +226,26 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
             let mut attempt = 0u32;
             let mut backoff = reconnection_config.initial_delay;
 
-            loop {
-                let from_slot = {
-                    let last = slot_tracker.get();
-                    if last > 0 { Some(last) } else { None }
-                };
+            // Create bytecode and VM once, outside the reconnection loop
+            // This preserves VM cache state across reconnections
+            let bytecode = create_multi_entity_bytecode();
 
-                if from_slot.is_some() {
-                    tracing::info!("Resuming from slot {}", from_slot.unwrap());
-                }
-
-                let vixen_config = VixenConfig {
-                    source: YellowstoneGrpcConfig {
-                        endpoint: endpoint.clone(),
-                        x_token: x_token.clone(),
-                        timeout: 60,
-                        commitment_level: None,
-                        from_slot,
-                        accept_compression: None,
-                        max_decoding_message_size: None,
-                    },
-                    buffer: BufferConfig::default(),
-                };
-
-                let bytecode = create_multi_entity_bytecode();
-
-                if attempt == 0 {
-                    tracing::info!("🔍 Bytecode Handler Details:");
-                    for (entity_name, entity_bytecode) in &bytecode.entities {
-                        tracing::info!("   Entity: {}", entity_name);
-                        for (event_type, handler_opcodes) in &entity_bytecode.handlers {
-                            tracing::info!("      {} -> {} opcodes", event_type, handler_opcodes.len());
-                            if event_type == "BuyIxState" {
-                                tracing::info!("         Opcode types:");
-                                for (idx, opcode) in handler_opcodes.iter().enumerate() {
-                                    tracing::info!("            [{}] {:?}", idx, opcode);
-                                }
-                            }
+            tracing::info!("🔍 Bytecode Handler Details:");
+            for (entity_name, entity_bytecode) in &bytecode.entities {
+                tracing::info!("   Entity: {}", entity_name);
+                for (event_type, handler_opcodes) in &entity_bytecode.handlers {
+                    tracing::info!("      {} -> {} opcodes", event_type, handler_opcodes.len());
+                    if event_type == "BuyIxState" {
+                        tracing::info!("         Opcode types:");
+                        for (idx, opcode) in handler_opcodes.iter().enumerate() {
+                            tracing::info!("            [{}] {:?}", idx, opcode);
                         }
                     }
                 }
+            }
 
-                let vm = Arc::new(Mutex::new(hyperstack_interpreter::vm::VmContext::new()));
-                let bytecode_arc = Arc::new(bytecode);
+            let vm = Arc::new(Mutex::new(hyperstack_interpreter::vm::VmContext::new()));
+            let bytecode_arc = Arc::new(bytecode);
 
             #[derive(Clone)]
             struct VmHandler {
@@ -299,6 +276,29 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                         .finish()
                 }
             }
+
+            loop {
+                let from_slot = {
+                    let last = slot_tracker.get();
+                    if last > 0 { Some(last) } else { None }
+                };
+
+                if from_slot.is_some() {
+                    tracing::info!("Resuming from slot {}", from_slot.unwrap());
+                }
+
+                let vixen_config = VixenConfig {
+                    source: YellowstoneGrpcConfig {
+                        endpoint: endpoint.clone(),
+                        x_token: x_token.clone(),
+                        timeout: 60,
+                        commitment_level: None,
+                        from_slot,
+                        accept_compression: None,
+                        max_decoding_message_size: None,
+                    },
+                    buffer: BufferConfig::default(),
+                };
 
             impl yellowstone_vixen::Handler<parsers::#state_enum_name, yellowstone_vixen_core::AccountUpdate> for VmHandler {
                 async fn handle(&self, value: &parsers::#state_enum_name, raw_update: &yellowstone_vixen_core::AccountUpdate)
@@ -670,17 +670,29 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                 }
 
                                 let stats = vm.get_memory_stats(0);
+                                eprintln!(
+                                    "📊 [VM] entities: {}/{} | lookup: {}({}) | temporal: {}({}) | pda_rev: {}({}) | path_cache: {}",
+                                    stats.state_table_entity_count,
+                                    stats.state_table_max_entries,
+                                    stats.lookup_index_count,
+                                    stats.lookup_index_total_entries,
+                                    stats.temporal_index_count,
+                                    stats.temporal_index_total_entries,
+                                    stats.pda_reverse_lookup_count,
+                                    stats.pda_reverse_lookup_total_entries,
+                                    stats.path_cache_size
+                                );
                                 if stats.state_table_at_capacity {
-                                    tracing::warn!(
-                                        "State table at capacity: {}/{} entities",
+                                    eprintln!(
+                                        "⚠️  State table at capacity: {}/{} entities",
                                         stats.state_table_entity_count,
                                         stats.state_table_max_entries
                                     );
                                 }
                                 if let Some(ref pending) = stats.pending_queue_stats {
-                                    if pending.total_updates > 100 {
-                                        tracing::warn!(
-                                            "Large pending queue: {} updates across {} PDAs (oldest: {}s, est memory: {}KB)",
+                                    if pending.total_updates > 0 {
+                                        eprintln!(
+                                            "📊 [VM PENDING] {} updates across {} PDAs (oldest: {}s, est memory: {}KB)",
                                             pending.total_updates,
                                             pending.unique_pdas,
                                             pending.oldest_age_seconds,
@@ -749,12 +761,16 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 health.record_connection().await;
             }
 
-            yellowstone_vixen::Runtime::<YellowstoneGrpcSource>::builder()
+            let result = yellowstone_vixen::Runtime::<YellowstoneGrpcSource>::builder()
                 .account(account_pipeline)
                 .instruction(instruction_pipeline)
                 .build(vixen_config)
-                .run_async()
+                .try_run_async()
                 .await;
+
+            if let Err(e) = result {
+                tracing::error!("Vixen runtime error: {:?}", e);
+            }
 
             attempt += 1;
 

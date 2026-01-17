@@ -9,6 +9,7 @@ use crate::websocket::WebSocketServer;
 use crate::Spec;
 use anyhow::Result;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc;
 use tracing::{error, info};
 
@@ -183,6 +184,46 @@ impl Runtime {
             None
         };
 
+        let bus_cleanup_handle = {
+            let bus = bus_manager.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(60));
+                loop {
+                    interval.tick().await;
+                    let state_cleaned = bus.cleanup_stale_state_buses().await;
+                    let list_cleaned = bus.cleanup_stale_list_buses().await;
+                    if state_cleaned > 0 || list_cleaned > 0 {
+                        let (state_count, list_count) = bus.bus_counts().await;
+                        info!(
+                            "Bus cleanup: removed {} state, {} list buses. Current: {} state, {} list",
+                            state_cleaned, list_cleaned, state_count, list_count
+                        );
+                    }
+                }
+            })
+        };
+
+        let stats_handle = {
+            let bus = bus_manager.clone();
+            let cache = entity_cache.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(30));
+                loop {
+                    interval.tick().await;
+                    let (state_buses, list_buses) = bus.bus_counts().await;
+                    let cache_stats = cache.stats().await;
+                    eprintln!(
+                        "📊 [STATS] buses: {} state, {} list | cache: {} views, {} entities | top: {:?}",
+                        state_buses,
+                        list_buses,
+                        cache_stats.view_count,
+                        cache_stats.total_entities,
+                        cache_stats.top_views
+                    );
+                }
+            })
+        };
+
         info!("HyperStack runtime is running. Press Ctrl+C to stop.");
 
         // Wait for any task to complete (or handle shutdown signals)
@@ -216,6 +257,12 @@ impl Runtime {
                 }
             } => {
                 info!("HTTP health server task completed");
+            }
+            _ = bus_cleanup_handle => {
+                info!("Bus cleanup task completed");
+            }
+            _ = stats_handle => {
+                info!("Stats reporter task completed");
             }
             _ = shutdown_signal() => {}
         }

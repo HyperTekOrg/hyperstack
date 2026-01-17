@@ -81,6 +81,46 @@ impl BusManager {
             let _ = tx.send(message);
         }
     }
+
+    pub async fn cleanup_stale_state_buses(&self) -> usize {
+        let mut buses = self.state_buses.write().await;
+        let before = buses.len();
+
+        buses.retain(|_, tx| tx.receiver_count() > 0);
+
+        let removed = before - buses.len();
+        if removed > 0 {
+            tracing::debug!(
+                "Cleaned up {} stale state buses, {} remaining",
+                removed,
+                buses.len()
+            );
+        }
+        removed
+    }
+
+    pub async fn cleanup_stale_list_buses(&self) -> usize {
+        let mut buses = self.list_buses.write().await;
+        let before = buses.len();
+
+        buses.retain(|_, tx| tx.receiver_count() > 0);
+
+        let removed = before - buses.len();
+        if removed > 0 {
+            tracing::debug!(
+                "Cleaned up {} stale list buses, {} remaining",
+                removed,
+                buses.len()
+            );
+        }
+        removed
+    }
+
+    pub async fn bus_counts(&self) -> (usize, usize) {
+        let state_count = self.state_buses.read().await.len();
+        let list_count = self.list_buses.read().await.len();
+        (state_count, list_count)
+    }
 }
 
 impl Default for BusManager {

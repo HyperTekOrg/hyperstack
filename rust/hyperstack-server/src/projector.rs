@@ -59,9 +59,14 @@ impl Projector {
         debug!("Projector started");
 
         while let Some(mutations) = self.mutations_rx.recv().await {
-            for mutation in mutations.iter() {
+            // Consume mutations by value to avoid cloning patch data
+            for mutation in mutations.into_iter() {
                 #[cfg(feature = "otel")]
                 let start = Instant::now();
+
+                // Capture export before consuming mutation
+                #[cfg(feature = "otel")]
+                let export = mutation.export.clone();
 
                 if let Err(e) = self.process_mutation(mutation).await {
                     error!("Failed to process mutation: {}", e);
@@ -71,7 +76,7 @@ impl Projector {
                 if let Some(ref metrics) = self.metrics {
                     let latency_ms = start.elapsed().as_secs_f64() * 1000.0;
                     metrics.record_projector_latency(latency_ms);
-                    metrics.record_mutation_processed(&mutation.export);
+                    metrics.record_mutation_processed(&export);
                 }
             }
         }
@@ -81,46 +86,56 @@ impl Projector {
 
     async fn process_mutation(
         &self,
-        mutation: &hyperstack_interpreter::Mutation,
+        mutation: hyperstack_interpreter::Mutation,
     ) -> anyhow::Result<()> {
         let specs = self.view_index.by_export(&mutation.export);
 
-        for spec in specs {
-            if !self.should_process(spec, mutation) {
-                continue;
-            }
+        if specs.is_empty() {
+            return Ok(());
+        }
 
-            let frame = self.create_frame(spec, mutation).await?;
-            let key = mutation
-                .key
-                .as_str()
-                .map(|s| s.to_string())
-                .or_else(|| mutation.key.as_u64().map(|n| n.to_string()))
-                .or_else(|| mutation.key.as_i64().map(|n| n.to_string()))
-                .or_else(|| {
-                    mutation.key.as_array().and_then(|arr| {
-                        let bytes: Vec<u8> = arr
-                            .iter()
-                            .filter_map(|v| v.as_u64().map(|n| n as u8))
-                            .collect();
-                        if bytes.len() == arr.len() {
-                            Some(hex::encode(&bytes))
-                        } else {
-                            None
-                        }
-                    })
-                })
-                .unwrap_or_else(|| mutation.key.to_string());
+        let key = Self::extract_key(&mutation.key);
+        let hyperstack_interpreter::Mutation { mut patch, .. } = mutation;
 
-            self.entity_cache.upsert(&spec.id, &key, &frame.data).await;
+        let matching_specs: SmallVec<[&ViewSpec; 4]> = specs
+            .iter()
+            .filter(|spec| spec.filters.matches(&key))
+            .collect();
+
+        let match_count = matching_specs.len();
+        if match_count == 0 {
+            return Ok(());
+        }
+
+        for (i, spec) in matching_specs.into_iter().enumerate() {
+            let is_last = i == match_count - 1;
+            let patch_data = if is_last {
+                std::mem::take(&mut patch)
+            } else {
+                patch.clone()
+            };
+
+            let projected = spec.projection.apply(patch_data);
+
+            let frame = Frame {
+                mode: spec.mode,
+                export: spec.id.clone(),
+                op: "patch",
+                key: key.clone(),
+                data: projected,
+            };
+
+            let payload = Arc::new(Bytes::from(serde_json::to_vec(&frame)?));
+
+            self.entity_cache.upsert(&spec.id, &key, frame.data).await;
 
             let message = Arc::new(BusMessage {
                 key: key.clone(),
                 entity: spec.id.clone(),
-                payload: Arc::new(Bytes::from(serde_json::to_vec(&frame)?)),
+                payload,
             });
 
-            self.publish_frame(spec, mutation, message).await;
+            self.publish_frame(spec, message).await;
 
             #[cfg(feature = "otel")]
             if let Some(ref metrics) = self.metrics {
@@ -136,48 +151,28 @@ impl Projector {
         Ok(())
     }
 
-    fn should_process(&self, spec: &ViewSpec, mutation: &hyperstack_interpreter::Mutation) -> bool {
-        let key = mutation
-            .key
-            .as_str()
+    fn extract_key(key: &serde_json::Value) -> String {
+        key.as_str()
             .map(|s| s.to_string())
-            .or_else(|| mutation.key.as_u64().map(|n| n.to_string()))
-            .or_else(|| mutation.key.as_i64().map(|n| n.to_string()))
-            .unwrap_or_else(|| mutation.key.to_string());
-
-        spec.filters.matches(&key)
+            .or_else(|| key.as_u64().map(|n| n.to_string()))
+            .or_else(|| key.as_i64().map(|n| n.to_string()))
+            .or_else(|| {
+                key.as_array().and_then(|arr| {
+                    let bytes: Vec<u8> = arr
+                        .iter()
+                        .filter_map(|v| v.as_u64().map(|n| n as u8))
+                        .collect();
+                    if bytes.len() == arr.len() {
+                        Some(hex::encode(&bytes))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .unwrap_or_else(|| key.to_string())
     }
 
-    async fn create_frame(
-        &self,
-        spec: &ViewSpec,
-        mutation: &hyperstack_interpreter::Mutation,
-    ) -> anyhow::Result<Frame> {
-        let key = mutation
-            .key
-            .as_str()
-            .map(|s| s.to_string())
-            .or_else(|| mutation.key.as_u64().map(|n| n.to_string()))
-            .or_else(|| mutation.key.as_i64().map(|n| n.to_string()))
-            .unwrap_or_else(|| mutation.key.to_string());
-
-        let projected = spec.projection.apply(mutation.patch.clone());
-
-        Ok(Frame {
-            mode: spec.mode,
-            export: spec.id.clone(),
-            op: "patch",
-            key,
-            data: projected,
-        })
-    }
-
-    async fn publish_frame(
-        &self,
-        spec: &ViewSpec,
-        _mutation: &hyperstack_interpreter::Mutation,
-        message: Arc<BusMessage>,
-    ) {
+    async fn publish_frame(&self, spec: &ViewSpec, message: Arc<BusMessage>) {
         match spec.mode {
             Mode::State => {
                 self.bus_manager

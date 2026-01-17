@@ -11,11 +11,8 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-/// Default maximum entities per view
-const DEFAULT_MAX_ENTITIES_PER_VIEW: usize = 1000;
-
-/// Default maximum array length before LRU eviction
-const DEFAULT_MAX_ARRAY_LENGTH: usize = 100;
+const DEFAULT_MAX_ENTITIES_PER_VIEW: usize = 100;
+const DEFAULT_MAX_ARRAY_LENGTH: usize = 20;
 
 /// Configuration for the entity cache
 #[derive(Debug, Clone)]
@@ -61,14 +58,7 @@ impl EntityCache {
         }
     }
 
-    /// Upsert a patch into the cache, merging with existing entity data.
-    ///
-    /// This method:
-    /// 1. Gets or creates the LRU cache for the view
-    /// 2. Gets or creates an empty entity for the key
-    /// 3. Deep merges the patch into the entity (appending arrays)
-    /// 4. Updates the LRU cache (promoting the key to most recently used)
-    pub async fn upsert(&self, view_id: &str, key: &str, patch: &Value) {
+    pub async fn upsert(&self, view_id: &str, key: &str, patch: Value) {
         let mut caches = self.caches.write().await;
 
         let cache = caches.entry(view_id.to_string()).or_insert_with(|| {
@@ -78,17 +68,14 @@ impl EntityCache {
             )
         });
 
-        // Get existing entity or create empty object
-        let entity = cache
-            .get_mut(key)
-            .map(|v| v.clone())
-            .unwrap_or_else(|| Value::Object(serde_json::Map::new()));
+        let max_array_length = self.config.max_array_length;
 
-        // Deep merge patch into entity
-        let merged = deep_merge_with_array_append(entity, patch, self.config.max_array_length);
-
-        // Put back into cache (this also promotes to most recently used)
-        cache.put(key.to_string(), merged);
+        if let Some(entity) = cache.get_mut(key) {
+            deep_merge_in_place(entity, patch, max_array_length);
+        } else {
+            let new_entity = truncate_arrays_if_needed(patch, max_array_length);
+            cache.put(key.to_string(), new_entity);
+        }
     }
 
     /// Get all cached entities for a view.
@@ -131,11 +118,37 @@ impl EntityCache {
         }
     }
 
-    /// Clear all caches
     pub async fn clear_all(&self) {
         let mut caches = self.caches.write().await;
         caches.clear();
     }
+
+    pub async fn stats(&self) -> CacheStats {
+        let caches = self.caches.read().await;
+        let mut total_entities = 0;
+        let mut views = Vec::new();
+
+        for (view_id, cache) in caches.iter() {
+            let count = cache.len();
+            total_entities += count;
+            views.push((view_id.clone(), count));
+        }
+
+        views.sort_by(|a, b| b.1.cmp(&a.1));
+
+        CacheStats {
+            view_count: caches.len(),
+            total_entities,
+            top_views: views.into_iter().take(5).collect(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct CacheStats {
+    pub view_count: usize,
+    pub total_entities: usize,
+    pub top_views: Vec<(String, usize)>,
 }
 
 impl Default for EntityCache {
@@ -144,52 +157,32 @@ impl Default for EntityCache {
     }
 }
 
-/// Deep merge two JSON values, appending arrays instead of replacing them.
-///
-/// For arrays, new elements are appended to the end. If the array exceeds
-/// `max_array_length`, the oldest elements (from the beginning) are removed.
-fn deep_merge_with_array_append(base: Value, patch: &Value, max_array_length: usize) -> Value {
+fn deep_merge_in_place(base: &mut Value, patch: Value, max_array_length: usize) {
     match (base, patch) {
-        // Both are objects: recursively merge
-        (Value::Object(mut base_map), Value::Object(patch_map)) => {
+        (Value::Object(base_map), Value::Object(patch_map)) => {
             for (key, patch_value) in patch_map {
-                let merged = if let Some(base_value) = base_map.remove(key) {
-                    deep_merge_with_array_append(base_value, patch_value, max_array_length)
+                if let Some(base_value) = base_map.get_mut(&key) {
+                    deep_merge_in_place(base_value, patch_value, max_array_length);
                 } else {
-                    // Key doesn't exist in base, use patch value (with array truncation if needed)
-                    truncate_arrays_if_needed(patch_value.clone(), max_array_length)
-                };
-                base_map.insert(key.clone(), merged);
+                    base_map.insert(
+                        key,
+                        truncate_arrays_if_needed(patch_value, max_array_length),
+                    );
+                }
             }
-            Value::Object(base_map)
         }
 
-        // Both are arrays: append and apply LRU eviction
-        (Value::Array(mut base_arr), Value::Array(patch_arr)) => {
-            // Append new elements
-            base_arr.extend(patch_arr.iter().cloned());
-
-            // LRU eviction: remove oldest elements from beginning if over limit
+        (Value::Array(base_arr), Value::Array(patch_arr)) => {
+            base_arr.extend(patch_arr);
             if base_arr.len() > max_array_length {
                 let excess = base_arr.len() - max_array_length;
                 base_arr.drain(0..excess);
             }
-
-            Value::Array(base_arr)
         }
 
-        // Patch has array but base doesn't: use patch array (truncated if needed)
-        (_, Value::Array(patch_arr)) => {
-            let mut arr = patch_arr.clone();
-            if arr.len() > max_array_length {
-                let excess = arr.len() - max_array_length;
-                arr.drain(0..excess);
-            }
-            Value::Array(arr)
+        (base, patch_value) => {
+            *base = truncate_arrays_if_needed(patch_value, max_array_length);
         }
-
-        // Default: patch value overwrites base
-        (_, patch_value) => patch_value.clone(),
     }
 }
 
@@ -228,7 +221,7 @@ mod tests {
         let cache = EntityCache::new();
 
         cache
-            .upsert("tokens/list", "abc123", &json!({"name": "Test Token"}))
+            .upsert("tokens/list", "abc123", json!({"name": "Test Token"}))
             .await;
 
         let entity = cache.get("tokens/list", "abc123").await;
@@ -240,24 +233,22 @@ mod tests {
     async fn test_deep_merge_objects() {
         let cache = EntityCache::new();
 
-        // First patch: set initial data
         cache
             .upsert(
                 "tokens/list",
                 "abc123",
-                &json!({
+                json!({
                     "id": "abc123",
                     "metrics": {"volume": 100}
                 }),
             )
             .await;
 
-        // Second patch: add more data
         cache
             .upsert(
                 "tokens/list",
                 "abc123",
-                &json!({
+                json!({
                     "metrics": {"trades": 50}
                 }),
             )
@@ -273,23 +264,21 @@ mod tests {
     async fn test_array_append() {
         let cache = EntityCache::new();
 
-        // First patch with initial events
         cache
             .upsert(
                 "tokens/list",
                 "abc123",
-                &json!({
+                json!({
                     "events": [{"type": "buy", "amount": 100}]
                 }),
             )
             .await;
 
-        // Second patch appends to events
         cache
             .upsert(
                 "tokens/list",
                 "abc123",
-                &json!({
+                json!({
                     "events": [{"type": "sell", "amount": 50}]
                 }),
             )
@@ -310,12 +299,11 @@ mod tests {
         };
         let cache = EntityCache::with_config(config);
 
-        // Add 5 events (exceeds max of 3)
         cache
             .upsert(
                 "tokens/list",
                 "abc123",
-                &json!({
+                json!({
                     "events": [
                         {"id": 1}, {"id": 2}, {"id": 3}, {"id": 4}, {"id": 5}
                     ]
@@ -326,7 +314,6 @@ mod tests {
         let entity = cache.get("tokens/list", "abc123").await.unwrap();
         let events = entity["events"].as_array().unwrap();
 
-        // Should only have last 3 (oldest evicted)
         assert_eq!(events.len(), 3);
         assert_eq!(events[0]["id"], 3);
         assert_eq!(events[1]["id"], 4);
@@ -341,23 +328,21 @@ mod tests {
         };
         let cache = EntityCache::with_config(config);
 
-        // Start with 2 events
         cache
             .upsert(
                 "tokens/list",
                 "abc123",
-                &json!({
+                json!({
                     "events": [{"id": 1}, {"id": 2}]
                 }),
             )
             .await;
 
-        // Append 2 more (total 4, exceeds max 3)
         cache
             .upsert(
                 "tokens/list",
                 "abc123",
-                &json!({
+                json!({
                     "events": [{"id": 3}, {"id": 4}]
                 }),
             )
@@ -366,7 +351,6 @@ mod tests {
         let entity = cache.get("tokens/list", "abc123").await.unwrap();
         let events = entity["events"].as_array().unwrap();
 
-        // Should have last 3
         assert_eq!(events.len(), 3);
         assert_eq!(events[0]["id"], 2);
         assert_eq!(events[1]["id"], 3);
@@ -381,12 +365,10 @@ mod tests {
         };
         let cache = EntityCache::with_config(config);
 
-        // Add 3 entities (exceeds max of 2)
-        cache.upsert("tokens/list", "key1", &json!({"id": 1})).await;
-        cache.upsert("tokens/list", "key2", &json!({"id": 2})).await;
-        cache.upsert("tokens/list", "key3", &json!({"id": 3})).await;
+        cache.upsert("tokens/list", "key1", json!({"id": 1})).await;
+        cache.upsert("tokens/list", "key2", json!({"id": 2})).await;
+        cache.upsert("tokens/list", "key3", json!({"id": 3})).await;
 
-        // key1 should be evicted (LRU)
         assert!(cache.get("tokens/list", "key1").await.is_none());
         assert!(cache.get("tokens/list", "key2").await.is_some());
         assert!(cache.get("tokens/list", "key3").await.is_some());
@@ -396,8 +378,8 @@ mod tests {
     async fn test_get_all() {
         let cache = EntityCache::new();
 
-        cache.upsert("tokens/list", "key1", &json!({"id": 1})).await;
-        cache.upsert("tokens/list", "key2", &json!({"id": 2})).await;
+        cache.upsert("tokens/list", "key1", json!({"id": 1})).await;
+        cache.upsert("tokens/list", "key2", json!({"id": 2})).await;
 
         let all = cache.get_all("tokens/list").await;
         assert_eq!(all.len(), 2);
@@ -408,10 +390,10 @@ mod tests {
         let cache = EntityCache::new();
 
         cache
-            .upsert("tokens/list", "key1", &json!({"type": "token"}))
+            .upsert("tokens/list", "key1", json!({"type": "token"}))
             .await;
         cache
-            .upsert("games/list", "key1", &json!({"type": "game"}))
+            .upsert("games/list", "key1", json!({"type": "game"}))
             .await;
 
         let token = cache.get("tokens/list", "key1").await.unwrap();
@@ -422,8 +404,8 @@ mod tests {
     }
 
     #[test]
-    fn test_deep_merge_function() {
-        let base = json!({
+    fn test_deep_merge_in_place() {
+        let mut base = json!({
             "a": 1,
             "b": {"c": 2},
             "arr": [1, 2]
@@ -435,12 +417,12 @@ mod tests {
             "e": 4
         });
 
-        let result = deep_merge_with_array_append(base, &patch, 100);
+        deep_merge_in_place(&mut base, patch, 100);
 
-        assert_eq!(result["a"], 1);
-        assert_eq!(result["b"]["c"], 2);
-        assert_eq!(result["b"]["d"], 3);
-        assert_eq!(result["arr"].as_array().unwrap().len(), 3);
-        assert_eq!(result["e"], 4);
+        assert_eq!(base["a"], 1);
+        assert_eq!(base["b"]["c"], 2);
+        assert_eq!(base["b"]["d"], 3);
+        assert_eq!(base["arr"].as_array().unwrap().len(), 3);
+        assert_eq!(base["e"], 4);
     }
 }
