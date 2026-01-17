@@ -138,25 +138,25 @@ pub trait ComputedFieldsEvaluator {
 }
 
 // Pending queue configuration
-const MAX_PENDING_UPDATES_TOTAL: usize = 1_000;
-const MAX_PENDING_UPDATES_PER_PDA: usize = 10;
+const MAX_PENDING_UPDATES_TOTAL: usize = 5_000;
+const MAX_PENDING_UPDATES_PER_PDA: usize = 50;
 const PENDING_UPDATE_TTL_SECONDS: i64 = 300; // 5 minutes
 
 // Temporal index configuration - prevents unbounded history growth
 const TEMPORAL_HISTORY_TTL_SECONDS: i64 = 300; // 5 minutes, matches pending queue TTL
-const MAX_TEMPORAL_ENTRIES_PER_KEY: usize = 100;
+const MAX_TEMPORAL_ENTRIES_PER_KEY: usize = 500;
 
-// State table configuration - aligned with downstream EntityCache (100 per view)
-const DEFAULT_MAX_STATE_TABLE_ENTRIES: usize = 1_000;
-const DEFAULT_MAX_ARRAY_LENGTH: usize = 20;
+// State table configuration - aligned with downstream EntityCache (500 per view)
+const DEFAULT_MAX_STATE_TABLE_ENTRIES: usize = 5_000;
+const DEFAULT_MAX_ARRAY_LENGTH: usize = 100;
 
-const DEFAULT_MAX_LOOKUP_INDEX_ENTRIES: usize = 1_000;
+const DEFAULT_MAX_LOOKUP_INDEX_ENTRIES: usize = 5_000;
 
-const DEFAULT_MAX_VERSION_TRACKER_ENTRIES: usize = 1_000;
+const DEFAULT_MAX_VERSION_TRACKER_ENTRIES: usize = 5_000;
 
-const DEFAULT_MAX_TEMPORAL_INDEX_KEYS: usize = 1_000;
+const DEFAULT_MAX_TEMPORAL_INDEX_KEYS: usize = 5_000;
 
-const DEFAULT_MAX_PDA_REVERSE_LOOKUP_ENTRIES: usize = 1_000;
+const DEFAULT_MAX_PDA_REVERSE_LOOKUP_ENTRIES: usize = 5_000;
 
 /// Estimate the size of a JSON value in bytes
 fn estimate_json_size(value: &Value) -> usize {

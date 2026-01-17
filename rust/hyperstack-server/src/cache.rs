@@ -11,8 +11,8 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-const DEFAULT_MAX_ENTITIES_PER_VIEW: usize = 100;
-const DEFAULT_MAX_ARRAY_LENGTH: usize = 20;
+const DEFAULT_MAX_ENTITIES_PER_VIEW: usize = 500;
+const DEFAULT_MAX_ARRAY_LENGTH: usize = 100;
 
 /// Configuration for the entity cache
 #[derive(Debug, Clone)]
