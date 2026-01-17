@@ -16,6 +16,7 @@ export default defineConfig({
       // Component overrides for custom design
       components: {
         Sidebar: "./src/components/overrides/Sidebar.astro",
+        EditLink: "./src/components/overrides/EditLink.astro",
       },
       // Autogenerate sidebar from directory structure
       // Contributors only need to add frontmatter to control ordering
