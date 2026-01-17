@@ -138,17 +138,25 @@ pub trait ComputedFieldsEvaluator {
 }
 
 // Pending queue configuration
-const MAX_PENDING_UPDATES_TOTAL: usize = 10_000;
+const MAX_PENDING_UPDATES_TOTAL: usize = 1_000;
 const MAX_PENDING_UPDATES_PER_PDA: usize = 10;
 const PENDING_UPDATE_TTL_SECONDS: i64 = 300; // 5 minutes
 
 // Temporal index configuration - prevents unbounded history growth
 const TEMPORAL_HISTORY_TTL_SECONDS: i64 = 300; // 5 minutes, matches pending queue TTL
-const MAX_TEMPORAL_ENTRIES_PER_KEY: usize = 1000; // Hard cap as safety net
+const MAX_TEMPORAL_ENTRIES_PER_KEY: usize = 100;
 
-// State table configuration
-const DEFAULT_MAX_STATE_TABLE_ENTRIES: usize = 100_000;
-const DEFAULT_MAX_ARRAY_LENGTH: usize = 100;
+// State table configuration - aligned with downstream EntityCache (100 per view)
+const DEFAULT_MAX_STATE_TABLE_ENTRIES: usize = 1_000;
+const DEFAULT_MAX_ARRAY_LENGTH: usize = 20;
+
+const DEFAULT_MAX_LOOKUP_INDEX_ENTRIES: usize = 1_000;
+
+const DEFAULT_MAX_VERSION_TRACKER_ENTRIES: usize = 1_000;
+
+const DEFAULT_MAX_TEMPORAL_INDEX_KEYS: usize = 1_000;
+
+const DEFAULT_MAX_PDA_REVERSE_LOOKUP_ENTRIES: usize = 1_000;
 
 /// Estimate the size of a JSON value in bytes
 fn estimate_json_size(value: &Value) -> usize {
@@ -200,7 +208,39 @@ pub struct VmContext {
 
 #[derive(Debug)]
 pub struct LookupIndex {
-    index: DashMap<Value, Value>,
+    index: std::sync::Mutex<LruCache<String, Value>>,
+}
+
+impl LookupIndex {
+    pub fn new() -> Self {
+        Self::with_capacity(DEFAULT_MAX_LOOKUP_INDEX_ENTRIES)
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        LookupIndex {
+            index: std::sync::Mutex::new(LruCache::new(
+                NonZeroUsize::new(capacity).expect("capacity must be > 0"),
+            )),
+        }
+    }
+
+    pub fn lookup(&self, lookup_value: &Value) -> Option<Value> {
+        let key = value_to_cache_key(lookup_value);
+        self.index.lock().unwrap().get(&key).cloned()
+    }
+
+    pub fn insert(&self, lookup_value: Value, primary_key: Value) {
+        let key = value_to_cache_key(&lookup_value);
+        self.index.lock().unwrap().put(key, primary_key);
+    }
+
+    pub fn len(&self) -> usize {
+        self.index.lock().unwrap().len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.index.lock().unwrap().is_empty()
+    }
 }
 
 impl Default for LookupIndex {
@@ -209,33 +249,19 @@ impl Default for LookupIndex {
     }
 }
 
-impl LookupIndex {
-    pub fn new() -> Self {
-        LookupIndex {
-            index: DashMap::new(),
-        }
-    }
-
-    pub fn lookup(&self, lookup_value: &Value) -> Option<Value> {
-        self.index.get(lookup_value).map(|v| v.clone())
-    }
-
-    pub fn insert(&self, lookup_value: Value, primary_key: Value) {
-        self.index.insert(lookup_value, primary_key);
-    }
-
-    pub fn len(&self) -> usize {
-        self.index.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.index.is_empty()
+fn value_to_cache_key(value: &Value) -> String {
+    match value {
+        Value::String(s) => s.clone(),
+        Value::Number(n) => n.to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Null => "null".to_string(),
+        _ => serde_json::to_string(value).unwrap_or_else(|_| "unknown".to_string()),
     }
 }
 
 #[derive(Debug)]
 pub struct TemporalIndex {
-    index: DashMap<Value, Vec<(Value, i64)>>,
+    index: std::sync::Mutex<LruCache<String, Vec<(Value, i64)>>>,
 }
 
 impl Default for TemporalIndex {
@@ -246,17 +272,24 @@ impl Default for TemporalIndex {
 
 impl TemporalIndex {
     pub fn new() -> Self {
+        Self::with_capacity(DEFAULT_MAX_TEMPORAL_INDEX_KEYS)
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
         TemporalIndex {
-            index: DashMap::new(),
+            index: std::sync::Mutex::new(LruCache::new(
+                NonZeroUsize::new(capacity).expect("capacity must be > 0"),
+            )),
         }
     }
 
     pub fn lookup(&self, lookup_value: &Value, timestamp: i64) -> Option<Value> {
-        if let Some(entries) = self.index.get(lookup_value) {
-            let entries_vec = entries.value();
-            for i in (0..entries_vec.len()).rev() {
-                if entries_vec[i].1 <= timestamp {
-                    return Some(entries_vec[i].0.clone());
+        let key = value_to_cache_key(lookup_value);
+        let mut cache = self.index.lock().unwrap();
+        if let Some(entries) = cache.get(&key) {
+            for i in (0..entries.len()).rev() {
+                if entries[i].1 <= timestamp {
+                    return Some(entries[i].0.clone());
                 }
             }
         }
@@ -264,9 +297,10 @@ impl TemporalIndex {
     }
 
     pub fn lookup_latest(&self, lookup_value: &Value) -> Option<Value> {
-        if let Some(entries) = self.index.get(lookup_value) {
-            let entries_vec = entries.value();
-            if let Some(last) = entries_vec.last() {
+        let key = value_to_cache_key(lookup_value);
+        let mut cache = self.index.lock().unwrap();
+        if let Some(entries) = cache.get(&key) {
+            if let Some(last) = entries.last() {
                 return Some(last.0.clone());
             }
         }
@@ -274,35 +308,50 @@ impl TemporalIndex {
     }
 
     pub fn insert(&self, lookup_value: Value, primary_key: Value, timestamp: i64) {
-        let lookup_key = lookup_value.clone();
-        self.index
-            .entry(lookup_value)
-            .or_default()
-            .push((primary_key, timestamp));
+        let key = value_to_cache_key(&lookup_value);
+        let mut cache = self.index.lock().unwrap();
 
-        if let Some(mut entries) = self.index.get_mut(&lookup_key) {
-            entries.sort_by_key(|(_, ts)| *ts);
+        let entries = cache.get_or_insert_mut(key, Vec::new);
+        entries.push((primary_key, timestamp));
+        entries.sort_by_key(|(_, ts)| *ts);
 
-            let cutoff = timestamp - TEMPORAL_HISTORY_TTL_SECONDS;
-            entries.retain(|(_, ts)| *ts >= cutoff);
+        let cutoff = timestamp - TEMPORAL_HISTORY_TTL_SECONDS;
+        entries.retain(|(_, ts)| *ts >= cutoff);
 
-            if entries.len() > MAX_TEMPORAL_ENTRIES_PER_KEY {
-                let excess = entries.len() - MAX_TEMPORAL_ENTRIES_PER_KEY;
-                entries.drain(0..excess);
-            }
+        if entries.len() > MAX_TEMPORAL_ENTRIES_PER_KEY {
+            let excess = entries.len() - MAX_TEMPORAL_ENTRIES_PER_KEY;
+            entries.drain(0..excess);
         }
     }
 
     pub fn len(&self) -> usize {
-        self.index.len()
+        self.index.lock().unwrap().len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.index.is_empty()
+        self.index.lock().unwrap().is_empty()
     }
 
     pub fn total_entries(&self) -> usize {
-        self.index.iter().map(|entry| entry.value().len()).sum()
+        self.index
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(_, entries)| entries.len())
+            .sum()
+    }
+
+    pub fn cleanup_expired(&self, cutoff_timestamp: i64) -> usize {
+        let mut cache = self.index.lock().unwrap();
+        let mut total_removed = 0;
+
+        for (_, entries) in cache.iter_mut() {
+            let original_len = entries.len();
+            entries.retain(|(_, ts)| *ts >= cutoff_timestamp);
+            total_removed += original_len - entries.len();
+        }
+
+        total_removed
     }
 }
 
@@ -418,10 +467,47 @@ impl Default for StateTableConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct VersionKey {
-    primary_key: String,
-    event_type: String,
+#[derive(Debug)]
+pub struct VersionTracker {
+    cache: std::sync::Mutex<LruCache<String, (u64, u64)>>,
+}
+
+impl VersionTracker {
+    pub fn new() -> Self {
+        Self::with_capacity(DEFAULT_MAX_VERSION_TRACKER_ENTRIES)
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        VersionTracker {
+            cache: std::sync::Mutex::new(LruCache::new(
+                NonZeroUsize::new(capacity).expect("capacity must be > 0"),
+            )),
+        }
+    }
+
+    fn make_key(primary_key: &Value, event_type: &str) -> String {
+        format!("{}:{}", primary_key, event_type)
+    }
+
+    pub fn get(&self, primary_key: &Value, event_type: &str) -> Option<(u64, u64)> {
+        let key = Self::make_key(primary_key, event_type);
+        self.cache.lock().unwrap().get(&key).copied()
+    }
+
+    pub fn insert(&self, primary_key: &Value, event_type: &str, slot: u64, ordering_value: u64) {
+        let key = Self::make_key(primary_key, event_type);
+        self.cache.lock().unwrap().put(key, (slot, ordering_value));
+    }
+
+    pub fn len(&self) -> usize {
+        self.cache.lock().unwrap().len()
+    }
+}
+
+impl Default for VersionTracker {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Debug)]
@@ -432,8 +518,7 @@ pub struct StateTable {
     pub temporal_indexes: HashMap<String, TemporalIndex>,
     pub pda_reverse_lookups: HashMap<String, PdaReverseLookup>,
     pub pending_updates: DashMap<String, Vec<PendingAccountUpdate>>,
-    /// Tracks (slot, ordering_value) per (primary_key, event_type) for staleness detection
-    version_tracker: DashMap<VersionKey, (u64, u64)>,
+    version_tracker: VersionTracker,
     config: StateTableConfig,
 }
 
@@ -517,25 +602,18 @@ impl StateTable {
         slot: u64,
         ordering_value: u64,
     ) -> bool {
-        let key = VersionKey {
-            primary_key: primary_key.to_string(),
-            event_type: event_type.to_string(),
-        };
-
         let dominated = self
             .version_tracker
-            .get(&key)
-            .map(|entry| {
-                let (last_slot, last_version) = *entry;
-                (slot, ordering_value) <= (last_slot, last_version)
-            })
+            .get(primary_key, event_type)
+            .map(|(last_slot, last_version)| (slot, ordering_value) <= (last_slot, last_version))
             .unwrap_or(false);
 
         if dominated {
             return false;
         }
 
-        self.version_tracker.insert(key, (slot, ordering_value));
+        self.version_tracker
+            .insert(primary_key, event_type, slot, ordering_value);
         true
     }
 }
@@ -562,7 +640,7 @@ impl VmContext {
                 temporal_indexes: HashMap::new(),
                 pda_reverse_lookups: HashMap::new(),
                 pending_updates: DashMap::new(),
-                version_tracker: DashMap::new(),
+                version_tracker: VersionTracker::new(),
                 config: StateTableConfig::default(),
             },
         );
@@ -590,7 +668,7 @@ impl VmContext {
                 temporal_indexes: HashMap::new(),
                 pda_reverse_lookups: HashMap::new(),
                 pending_updates: DashMap::new(),
-                version_tracker: DashMap::new(),
+                version_tracker: VersionTracker::new(),
                 config: state_config,
             },
         );
@@ -938,7 +1016,7 @@ impl VmContext {
                             temporal_indexes: HashMap::new(),
                             pda_reverse_lookups: HashMap::new(),
                             pending_updates: DashMap::new(),
-                            version_tracker: DashMap::new(),
+                            version_tracker: VersionTracker::new(),
                             config: StateTableConfig::default(),
                         });
                     let state = self
@@ -1564,7 +1642,9 @@ impl VmContext {
                         let pda_lookup = state
                             .pda_reverse_lookups
                             .entry(lookup_name.clone())
-                            .or_insert_with(|| PdaReverseLookup::new(10000));
+                            .or_insert_with(|| {
+                                PdaReverseLookup::new(DEFAULT_MAX_PDA_REVERSE_LOOKUP_ENTRIES)
+                            });
 
                         pda_lookup.insert(pda_str.to_string(), pk_str.to_string());
 
@@ -1581,7 +1661,11 @@ impl VmContext {
                                 let pda_lookup = state
                                     .pda_reverse_lookups
                                     .entry(lookup_name.clone())
-                                    .or_insert_with(|| PdaReverseLookup::new(10000));
+                                    .or_insert_with(|| {
+                                        PdaReverseLookup::new(
+                                            DEFAULT_MAX_PDA_REVERSE_LOOKUP_ENTRIES,
+                                        )
+                                    });
 
                                 pda_lookup.insert(pda_str.to_string(), pk_num.to_string());
 
@@ -2233,7 +2317,7 @@ impl VmContext {
         let lookup = state
             .pda_reverse_lookups
             .entry(lookup_name.to_string())
-            .or_insert_with(|| PdaReverseLookup::new(10000));
+            .or_insert_with(|| PdaReverseLookup::new(DEFAULT_MAX_PDA_REVERSE_LOOKUP_ENTRIES));
 
         tracing::info!(
             "📝 Registering PDA reverse lookup: {} -> {} (lookup: {})",
@@ -2534,12 +2618,7 @@ impl VmContext {
         let mut total_removed = 0;
 
         for (_, index) in state.temporal_indexes.iter_mut() {
-            for mut entry in index.index.iter_mut() {
-                let original_len = entry.value().len();
-                entry.value_mut().retain(|(_, ts)| *ts >= cutoff);
-                total_removed += original_len - entry.value().len();
-            }
-            index.index.retain(|_, entries| !entries.is_empty());
+            total_removed += index.cleanup_expired(cutoff);
         }
 
         if total_removed > 0 {
