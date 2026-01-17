@@ -58,6 +58,8 @@ impl Projector {
     pub async fn run(mut self) {
         debug!("Projector started");
 
+        let mut json_buffer = Vec::with_capacity(4096);
+
         while let Some(mutations) = self.mutations_rx.recv().await {
             // Consume mutations by value to avoid cloning patch data
             for mutation in mutations.into_iter() {
@@ -68,7 +70,7 @@ impl Projector {
                 #[cfg(feature = "otel")]
                 let export = mutation.export.clone();
 
-                if let Err(e) = self.process_mutation(mutation).await {
+                if let Err(e) = self.process_mutation(mutation, &mut json_buffer).await {
                     error!("Failed to process mutation: {}", e);
                 }
 
@@ -87,6 +89,7 @@ impl Projector {
     async fn process_mutation(
         &self,
         mutation: hyperstack_interpreter::Mutation,
+        json_buffer: &mut Vec<u8>,
     ) -> anyhow::Result<()> {
         let specs = self.view_index.by_export(&mutation.export);
 
@@ -125,7 +128,9 @@ impl Projector {
                 data: projected,
             };
 
-            let payload = Arc::new(Bytes::from(serde_json::to_vec(&frame)?));
+            json_buffer.clear();
+            serde_json::to_writer(&mut *json_buffer, &frame)?;
+            let payload = Arc::new(Bytes::copy_from_slice(json_buffer));
 
             self.entity_cache.upsert(&spec.id, &key, frame.data).await;
 

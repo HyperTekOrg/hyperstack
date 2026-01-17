@@ -138,25 +138,25 @@ pub trait ComputedFieldsEvaluator {
 }
 
 // Pending queue configuration
-const MAX_PENDING_UPDATES_TOTAL: usize = 5_000;
+const MAX_PENDING_UPDATES_TOTAL: usize = 2_500;
 const MAX_PENDING_UPDATES_PER_PDA: usize = 50;
 const PENDING_UPDATE_TTL_SECONDS: i64 = 300; // 5 minutes
 
 // Temporal index configuration - prevents unbounded history growth
 const TEMPORAL_HISTORY_TTL_SECONDS: i64 = 300; // 5 minutes, matches pending queue TTL
-const MAX_TEMPORAL_ENTRIES_PER_KEY: usize = 500;
+const MAX_TEMPORAL_ENTRIES_PER_KEY: usize = 250;
 
 // State table configuration - aligned with downstream EntityCache (500 per view)
-const DEFAULT_MAX_STATE_TABLE_ENTRIES: usize = 5_000;
+const DEFAULT_MAX_STATE_TABLE_ENTRIES: usize = 2_500;
 const DEFAULT_MAX_ARRAY_LENGTH: usize = 100;
 
-const DEFAULT_MAX_LOOKUP_INDEX_ENTRIES: usize = 5_000;
+const DEFAULT_MAX_LOOKUP_INDEX_ENTRIES: usize = 2_500;
 
-const DEFAULT_MAX_VERSION_TRACKER_ENTRIES: usize = 5_000;
+const DEFAULT_MAX_VERSION_TRACKER_ENTRIES: usize = 2_500;
 
-const DEFAULT_MAX_TEMPORAL_INDEX_KEYS: usize = 5_000;
+const DEFAULT_MAX_TEMPORAL_INDEX_KEYS: usize = 2_500;
 
-const DEFAULT_MAX_PDA_REVERSE_LOOKUP_ENTRIES: usize = 5_000;
+const DEFAULT_MAX_PDA_REVERSE_LOOKUP_ENTRIES: usize = 2_500;
 
 /// Estimate the size of a JSON value in bytes
 fn estimate_json_size(value: &Value) -> usize {
@@ -824,7 +824,7 @@ impl VmContext {
 
                         let mutations = self.execute_handler(
                             handler,
-                            event_value.clone(),
+                            &event_value,
                             event_type,
                             entity_bytecode.state_id,
                             entity_bytecode.computed_fields_evaluator.as_ref(),
@@ -870,7 +870,7 @@ impl VmContext {
     }
 
     #[cfg_attr(feature = "otel", instrument(
-        name = "vm.execute_handler", 
+        name = "vm.execute_handler",
         skip(self, handler, event_value, entity_evaluator),
         level = "debug",
         fields(
@@ -882,7 +882,7 @@ impl VmContext {
     fn execute_handler(
         &mut self,
         handler: &[OpCode],
-        event_value: Value,
+        event_value: &Value,
         event_type: &str,
         override_state_id: u32,
         entity_evaluator: Option<&Box<dyn Fn(&mut Value) -> Result<()> + Send + Sync>>,
@@ -937,18 +937,17 @@ impl VmContext {
                     pc += 1;
                 }
                 OpCode::CopyRegister { source, dest } => {
-                    let value = self.registers[*source].clone();
                     tracing::trace!(
                         "CopyRegister: source={}, dest={}, value={:?}",
                         source,
                         dest,
-                        if value.is_null() {
-                            "NULL".to_string()
+                        if self.registers[*source].is_null() {
+                            "NULL"
                         } else {
-                            format!("{}", value)
+                            "..."
                         }
                     );
-                    self.registers[*dest] = value;
+                    self.registers[*dest] = self.registers[*source].clone();
                     pc += 1;
                 }
                 OpCode::CopyRegisterIfNull { source, dest } => {
@@ -981,8 +980,11 @@ impl VmContext {
                     path,
                     value,
                 } => {
-                    let val = self.registers[*value].clone();
-                    tracing::trace!("SetField: path={}, value={:?}", path, val);
+                    tracing::trace!(
+                        "SetField: path={}, value={:?}",
+                        path,
+                        &self.registers[*value]
+                    );
 
                     self.set_field_auto_vivify(*object, path, *value)?;
                     dirty_fields.insert(path.to_string());
@@ -1780,7 +1782,8 @@ impl VmContext {
         let mut current = obj;
         for (i, segment) in segments.iter().enumerate() {
             if i == segments.len() - 1 {
-                current.insert(segment.to_string(), value.clone());
+                current.insert(segment.to_string(), value);
+                return Ok(());
             } else {
                 current
                     .entry(segment.to_string())
@@ -1814,13 +1817,13 @@ impl VmContext {
             .ok_or("Not an object")?;
 
         let mut current = obj;
-        let mut was_set = false;
         for (i, segment) in segments.iter().enumerate() {
             if i == segments.len() - 1 {
                 if !current.contains_key(segment) || current.get(segment).unwrap().is_null() {
-                    current.insert(segment.to_string(), value.clone());
-                    was_set = true;
+                    current.insert(segment.to_string(), value);
+                    return Ok(true);
                 }
+                return Ok(false);
             } else {
                 current
                     .entry(segment.to_string())
@@ -1832,7 +1835,7 @@ impl VmContext {
             }
         }
 
-        Ok(was_set)
+        Ok(false)
     }
 
     fn set_field_max(
@@ -1854,7 +1857,6 @@ impl VmContext {
             .ok_or("Not an object")?;
 
         let mut current = obj;
-        let mut was_updated = false;
         for (i, segment) in segments.iter().enumerate() {
             if i == segments.len() - 1 {
                 let should_update = if let Some(current_value) = current.get(segment) {
@@ -1884,9 +1886,10 @@ impl VmContext {
                 };
 
                 if should_update {
-                    current.insert(segment.to_string(), new_value.clone());
-                    was_updated = true;
+                    current.insert(segment.to_string(), new_value);
+                    return Ok(true);
                 }
+                return Ok(false);
             } else {
                 current
                     .entry(segment.to_string())
@@ -1898,7 +1901,7 @@ impl VmContext {
             }
         }
 
-        Ok(was_updated)
+        Ok(false)
     }
 
     fn set_field_sum(
@@ -1909,7 +1912,13 @@ impl VmContext {
     ) -> Result<bool> {
         let compiled = self.get_compiled_path(path);
         let segments = compiled.segments();
-        let new_value = self.registers[value_reg].clone();
+        let new_value = &self.registers[value_reg];
+
+        // Extract numeric value before borrowing object_reg mutably
+        let new_val_num = new_value
+            .as_i64()
+            .or_else(|| new_value.as_u64().map(|n| n as i64))
+            .ok_or("Sum requires numeric value")?;
 
         if !self.registers[object_reg].is_object() {
             self.registers[object_reg] = json!({});
@@ -1922,7 +1931,6 @@ impl VmContext {
         let mut current = obj;
         for (i, segment) in segments.iter().enumerate() {
             if i == segments.len() - 1 {
-                // Get current value (default to 0 if null/missing)
                 let current_val = current
                     .get(segment)
                     .and_then(|v| {
@@ -1933,12 +1941,6 @@ impl VmContext {
                         }
                     })
                     .unwrap_or(0);
-
-                // Add new value
-                let new_val_num = new_value
-                    .as_i64()
-                    .or_else(|| new_value.as_u64().map(|n| n as i64))
-                    .ok_or("Sum requires numeric value")?;
 
                 let sum = current_val + new_val_num;
                 current.insert(segment.to_string(), json!(sum));
@@ -2020,7 +2022,6 @@ impl VmContext {
             .ok_or("Not an object")?;
 
         let mut current = obj;
-        let mut was_updated = false;
         for (i, segment) in segments.iter().enumerate() {
             if i == segments.len() - 1 {
                 let should_update = if let Some(current_value) = current.get(segment) {
@@ -2050,9 +2051,10 @@ impl VmContext {
                 };
 
                 if should_update {
-                    current.insert(segment.to_string(), new_value.clone());
-                    was_updated = true;
+                    current.insert(segment.to_string(), new_value);
+                    return Ok(true);
                 }
+                return Ok(false);
             } else {
                 current
                     .entry(segment.to_string())
@@ -2064,7 +2066,7 @@ impl VmContext {
             }
         }
 
-        Ok(was_updated)
+        Ok(false)
     }
 
     fn get_field(&mut self, object_reg: Register, path: &str) -> Result<Value> {
