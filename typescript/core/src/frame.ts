@@ -7,6 +7,7 @@ export interface EntityFrame<T = unknown> {
   op: FrameOp;
   key: string;
   data: T;
+  append?: string[];
 }
 
 export interface SnapshotEntity<T = unknown> {

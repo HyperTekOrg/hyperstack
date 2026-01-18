@@ -59,6 +59,16 @@ impl EntityCache {
     }
 
     pub async fn upsert(&self, view_id: &str, key: &str, patch: Value) {
+        self.upsert_with_append(view_id, key, patch, &[]).await;
+    }
+
+    pub async fn upsert_with_append(
+        &self,
+        view_id: &str,
+        key: &str,
+        patch: Value,
+        append_paths: &[String],
+    ) {
         let mut caches = self.caches.write().await;
 
         let cache = caches.entry(view_id.to_string()).or_insert_with(|| {
@@ -71,7 +81,7 @@ impl EntityCache {
         let max_array_length = self.config.max_array_length;
 
         if let Some(entity) = cache.get_mut(key) {
-            deep_merge_in_place(entity, patch, max_array_length);
+            deep_merge_with_append(entity, patch, append_paths, max_array_length);
         } else {
             let new_entity = truncate_arrays_if_needed(patch, max_array_length);
             cache.put(key.to_string(), new_entity);
@@ -157,12 +167,39 @@ impl Default for EntityCache {
     }
 }
 
-fn deep_merge_in_place(base: &mut Value, patch: Value, max_array_length: usize) {
+fn deep_merge_with_append(
+    base: &mut Value,
+    patch: Value,
+    append_paths: &[String],
+    max_array_length: usize,
+) {
+    deep_merge_with_append_inner(base, patch, append_paths, "", max_array_length);
+}
+
+fn deep_merge_with_append_inner(
+    base: &mut Value,
+    patch: Value,
+    append_paths: &[String],
+    current_path: &str,
+    max_array_length: usize,
+) {
     match (base, patch) {
         (Value::Object(base_map), Value::Object(patch_map)) => {
             for (key, patch_value) in patch_map {
+                let child_path = if current_path.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{}.{}", current_path, key)
+                };
+
                 if let Some(base_value) = base_map.get_mut(&key) {
-                    deep_merge_in_place(base_value, patch_value, max_array_length);
+                    deep_merge_with_append_inner(
+                        base_value,
+                        patch_value,
+                        append_paths,
+                        &child_path,
+                        max_array_length,
+                    );
                 } else {
                     base_map.insert(
                         key,
@@ -173,10 +210,19 @@ fn deep_merge_in_place(base: &mut Value, patch: Value, max_array_length: usize) 
         }
 
         (Value::Array(base_arr), Value::Array(patch_arr)) => {
-            base_arr.extend(patch_arr);
-            if base_arr.len() > max_array_length {
-                let excess = base_arr.len() - max_array_length;
-                base_arr.drain(0..excess);
+            let should_append = append_paths.iter().any(|p| p == current_path);
+            if should_append {
+                base_arr.extend(patch_arr);
+                if base_arr.len() > max_array_length {
+                    let excess = base_arr.len() - max_array_length;
+                    base_arr.drain(0..excess);
+                }
+            } else {
+                *base_arr = patch_arr;
+                if base_arr.len() > max_array_length {
+                    let excess = base_arr.len() - max_array_length;
+                    base_arr.drain(0..excess);
+                }
             }
         }
 
@@ -275,12 +321,13 @@ mod tests {
             .await;
 
         cache
-            .upsert(
+            .upsert_with_append(
                 "tokens/list",
                 "abc123",
                 json!({
                     "events": [{"type": "sell", "amount": 50}]
                 }),
+                &["events".to_string()],
             )
             .await;
 
@@ -339,18 +386,20 @@ mod tests {
             .await;
 
         cache
-            .upsert(
+            .upsert_with_append(
                 "tokens/list",
                 "abc123",
                 json!({
                     "events": [{"id": 3}, {"id": 4}]
                 }),
+                &["events".to_string()],
             )
             .await;
 
         let entity = cache.get("tokens/list", "abc123").await.unwrap();
         let events = entity["events"].as_array().unwrap();
 
+        // [1,2] + [3,4] = [1,2,3,4] → LRU(3) = [2,3,4]
         assert_eq!(events.len(), 3);
         assert_eq!(events[0]["id"], 2);
         assert_eq!(events[1]["id"], 3);
@@ -404,7 +453,7 @@ mod tests {
     }
 
     #[test]
-    fn test_deep_merge_in_place() {
+    fn test_deep_merge_with_append() {
         let mut base = json!({
             "a": 1,
             "b": {"c": 2},
@@ -417,12 +466,44 @@ mod tests {
             "e": 4
         });
 
-        deep_merge_in_place(&mut base, patch, 100);
+        deep_merge_with_append(&mut base, patch, &["arr".to_string()], 100);
 
         assert_eq!(base["a"], 1);
         assert_eq!(base["b"]["c"], 2);
         assert_eq!(base["b"]["d"], 3);
         assert_eq!(base["arr"].as_array().unwrap().len(), 3);
         assert_eq!(base["e"], 4);
+    }
+
+    #[test]
+    fn test_deep_merge_replace_array() {
+        let mut base = json!({
+            "arr": [1, 2, 3]
+        });
+
+        let patch = json!({
+            "arr": [4, 5]
+        });
+
+        deep_merge_with_append(&mut base, patch, &[], 100);
+
+        assert_eq!(base["arr"].as_array().unwrap().len(), 2);
+        assert_eq!(base["arr"][0], 4);
+        assert_eq!(base["arr"][1], 5);
+    }
+
+    #[test]
+    fn test_deep_merge_nested_append() {
+        let mut base = json!({
+            "stats": {"events": [1, 2]}
+        });
+
+        let patch = json!({
+            "stats": {"events": [3]}
+        });
+
+        deep_merge_with_append(&mut base, patch, &["stats.events".to_string()], 100);
+
+        assert_eq!(base["stats"]["events"].as_array().unwrap().len(), 3);
     }
 }

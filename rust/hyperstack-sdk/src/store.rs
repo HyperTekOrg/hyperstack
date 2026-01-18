@@ -5,17 +5,34 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{broadcast, watch, RwLock};
 
-fn deep_merge(target: &mut Value, patch: &Value) {
+fn deep_merge_with_append(
+    target: &mut Value,
+    patch: &Value,
+    append_paths: &[String],
+    current_path: &str,
+) {
     match (target, patch) {
         (Value::Object(target_map), Value::Object(patch_map)) => {
             for (key, patch_value) in patch_map {
+                let field_path = if current_path.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{}.{}", current_path, key)
+                };
                 match target_map.get_mut(key) {
-                    Some(target_value) => deep_merge(target_value, patch_value),
+                    Some(target_value) => {
+                        deep_merge_with_append(target_value, patch_value, append_paths, &field_path)
+                    }
                     None => {
                         target_map.insert(key.clone(), patch_value.clone());
                     }
                 }
             }
+        }
+        (Value::Array(target_arr), Value::Array(patch_arr))
+            if append_paths.contains(&current_path.to_string()) =>
+        {
+            target_arr.extend(patch_arr.iter().cloned());
         }
         (target, patch) => {
             *target = patch.clone();
@@ -89,7 +106,7 @@ impl SharedStore {
                 let entry = view_map
                     .entry(frame.key.clone())
                     .or_insert_with(|| serde_json::json!({}));
-                deep_merge(entry, &frame.data);
+                deep_merge_with_append(entry, &frame.data, &frame.append, "");
                 (Some(entry.clone()), Some(raw_patch))
             }
             Operation::Delete => {

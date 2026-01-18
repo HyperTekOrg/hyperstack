@@ -272,6 +272,17 @@ impl DirtyTracker {
     pub fn changes(&self) -> &HashMap<String, FieldChange> {
         &self.changes
     }
+
+    /// Get paths that were appended (not replaced)
+    pub fn appended_paths(&self) -> Vec<String> {
+        self.changes
+            .iter()
+            .filter_map(|(path, change)| match change {
+                FieldChange::Appended(_) => Some(path.clone()),
+                FieldChange::Replaced => None,
+            })
+            .collect()
+    }
 }
 
 pub struct VmContext {
@@ -1381,6 +1392,7 @@ impl VmContext {
                     } else {
                         let patch =
                             self.extract_partial_state_with_tracker(*state, &dirty_tracker)?;
+                        let append = dirty_tracker.appended_paths();
                         tracing::debug!(
                             "   Patch structure: {}",
                             serde_json::to_string_pretty(&patch).unwrap_or_default()
@@ -1389,6 +1401,7 @@ impl VmContext {
                             export: entity_name.clone(),
                             key: primary_key,
                             patch,
+                            append,
                         };
                         output.push(mutation);
                     }

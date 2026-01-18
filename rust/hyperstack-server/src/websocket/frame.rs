@@ -21,6 +21,8 @@ pub struct Frame {
     pub op: &'static str,
     pub key: String,
     pub data: serde_json::Value,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub append: Vec<String>,
 }
 
 /// A single entity within a snapshot
@@ -62,6 +64,7 @@ mod tests {
             op: "upsert",
             key: "123".to_string(),
             data: serde_json::json!({}),
+            append: vec![],
         };
 
         assert_eq!(frame.entity(), "SettlementGame/list");
@@ -76,6 +79,7 @@ mod tests {
             op: "upsert",
             key: "123".to_string(),
             data: serde_json::json!({"gameId": "123"}),
+            append: vec![],
         };
 
         let json = serde_json::to_value(&frame).unwrap();

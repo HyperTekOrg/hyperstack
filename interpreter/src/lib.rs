@@ -55,6 +55,8 @@ pub struct Mutation {
     pub export: String,
     pub key: Value,
     pub patch: Value,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub append: Vec<String>,
 }
 
 /// Generic wrapper for event data that includes context metadata

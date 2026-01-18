@@ -4,6 +4,7 @@ export interface EntityFrame<T = unknown> {
   op: 'create' | 'upsert' | 'patch' | 'delete' | 'snapshot';
   key: string;
   data: T;
+  append?: string[];
 }
 
 export interface SnapshotEntity<T = unknown> {

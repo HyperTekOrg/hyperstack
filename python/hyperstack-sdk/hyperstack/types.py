@@ -1,6 +1,6 @@
 from enum import Enum
-from typing import Any, Dict, Optional
-from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+from dataclasses import dataclass, field
 
 
 class Mode(str, Enum):
@@ -31,6 +31,7 @@ class Frame:
     op: str
     key: str
     data: Dict[str, Any]
+    append: List[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Frame":
@@ -40,6 +41,7 @@ class Frame:
             op=data["op"],
             key=data["key"],
             data=data.get("data", {}),
+            append=data.get("append", []),
         )
 
 

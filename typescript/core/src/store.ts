@@ -6,7 +6,12 @@ function isObject(item: unknown): item is Record<string, unknown> {
   return item !== null && typeof item === 'object' && !Array.isArray(item);
 }
 
-function deepMerge<T>(target: T, source: Partial<T>): T {
+function deepMergeWithAppend<T>(
+  target: T,
+  source: Partial<T>,
+  appendPaths: string[],
+  currentPath = ''
+): T {
   if (!isObject(target) || !isObject(source)) {
     return source as T;
   }
@@ -16,9 +21,21 @@ function deepMerge<T>(target: T, source: Partial<T>): T {
   for (const key in source) {
     const sourceValue = source[key];
     const targetValue = result[key];
+    const fieldPath = currentPath ? `${currentPath}.${key}` : key;
 
-    if (isObject(sourceValue) && isObject(targetValue)) {
-      result[key] = deepMerge(targetValue, sourceValue as Record<string, unknown>);
+    if (Array.isArray(sourceValue) && Array.isArray(targetValue)) {
+      if (appendPaths.includes(fieldPath)) {
+        result[key] = [...targetValue, ...sourceValue];
+      } else {
+        result[key] = sourceValue;
+      }
+    } else if (isObject(sourceValue) && isObject(targetValue)) {
+      result[key] = deepMergeWithAppend(
+        targetValue,
+        sourceValue as Record<string, unknown>,
+        appendPaths,
+        fieldPath
+      );
     } else {
       result[key] = sourceValue;
     }
@@ -89,7 +106,10 @@ export class EntityStore {
 
       case 'patch': {
         const existing = viewMap.get(frame.key);
-        const merged = existing ? deepMerge(existing, frame.data as Partial<unknown>) : frame.data;
+        const appendPaths = frame.append ?? [];
+        const merged = existing
+          ? deepMergeWithAppend(existing, frame.data as Partial<unknown>, appendPaths)
+          : frame.data;
         viewMap.set(frame.key, merged);
         this.notifyUpdate(viewPath, frame.key, {
           type: 'patch',

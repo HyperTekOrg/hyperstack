@@ -41,6 +41,8 @@ pub struct Frame {
     #[serde(default)]
     pub key: String,
     pub data: serde_json::Value,
+    #[serde(default)]
+    pub append: Vec<String>,
 }
 
 impl Frame {

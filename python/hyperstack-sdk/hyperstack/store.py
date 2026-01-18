@@ -100,23 +100,50 @@ class Store(Generic[T]):
             update = await self._update_queue.get()
             yield update
 
-    async def apply_patch(self, key: str, patch: Dict[str, Any]) -> None:
+    async def apply_patch(
+        self, key: str, patch: Dict[str, Any], append_paths: Optional[List[str]] = None
+    ) -> None:
+        if append_paths is None:
+            append_paths = []
         async with self._lock:
             if isinstance(self._data, dict):
-                # List/State mode: merge patch into dict entry
                 current = self._data.get(key, {})
                 if isinstance(current, dict):
-                    merged = {**current, **patch}
+                    merged = self._deep_merge_with_append(current, patch, append_paths)
                 else:
                     merged = patch
                 parsed_data = self._parse_data(merged)
                 self._data[key] = parsed_data
                 await self._notify_update(key, parsed_data)
             else:
-                # Append mode: just append
                 parsed_data = self._parse_data(patch)
                 self._data.append(parsed_data)
                 await self._notify_update(key, parsed_data)
+
+    def _deep_merge_with_append(
+        self,
+        target: Dict[str, Any],
+        source: Dict[str, Any],
+        append_paths: List[str],
+        current_path: str = "",
+    ) -> Dict[str, Any]:
+        result = {**target}
+        for key, source_value in source.items():
+            field_path = f"{current_path}.{key}" if current_path else key
+            target_value = result.get(key)
+
+            if isinstance(source_value, list) and isinstance(target_value, list):
+                if field_path in append_paths:
+                    result[key] = target_value + source_value
+                else:
+                    result[key] = source_value
+            elif isinstance(source_value, dict) and isinstance(target_value, dict):
+                result[key] = self._deep_merge_with_append(
+                    target_value, source_value, append_paths, field_path
+                )
+            else:
+                result[key] = source_value
+        return result
 
     async def apply_upsert(self, key: str, value: T) -> None:
         async with self._lock:
@@ -140,11 +167,11 @@ class Store(Generic[T]):
         if frame.op == "upsert":
             await self.apply_upsert(frame.key, frame.data)
         elif frame.op == "patch":
-            await self.apply_patch(frame.key, frame.data)
+            append_paths = getattr(frame, "append", []) or []
+            await self.apply_patch(frame.key, frame.data, append_paths)
         elif frame.op == "delete":
             await self.apply_delete(frame.key)
         else:
-            # Default to upsert for unknown operations
             await self.apply_upsert(frame.key, frame.data)
 
     async def _notify_update(self, key: str, data: T) -> None:

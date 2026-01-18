@@ -12,7 +12,16 @@ import {
   isSnapshotFrame
 } from './types';
 
-function deepMerge<T>(target: T, source: Partial<T>): T {
+function isObject(item: any): item is Record<string, any> {
+  return item && typeof item === 'object' && !Array.isArray(item);
+}
+
+function deepMergeWithAppend<T>(
+  target: T,
+  source: Partial<T>,
+  appendPaths: string[],
+  currentPath = ''
+): T {
   if (!isObject(target) || !isObject(source)) {
     return source as T;
   }
@@ -22,19 +31,27 @@ function deepMerge<T>(target: T, source: Partial<T>): T {
   for (const key in source) {
     const sourceValue = source[key];
     const targetValue = result[key];
+    const fieldPath = currentPath ? `${currentPath}.${key}` : key;
 
-    if (isObject(sourceValue) && isObject(targetValue)) {
-      result[key] = deepMerge(targetValue, sourceValue as any);
+    if (Array.isArray(sourceValue) && Array.isArray(targetValue)) {
+      if (appendPaths.includes(fieldPath)) {
+        result[key] = [...targetValue, ...sourceValue] as any;
+      } else {
+        result[key] = sourceValue as any;
+      }
+    } else if (isObject(sourceValue) && isObject(targetValue)) {
+      result[key] = deepMergeWithAppend(
+        targetValue,
+        sourceValue as any,
+        appendPaths,
+        fieldPath
+      );
     } else {
       result[key] = sourceValue as any;
     }
   }
 
   return result;
-}
-
-function isObject(item: any): item is Record<string, any> {
-  return item && typeof item === 'object' && !Array.isArray(item);
 }
 
 // Subscription key for tracking ref counts across components
@@ -127,8 +144,12 @@ export function createHyperStore(config: Partial<HyperSDKConfig> = {}) {
                 break;
               case 'patch':
                 const existing = entityMap.get(frame.key);
+                const appendPaths = frame.append ?? [];
                 if (existing && typeof existing === 'object' && typeof frame.data === 'object') {
-                  entityMap.set(frame.key, deepMerge(existing, frame.data as any));
+                  entityMap.set(
+                    frame.key,
+                    deepMergeWithAppend(existing, frame.data as any, appendPaths)
+                  );
                 } else {
                   entityMap.set(frame.key, frame.data);
                 }

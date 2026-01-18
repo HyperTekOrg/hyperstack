@@ -98,7 +98,9 @@ impl Projector {
         }
 
         let key = Self::extract_key(&mutation.key);
-        let hyperstack_interpreter::Mutation { mut patch, .. } = mutation;
+        let hyperstack_interpreter::Mutation {
+            mut patch, append, ..
+        } = mutation;
 
         let matching_specs: SmallVec<[&ViewSpec; 4]> = specs
             .iter()
@@ -126,13 +128,16 @@ impl Projector {
                 op: "patch",
                 key: key.clone(),
                 data: projected,
+                append: append.clone(),
             };
 
             json_buffer.clear();
             serde_json::to_writer(&mut *json_buffer, &frame)?;
             let payload = Arc::new(Bytes::copy_from_slice(json_buffer));
 
-            self.entity_cache.upsert(&spec.id, &key, frame.data).await;
+            self.entity_cache
+                .upsert_with_append(&spec.id, &key, frame.data.clone(), &frame.append)
+                .await;
 
             let message = Arc::new(BusMessage {
                 key: key.clone(),

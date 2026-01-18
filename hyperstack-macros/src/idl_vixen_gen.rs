@@ -517,7 +517,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                 }
 
                                 // Collect data from ctx before dropping it
-                                let dirty_fields: std::collections::HashSet<String> = ctx.dirty_fields().clone();
+                                let dirty_fields: std::collections::HashSet<String> = ctx.dirty_tracker().dirty_paths();
                                 let pending_updates = ctx.take_pending_updates();
 
                                 // Drop ctx to release the mutable borrows before we use vm again
@@ -619,6 +619,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                                         export: "Token".to_string(), // TODO: Get export name from event type
                                                         key: mint_value,
                                                         patch: patch.clone(),
+                                                        append: Vec::new(),
                                                     });
                                                 }
                                             }

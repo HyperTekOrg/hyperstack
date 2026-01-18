@@ -256,7 +256,7 @@ pub fn generate_vm_handler(
                             }
 
                             // Collect data from ctx before dropping it
-                            let dirty_fields: std::collections::HashSet<String> = ctx.dirty_fields().clone();
+                            let dirty_fields: std::collections::HashSet<String> = ctx.dirty_tracker().dirty_paths();
                             let pending_updates = ctx.take_pending_updates();
 
                             // Drop ctx to release the mutable borrows before we use vm again
@@ -337,6 +337,7 @@ pub fn generate_vm_handler(
                                                     export: #entity_name_lit.to_string(),
                                                     key: mint_value,
                                                     patch: patch.clone(),
+                                                    append: Vec::new(),
                                                 });
                                             }
                                         }
