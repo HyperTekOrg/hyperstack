@@ -1,21 +1,43 @@
 use super::subscription::Subscription;
-use anyhow::Result;
 use bytes::Bytes;
+use dashmap::DashMap;
 use futures_util::stream::SplitSink;
 use futures_util::SinkExt;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::mpsc;
 use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 pub type WebSocketSender = SplitSink<WebSocketStream<TcpStream>, Message>;
 
+/// Error type for send operations
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SendError {
+    /// Client not found in registry
+    ClientNotFound,
+    /// Client's message queue is full - client was disconnected
+    ClientBackpressured,
+    /// Client's channel is closed - client was disconnected
+    ClientDisconnected,
+}
+
+impl std::fmt::Display for SendError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SendError::ClientNotFound => write!(f, "client not found"),
+            SendError::ClientBackpressured => write!(f, "client backpressured and disconnected"),
+            SendError::ClientDisconnected => write!(f, "client disconnected"),
+        }
+    }
+}
+
+impl std::error::Error for SendError {}
+
 /// Information about a connected client
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ClientInfo {
     pub id: Uuid,
     pub subscription: Option<Subscription>,
@@ -42,10 +64,16 @@ impl ClientInfo {
     }
 }
 
-/// Manages all connected WebSocket clients
+/// Manages all connected WebSocket clients using lock-free DashMap.
+///
+/// Key design decisions:
+/// - Uses DashMap for lock-free concurrent access to client registry
+/// - Uses try_send instead of send to never block on slow clients
+/// - Disconnects clients that are backpressured (queue full) to prevent cascade failures
+/// - All public methods are non-blocking or use fine-grained per-key locks
 #[derive(Clone)]
 pub struct ClientManager {
-    clients: Arc<RwLock<HashMap<Uuid, ClientInfo>>>,
+    clients: Arc<DashMap<Uuid, ClientInfo>>,
     client_timeout: Duration,
     message_queue_size: usize,
 }
@@ -53,9 +81,9 @@ pub struct ClientManager {
 impl ClientManager {
     pub fn new() -> Self {
         Self {
-            clients: Arc::new(RwLock::new(HashMap::new())),
+            clients: Arc::new(DashMap::new()),
             client_timeout: Duration::from_secs(300),
-            message_queue_size: 1000,
+            message_queue_size: 512,
         }
     }
 
@@ -69,62 +97,115 @@ impl ClientManager {
         self
     }
 
-    /// Add a new client connection
-    pub async fn add_client(&self, client_id: Uuid, mut ws_sender: WebSocketSender) -> Result<()> {
+    /// Add a new client connection.
+    ///
+    /// Spawns a dedicated sender task for this client that reads from its mpsc channel
+    /// and writes to the WebSocket. If the WebSocket write fails, the client is automatically
+    /// removed from the registry.
+    pub fn add_client(&self, client_id: Uuid, mut ws_sender: WebSocketSender) {
         let (client_tx, mut client_rx) = mpsc::channel::<Message>(self.message_queue_size);
-
         let client_info = ClientInfo::new(client_id, client_tx);
 
-        // Spawn task to handle WebSocket sending for this client
         let clients_ref = self.clients.clone();
         tokio::spawn(async move {
-            // The client info struct is given client_tx. The below listens to this channel
-            // This gives us clean decoupling and handles backpressure without blocking
-            // We also get natural cleanup of failed clients without putting that complexity into
-            // the ClientInfo struct
             while let Some(message) = client_rx.recv().await {
                 if let Err(e) = ws_sender.send(message).await {
                     warn!("Failed to send message to client {}: {}", client_id, e);
-
-                    // Remove failed client
-                    clients_ref.write().await.remove(&client_id);
                     break;
                 }
             }
-
-            debug!("WebSocket sender for client {} stopped", client_id);
+            clients_ref.remove(&client_id);
+            debug!("WebSocket sender task for client {} stopped", client_id);
         });
 
-        // Register client
-        self.clients.write().await.insert(client_id, client_info);
+        self.clients.insert(client_id, client_info);
         info!("Client {} registered", client_id);
-
-        Ok(())
     }
 
-    pub async fn remove_client(&self, client_id: Uuid) {
-        if self.clients.write().await.remove(&client_id).is_some() {
+    /// Remove a client from the registry.
+    pub fn remove_client(&self, client_id: Uuid) {
+        if self.clients.remove(&client_id).is_some() {
             info!("Client {} removed", client_id);
         }
     }
 
-    pub async fn client_count(&self) -> usize {
-        self.clients.read().await.len()
+    /// Get the current number of connected clients.
+    ///
+    /// This is lock-free and returns an approximate count (may be slightly stale
+    /// under high concurrency, which is fine for max_clients checks).
+    pub fn client_count(&self) -> usize {
+        self.clients.len()
     }
 
-    pub async fn send_to_client(&self, client_id: Uuid, data: Arc<Bytes>) -> Result<()> {
-        let clients = self.clients.read().await;
-        if let Some(client) = clients.get(&client_id) {
-            let msg = Message::Binary((*data).clone());
-            client.sender.send(msg).await?;
+    /// Send data to a specific client (non-blocking).
+    ///
+    /// This method NEVER blocks. If the client's queue is full, the client is
+    /// considered too slow and is disconnected to prevent cascade failures.
+    /// Use this for live streaming updates.
+    ///
+    /// For initial snapshots where you expect to send many messages at once,
+    /// use `send_to_client_async` instead which will wait for queue space.
+    pub fn send_to_client(&self, client_id: Uuid, data: Arc<Bytes>) -> Result<(), SendError> {
+        let sender = {
+            let client = self
+                .clients
+                .get(&client_id)
+                .ok_or(SendError::ClientNotFound)?;
+            client.sender.clone()
+        };
+
+        let msg = Message::Binary((*data).clone());
+        match sender.try_send(msg) {
+            Ok(()) => Ok(()),
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                warn!(
+                    "Client {} backpressured (queue full), disconnecting",
+                    client_id
+                );
+                self.clients.remove(&client_id);
+                Err(SendError::ClientBackpressured)
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                debug!("Client {} channel closed", client_id);
+                self.clients.remove(&client_id);
+                Err(SendError::ClientDisconnected)
+            }
         }
-        Ok(())
     }
 
-    pub async fn update_subscription(&self, client_id: Uuid, subscription: Subscription) -> bool {
-        if let Some(client_info) = self.clients.write().await.get_mut(&client_id) {
-            client_info.subscription = Some(subscription);
-            client_info.update_last_seen();
+    /// Send data to a specific client (async, waits for queue space).
+    ///
+    /// This method will wait if the client's queue is full, allowing the client
+    /// time to catch up. Use this for initial snapshots where you need to send
+    /// many messages at once.
+    ///
+    /// For live streaming updates, use `send_to_client` instead which will
+    /// disconnect slow clients rather than blocking.
+    pub async fn send_to_client_async(
+        &self,
+        client_id: Uuid,
+        data: Arc<Bytes>,
+    ) -> Result<(), SendError> {
+        let sender = {
+            let client = self
+                .clients
+                .get(&client_id)
+                .ok_or(SendError::ClientNotFound)?;
+            client.sender.clone()
+        };
+
+        let msg = Message::Binary((*data).clone());
+        sender
+            .send(msg)
+            .await
+            .map_err(|_| SendError::ClientDisconnected)
+    }
+
+    /// Update the subscription for a client.
+    pub fn update_subscription(&self, client_id: Uuid, subscription: Subscription) -> bool {
+        if let Some(mut client) = self.clients.get_mut(&client_id) {
+            client.subscription = Some(subscription);
+            client.update_last_seen();
             debug!("Updated subscription for client {}", client_id);
             true
         } else {
@@ -136,37 +217,47 @@ impl ClientManager {
         }
     }
 
-    pub async fn update_client_last_seen(&self, client_id: Uuid) {
-        if let Some(client_info) = self.clients.write().await.get_mut(&client_id) {
-            client_info.update_last_seen();
+    /// Update the last_seen timestamp for a client.
+    pub fn update_client_last_seen(&self, client_id: Uuid) {
+        if let Some(mut client) = self.clients.get_mut(&client_id) {
+            client.update_last_seen();
         }
     }
 
-    pub async fn get_subscription(&self, client_id: Uuid) -> Option<Subscription> {
-        let clients = self.clients.read().await;
-        clients.get(&client_id).and_then(|c| c.subscription.clone())
+    /// Get the subscription for a client.
+    pub fn get_subscription(&self, client_id: Uuid) -> Option<Subscription> {
+        self.clients
+            .get(&client_id)
+            .and_then(|c| c.subscription.clone())
     }
 
-    pub async fn cleanup_stale_clients(&self) -> usize {
-        let mut clients = self.clients.write().await;
+    /// Check if a client exists.
+    pub fn has_client(&self, client_id: Uuid) -> bool {
+        self.clients.contains_key(&client_id)
+    }
+
+    /// Remove stale clients that haven't been seen within the timeout period.
+    pub fn cleanup_stale_clients(&self) -> usize {
+        let timeout = self.client_timeout;
         let mut stale_clients = Vec::new();
 
-        for (client_id, client_info) in clients.iter() {
-            if client_info.is_stale(self.client_timeout) {
-                stale_clients.push(*client_id);
+        for entry in self.clients.iter() {
+            if entry.value().is_stale(timeout) {
+                stale_clients.push(*entry.key());
             }
         }
 
         let removed_count = stale_clients.len();
         for client_id in stale_clients {
-            clients.remove(&client_id);
+            self.clients.remove(&client_id);
             info!("Removed stale client {}", client_id);
         }
 
         removed_count
     }
 
-    pub async fn start_cleanup_task(&self) {
+    /// Start a background task that periodically cleans up stale clients.
+    pub fn start_cleanup_task(&self) {
         let client_manager = self.clone();
 
         tokio::spawn(async move {
@@ -174,7 +265,7 @@ impl ClientManager {
 
             loop {
                 interval.tick().await;
-                let removed = client_manager.cleanup_stale_clients().await;
+                let removed = client_manager.cleanup_stale_clients();
                 if removed > 0 {
                     info!("Cleaned up {} stale clients", removed);
                 }

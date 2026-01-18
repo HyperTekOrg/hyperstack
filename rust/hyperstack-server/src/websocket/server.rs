@@ -2,7 +2,7 @@ use crate::bus::BusManager;
 use crate::cache::EntityCache;
 use crate::view::ViewIndex;
 use crate::websocket::client_manager::ClientManager;
-use crate::websocket::frame::{Frame, Mode};
+use crate::websocket::frame::{Mode, SnapshotEntity, SnapshotFrame};
 use crate::websocket::subscription::Subscription;
 use anyhow::Result;
 use bytes::Bytes;
@@ -82,28 +82,21 @@ impl WebSocketServer {
         let listener = TcpListener::bind(&self.bind_addr).await?;
         info!("WebSocket server listening on {}", self.bind_addr);
 
-        // Start cleanup task
-        self.client_manager.start_cleanup_task().await;
+        self.client_manager.start_cleanup_task();
 
-        // Accept incoming connections
         loop {
             match listener.accept().await {
                 Ok((stream, addr)) => {
-                    // Check if we've reached the maximum number of clients
-                    let client_count = self.client_manager.client_count().await;
+                    let client_count = self.client_manager.client_count();
                     if client_count >= self.max_clients {
                         warn!(
                             "Rejecting connection from {} - max clients ({}) reached",
                             addr, self.max_clients
                         );
-                        // Accept the connection but immediately close it
-                        if let Ok(mut ws_stream) = accept_async(stream).await {
-                            let _ = ws_stream.close(None).await;
-                        }
+                        drop(stream);
                         continue;
                     }
 
-                    // Record connection metric
                     #[cfg(feature = "otel")]
                     if let Some(ref metrics) = self.metrics {
                         metrics.record_ws_connection();
@@ -173,7 +166,7 @@ async fn handle_connection(
 
     let (ws_sender, mut ws_receiver) = ws_stream.split();
 
-    client_manager.add_client(client_id, ws_sender).await?;
+    client_manager.add_client(client_id, ws_sender);
 
     let mut active_subscriptions: Vec<String> = Vec::new();
 
@@ -187,7 +180,7 @@ async fn handle_connection(
                             break;
                         }
 
-                        client_manager.update_client_last_seen(client_id).await;
+                        client_manager.update_client_last_seen(client_id);
 
                         if msg.is_text() {
                             if let Some(ref m) = metrics {
@@ -199,7 +192,7 @@ async fn handle_connection(
 
                                 if let Ok(subscription) = serde_json::from_str::<Subscription>(text) {
                                     let view_id = subscription.view.clone();
-                                    client_manager.update_subscription(client_id, subscription.clone()).await;
+                                    client_manager.update_subscription(client_id, subscription.clone());
 
                                     if let Some(ref m) = metrics {
                                         m.record_subscription_created(&view_id);
@@ -234,7 +227,7 @@ async fn handle_connection(
         }
     }
 
-    client_manager.remove_client(client_id).await;
+    client_manager.remove_client(client_id);
 
     if let Some(ref m) = metrics {
         let duration_secs = connection_start.elapsed().as_secs_f64();
@@ -265,7 +258,7 @@ async fn handle_connection(
 
     let (ws_sender, mut ws_receiver) = ws_stream.split();
 
-    client_manager.add_client(client_id, ws_sender).await?;
+    client_manager.add_client(client_id, ws_sender);
 
     loop {
         tokio::select! {
@@ -277,14 +270,14 @@ async fn handle_connection(
                             break;
                         }
 
-                        client_manager.update_client_last_seen(client_id).await;
+                        client_manager.update_client_last_seen(client_id);
 
                         if msg.is_text() {
                             if let Ok(text) = msg.to_text() {
                                 debug!("Received text message from client {}: {}", client_id, text);
 
                                 if let Ok(subscription) = serde_json::from_str::<Subscription>(text) {
-                                    client_manager.update_subscription(client_id, subscription.clone()).await;
+                                    client_manager.update_subscription(client_id, subscription.clone());
 
                                     attach_client_to_bus(
                                         client_id,
@@ -313,7 +306,7 @@ async fn handle_connection(
         }
     }
 
-    client_manager.remove_client(client_id).await;
+    client_manager.remove_client(client_id);
     info!("Client {} disconnected", client_id);
 
     Ok(())
@@ -346,7 +339,7 @@ async fn attach_client_to_bus(
 
             if !rx.borrow().is_empty() {
                 let data = rx.borrow().clone();
-                let _ = client_manager.send_to_client(client_id, data).await;
+                let _ = client_manager.send_to_client(client_id, data);
                 if let Some(ref m) = metrics {
                     m.record_ws_message_sent();
                 }
@@ -357,7 +350,7 @@ async fn attach_client_to_bus(
             tokio::spawn(async move {
                 while rx.changed().await.is_ok() {
                     let data = rx.borrow().clone();
-                    if client_mgr.send_to_client(client_id, data).await.is_err() {
+                    if client_mgr.send_to_client(client_id, data).is_err() {
                         break;
                     }
                     if let Some(ref m) = metrics_clone {
@@ -370,22 +363,29 @@ async fn attach_client_to_bus(
             let mut rx = bus_manager.get_or_create_list_bus(view_id).await;
 
             let snapshots = entity_cache.get_all(view_id).await;
-            for (key, entity) in snapshots {
-                if subscription.matches_key(&key) {
-                    let frame = Frame {
-                        mode: view_spec.mode,
-                        export: view_id.clone(),
-                        op: "upsert",
-                        key,
-                        data: entity,
-                    };
-                    if let Ok(payload) = serde_json::to_vec(&frame) {
-                        let _ = client_manager
-                            .send_to_client(client_id, Arc::new(Bytes::from(payload)))
-                            .await;
-                        if let Some(ref m) = metrics {
-                            m.record_ws_message_sent();
-                        }
+            let snapshot_entities: Vec<SnapshotEntity> = snapshots
+                .into_iter()
+                .filter(|(key, _)| subscription.matches_key(key))
+                .map(|(key, data)| SnapshotEntity { key, data })
+                .collect();
+
+            if !snapshot_entities.is_empty() {
+                let snapshot_frame = SnapshotFrame {
+                    mode: view_spec.mode,
+                    export: view_id.clone(),
+                    op: "snapshot",
+                    data: snapshot_entities,
+                };
+                if let Ok(payload) = serde_json::to_vec(&snapshot_frame) {
+                    if client_manager
+                        .send_to_client_async(client_id, Arc::new(Bytes::from(payload)))
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
+                    if let Some(ref m) = metrics {
+                        m.record_ws_message_sent();
                     }
                 }
             }
@@ -398,7 +398,6 @@ async fn attach_client_to_bus(
                     if sub.matches(&envelope.entity, &envelope.key) {
                         if client_mgr
                             .send_to_client(client_id, envelope.payload.clone())
-                            .await
                             .is_err()
                         {
                             break;
@@ -444,14 +443,14 @@ async fn attach_client_to_bus(
 
             if !rx.borrow().is_empty() {
                 let data = rx.borrow().clone();
-                let _ = client_manager.send_to_client(client_id, data).await;
+                let _ = client_manager.send_to_client(client_id, data);
             }
 
             let client_mgr = client_manager.clone();
             tokio::spawn(async move {
                 while rx.changed().await.is_ok() {
                     let data = rx.borrow().clone();
-                    if client_mgr.send_to_client(client_id, data).await.is_err() {
+                    if client_mgr.send_to_client(client_id, data).is_err() {
                         break;
                     }
                 }
@@ -461,19 +460,26 @@ async fn attach_client_to_bus(
             let mut rx = bus_manager.get_or_create_list_bus(view_id).await;
 
             let snapshots = entity_cache.get_all(view_id).await;
-            for (key, entity) in snapshots {
-                if subscription.matches_key(&key) {
-                    let frame = Frame {
-                        mode: view_spec.mode,
-                        export: view_id.clone(),
-                        op: "upsert",
-                        key,
-                        data: entity,
-                    };
-                    if let Ok(payload) = serde_json::to_vec(&frame) {
-                        let _ = client_manager
-                            .send_to_client(client_id, Arc::new(Bytes::from(payload)))
-                            .await;
+            let snapshot_entities: Vec<SnapshotEntity> = snapshots
+                .into_iter()
+                .filter(|(key, _)| subscription.matches_key(key))
+                .map(|(key, data)| SnapshotEntity { key, data })
+                .collect();
+
+            if !snapshot_entities.is_empty() {
+                let snapshot_frame = SnapshotFrame {
+                    mode: view_spec.mode,
+                    export: view_id.clone(),
+                    op: "snapshot",
+                    data: snapshot_entities,
+                };
+                if let Ok(payload) = serde_json::to_vec(&snapshot_frame) {
+                    if client_manager
+                        .send_to_client_async(client_id, Arc::new(Bytes::from(payload)))
+                        .await
+                        .is_err()
+                    {
+                        return;
                     }
                 }
             }
@@ -485,7 +491,6 @@ async fn attach_client_to_bus(
                     if sub.matches(&envelope.entity, &envelope.key)
                         && client_mgr
                             .send_to_client(client_id, envelope.payload.clone())
-                            .await
                             .is_err()
                     {
                         break;

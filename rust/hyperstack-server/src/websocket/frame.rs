@@ -23,6 +23,23 @@ pub struct Frame {
     pub data: serde_json::Value,
 }
 
+/// A single entity within a snapshot
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnapshotEntity {
+    pub key: String,
+    pub data: serde_json::Value,
+}
+
+/// Batch snapshot frame for initial data load
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnapshotFrame {
+    pub mode: Mode,
+    #[serde(rename = "entity")]
+    pub export: String,
+    pub op: &'static str,
+    pub data: Vec<SnapshotEntity>,
+}
+
 impl Frame {
     pub fn entity(&self) -> &str {
         &self.export
