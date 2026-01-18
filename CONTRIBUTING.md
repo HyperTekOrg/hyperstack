@@ -25,7 +25,6 @@ New to Hyperstack? Start here:
 
 1. **Find an issue**: Look for issues labeled [`good first issue`](https://github.com/HyperTekOrg/hyperstack/labels/good%20first%20issue) or [`help wanted`](https://github.com/HyperTekOrg/hyperstack/labels/help%20wanted)
 2. **Claim it**: Comment on the issue to let us know you're working on it
-3. **Ask questions**: Drop into Discord if you get stuck — seriously, please ask
 4. **Submit your PR**: We'll review it and work with you to get it merged
 
 **New to open source entirely?** Check out [How to Contribute to Open Source](https://opensource.guide/how-to-contribute/) — it's a great primer.
@@ -372,7 +371,6 @@ All contributors are recognized:
 
 - Added to [CONTRIBUTORS.md](CONTRIBUTORS.md)
 - Mentioned in release notes for significant contributions
-- Featured in our Discord community highlights
 
 ## License
 
