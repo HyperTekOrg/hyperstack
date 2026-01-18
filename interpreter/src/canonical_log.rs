@@ -15,19 +15,14 @@ use opentelemetry::trace::TraceContextExt;
 #[cfg(feature = "otel")]
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LogLevel {
     Trace,
     Debug,
+    #[default]
     Info,
     Warn,
     Error,
-}
-
-impl Default for LogLevel {
-    fn default() -> Self {
-        Self::Info
-    }
 }
 
 pub struct CanonicalLog {
