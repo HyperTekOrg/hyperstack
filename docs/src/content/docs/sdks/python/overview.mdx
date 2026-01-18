@@ -71,6 +71,7 @@ client = HyperStackClient(
     url="wss://...",
     reconnect_intervals=[1, 2, 4, 8, 16],
     ping_interval=15,
+    max_entries=10000,
     on_connect=None,
     on_disconnect=None,
     on_error=None
@@ -80,6 +81,7 @@ client = HyperStackClient(
 - **`url`**: The WebSocket URL of the HyperStack server.
 - **`reconnect_intervals`**: A list of seconds to wait between reconnection attempts.
 - **`ping_interval`**: Seconds between WebSocket pings to keep the connection alive.
+- **`max_entries`**: Maximum entries per store before LRU eviction (default: 10,000). Set to `None` for unlimited (not recommended for long-running clients).
 - **`on_connect` / `on_disconnect`**: Async callbacks triggered on connection state changes.
 
 #### Methods

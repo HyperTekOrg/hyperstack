@@ -141,6 +141,27 @@ let hs = HyperStack::builder()
     ])
     .ping_interval(Duration::from_secs(30))
     .initial_data_timeout(Duration::from_secs(5))  // Timeout for get()/list()
+    .max_entries_per_view(5000)  // Limit entries per view (default: 10,000)
+    .connect()
+    .await?;
+```
+
+### Store Size Limits
+
+By default, each view is limited to 10,000 entries to prevent memory issues on long-running clients. When the limit is reached, oldest entries are evicted (LRU).
+
+```rust
+// Custom limit
+let hs = HyperStack::builder()
+    .url("wss://api.hyperstack.xyz")
+    .max_entries_per_view(5000)
+    .connect()
+    .await?;
+
+// Unlimited (not recommended for long-running clients)
+let hs = HyperStack::builder()
+    .url("wss://api.hyperstack.xyz")
+    .max_entries_per_view(None)
     .connect()
     .await?;
 ```

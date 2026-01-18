@@ -91,6 +91,23 @@ const unsubscribe = hs.onConnectionStateChange((state) => {
 await hs.disconnect();
 ```
 
+### Store Size Limits
+
+By default, each view is limited to 10,000 entries to prevent memory issues on long-running clients. When the limit is reached, oldest entries are evicted (LRU).
+
+```typescript
+const hs = await HyperStack.connect("wss://my-stack.stack.usehyperstack.com", {
+  stack: MY_STACK,
+  maxEntriesPerView: 5000, // Custom limit per view
+});
+
+// Or disable limiting (not recommended for long-running clients)
+const hs = await HyperStack.connect("wss://my-stack.stack.usehyperstack.com", {
+  stack: MY_STACK,
+  maxEntriesPerView: null, // Unlimited entries
+});
+```
+
 ### Core SDK Exports
 
 ```typescript

@@ -14,8 +14,10 @@ Complete reference for the Hyperstack CLI (`hs`).
 | --------------------- | ---------------------------------------------------- |
 | `--config, -c <path>` | Path to hyperstack.toml (default: `hyperstack.toml`) |
 | `--json`              | Output as JSON                                       |
+| `--verbose`           | Enable verbose output                                |
 | `--help, -h`          | Show help                                            |
 | `--version, -V`       | Show version                                         |
+| `--completions <SHELL>` | Generate shell completions (bash, zsh, fish, powershell, elvish) |
 
 ---
 
@@ -26,7 +28,6 @@ Complete reference for the Hyperstack CLI (`hs`).
 | `hs init`       | Initialize project                   |
 | `hs up [stack]` | Deploy stack (push + build + deploy) |
 | `hs status`     | Show project overview                |
-| `hs logs`       | View build logs                      |
 | `hs stack list` | List all stacks                      |
 | `hs stack show` | Show stack details                   |
 
@@ -121,14 +122,18 @@ hs up my-stack --branch staging
 
 # Preview deployment
 hs up my-stack --preview
+
+# Preview what would be deployed (no actual deployment)
+hs up my-stack --dry-run
 ```
 
 **Options:**
 
-| Flag                  | Description               |
-| --------------------- | ------------------------- |
-| `--branch, -b <name>` | Deploy to named branch    |
-| `--preview`           | Create preview deployment |
+| Flag                  | Description                                      |
+| --------------------- | ------------------------------------------------ |
+| `--branch, -b <name>` | Deploy to named branch                           |
+| `--preview`           | Create preview deployment                        |
+| `--dry-run`           | Show what would be deployed without deploying    |
 
 ### hs status
 
@@ -137,18 +142,6 @@ Show overview of all stacks, builds, and deployments.
 ```bash
 hs status
 hs status --json
-```
-
-### hs logs [build-id]
-
-View build logs.
-
-```bash
-# Most recent build
-hs logs
-
-# Specific build
-hs logs 123
 ```
 
 ---
@@ -253,21 +246,6 @@ Stop a deployment.
 ```bash
 hs stack stop my-stack
 hs stack stop my-stack --branch staging
-```
-
-### hs stack logs \<stack-or-build-id\>
-
-View build logs for a stack.
-
-```bash
-# By stack name (shows latest build)
-hs stack logs my-stack
-
-# By build ID
-hs stack logs 123
-
-# Watch in real-time
-hs stack logs my-stack --watch
 ```
 
 ---
