@@ -213,18 +213,8 @@ pub struct MultiEntityBytecode {
 
 impl MultiEntityBytecode {
     pub fn from_single<S>(entity_name: String, spec: TypedStreamSpec<S>, state_id: u32) -> Self {
-        tracing::info!(
-            "🔨 Compiling entity {} with {} handlers",
-            entity_name,
-            spec.handlers.len()
-        );
         let compiler = TypedCompiler::new(spec, entity_name.clone()).with_state_id(state_id);
         let entity_bytecode = compiler.compile_entity();
-        tracing::info!(
-            "🔨 Compiled {} handlers for {}",
-            entity_bytecode.handlers.len(),
-            entity_name
-        );
 
         let mut entities = HashMap::new();
         let mut event_routing = HashMap::new();
@@ -473,13 +463,7 @@ impl<S> TypedCompiler<S> {
         for hook in &self.spec.instruction_hooks {
             let event_type = hook.instruction_type.clone();
 
-            // Get or create handler for this instruction type
             let handler_opcodes = handlers.entry(event_type.clone()).or_insert_with(|| {
-                tracing::debug!(
-                    "    Creating new handler for {} with key loading from lookup_by",
-                    event_type
-                );
-                // Create a handler with proper key loading if none exists
                 let key_reg = 20;
                 let state_reg = 2;
                 let resolved_key_reg = 19;
@@ -954,31 +938,15 @@ impl<S> TypedCompiler<S> {
                 let lookup_reg = 15;
                 let result_reg = 17;
 
-                tracing::debug!(
-                    "Compiling Lookup key_resolution: primary_field={:?}",
-                    primary_field.segments
-                );
-
                 ops.push(OpCode::LoadEventField {
                     path: primary_field.clone(),
                     dest: lookup_reg,
                     default: None,
                 });
 
-                // For Lookup resolution, check if there's a mapping from primary_field to a lookup index field
                 let index_name = self.find_lookup_index_for_lookup_field(primary_field, mappings);
-
-                tracing::debug!("  Lookup index search result: {:?}", index_name);
-
-                // Use configured index name or fall back to "default_pda_lookup" for PDA reverse lookups
-                // The VM's LookupIndex opcode will check both regular indexes and PDA reverse lookup table
-                let effective_index_name = index_name.unwrap_or_else(|| {
-                    tracing::debug!(
-                        "No lookup index configured for primary_field={:?}, using default_pda_lookup",
-                        primary_field.segments
-                    );
-                    "default_pda_lookup".to_string()
-                });
+                let effective_index_name =
+                    index_name.unwrap_or_else(|| "default_pda_lookup".to_string());
 
                 ops.push(OpCode::LookupIndex {
                     state_id: self.state_id,

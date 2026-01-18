@@ -29,21 +29,10 @@ impl<'a> ResolveContext<'a> {
     /// Try to reverse lookup a PDA address to find the seed value
     /// This is typically used to find the primary key from a PDA account address
     pub fn pda_reverse_lookup(&mut self, pda_address: &str) -> Option<String> {
-        // Default lookup name - could be made configurable
         let lookup_name = "default_pda_lookup";
-
-        if let Some(lookup_table) = self.reverse_lookups.get_mut(lookup_name) {
-            let result = lookup_table.lookup(pda_address);
-            if result.is_some() {
-                tracing::debug!("✓ PDA reverse lookup hit: {} -> {:?}", pda_address, result);
-            } else {
-                tracing::debug!("✗ PDA reverse lookup miss: {}", pda_address);
-            }
-            result
-        } else {
-            tracing::debug!("✗ PDA reverse lookup table '{}' not found", lookup_name);
-            None
-        }
+        self.reverse_lookups
+            .get_mut(lookup_name)
+            .and_then(|t| t.lookup(pda_address))
     }
 
     pub fn slot(&self) -> u64 {
@@ -157,20 +146,9 @@ impl<'a> InstructionContext<'a> {
     /// The pending account updates are accumulated internally and can be retrieved
     /// via `take_pending_updates()` after all hooks have executed.
     pub fn register_pda_reverse_lookup(&mut self, pda_address: &str, seed_value: &str) {
-        tracing::info!(
-            "📝 Registering PDA reverse lookup: {} -> {}",
-            pda_address,
-            seed_value
-        );
         let pending = self
             .reverse_lookup_tx
             .update(pda_address.to_string(), seed_value.to_string());
-        if !pending.is_empty() {
-            tracing::info!(
-                "   🔄 Flushed {} pending account update(s) for this PDA",
-                pending.len()
-            );
-        }
         self.pending_updates.extend(pending);
     }
 

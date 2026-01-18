@@ -27,10 +27,10 @@ sha2 = "0.10"
 tracing = "0.1"
 hyperstack-macros = { version = "0.2.2", path = "../hyperstack-macros" }
 
-# OpenTelemetry for distributed tracing (optional, behind 'otel' feature)
-opentelemetry = { version = "0.22", optional = true }
-opentelemetry_sdk = { version = "0.22", features = ["rt-tokio"], optional = true }
-opentelemetry-otlp = { version = "0.15", features = ["tonic"], optional = true }
+# OpenTelemetry for distributed tracing and metrics (optional, behind 'otel' feature)
+opentelemetry = { version = "0.22", features = ["otel_unstable"], optional = true }
+opentelemetry_sdk = { version = "0.22", features = ["rt-tokio", "metrics"], optional = true }
+opentelemetry-otlp = { version = "0.15", features = ["tonic", "metrics"], optional = true }
 tracing-opentelemetry = { version = "0.23", optional = true }
 
 [build-dependencies]

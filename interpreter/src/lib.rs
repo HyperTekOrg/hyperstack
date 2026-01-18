@@ -25,6 +25,7 @@
 //! - `otel` - OpenTelemetry integration for distributed tracing and metrics
 
 pub mod ast;
+pub mod canonical_log;
 pub mod compiler;
 pub mod metrics_context;
 pub mod proto_router;
@@ -33,8 +34,9 @@ pub mod rust;
 pub mod spec_trait;
 pub mod typescript;
 pub mod vm;
+pub mod vm_metrics;
 
-// Re-export commonly used items
+pub use canonical_log::{CanonicalLog, LogLevel};
 pub use metrics_context::{FieldAccessor, FieldRef, MetricsContext};
 pub use resolvers::{InstructionContext, KeyResolution, ResolveContext, ReverseLookupUpdater};
 pub use typescript::{write_typescript_to_file, TypeScriptCompiler, TypeScriptConfig};
