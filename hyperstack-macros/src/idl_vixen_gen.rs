@@ -194,9 +194,8 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
             })
         }
 
-        /// Runs the Vixen runtime with reconnection support
         async fn run_vixen_runtime_with_channel(
-            mutations_tx: tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
+            mutations_tx: tokio::sync::mpsc::Sender<hyperstack_server::MutationBatch>,
             health_monitor: Option<hyperstack_server::HealthMonitor>,
             reconnection_config: hyperstack_server::ReconnectionConfig,
         ) -> anyhow::Result<()> {
@@ -205,6 +204,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
             use yellowstone_vixen_yellowstone_grpc_source::YellowstoneGrpcSource;
             use yellowstone_vixen::Pipeline;
             use std::sync::{Arc, Mutex};
+            use tracing::Instrument;
 
             let env_loaded = dotenvy::from_filename(".env.local").is_ok()
                 || dotenvy::from_filename("backend/tenant-runtime/.env").is_ok()
@@ -251,7 +251,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
             struct VmHandler {
                 vm: Arc<Mutex<hyperstack_interpreter::vm::VmContext>>,
                 bytecode: Arc<hyperstack_interpreter::compiler::MultiEntityBytecode>,
-                mutations_tx: tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
+                mutations_tx: tokio::sync::mpsc::Sender<hyperstack_server::MutationBatch>,
                 health_monitor: Option<hyperstack_server::HealthMonitor>,
                 slot_tracker: hyperstack_server::SlotTracker,
             }
@@ -260,7 +260,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 fn new(
                     vm: Arc<Mutex<hyperstack_interpreter::vm::VmContext>>,
                     bytecode: Arc<hyperstack_interpreter::compiler::MultiEntityBytecode>,
-                    mutations_tx: tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
+                    mutations_tx: tokio::sync::mpsc::Sender<hyperstack_server::MutationBatch>,
                     health_monitor: Option<hyperstack_server::HealthMonitor>,
                     slot_tracker: hyperstack_server::SlotTracker,
                 ) -> Self {
@@ -308,28 +308,40 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                     let account = raw_update.account.as_ref().unwrap();
                     let write_version = account.write_version;
                     let signature = bs58::encode(account.txn_signature.as_ref().unwrap()).into_string();
-                    // Record event received for health monitoring
+                    let account_address = bs58::encode(&account.pubkey).into_string();
+                    let event_type = value.event_type();
+                    let sig_short = &signature[..12.min(signature.len())];
+
+                    let span = tracing::info_span!(
+                        "solana.account",
+                        event_type = %event_type,
+                        slot = %slot,
+                        sig = %sig_short,
+                        account = %account_address,
+                    );
+
+                    let mut log = hyperstack_interpreter::CanonicalLog::new();
+                    span.in_scope(|| {
+                        log.set("phase", "account")
+                            .set("event_type", event_type)
+                            .set("account", &account_address)
+                            .set("slot", slot)
+                            .set("write_version", write_version)
+                            .set("sig", sig_short);
+                    });
+
                     if let Some(ref health) = self.health_monitor {
                         health.record_event().await;
                     }
 
-                    // Extract account address from raw_update
-                    let account_address = bs58::encode(&account.pubkey).into_string();
-
-                    let event_type = value.event_type();
                     let mut event_value = value.to_value();
-
-                    // Add account address to event value
                     if let Some(obj) = event_value.as_object_mut() {
                         obj.insert("__account_address".to_string(), serde_json::json!(account_address));
                     }
 
-                    // Check if this account type has a resolver and handle the resolution
-                    tracing::debug!("🔍 Account update: type={}, address={}", event_type, account_address);
                     let resolver_result = {
                         let mut vm = self.vm.lock().unwrap();
 
-                        // Get state table to access reverse lookups
                         if let Some(state_table) = vm.get_state_table_mut(0) {
                             let mut ctx = hyperstack_interpreter::resolvers::ResolveContext::new(
                                 0,
@@ -338,41 +350,32 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                 &mut state_table.pda_reverse_lookups,
                             );
 
-                            // Call the resolver if one exists for this account type
                             if let Some(resolver_fn) = get_resolver_for_account_type(event_type) {
-                                tracing::debug!("   Has resolver, attempting lookup");
+                                log.set("key_resolution", "pda_reverse_lookup");
                                 resolver_fn(&account_address, &event_value, &mut ctx)
                             } else {
-                                tracing::debug!("   No resolver, processing normally");
-                                // No resolver defined, process normally
                                 hyperstack_interpreter::resolvers::KeyResolution::Found(String::new())
                             }
                         } else {
-                            tracing::warn!("   No state table found!");
-                            // No state table, process normally
                             hyperstack_interpreter::resolvers::KeyResolution::Found(String::new())
                         }
                     };
 
-                    // Handle the resolution result
                     match resolver_result {
                         hyperstack_interpreter::resolvers::KeyResolution::Found(resolved_key) => {
-                            tracing::debug!("   ✓ Resolved key: {}", if resolved_key.is_empty() { "(empty)" } else { &resolved_key });
-                            // If a primary key was resolved, override it in the event value
                             if !resolved_key.is_empty() {
+                                log.set("primary_key", &resolved_key);
                                 if let Some(obj) = event_value.as_object_mut() {
                                     obj.insert("__resolved_primary_key".to_string(), serde_json::json!(resolved_key));
                                 }
                             }
-                            // Continue with normal processing
                         }
                         hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(_discriminators) => {
-                            // Queue this update for later processing
-                            tracing::info!("⏳ Queuing {} account update for PDA {}, waiting for reverse lookup", event_type, account_address);
+                            log.set("outcome", "queued");
                             let mut vm = self.vm.lock().unwrap();
 
-                            if let Err(e) = vm.queue_account_update(
-                                0, // state_id
+                            let queue_result = vm.queue_account_update(
+                                0,
                                 hyperstack_interpreter::QueuedAccountUpdate {
                                     pda_address: account_address.clone(),
                                     account_type: event_type.to_string(),
@@ -381,42 +384,43 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                     write_version,
                                     signature,
                                 },
-                            ) {
-                                tracing::warn!("Failed to queue account update: {}", e);
+                            );
+                            log.set("pending_queue_size", vm.pending_queue_size as i64);
+                            if let Err(e) = queue_result {
+                                log.set("error", format!("queue_failed: {}", e))
+                                    .set_level(hyperstack_interpreter::LogLevel::Error);
                             }
-                            return Ok(()); // Don't process now, wait for queue flush
+                            return Ok(());
                         }
                         hyperstack_interpreter::resolvers::KeyResolution::Skip => {
-                            // Skip this update entirely
+                            log.set("outcome", "skipped").set("skip_reason", "resolver");
                             return Ok(());
                         }
                     }
 
                     let mutations_result = {
                         let mut vm = self.vm.lock().unwrap();
-
                         let context = hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
-
-                        vm.process_event_with_context(&self.bytecode, event_value, event_type, Some(&context))
+                        vm.process_event(&self.bytecode, event_value, event_type, Some(&context), Some(&mut log))
                             .map_err(|e| e.to_string())
                     };
 
                     match mutations_result {
                         Ok(mutations) => {
                             self.slot_tracker.record(slot);
+                            log.set("outcome", "success").set("mutations", mutations.len() as i64);
                             if !mutations.is_empty() {
-                                for (i, m) in mutations.iter().enumerate() {
-                                    tracing::info!("      Mutation {}: key={}, patch_keys={:?}",
-                                        i + 1,
-                                        m.key,
-                                        m.patch.as_object().map(|o| o.keys().collect::<Vec<_>>()).unwrap_or_default()
-                                    );
-                                }
-                                let _ = self.mutations_tx.send(smallvec::SmallVec::from_vec(mutations)).await;
+                                let batch = hyperstack_server::MutationBatch::new(
+                                    smallvec::SmallVec::from_vec(mutations)
+                                );
+                                let _ = self.mutations_tx.send(batch).await;
                             }
                             Ok(())
                         }
                         Err(e) => {
+                            log.set("outcome", "error")
+                                .set("error", &e)
+                                .set_level(hyperstack_interpreter::LogLevel::Error);
                             if let Some(ref health) = self.health_monitor {
                                 health.record_error(format!("VM error for {}: {}", event_type, e)).await;
                             }
@@ -433,31 +437,32 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                     let slot = raw_update.shared.slot;
                     let txn_index = raw_update.shared.txn_index;
                     let signature = bs58::encode(&raw_update.shared.signature).into_string();
+                    let event_type = value.event_type();
+                    let sig_short = &signature[..12.min(signature.len())];
 
-                    // Record event received for health monitoring
+                    let span = tracing::info_span!(
+                        "solana.instruction",
+                        event_type = %event_type,
+                        slot = %slot,
+                        sig = %sig_short,
+                        txn_index = %txn_index,
+                    );
+
+                    let mut log = hyperstack_interpreter::CanonicalLog::new();
+                    span.in_scope(|| {
+                        log.set("phase", "instruction")
+                            .set("event_type", event_type)
+                            .set("slot", slot)
+                            .set("txn_index", txn_index)
+                            .set("sig", sig_short);
+                    });
+
                     if let Some(ref health) = self.health_monitor {
                         health.record_event().await;
                     }
 
-                    // raw_update.accounts are already KeyBytes<32>, no conversion needed
                     let static_keys_vec = &raw_update.accounts;
-                    let event_type = value.event_type();
-
-                    // Use to_value_with_accounts to get event value with named accounts from IDL
-                    // Pass the inner instruction accounts from raw_update
                     let event_value = value.to_value_with_accounts(static_keys_vec);
-
-                    // Log instruction processing details
-                    if event_type.ends_with("IxState") {
-                        let account_keys: Vec<String> = event_value.get("accounts")
-                            .and_then(|a| a.as_object())
-                            .map(|obj| obj.keys().cloned().collect())
-                            .unwrap_or_default();
-                        tracing::info!(
-                            "📥 [INSTRUCTION] type={} slot={} sig={}... accounts=[{}]",
-                            event_type, slot, &signature[..8], account_keys.join(", ")
-                        );
-                    }
 
                     let bytecode = self.bytecode.clone();
                     let mutations_result = {
@@ -465,15 +470,12 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
 
                         let context = hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
 
-                        let mut result = vm.process_event_with_context(&bytecode, event_value.clone(), event_type, Some(&context))
+                        let mut result = vm.process_event(&bytecode, event_value.clone(), event_type, Some(&context), Some(&mut log))
                             .map_err(|e| e.to_string());
 
-                        // After processing instruction, call any registered after-instruction hooks
                         if result.is_ok() {
                             let hooks = get_instruction_hooks(event_type);
                             if !hooks.is_empty() {
-
-                                // Extract accounts map from event_value
                                 let accounts = event_value.get("accounts")
                                     .and_then(|a| a.as_object())
                                     .map(|obj| {
@@ -483,10 +485,8 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                     })
                                     .unwrap_or_default();
 
-                                // Extract instruction data (the "data" field contains instruction args)
                                 let instruction_data = event_value.get("data").unwrap_or(&serde_json::Value::Null);
 
-                                // Get timestamp from context (defaults to current time if not set)
                                 let timestamp = vm.current_context()
                                     .map(|ctx| ctx.timestamp())
                                     .unwrap_or_else(|| std::time::SystemTime::now()
@@ -494,16 +494,14 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                         .unwrap()
                                         .as_secs() as i64);
 
-                                // SAFETY: We're carefully splitting the mutable borrow of vm into disjoint parts.
                                 let vm_ptr: *mut hyperstack_interpreter::vm::VmContext = &mut *vm as *mut hyperstack_interpreter::vm::VmContext;
 
-                                // Build InstructionContext with metrics support
                                 let mut ctx = hyperstack_interpreter::resolvers::InstructionContext::with_metrics(
                                     accounts,
-                                    0, // state_id
+                                    0,
                                     &mut *vm,
                                     unsafe { (*vm_ptr).registers_mut() },
-                                    2, // state_reg - register 2 holds the entity state (see compiler.rs line 384)
+                                    2,
                                     unsafe { (*vm_ptr).path_cache() },
                                     instruction_data,
                                     Some(context.slot.unwrap_or(0)),
@@ -511,96 +509,66 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                     timestamp,
                                 );
 
-                                // Call each registered hook
-                                for (idx, hook_fn) in hooks.iter().enumerate() {
+                                for hook_fn in hooks.iter() {
                                     hook_fn(&mut ctx);
                                 }
 
-                                // Collect data from ctx before dropping it
                                 let dirty_fields: std::collections::HashSet<String> = ctx.dirty_tracker().dirty_paths();
                                 let pending_updates = ctx.take_pending_updates();
-
-                                // Drop ctx to release the mutable borrows before we use vm again
                                 drop(ctx);
 
-                                // Generate additional mutations from fields modified by hooks
                                 if !dirty_fields.is_empty() {
-                                    tracing::info!("   📝 Hooks modified {} field(s): {:?}", dirty_fields.len(), dirty_fields);
+                                    log.set("fields_modified", dirty_fields.len() as i64);
 
-                                    // IMPORTANT: Persist hook changes back to state table so they're available for future mutations
-                                    // The state is in register 2 (see compiler.rs line 384), and the key should be the mint
                                     if let Ok(ref mutations) = result {
                                         if let Some(first_mutation) = mutations.first() {
-                                            tracing::debug!("      💾 Persisting hook changes to state table for key: {:?}", first_mutation.key);
-                                            // Manually call UpdateState to persist the modified state back to the state table
-                                            if let Err(e) = vm.update_state_from_register(0, first_mutation.key.clone(), 2) {
-                                            } else {
-                                            }
+                                            let _ = vm.update_state_from_register(0, first_mutation.key.clone(), 2);
                                         }
                                     }
 
-                                    // Extract the dirty fields from state to create a patch
                                     if let Ok(patch) = vm.extract_partial_state(2, &dirty_fields) {
-                                        // Find or create mutation for the current entity
                                         if let Some(mint) = event_value.get("accounts").and_then(|a| a.get("mint")).and_then(|m| m.as_str()) {
+                                            log.set("primary_key", mint);
 
-                                            // Merge this patch into mutations from result
                                             if let Ok(ref mut mutations) = result {
-                                                // Find existing mutation for this mint, or create new one
                                                 let mint_value = serde_json::Value::String(mint.to_string());
                                                 let found = mutations.iter_mut()
                                                     .find(|m| m.key == mint_value)
                                                     .map(|m| {
-                                                        // Deep merge patch into existing mutation's patch
                                                         if let serde_json::Value::Object(ref mut existing_patch_obj) = m.patch {
                                                             if let serde_json::Value::Object(new_patch_obj) = patch.clone() {
                                                                 for (section_key, new_section_value) in new_patch_obj {
                                                                     if let Some(existing_section) = existing_patch_obj.get_mut(&section_key) {
-                                                                        // Section exists - deep merge objects
                                                                         if let (Some(existing_obj), Some(new_obj)) =
                                                                             (existing_section.as_object_mut(), new_section_value.as_object()) {
-                                                                            // Merge field by field within the section
                                                                             for (field_key, field_value) in new_obj {
                                                                                 existing_obj.insert(field_key.clone(), field_value.clone());
                                                                             }
                                                                         } else {
-                                                                            // Not both objects - replace entirely
                                                                             *existing_section = new_section_value.clone();
                                                                         }
                                                                     } else {
-                                                                        // Section doesn't exist - insert it
                                                                         existing_patch_obj.insert(section_key.clone(), new_section_value.clone());
                                                                     }
                                                                 }
 
-                                                                // Re-evaluate computed fields using full accumulated state
-                                                                // The patch only contains dirty fields, but computed fields may reference
-                                                                // other sections (e.g., last_trade_price references reserves.*)
-                                                                // So we evaluate on full state and copy computed values back to patch
                                                                 let mut full_state_for_eval = vm.registers_mut()[2].clone();
-                                                                if let Err(_e) = evaluate_computed_fields(&mut full_state_for_eval) {
-                                                                    // Ignore errors
-                                                                }
-                                                                // Copy only computed field values from full state back to patch
-                                                                // Uses computed_field_paths() to know which fields to copy
+                                                                let _ = evaluate_computed_fields(&mut full_state_for_eval);
                                                                 for path in computed_field_paths() {
                                                                     let parts: Vec<&str> = path.split('.').collect();
                                                                     if parts.len() >= 2 {
                                                                         let section = parts[0];
                                                                         let field = parts[1];
-                                                                        // Get value from full state
                                                                         if let Some(value) = full_state_for_eval
                                                                             .get(section)
                                                                             .and_then(|s| s.get(field))
                                                                         {
-                                                                            // Ensure section exists in patch
                                                                             if !existing_patch_obj.contains_key(section) {
                                                                                 existing_patch_obj.insert(
                                                                                     section.to_string(),
                                                                                     serde_json::json!({})
                                                                                 );
                                                                             }
-                                                                            // Insert computed value into patch
                                                                             if let Some(patch_section) = existing_patch_obj.get_mut(section) {
                                                                                 if let Some(obj) = patch_section.as_object_mut() {
                                                                                     obj.insert(field.to_string(), value.clone());
@@ -613,10 +581,9 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                                         }
                                                     });
 
-                                                // If no mutation existed for this key, create one
                                                 if found.is_none() {
                                                     mutations.push(hyperstack_interpreter::Mutation {
-                                                        export: "Token".to_string(), // TODO: Get export name from event type
+                                                        export: "Token".to_string(),
                                                         key: mint_value,
                                                         patch: patch.clone(),
                                                         append: Vec::new(),
@@ -627,9 +594,9 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                     }
                                 }
 
-                                // Reprocess any pending updates that were queued
                                 if !pending_updates.is_empty() {
-                                    for (_idx, update) in pending_updates.into_iter().enumerate() {
+                                    log.set("pending_updates_processed", pending_updates.len() as i64);
+                                    for update in pending_updates.into_iter() {
                                         let resolved_key = vm.try_pda_reverse_lookup(0, "default_pda_lookup", &update.pda_address);
 
                                         let mut account_data = update.account_data;
@@ -645,15 +612,11 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                             update.write_version,
                                         );
 
-                                        match vm.process_event_with_context(&bytecode, account_data, &update.account_type, Some(&update_context)) {
-                                            Ok(pending_mutations) => {
-                                                if !pending_mutations.is_empty() {
-                                                    if let Ok(ref mut mutations) = result {
-                                                        mutations.extend(pending_mutations);
-                                                    }
+                                        if let Ok(pending_mutations) = vm.process_event(&bytecode, account_data, &update.account_type, Some(&update_context), None) {
+                                            if !pending_mutations.is_empty() {
+                                                if let Ok(ref mut mutations) = result {
+                                                    mutations.extend(pending_mutations);
                                                 }
-                                            }
-                                            Err(_e) => {
                                             }
                                         }
                                     }
@@ -662,6 +625,8 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
 
                             if vm.instructions_executed % 1000 == 0 {
                                 let _ = vm.cleanup_all_expired(0);
+                                let stats = vm.get_memory_stats(0);
+                                hyperstack_interpreter::vm_metrics::record_memory_stats(&stats, #program_name);
                             }
                         }
 
@@ -671,19 +636,19 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                     match mutations_result {
                         Ok(mutations) => {
                             self.slot_tracker.record(slot);
+                            log.set("outcome", "success").set("mutations", mutations.len() as i64);
                             if !mutations.is_empty() {
-                                for (i, m) in mutations.iter().enumerate() {
-                                    tracing::info!("      Mutation {}: key={}, patch_keys={:?}",
-                                        i + 1,
-                                        m.key,
-                                        m.patch.as_object().map(|o| o.keys().collect::<Vec<_>>()).unwrap_or_default()
-                                    );
-                                }
-                                let _ = self.mutations_tx.send(smallvec::SmallVec::from_vec(mutations)).await;
+                                let batch = hyperstack_server::MutationBatch::new(
+                                    smallvec::SmallVec::from_vec(mutations)
+                                );
+                                let _ = self.mutations_tx.send(batch).await;
                             }
                             Ok(())
                         }
                         Err(e) => {
+                            log.set("outcome", "error")
+                                .set("error", &e)
+                                .set_level(hyperstack_interpreter::LogLevel::Error);
                             if let Some(ref health) = self.health_monitor {
                                 health.record_error(format!("VM error for {}: {}", event_type, e)).await;
                             }

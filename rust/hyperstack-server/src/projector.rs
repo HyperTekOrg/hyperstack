@@ -1,14 +1,14 @@
 use crate::bus::{BusManager, BusMessage};
 use crate::cache::EntityCache;
+use crate::mutation_batch::MutationBatch;
 use crate::view::{ViewIndex, ViewSpec};
 use crate::websocket::frame::{Frame, Mode};
 use bytes::Bytes;
+use hyperstack_interpreter::CanonicalLog;
 use smallvec::SmallVec;
 use std::sync::Arc;
-#[cfg(feature = "otel")]
-use std::time::Instant;
 use tokio::sync::mpsc;
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 #[cfg(feature = "otel")]
 use crate::metrics::Metrics;
@@ -17,7 +17,7 @@ pub struct Projector {
     view_index: Arc<ViewIndex>,
     bus_manager: BusManager,
     entity_cache: EntityCache,
-    mutations_rx: mpsc::Receiver<SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
+    mutations_rx: mpsc::Receiver<MutationBatch>,
     #[cfg(feature = "otel")]
     metrics: Option<Arc<Metrics>>,
 }
@@ -28,7 +28,7 @@ impl Projector {
         view_index: Arc<ViewIndex>,
         bus_manager: BusManager,
         entity_cache: EntityCache,
-        mutations_rx: mpsc::Receiver<SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
+        mutations_rx: mpsc::Receiver<MutationBatch>,
         metrics: Option<Arc<Metrics>>,
     ) -> Self {
         Self {
@@ -45,7 +45,7 @@ impl Projector {
         view_index: Arc<ViewIndex>,
         bus_manager: BusManager,
         entity_cache: EntityCache,
-        mutations_rx: mpsc::Receiver<SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
+        mutations_rx: mpsc::Receiver<MutationBatch>,
     ) -> Self {
         Self {
             view_index,
@@ -60,41 +60,63 @@ impl Projector {
 
         let mut json_buffer = Vec::with_capacity(4096);
 
-        while let Some(mutations) = self.mutations_rx.recv().await {
-            // Consume mutations by value to avoid cloning patch data
-            for mutation in mutations.into_iter() {
-                #[cfg(feature = "otel")]
-                let start = Instant::now();
+        while let Some(batch) = self.mutations_rx.recv().await {
+            let _span_guard = batch.span.enter();
 
-                // Capture export before consuming mutation
+            let mut log = CanonicalLog::new();
+            log.set("phase", "projector");
+
+            let batch_size = batch.len();
+            let mut frames_published = 0u32;
+            let mut errors = 0u32;
+
+            for mutation in batch.mutations.into_iter() {
                 #[cfg(feature = "otel")]
                 let export = mutation.export.clone();
 
-                if let Err(e) = self.process_mutation(mutation, &mut json_buffer).await {
-                    error!("Failed to process mutation: {}", e);
+                match self.process_mutation(mutation, &mut json_buffer).await {
+                    Ok(count) => frames_published += count,
+                    Err(e) => {
+                        error!("Failed to process mutation: {}", e);
+                        errors += 1;
+                    }
                 }
 
                 #[cfg(feature = "otel")]
                 if let Some(ref metrics) = self.metrics {
-                    let latency_ms = start.elapsed().as_secs_f64() * 1000.0;
-                    metrics.record_projector_latency(latency_ms);
                     metrics.record_mutation_processed(&export);
                 }
             }
+
+            log.set("batch_size", batch_size)
+                .set("frames_published", frames_published)
+                .set("errors", errors);
+
+            #[cfg(feature = "otel")]
+            if let Some(ref metrics) = self.metrics {
+                metrics.record_projector_latency(log.duration_ms());
+            }
+
+            log.emit();
         }
 
         debug!("Projector stopped");
     }
 
+    #[instrument(
+        name = "projector.mutation",
+        skip(self, mutation, json_buffer),
+        fields(export = %mutation.export)
+    )]
     async fn process_mutation(
         &self,
         mutation: hyperstack_interpreter::Mutation,
         json_buffer: &mut Vec<u8>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<u32> {
         let specs = self.view_index.by_export(&mutation.export);
 
         if specs.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
 
         let key = Self::extract_key(&mutation.key);
@@ -109,8 +131,10 @@ impl Projector {
 
         let match_count = matching_specs.len();
         if match_count == 0 {
-            return Ok(());
+            return Ok(0);
         }
+
+        let mut frames_published = 0u32;
 
         for (i, spec) in matching_specs.into_iter().enumerate() {
             let is_last = i == match_count - 1;
@@ -146,6 +170,7 @@ impl Projector {
             });
 
             self.publish_frame(spec, message).await;
+            frames_published += 1;
 
             #[cfg(feature = "otel")]
             if let Some(ref metrics) = self.metrics {
@@ -158,7 +183,7 @@ impl Projector {
             }
         }
 
-        Ok(())
+        Ok(frames_published)
     }
 
     fn extract_key(key: &serde_json::Value) -> String {
@@ -182,6 +207,11 @@ impl Projector {
             .unwrap_or_else(|| key.to_string())
     }
 
+    #[instrument(
+        name = "projector.publish",
+        skip(self, spec, message),
+        fields(view_id = %spec.id, mode = ?spec.mode)
+    )]
     async fn publish_frame(&self, spec: &ViewSpec, message: Arc<BusMessage>) {
         match spec.mode {
             Mode::State => {

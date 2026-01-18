@@ -25,7 +25,7 @@
 
 use opentelemetry::{
     global,
-    metrics::{Counter, Histogram, Meter, UpDownCounter},
+    metrics::{Counter, Gauge, Histogram, Meter, UpDownCounter},
     KeyValue,
 };
 
@@ -65,6 +65,35 @@ pub struct Metrics {
 
     // Entity metrics (business)
     pub entities_active: UpDownCounter<i64>,
+
+    // Interpreter cache gauges (updated periodically from VmMemoryStats)
+    pub vm_state_table_entries: Gauge<i64>,
+    pub vm_state_table_capacity: Gauge<i64>,
+    pub vm_lookup_index_count: Gauge<i64>,
+    pub vm_lookup_index_entries: Gauge<i64>,
+    pub vm_temporal_index_count: Gauge<i64>,
+    pub vm_temporal_index_entries: Gauge<i64>,
+    pub vm_pda_reverse_lookup_count: Gauge<i64>,
+    pub vm_pda_reverse_lookup_entries: Gauge<i64>,
+    pub vm_version_tracker_entries: Gauge<i64>,
+    pub vm_path_cache_size: Gauge<i64>,
+    pub vm_pending_queue_updates: Gauge<i64>,
+    pub vm_pending_queue_unique_pdas: Gauge<i64>,
+    pub vm_pending_queue_memory_bytes: Gauge<i64>,
+    pub vm_pending_queue_oldest_age: Histogram<f64>,
+
+    // Interpreter event counters (recorded inline)
+    pub vm_state_table_evictions: Counter<u64>,
+    pub vm_state_table_at_capacity_events: Counter<u64>,
+    pub vm_cleanup_pending_removed: Counter<u64>,
+    pub vm_cleanup_temporal_removed: Counter<u64>,
+    pub vm_path_cache_hits: Counter<u64>,
+    pub vm_path_cache_misses: Counter<u64>,
+    pub vm_lookup_index_hits: Counter<u64>,
+    pub vm_lookup_index_misses: Counter<u64>,
+    pub vm_pending_updates_queued: Counter<u64>,
+    pub vm_pending_updates_flushed: Counter<u64>,
+    pub vm_pending_updates_expired: Counter<u64>,
 }
 
 impl Metrics {
@@ -174,6 +203,133 @@ impl Metrics {
             .with_description("Number of active entities being tracked")
             .init();
 
+        // Interpreter cache gauges
+        let vm_state_table_entries = meter
+            .i64_gauge("hyperstack.vm.state_table.entries")
+            .with_description("Current entries in the state table")
+            .init();
+
+        let vm_state_table_capacity = meter
+            .i64_gauge("hyperstack.vm.state_table.capacity")
+            .with_description("Maximum capacity of the state table")
+            .init();
+
+        let vm_lookup_index_count = meter
+            .i64_gauge("hyperstack.vm.lookup_index.count")
+            .with_description("Number of lookup indexes")
+            .init();
+
+        let vm_lookup_index_entries = meter
+            .i64_gauge("hyperstack.vm.lookup_index.entries")
+            .with_description("Total entries across lookup indexes")
+            .init();
+
+        let vm_temporal_index_count = meter
+            .i64_gauge("hyperstack.vm.temporal_index.count")
+            .with_description("Number of temporal indexes")
+            .init();
+
+        let vm_temporal_index_entries = meter
+            .i64_gauge("hyperstack.vm.temporal_index.entries")
+            .with_description("Total entries across temporal indexes")
+            .init();
+
+        let vm_pda_reverse_lookup_count = meter
+            .i64_gauge("hyperstack.vm.pda_reverse_lookup.count")
+            .with_description("Number of PDA reverse lookup tables")
+            .init();
+
+        let vm_pda_reverse_lookup_entries = meter
+            .i64_gauge("hyperstack.vm.pda_reverse_lookup.entries")
+            .with_description("Total entries across PDA reverse lookups")
+            .init();
+
+        let vm_version_tracker_entries = meter
+            .i64_gauge("hyperstack.vm.version_tracker.entries")
+            .with_description("Entries in the version tracker")
+            .init();
+
+        let vm_path_cache_size = meter
+            .i64_gauge("hyperstack.vm.path_cache.size")
+            .with_description("Size of the compiled path cache")
+            .init();
+
+        let vm_pending_queue_updates = meter
+            .i64_gauge("hyperstack.vm.pending_queue.updates")
+            .with_description("Total pending updates in queue")
+            .init();
+
+        let vm_pending_queue_unique_pdas = meter
+            .i64_gauge("hyperstack.vm.pending_queue.unique_pdas")
+            .with_description("Unique PDAs with pending updates")
+            .init();
+
+        let vm_pending_queue_memory_bytes = meter
+            .i64_gauge("hyperstack.vm.pending_queue.memory_bytes")
+            .with_description("Estimated memory usage of pending queue")
+            .init();
+
+        let vm_pending_queue_oldest_age = meter
+            .f64_histogram("hyperstack.vm.pending_queue.oldest_age_seconds")
+            .with_description("Age of oldest pending update in seconds")
+            .init();
+
+        // Interpreter event counters
+        let vm_state_table_evictions = meter
+            .u64_counter("hyperstack.vm.state_table.evictions")
+            .with_description("State table LRU evictions")
+            .init();
+
+        let vm_state_table_at_capacity_events = meter
+            .u64_counter("hyperstack.vm.state_table.at_capacity_events")
+            .with_description("State table at capacity events")
+            .init();
+
+        let vm_cleanup_pending_removed = meter
+            .u64_counter("hyperstack.vm.cleanup.pending_removed")
+            .with_description("Pending updates removed during cleanup")
+            .init();
+
+        let vm_cleanup_temporal_removed = meter
+            .u64_counter("hyperstack.vm.cleanup.temporal_removed")
+            .with_description("Temporal entries removed during cleanup")
+            .init();
+
+        let vm_path_cache_hits = meter
+            .u64_counter("hyperstack.vm.path_cache.hits")
+            .with_description("Path cache hits")
+            .init();
+
+        let vm_path_cache_misses = meter
+            .u64_counter("hyperstack.vm.path_cache.misses")
+            .with_description("Path cache misses")
+            .init();
+
+        let vm_lookup_index_hits = meter
+            .u64_counter("hyperstack.vm.lookup_index.hits")
+            .with_description("Lookup index hits")
+            .init();
+
+        let vm_lookup_index_misses = meter
+            .u64_counter("hyperstack.vm.lookup_index.misses")
+            .with_description("Lookup index misses")
+            .init();
+
+        let vm_pending_updates_queued = meter
+            .u64_counter("hyperstack.vm.pending_updates.queued")
+            .with_description("Updates queued for later processing")
+            .init();
+
+        let vm_pending_updates_flushed = meter
+            .u64_counter("hyperstack.vm.pending_updates.flushed")
+            .with_description("Queued updates flushed after PDA resolution")
+            .init();
+
+        let vm_pending_updates_expired = meter
+            .u64_counter("hyperstack.vm.pending_updates.expired")
+            .with_description("Queued updates that expired")
+            .init();
+
         Self {
             meter,
             ws_connections_total,
@@ -195,6 +351,31 @@ impl Metrics {
             vm_pda_cache_misses,
             vm_pending_queue_size,
             entities_active,
+            vm_state_table_entries,
+            vm_state_table_capacity,
+            vm_lookup_index_count,
+            vm_lookup_index_entries,
+            vm_temporal_index_count,
+            vm_temporal_index_entries,
+            vm_pda_reverse_lookup_count,
+            vm_pda_reverse_lookup_entries,
+            vm_version_tracker_entries,
+            vm_path_cache_size,
+            vm_pending_queue_updates,
+            vm_pending_queue_unique_pdas,
+            vm_pending_queue_memory_bytes,
+            vm_pending_queue_oldest_age,
+            vm_state_table_evictions,
+            vm_state_table_at_capacity_events,
+            vm_cleanup_pending_removed,
+            vm_cleanup_temporal_removed,
+            vm_path_cache_hits,
+            vm_path_cache_misses,
+            vm_lookup_index_hits,
+            vm_lookup_index_misses,
+            vm_pending_updates_queued,
+            vm_pending_updates_flushed,
+            vm_pending_updates_expired,
         }
     }
 
@@ -317,6 +498,115 @@ impl Metrics {
     /// Update the pending queue size
     pub fn update_pending_queue_size(&self, delta: i64) {
         self.vm_pending_queue_size.add(delta, &[]);
+    }
+
+    // ==================== Interpreter Cache Helpers ====================
+
+    /// Record all gauge metrics from VmMemoryStats
+    pub fn record_vm_memory_stats(
+        &self,
+        stats: &hyperstack_interpreter::VmMemoryStats,
+        entity: &str,
+    ) {
+        let attrs = &[KeyValue::new("entity", entity.to_string())];
+
+        self.vm_state_table_entries
+            .record(stats.state_table_entity_count as i64, attrs);
+        self.vm_state_table_capacity
+            .record(stats.state_table_max_entries as i64, attrs);
+
+        self.vm_lookup_index_count
+            .record(stats.lookup_index_count as i64, attrs);
+        self.vm_lookup_index_entries
+            .record(stats.lookup_index_total_entries as i64, attrs);
+
+        self.vm_temporal_index_count
+            .record(stats.temporal_index_count as i64, attrs);
+        self.vm_temporal_index_entries
+            .record(stats.temporal_index_total_entries as i64, attrs);
+
+        self.vm_pda_reverse_lookup_count
+            .record(stats.pda_reverse_lookup_count as i64, attrs);
+        self.vm_pda_reverse_lookup_entries
+            .record(stats.pda_reverse_lookup_total_entries as i64, attrs);
+
+        self.vm_version_tracker_entries
+            .record(stats.version_tracker_entries as i64, attrs);
+
+        self.vm_path_cache_size
+            .record(stats.path_cache_size as i64, attrs);
+
+        if let Some(ref pq) = stats.pending_queue_stats {
+            self.vm_pending_queue_updates
+                .record(pq.total_updates as i64, attrs);
+            self.vm_pending_queue_unique_pdas
+                .record(pq.unique_pdas as i64, attrs);
+            self.vm_pending_queue_memory_bytes
+                .record(pq.estimated_memory_bytes as i64, attrs);
+            self.vm_pending_queue_oldest_age
+                .record(pq.oldest_age_seconds as f64, attrs);
+        }
+    }
+
+    /// Record state table evictions
+    pub fn record_state_table_eviction(&self, count: u64, entity: &str) {
+        self.vm_state_table_evictions
+            .add(count, &[KeyValue::new("entity", entity.to_string())]);
+    }
+
+    /// Record state table at capacity event
+    pub fn record_state_table_at_capacity(&self, entity: &str) {
+        self.vm_state_table_at_capacity_events
+            .add(1, &[KeyValue::new("entity", entity.to_string())]);
+    }
+
+    /// Record cleanup results
+    pub fn record_vm_cleanup(&self, pending_removed: usize, temporal_removed: usize, entity: &str) {
+        let attrs = &[KeyValue::new("entity", entity.to_string())];
+        self.vm_cleanup_pending_removed
+            .add(pending_removed as u64, attrs);
+        self.vm_cleanup_temporal_removed
+            .add(temporal_removed as u64, attrs);
+    }
+
+    /// Record a path cache hit
+    pub fn record_path_cache_hit(&self) {
+        self.vm_path_cache_hits.add(1, &[]);
+    }
+
+    /// Record a path cache miss
+    pub fn record_path_cache_miss(&self) {
+        self.vm_path_cache_misses.add(1, &[]);
+    }
+
+    /// Record a lookup index hit
+    pub fn record_lookup_index_hit(&self, index_name: &str) {
+        self.vm_lookup_index_hits
+            .add(1, &[KeyValue::new("index", index_name.to_string())]);
+    }
+
+    /// Record a lookup index miss
+    pub fn record_lookup_index_miss(&self, index_name: &str) {
+        self.vm_lookup_index_misses
+            .add(1, &[KeyValue::new("index", index_name.to_string())]);
+    }
+
+    /// Record an update queued for later processing
+    pub fn record_pending_update_queued(&self, entity: &str) {
+        self.vm_pending_updates_queued
+            .add(1, &[KeyValue::new("entity", entity.to_string())]);
+    }
+
+    /// Record queued updates flushed
+    pub fn record_pending_updates_flushed(&self, count: u64, entity: &str) {
+        self.vm_pending_updates_flushed
+            .add(count, &[KeyValue::new("entity", entity.to_string())]);
+    }
+
+    /// Record expired pending updates
+    pub fn record_pending_updates_expired(&self, count: u64, entity: &str) {
+        self.vm_pending_updates_expired
+            .add(count, &[KeyValue::new("entity", entity.to_string())]);
     }
 
     // ==================== Business Helpers ====================

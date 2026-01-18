@@ -37,8 +37,10 @@ pub mod health;
 pub mod http_health;
 #[cfg(feature = "otel")]
 pub mod metrics;
+pub mod mutation_batch;
 pub mod projector;
 pub mod runtime;
+pub mod telemetry;
 pub mod view;
 pub mod websocket;
 
@@ -52,8 +54,12 @@ pub use health::{HealthMonitor, SlotTracker, StreamStatus};
 pub use http_health::HttpHealthServer;
 #[cfg(feature = "otel")]
 pub use metrics::Metrics;
+pub use mutation_batch::MutationBatch;
 pub use projector::Projector;
 pub use runtime::Runtime;
+pub use telemetry::{init as init_telemetry, TelemetryConfig};
+#[cfg(feature = "otel")]
+pub use telemetry::{init_with_otel, TelemetryGuard};
 pub use view::{Delivery, Filters, Projection, ViewIndex, ViewSpec};
 pub use websocket::{ClientInfo, ClientManager, Frame, Mode, Subscription, WebSocketServer};
 
@@ -62,10 +68,9 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 /// Type alias for a parser setup function.
-/// Receives mutations sender, optional health monitor, and reconnection config.
 pub type ParserSetupFn = Arc<
     dyn Fn(
-            tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
+            tokio::sync::mpsc::Sender<MutationBatch>,
             Option<HealthMonitor>,
             ReconnectionConfig,
         ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send>>
@@ -257,8 +262,6 @@ impl ServerBuilder {
                         filters: Filters::all(),
                         delivery: Delivery::default(),
                     });
-
-                    tracing::info!("Registered views for entity: {}", entity_name);
                 }
             }
 

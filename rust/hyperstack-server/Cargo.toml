@@ -44,14 +44,16 @@ hyper = { version = "1.6", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 
+# Telemetry/tracing subscriber
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
 # OpenTelemetry for distributed tracing and metrics (optional, behind 'otel' feature)
-opentelemetry = { version = "0.22", optional = true }
+opentelemetry = { version = "0.22", features = ["otel_unstable"], optional = true }
 opentelemetry_sdk = { version = "0.22", features = ["rt-tokio", "metrics"], optional = true }
 opentelemetry-otlp = { version = "0.15", features = ["tonic", "metrics"], optional = true }
 tracing-opentelemetry = { version = "0.23", optional = true }
 
 [dev-dependencies]
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [features]
 default = []

@@ -155,7 +155,7 @@ pub fn generate_vm_handler(
 
                     let context = hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
 
-                    vm.process_event_with_context(&self.bytecode, event_value, event_type, Some(&context))
+                    vm.process_event(&self.bytecode, event_value, event_type, Some(&context), None)
                         .map_err(|e| e.to_string())
                 };
 
@@ -205,7 +205,7 @@ pub fn generate_vm_handler(
 
                     let context = hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
 
-                    let mut result = vm.process_event_with_context(&bytecode, event_value.clone(), event_type, Some(&context))
+                    let mut result = vm.process_event(&bytecode, event_value.clone(), event_type, Some(&context), None)
                         .map_err(|e| e.to_string());
 
                     // After processing instruction, call any registered after-instruction hooks
@@ -363,15 +363,13 @@ pub fn generate_vm_handler(
                                         update.write_version,
                                     );
 
-                                    match vm.process_event_with_context(&bytecode, account_data, &update.account_type, Some(&update_context)) {
+                                    match vm.process_event(&bytecode, account_data, &update.account_type, Some(&update_context), None) {
                                         Ok(pending_mutations) => {
                                             if let Ok(ref mut mutations) = result {
                                                 mutations.extend(pending_mutations);
                                             }
                                         }
-                                        Err(_e) => {
-                                            // Ignore errors
-                                        }
+                                        Err(_e) => {}
                                     }
                                 }
                             }
@@ -379,6 +377,8 @@ pub fn generate_vm_handler(
 
                         if vm.instructions_executed % 1000 == 0 {
                             let _ = vm.cleanup_all_expired(0);
+                            let stats = vm.get_memory_stats(0);
+                            hyperstack_interpreter::vm_metrics::record_memory_stats(&stats, #entity_name_lit);
                         }
                     }
 

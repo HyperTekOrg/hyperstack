@@ -3,6 +3,7 @@ use crate::cache::EntityCache;
 use crate::config::ServerConfig;
 use crate::health::HealthMonitor;
 use crate::http_health::HttpHealthServer;
+use crate::mutation_batch::MutationBatch;
 use crate::projector::Projector;
 use crate::view::ViewIndex;
 use crate::websocket::WebSocketServer;
@@ -11,7 +12,7 @@ use anyhow::Result;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tracing::{error, info};
+use tracing::{error, info, info_span, Instrument};
 
 #[cfg(feature = "otel")]
 use crate::metrics::Metrics;
@@ -82,9 +83,7 @@ impl Runtime {
     pub async fn run(self) -> Result<()> {
         info!("Starting HyperStack runtime");
 
-        // Create bounded mutations channel for Transform Library -> Projector communication
-        let (mutations_tx, mutations_rx) =
-            mpsc::channel::<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>(1024);
+        let (mutations_tx, mutations_rx) = mpsc::channel::<MutationBatch>(1024);
 
         let bus_manager = BusManager::new();
         let entity_cache = EntityCache::new();
@@ -114,9 +113,12 @@ impl Runtime {
             mutations_rx,
         );
 
-        let projector_handle = tokio::spawn(async move {
-            projector.run().await;
-        });
+        let projector_handle = tokio::spawn(
+            async move {
+                projector.run().await;
+            }
+            .instrument(info_span!("projector")),
+        );
 
         let ws_handle = if let Some(ws_config) = &self.config.websocket {
             #[cfg(feature = "otel")]
@@ -135,16 +137,19 @@ impl Runtime {
                 self.view_index.clone(),
             );
 
-            Some(tokio::spawn(async move {
-                if let Err(e) = ws_server.start().await {
-                    error!("WebSocket server error: {}", e);
+            let bind_addr = ws_config.bind_address;
+            Some(tokio::spawn(
+                async move {
+                    if let Err(e) = ws_server.start().await {
+                        error!("WebSocket server error: {}", e);
+                    }
                 }
-            }))
+                .instrument(info_span!("ws.server", %bind_addr)),
+            ))
         } else {
             None
         };
 
-        // Start Vixen parser/stream consumer (if spec with parser setup is provided)
         let parser_handle = if let Some(spec) = self.spec {
             if let Some(parser_setup) = spec.parser_setup {
                 info!(
@@ -154,11 +159,15 @@ impl Runtime {
                 let tx = mutations_tx.clone();
                 let health = health_monitor.clone();
                 let reconnection_config = self.config.reconnection.clone().unwrap_or_default();
-                Some(tokio::spawn(async move {
-                    if let Err(e) = parser_setup(tx, health, reconnection_config).await {
-                        error!("Vixen parser runtime error: {}", e);
+                let program_id = spec.program_id.clone();
+                Some(tokio::spawn(
+                    async move {
+                        if let Err(e) = parser_setup(tx, health, reconnection_config).await {
+                            error!("Vixen parser runtime error: {}", e);
+                        }
                     }
-                }))
+                    .instrument(info_span!("vixen.parser", %program_id)),
+                ))
             } else {
                 info!("Spec provided but no parser_setup configured - skipping Vixen runtime");
                 None
@@ -168,52 +177,61 @@ impl Runtime {
             None
         };
 
-        // Start HTTP health server (if configured)
         let http_health_handle = if let Some(http_health_config) = &self.config.http_health {
             let mut http_server = HttpHealthServer::new(http_health_config.bind_address);
             if let Some(monitor) = health_monitor.clone() {
                 http_server = http_server.with_health_monitor(monitor);
             }
 
-            Some(tokio::spawn(async move {
-                if let Err(e) = http_server.start().await {
-                    error!("HTTP health server error: {}", e);
+            let bind_addr = http_health_config.bind_address;
+            Some(tokio::spawn(
+                async move {
+                    if let Err(e) = http_server.start().await {
+                        error!("HTTP health server error: {}", e);
+                    }
                 }
-            }))
+                .instrument(info_span!("http.health", %bind_addr)),
+            ))
         } else {
             None
         };
 
         let bus_cleanup_handle = {
             let bus = bus_manager.clone();
-            tokio::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(60));
-                loop {
-                    interval.tick().await;
-                    let state_cleaned = bus.cleanup_stale_state_buses().await;
-                    let list_cleaned = bus.cleanup_stale_list_buses().await;
-                    if state_cleaned > 0 || list_cleaned > 0 {
-                        let (state_count, list_count) = bus.bus_counts().await;
-                        info!(
-                            "Bus cleanup: removed {} state, {} list buses. Current: {} state, {} list",
-                            state_cleaned, list_cleaned, state_count, list_count
-                        );
+            tokio::spawn(
+                async move {
+                    let mut interval = tokio::time::interval(Duration::from_secs(60));
+                    loop {
+                        interval.tick().await;
+                        let state_cleaned = bus.cleanup_stale_state_buses().await;
+                        let list_cleaned = bus.cleanup_stale_list_buses().await;
+                        if state_cleaned > 0 || list_cleaned > 0 {
+                            let (state_count, list_count) = bus.bus_counts().await;
+                            info!(
+                                "Bus cleanup: removed {} state, {} list buses. Current: {} state, {} list",
+                                state_cleaned, list_cleaned, state_count, list_count
+                            );
+                        }
                     }
                 }
-            })
+                .instrument(info_span!("bus.cleanup")),
+            )
         };
 
         let stats_handle = {
             let bus = bus_manager.clone();
             let cache = entity_cache.clone();
-            tokio::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(30));
-                loop {
-                    interval.tick().await;
-                    let (_state_buses, _list_buses) = bus.bus_counts().await;
-                    let _cache_stats = cache.stats().await;
+            tokio::spawn(
+                async move {
+                    let mut interval = tokio::time::interval(Duration::from_secs(30));
+                    loop {
+                        interval.tick().await;
+                        let (_state_buses, _list_buses) = bus.bus_counts().await;
+                        let _cache_stats = cache.stats().await;
+                    }
                 }
-            })
+                .instrument(info_span!("stats.reporter")),
+            )
         };
 
         info!("HyperStack runtime is running. Press Ctrl+C to stop.");

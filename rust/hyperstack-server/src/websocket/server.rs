@@ -15,7 +15,7 @@ use std::time::Instant;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::accept_async;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, info_span, warn, Instrument};
 use uuid::Uuid;
 
 #[cfg(feature = "otel")]
@@ -116,31 +116,34 @@ impl WebSocketServer {
                     #[cfg(feature = "otel")]
                     let metrics = self.metrics.clone();
 
-                    tokio::spawn(async move {
-                        #[cfg(feature = "otel")]
-                        let result = handle_connection(
-                            stream,
-                            client_manager,
-                            bus_manager,
-                            entity_cache,
-                            view_index,
-                            metrics,
-                        )
-                        .await;
-                        #[cfg(not(feature = "otel"))]
-                        let result = handle_connection(
-                            stream,
-                            client_manager,
-                            bus_manager,
-                            entity_cache,
-                            view_index,
-                        )
-                        .await;
+                    tokio::spawn(
+                        async move {
+                            #[cfg(feature = "otel")]
+                            let result = handle_connection(
+                                stream,
+                                client_manager,
+                                bus_manager,
+                                entity_cache,
+                                view_index,
+                                metrics,
+                            )
+                            .await;
+                            #[cfg(not(feature = "otel"))]
+                            let result = handle_connection(
+                                stream,
+                                client_manager,
+                                bus_manager,
+                                entity_cache,
+                                view_index,
+                            )
+                            .await;
 
-                        if let Err(e) = result {
-                            error!("WebSocket connection error: {}", e);
+                            if let Err(e) = result {
+                                error!("WebSocket connection error: {}", e);
+                            }
                         }
-                    });
+                        .instrument(info_span!("ws.connection", %addr)),
+                    );
                 }
                 Err(e) => {
                     error!("Failed to accept connection: {}", e);
@@ -457,28 +460,33 @@ async fn attach_client_to_bus(
 
             let client_mgr = client_manager.clone();
             let metrics_clone = metrics.clone();
-            tokio::spawn(async move {
-                loop {
-                    tokio::select! {
-                        _ = cancel_token.cancelled() => {
-                            debug!("State subscription cancelled for client {}", client_id);
-                            break;
-                        }
-                        result = rx.changed() => {
-                            if result.is_err() {
+            let view_id_clone = view_id.clone();
+            let key_clone = key.to_string();
+            tokio::spawn(
+                async move {
+                    loop {
+                        tokio::select! {
+                            _ = cancel_token.cancelled() => {
+                                debug!("State subscription cancelled for client {}", client_id);
                                 break;
                             }
-                            let data = rx.borrow().clone();
-                            if client_mgr.send_to_client(client_id, data).is_err() {
-                                break;
-                            }
-                            if let Some(ref m) = metrics_clone {
-                                m.record_ws_message_sent();
+                            result = rx.changed() => {
+                                if result.is_err() {
+                                    break;
+                                }
+                                let data = rx.borrow().clone();
+                                if client_mgr.send_to_client(client_id, data).is_err() {
+                                    break;
+                                }
+                                if let Some(ref m) = metrics_clone {
+                                    m.record_ws_message_sent();
+                                }
                             }
                         }
                     }
                 }
-            });
+                .instrument(info_span!("ws.subscribe.state", %client_id, view = %view_id_clone, key = %key_clone)),
+            );
         }
         Mode::List | Mode::Append => {
             let mut rx = bus_manager.get_or_create_list_bus(view_id).await;
@@ -514,34 +522,39 @@ async fn attach_client_to_bus(
             let client_mgr = client_manager.clone();
             let sub = subscription.clone();
             let metrics_clone = metrics.clone();
-            tokio::spawn(async move {
-                loop {
-                    tokio::select! {
-                        _ = cancel_token.cancelled() => {
-                            debug!("List subscription cancelled for client {}", client_id);
-                            break;
-                        }
-                        result = rx.recv() => {
-                            match result {
-                                Ok(envelope) => {
-                                    if sub.matches(&envelope.entity, &envelope.key) {
-                                        if client_mgr
-                                            .send_to_client(client_id, envelope.payload.clone())
-                                            .is_err()
-                                        {
-                                            break;
-                                        }
-                                        if let Some(ref m) = metrics_clone {
-                                            m.record_ws_message_sent();
+            let view_id_clone = view_id.clone();
+            let mode = view_spec.mode;
+            tokio::spawn(
+                async move {
+                    loop {
+                        tokio::select! {
+                            _ = cancel_token.cancelled() => {
+                                debug!("List subscription cancelled for client {}", client_id);
+                                break;
+                            }
+                            result = rx.recv() => {
+                                match result {
+                                    Ok(envelope) => {
+                                        if sub.matches(&envelope.entity, &envelope.key) {
+                                            if client_mgr
+                                                .send_to_client(client_id, envelope.payload.clone())
+                                                .is_err()
+                                            {
+                                                break;
+                                            }
+                                            if let Some(ref m) = metrics_clone {
+                                                m.record_ws_message_sent();
+                                            }
                                         }
                                     }
+                                    Err(_) => break,
                                 }
-                                Err(_) => break,
                             }
                         }
                     }
                 }
-            });
+                .instrument(info_span!("ws.subscribe.list", %client_id, view = %view_id_clone, mode = ?mode)),
+            );
         }
     }
 
@@ -582,25 +595,30 @@ async fn attach_client_to_bus(
             }
 
             let client_mgr = client_manager.clone();
-            tokio::spawn(async move {
-                loop {
-                    tokio::select! {
-                        _ = cancel_token.cancelled() => {
-                            debug!("State subscription cancelled for client {}", client_id);
-                            break;
-                        }
-                        result = rx.changed() => {
-                            if result.is_err() {
+            let view_id_clone = view_id.clone();
+            let key_clone = key.to_string();
+            tokio::spawn(
+                async move {
+                    loop {
+                        tokio::select! {
+                            _ = cancel_token.cancelled() => {
+                                debug!("State subscription cancelled for client {}", client_id);
                                 break;
                             }
-                            let data = rx.borrow().clone();
-                            if client_mgr.send_to_client(client_id, data).is_err() {
-                                break;
+                            result = rx.changed() => {
+                                if result.is_err() {
+                                    break;
+                                }
+                                let data = rx.borrow().clone();
+                                if client_mgr.send_to_client(client_id, data).is_err() {
+                                    break;
+                                }
                             }
                         }
                     }
                 }
-            });
+                .instrument(info_span!("ws.subscribe.state", %client_id, view = %view_id_clone, key = %key_clone)),
+            );
         }
         Mode::List | Mode::Append => {
             let mut rx = bus_manager.get_or_create_list_bus(view_id).await;
@@ -632,30 +650,35 @@ async fn attach_client_to_bus(
 
             let client_mgr = client_manager.clone();
             let sub = subscription.clone();
-            tokio::spawn(async move {
-                loop {
-                    tokio::select! {
-                        _ = cancel_token.cancelled() => {
-                            debug!("List subscription cancelled for client {}", client_id);
-                            break;
-                        }
-                        result = rx.recv() => {
-                            match result {
-                                Ok(envelope) => {
-                                    if sub.matches(&envelope.entity, &envelope.key)
-                                        && client_mgr
-                                            .send_to_client(client_id, envelope.payload.clone())
-                                            .is_err()
-                                    {
-                                        break;
+            let view_id_clone = view_id.clone();
+            let mode = view_spec.mode;
+            tokio::spawn(
+                async move {
+                    loop {
+                        tokio::select! {
+                            _ = cancel_token.cancelled() => {
+                                debug!("List subscription cancelled for client {}", client_id);
+                                break;
+                            }
+                            result = rx.recv() => {
+                                match result {
+                                    Ok(envelope) => {
+                                        if sub.matches(&envelope.entity, &envelope.key)
+                                            && client_mgr
+                                                .send_to_client(client_id, envelope.payload.clone())
+                                                .is_err()
+                                        {
+                                            break;
+                                        }
                                     }
+                                    Err(_) => break,
                                 }
-                                Err(_) => break,
                             }
                         }
                     }
                 }
-            });
+                .instrument(info_span!("ws.subscribe.list", %client_id, view = %view_id_clone, mode = ?mode)),
+            );
         }
     }
 

@@ -88,15 +88,7 @@ impl BusManager {
 
         buses.retain(|_, tx| tx.receiver_count() > 0);
 
-        let removed = before - buses.len();
-        if removed > 0 {
-            tracing::debug!(
-                "Cleaned up {} stale state buses, {} remaining",
-                removed,
-                buses.len()
-            );
-        }
-        removed
+        before - buses.len()
     }
 
     pub async fn cleanup_stale_list_buses(&self) -> usize {
@@ -105,15 +97,7 @@ impl BusManager {
 
         buses.retain(|_, tx| tx.receiver_count() > 0);
 
-        let removed = before - buses.len();
-        if removed > 0 {
-            tracing::debug!(
-                "Cleaned up {} stale list buses, {} remaining",
-                removed,
-                buses.len()
-            );
-        }
-        removed
+        before - buses.len()
     }
 
     pub async fn bus_counts(&self) -> (usize, usize) {
