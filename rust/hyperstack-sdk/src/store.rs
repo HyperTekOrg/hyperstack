@@ -1,4 +1,4 @@
-use crate::frame::{Frame, Operation};
+use crate::frame::{parse_snapshot_entities, Frame, Operation};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -65,12 +65,17 @@ impl SharedStore {
             frame.op,
         );
 
+        let operation = frame.operation();
+
+        if operation == Operation::Snapshot {
+            self.apply_snapshot(&frame).await;
+            return;
+        }
+
         let mut entities = self.entities.write().await;
         let view_map = entities
             .entry(entity_name.to_string())
             .or_insert_with(HashMap::new);
-
-        let operation = frame.operation();
 
         let previous = view_map.get(&frame.key).cloned();
 
@@ -91,6 +96,7 @@ impl SharedStore {
                 view_map.remove(&frame.key);
                 (None, None)
             }
+            Operation::Snapshot => unreachable!(),
         };
 
         let _ = self.updates_tx.send(StoreUpdate {
@@ -102,6 +108,39 @@ impl SharedStore {
             patch,
         });
 
+        self.mark_view_ready(entity_name).await;
+    }
+
+    async fn apply_snapshot(&self, frame: &Frame) {
+        let entity_name = extract_entity_name(&frame.entity);
+        let snapshot_entities = parse_snapshot_entities(&frame.data);
+
+        tracing::debug!(
+            "apply_snapshot: entity={}, count={}",
+            entity_name,
+            snapshot_entities.len()
+        );
+
+        let mut entities = self.entities.write().await;
+        let view_map = entities
+            .entry(entity_name.to_string())
+            .or_insert_with(HashMap::new);
+
+        for entity in snapshot_entities {
+            let previous = view_map.get(&entity.key).cloned();
+            view_map.insert(entity.key.clone(), entity.data.clone());
+
+            let _ = self.updates_tx.send(StoreUpdate {
+                view: entity_name.to_string(),
+                key: entity.key,
+                operation: Operation::Upsert,
+                data: Some(entity.data),
+                previous,
+                patch: None,
+            });
+        }
+
+        drop(entities);
         self.mark_view_ready(entity_name).await;
     }
 

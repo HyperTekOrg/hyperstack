@@ -3,8 +3,8 @@ export { ConnectionManager } from './connection';
 export { EntityStore } from './store';
 export { SubscriptionRegistry } from './subscription';
 
-export { parseFrame, parseFrameFromBlob, isValidFrame } from './frame';
-export type { EntityFrame, FrameMode, FrameOp } from './frame';
+export { parseFrame, parseFrameFromBlob, isValidFrame, isSnapshotFrame } from './frame';
+export type { EntityFrame, SnapshotFrame, SnapshotEntity, Frame, FrameMode, FrameOp } from './frame';
 
 export { createUpdateStream, createRichUpdateStream } from './stream';
 export {

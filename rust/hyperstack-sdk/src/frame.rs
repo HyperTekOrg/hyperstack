@@ -14,6 +14,7 @@ pub enum Operation {
     Patch,
     Delete,
     Create,
+    Snapshot,
 }
 
 impl std::str::FromStr for Operation {
@@ -25,6 +26,7 @@ impl std::str::FromStr for Operation {
             "patch" => Operation::Patch,
             "delete" => Operation::Delete,
             "create" => Operation::Create,
+            "snapshot" => Operation::Snapshot,
             _ => Operation::Upsert,
         })
     }
@@ -36,6 +38,7 @@ pub struct Frame {
     #[serde(rename = "entity")]
     pub entity: String,
     pub op: String,
+    #[serde(default)]
     pub key: String,
     pub data: serde_json::Value,
 }
@@ -48,9 +51,29 @@ impl Frame {
     pub fn operation(&self) -> Operation {
         self.op.parse().unwrap()
     }
+
+    pub fn is_snapshot(&self) -> bool {
+        self.op == "snapshot"
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnapshotEntity {
+    pub key: String,
+    pub data: serde_json::Value,
 }
 
 pub fn parse_frame(bytes: &[u8]) -> Result<Frame, serde_json::Error> {
     let text = String::from_utf8_lossy(bytes);
     serde_json::from_str(&text)
+}
+
+pub fn parse_snapshot_entities(data: &serde_json::Value) -> Vec<SnapshotEntity> {
+    match data {
+        serde_json::Value::Array(arr) => arr
+            .iter()
+            .filter_map(|v| serde_json::from_value(v.clone()).ok())
+            .collect(),
+        _ => Vec::new(),
+    }
 }

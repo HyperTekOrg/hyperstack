@@ -1,5 +1,5 @@
 export type FrameMode = 'state' | 'append' | 'list';
-export type FrameOp = 'create' | 'upsert' | 'patch' | 'delete';
+export type FrameOp = 'create' | 'upsert' | 'patch' | 'delete' | 'snapshot';
 
 export interface EntityFrame<T = unknown> {
   mode: FrameMode;
@@ -7,6 +7,24 @@ export interface EntityFrame<T = unknown> {
   op: FrameOp;
   key: string;
   data: T;
+}
+
+export interface SnapshotEntity<T = unknown> {
+  key: string;
+  data: T;
+}
+
+export interface SnapshotFrame<T = unknown> {
+  mode: FrameMode;
+  entity: string;
+  op: 'snapshot';
+  data: SnapshotEntity<T>[];
+}
+
+export type Frame<T = unknown> = EntityFrame<T> | SnapshotFrame<T>;
+
+export function isSnapshotFrame<T>(frame: Frame<T>): frame is SnapshotFrame<T> {
+  return frame.op === 'snapshot';
 }
 
 export function parseFrame(data: ArrayBuffer | string): EntityFrame {
@@ -24,19 +42,28 @@ export async function parseFrameFromBlob(blob: Blob): Promise<EntityFrame> {
   return parseFrame(arrayBuffer);
 }
 
-export function isValidFrame(frame: unknown): frame is EntityFrame {
+export function isValidFrame(frame: unknown): frame is Frame {
   if (typeof frame !== 'object' || frame === null) {
     return false;
   }
 
   const f = frame as Record<string, unknown>;
 
+  if (
+    typeof f['entity'] !== 'string' ||
+    typeof f['op'] !== 'string' ||
+    typeof f['mode'] !== 'string' ||
+    !['state', 'append', 'list'].includes(f['mode'] as string)
+  ) {
+    return false;
+  }
+
+  if (f['op'] === 'snapshot') {
+    return Array.isArray(f['data']);
+  }
+
   return (
-    typeof f['entity'] === 'string' &&
     typeof f['key'] === 'string' &&
-    typeof f['op'] === 'string' &&
-    ['create', 'upsert', 'patch', 'delete'].includes(f['op'] as string) &&
-    typeof f['mode'] === 'string' &&
-    ['state', 'append', 'list'].includes(f['mode'] as string)
+    ['create', 'upsert', 'patch', 'delete'].includes(f['op'] as string)
   );
 }

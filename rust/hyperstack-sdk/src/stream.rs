@@ -327,7 +327,7 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for EntityStre
                             Operation::Delete => {
                                 return Poll::Ready(Some(Update::Delete { key: update.key }));
                             }
-                            Operation::Upsert | Operation::Create => {
+                            Operation::Upsert | Operation::Create | Operation::Snapshot => {
                                 if let Some(data) = update.data {
                                     if let Ok(typed) = serde_json::from_value::<T>(data) {
                                         return Poll::Ready(Some(Update::Upsert {
@@ -512,7 +512,7 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for RichEntity
                                     last_known: previous,
                                 }));
                             }
-                            Operation::Create => {
+                            Operation::Create | Operation::Snapshot => {
                                 if let Some(data) = update.data {
                                     if let Ok(typed) = serde_json::from_value::<T>(data) {
                                         return Poll::Ready(Some(RichUpdate::Created {

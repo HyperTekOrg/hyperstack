@@ -1,9 +1,27 @@
 export interface EntityFrame<T = unknown> {
   mode: 'state' | 'append' | 'list';
   entity: string;
-  op: 'create' | 'upsert' | 'patch' | 'delete';
+  op: 'create' | 'upsert' | 'patch' | 'delete' | 'snapshot';
   key: string;
   data: T;
+}
+
+export interface SnapshotEntity<T = unknown> {
+  key: string;
+  data: T;
+}
+
+export interface SnapshotFrame<T = unknown> {
+  mode: 'state' | 'append' | 'list';
+  entity: string;
+  op: 'snapshot';
+  data: SnapshotEntity<T>[];
+}
+
+export type Frame<T = unknown> = EntityFrame<T> | SnapshotFrame<T>;
+
+export function isSnapshotFrame<T>(frame: Frame<T>): frame is SnapshotFrame<T> {
+  return frame.op === 'snapshot';
 }
 
 export interface Subscription {

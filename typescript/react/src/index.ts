@@ -17,6 +17,9 @@ export type {
   ListViewHook,
   ViewMode,
   EntityFrame,
+  SnapshotFrame,
+  SnapshotEntity,
+  Frame,
   Subscription,
   ConnectionState,
   HyperSDKConfig
@@ -24,4 +27,4 @@ export type {
 
 export type { HyperstackRuntime, SubscriptionHandle } from './runtime';
 
-export { HyperStreamError, DEFAULT_CONFIG } from './types';
+export { HyperStreamError, DEFAULT_CONFIG, isSnapshotFrame } from './types';

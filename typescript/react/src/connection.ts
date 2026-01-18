@@ -1,7 +1,7 @@
-import { ConnectionState, EntityFrame, Subscription, HyperSDKConfig, DEFAULT_CONFIG } from './types';
+import { ConnectionState, Frame, Subscription, HyperSDKConfig, DEFAULT_CONFIG } from './types';
 
 // Handler types for the ConnectionManager callbacks
-export type FrameHandler = <T>(frame: EntityFrame<T>) => void;               // called when EntityFrame arrives from WebSocket
+export type FrameHandler = <T>(frame: Frame<T>) => void;               // called when Frame arrives from WebSocket
 export type StateHandler = (state: ConnectionState, error?: string) => void; // called on connection state changes
 
 // Manages WebSocket connection lifecycle and subscription queuing
@@ -76,26 +76,21 @@ export class ConnectionManager {
         }
       };
 
-      // core message handler - parses incoming data into EntityFrames
       this.ws.onmessage = async (event) => {
         try {
-          let frame: EntityFrame;
+          let frame: Frame;
 
           if (event.data instanceof ArrayBuffer) {
-            // binary data as ArrayBuffer
             frame = this.parseBinaryFrame(event.data);
           } else if (event.data instanceof Blob) {
-            // binary data as Blob - convert to ArrayBuffer
             const arrayBuffer = await event.data.arrayBuffer();
             frame = this.parseBinaryFrame(arrayBuffer);
           } else if (typeof event.data === 'string') {
-            // JSON text data
-            frame = JSON.parse(event.data) as EntityFrame;
+            frame = JSON.parse(event.data) as Frame;
           } else {
             throw new Error(`Unsupported message type: ${typeof event.data}`);
           }
 
-          // fw parsed frame to store for entity updates
           this.onFrame?.(frame);
         } catch (error) {
           console.error('Failed to parse frame:', error);
@@ -162,24 +157,10 @@ export class ConnectionManager {
     }
   }
 
-  // binary frame parser - converts WebSocket binary data to EntityFrame
-  private parseBinaryFrame(data: ArrayBuffer): EntityFrame {
-    // server sends JSON Frame serialized as binary bytes
-    // convert binary data back to JSON string and parse
+  private parseBinaryFrame(data: ArrayBuffer): Frame {
     const decoder = new TextDecoder('utf-8');
     const jsonString = decoder.decode(data);
-
-    // parse the Frame JSON sent by projector
-    const frame = JSON.parse(jsonString);
-
-    // convert to EntityFrame format expected by SDK
-    return {
-      mode: frame.mode,
-      entity: frame.entity,  // Backend serializes view path as 'entity' field
-      op: frame.op,
-      key: frame.key,
-      data: frame.data
-    };
+    return JSON.parse(jsonString) as Frame;
   }
 
   // Internal state change handler - notifies store and triggers UI re-renders

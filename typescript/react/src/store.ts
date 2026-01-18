@@ -3,11 +3,13 @@ import { ConnectionManager } from './connection';
 import {
   ConnectionState,
   EntityFrame,
+  Frame,
   Subscription,
   HyperState,
   DEFAULT_CONFIG,
   HyperSDKConfig,
-  ViewMode
+  ViewMode,
+  isSnapshotFrame
 } from './types';
 
 function deepMerge<T>(target: T, source: Partial<T>): T {
@@ -58,7 +60,7 @@ interface ViewCache {
 // The complete Zustand store interface - extends HyperState with actions
 interface HyperStore extends HyperState {
   // core frame processor - processes incoming WebSocket frames
-  handleFrame: <T>(frame: EntityFrame<T>) => void;  // core frame processor (called by ConnectionManager)
+  handleFrame: <T>(frame: Frame<T>) => void;  // core frame processor (called by ConnectionManager)
 
   // Subscription lifecycle with automatic ref counting
   // Multiple components can request same data, only 1 network subscription happens
@@ -89,7 +91,7 @@ export function createHyperStore(config: Partial<HyperSDKConfig> = {}) {
       `${subscription.view}:${subscription.key ?? '*'}:${subscription.partition ?? ''}:${JSON.stringify(subscription.filters ?? {})}`;
 
     connectionManager.setHandlers({
-      onFrame: <T>(frame: EntityFrame<T>) => {
+      onFrame: <T>(frame: Frame<T>) => {
         get().handleFrame(frame);
       },
 
@@ -107,29 +109,34 @@ export function createHyperStore(config: Partial<HyperSDKConfig> = {}) {
       connectionManager,
       viewCache: {},
 
-      handleFrame: <T>(frame: EntityFrame<T>) => {
+      handleFrame: <T>(frame: Frame<T>) => {
         set((state) => {
           const newEntities = new Map(state.entities);
-
           const viewPath = frame.entity;
-
           const entityMap = new Map(newEntities.get(viewPath) || new Map());
 
-          switch (frame.op) {
-            case 'upsert':
-              entityMap.set(frame.key, frame.data);
-              break;
-            case 'patch':
-              const existing = entityMap.get(frame.key);
-              if (existing && typeof existing === 'object' && typeof frame.data === 'object') {
-                entityMap.set(frame.key, deepMerge(existing, frame.data as any));
-              } else {
+          if (isSnapshotFrame(frame)) {
+            for (const entity of frame.data) {
+              entityMap.set(entity.key, entity.data);
+            }
+          } else {
+            switch (frame.op) {
+              case 'upsert':
+              case 'create':
                 entityMap.set(frame.key, frame.data);
-              }
-              break;
-            case 'delete':
-              entityMap.delete(frame.key);
-              break;
+                break;
+              case 'patch':
+                const existing = entityMap.get(frame.key);
+                if (existing && typeof existing === 'object' && typeof frame.data === 'object') {
+                  entityMap.set(frame.key, deepMerge(existing, frame.data as any));
+                } else {
+                  entityMap.set(frame.key, frame.data);
+                }
+                break;
+              case 'delete':
+                entityMap.delete(frame.key);
+                break;
+            }
           }
 
           newEntities.set(viewPath, entityMap);
@@ -148,7 +155,7 @@ export function createHyperStore(config: Partial<HyperSDKConfig> = {}) {
           return {
             ...state,
             entities: newEntities,
-            recentFrames: [frame, ...state.recentFrames],
+            recentFrames: [frame as EntityFrame<T>, ...state.recentFrames],
             viewCache: newViewCache
           };
         });

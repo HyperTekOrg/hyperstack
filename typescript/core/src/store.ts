@@ -1,4 +1,5 @@
-import type { EntityFrame } from './frame';
+import type { EntityFrame, SnapshotFrame, Frame } from './frame';
+import { isSnapshotFrame } from './frame';
 import type { Update, RichUpdate, SubscribeCallback, UnsubscribeFn } from './types';
 
 function isObject(item: unknown): item is Record<string, unknown> {
@@ -34,7 +35,36 @@ export class EntityStore {
   private updateCallbacks: Set<EntityUpdateCallback> = new Set();
   private richUpdateCallbacks: Set<RichUpdateCallback> = new Set();
 
-  handleFrame<T>(frame: EntityFrame<T>): void {
+  handleFrame<T>(frame: Frame<T>): void {
+    if (isSnapshotFrame(frame)) {
+      this.handleSnapshotFrame(frame);
+      return;
+    }
+    this.handleEntityFrame(frame);
+  }
+
+  private handleSnapshotFrame<T>(frame: SnapshotFrame<T>): void {
+    const viewPath = frame.entity;
+    let viewMap = this.entities.get(viewPath);
+
+    if (!viewMap) {
+      viewMap = new Map();
+      this.entities.set(viewPath, viewMap);
+    }
+
+    for (const entity of frame.data) {
+      const previousValue = viewMap.get(entity.key) as T | undefined;
+      viewMap.set(entity.key, entity.data);
+      this.notifyUpdate(viewPath, entity.key, {
+        type: 'upsert',
+        key: entity.key,
+        data: entity.data,
+      });
+      this.notifyRichUpdate(viewPath, entity.key, previousValue, entity.data, 'upsert');
+    }
+  }
+
+  private handleEntityFrame<T>(frame: EntityFrame<T>): void {
     const viewPath = frame.entity;
     let viewMap = this.entities.get(viewPath);
 
