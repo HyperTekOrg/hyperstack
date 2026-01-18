@@ -75,7 +75,6 @@ pub struct InstructionContext<'a> {
     pub(crate) state_id: u32,
     pub(crate) reverse_lookup_tx: &'a mut dyn ReverseLookupUpdater,
     pub(crate) pending_updates: Vec<crate::vm::PendingAccountUpdate>,
-    // Fields for metrics context integration
     pub(crate) registers: Option<&'a mut Vec<crate::vm::RegisterValue>>,
     pub(crate) state_reg: Option<crate::vm::Register>,
     #[allow(dead_code)]
@@ -84,8 +83,7 @@ pub struct InstructionContext<'a> {
     pub(crate) slot: Option<u64>,
     pub(crate) signature: Option<String>,
     pub(crate) timestamp: Option<i64>,
-    // Track which fields were modified by imperative hooks
-    pub(crate) dirty_fields: std::collections::HashSet<String>,
+    pub(crate) dirty_tracker: crate::vm::DirtyTracker,
 }
 
 pub trait ReverseLookupUpdater {
@@ -98,7 +96,6 @@ pub trait ReverseLookupUpdater {
 }
 
 impl<'a> InstructionContext<'a> {
-    /// Create a new InstructionContext (primarily for use by generated code)
     pub fn new(
         accounts: HashMap<String, String>,
         state_id: u32,
@@ -116,11 +113,10 @@ impl<'a> InstructionContext<'a> {
             slot: None,
             signature: None,
             timestamp: None,
-            dirty_fields: std::collections::HashSet::new(),
+            dirty_tracker: crate::vm::DirtyTracker::new(),
         }
     }
 
-    /// Create InstructionContext with metrics support
     #[allow(clippy::too_many_arguments)]
     pub fn with_metrics(
         accounts: HashMap<String, String>,
@@ -146,7 +142,7 @@ impl<'a> InstructionContext<'a> {
             slot,
             signature,
             timestamp: Some(timestamp),
-            dirty_fields: std::collections::HashSet::new(),
+            dirty_tracker: crate::vm::DirtyTracker::new(),
         }
     }
 
@@ -186,9 +182,12 @@ impl<'a> InstructionContext<'a> {
         std::mem::take(&mut self.pending_updates)
     }
 
-    /// Get the fields modified by imperative hooks
-    pub fn dirty_fields(&self) -> &std::collections::HashSet<String> {
-        &self.dirty_fields
+    pub fn dirty_tracker(&self) -> &crate::vm::DirtyTracker {
+        &self.dirty_tracker
+    }
+
+    pub fn dirty_tracker_mut(&mut self) -> &mut crate::vm::DirtyTracker {
+        &mut self.dirty_tracker
     }
 
     /// Get the current state register value (for generating mutations)
@@ -212,14 +211,12 @@ impl<'a> InstructionContext<'a> {
         }
     }
 
-    /// Set a field value in the entity state
     pub fn set<T: serde::Serialize>(&mut self, field_path: &str, value: T) {
         if let (Some(registers), Some(state_reg)) = (self.registers.as_mut(), self.state_reg) {
             let serialized = serde_json::to_value(value).ok();
             if let Some(val) = serialized {
                 Self::set_nested_value_static(&mut registers[state_reg], field_path, val);
-                // Track this field as dirty so it gets included in mutations
-                self.dirty_fields.insert(field_path.to_string());
+                self.dirty_tracker.mark_replaced(field_path);
                 println!("      ✓ Set field '{}' and marked as dirty", field_path);
             }
         } else {
@@ -228,13 +225,64 @@ impl<'a> InstructionContext<'a> {
         }
     }
 
-    /// Increment a numeric field (creates it as 0 if it doesn't exist)
     pub fn increment(&mut self, field_path: &str, amount: i64) {
         let current = self.get::<i64>(field_path).unwrap_or(0);
         self.set(field_path, current + amount);
     }
 
-    /// Helper to get nested value from JSON
+    pub fn append<T: serde::Serialize>(&mut self, field_path: &str, value: T) {
+        if let (Some(registers), Some(state_reg)) = (self.registers.as_mut(), self.state_reg) {
+            let serialized = serde_json::to_value(&value).ok();
+            if let Some(val) = serialized {
+                Self::append_to_array_static(&mut registers[state_reg], field_path, val.clone());
+                self.dirty_tracker.mark_appended(field_path, val);
+                println!(
+                    "      ✓ Appended to '{}' and marked as appended",
+                    field_path
+                );
+            }
+        } else {
+            println!(
+                "      ⚠️  Cannot append to '{}': metrics not configured",
+                field_path
+            );
+        }
+    }
+
+    fn append_to_array_static(
+        value: &mut serde_json::Value,
+        path: &str,
+        new_value: serde_json::Value,
+    ) {
+        let segments: Vec<&str> = path.split('.').collect();
+        if segments.is_empty() {
+            return;
+        }
+
+        let mut current = value;
+        for segment in &segments[..segments.len() - 1] {
+            if !current.is_object() {
+                *current = serde_json::json!({});
+            }
+            let obj = current.as_object_mut().unwrap();
+            current = obj
+                .entry(segment.to_string())
+                .or_insert(serde_json::json!({}));
+        }
+
+        let last_segment = segments[segments.len() - 1];
+        if !current.is_object() {
+            *current = serde_json::json!({});
+        }
+        let obj = current.as_object_mut().unwrap();
+        let arr = obj
+            .entry(last_segment.to_string())
+            .or_insert_with(|| serde_json::json!([]));
+        if let Some(arr) = arr.as_array_mut() {
+            arr.push(new_value);
+        }
+    }
+
     fn get_nested_value<'b>(
         &self,
         value: &'b serde_json::Value,
@@ -247,7 +295,6 @@ impl<'a> InstructionContext<'a> {
         Some(current)
     }
 
-    /// Helper to set nested value in JSON
     fn set_nested_value_static(
         value: &mut serde_json::Value,
         path: &str,
@@ -258,7 +305,6 @@ impl<'a> InstructionContext<'a> {
             return;
         }
 
-        // Navigate to parent
         let mut current = value;
         for segment in &segments[..segments.len() - 1] {
             if !current.is_object() {
@@ -270,7 +316,6 @@ impl<'a> InstructionContext<'a> {
                 .or_insert(serde_json::json!({}));
         }
 
-        // Set final value
         if !current.is_object() {
             *current = serde_json::json!({});
         }

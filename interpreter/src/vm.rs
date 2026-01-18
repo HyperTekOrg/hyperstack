@@ -193,6 +193,87 @@ impl CompiledPath {
     }
 }
 
+/// Represents the type of change made to a field for granular dirty tracking.
+/// This enables emitting only the actual changes rather than entire field values.
+#[derive(Debug, Clone)]
+pub enum FieldChange {
+    /// Field was replaced with a new value (emit the full value from state)
+    Replaced,
+    /// Items were appended to an array field (emit only the new items)
+    Appended(Vec<Value>),
+}
+
+/// Tracks field modifications during handler execution with granular change information.
+/// This replaces the simple HashSet<String> approach to enable delta-only emissions.
+#[derive(Debug, Clone, Default)]
+pub struct DirtyTracker {
+    changes: HashMap<String, FieldChange>,
+}
+
+impl DirtyTracker {
+    /// Create a new empty DirtyTracker
+    pub fn new() -> Self {
+        Self {
+            changes: HashMap::new(),
+        }
+    }
+
+    /// Mark a field as replaced (full value will be emitted)
+    pub fn mark_replaced(&mut self, path: &str) {
+        // If there was an append, it's now superseded by a full replacement
+        self.changes.insert(path.to_string(), FieldChange::Replaced);
+    }
+
+    /// Record an appended value for a field
+    pub fn mark_appended(&mut self, path: &str, value: Value) {
+        match self.changes.get_mut(path) {
+            Some(FieldChange::Appended(values)) => {
+                // Add to existing appended values
+                values.push(value);
+            }
+            Some(FieldChange::Replaced) => {
+                // Field was already replaced, keep it as replaced
+                // (the full value including the append will be emitted)
+            }
+            None => {
+                // First append to this field
+                self.changes
+                    .insert(path.to_string(), FieldChange::Appended(vec![value]));
+            }
+        }
+    }
+
+    /// Check if there are any changes tracked
+    pub fn is_empty(&self) -> bool {
+        self.changes.is_empty()
+    }
+
+    /// Get the number of changed fields
+    pub fn len(&self) -> usize {
+        self.changes.len()
+    }
+
+    /// Iterate over all changes
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &FieldChange)> {
+        self.changes.iter()
+    }
+
+    /// Get a set of all dirty field paths (for backward compatibility)
+    pub fn dirty_paths(&self) -> HashSet<String> {
+        self.changes.keys().cloned().collect()
+    }
+
+    /// Consume the tracker and return the changes map
+    pub fn into_changes(self) -> HashMap<String, FieldChange> {
+        self.changes
+    }
+
+    /// Get a reference to the changes map
+    pub fn changes(&self) -> &HashMap<String, FieldChange> {
+        &self.changes
+    }
+}
+
 pub struct VmContext {
     registers: Vec<RegisterValue>,
     states: HashMap<u32, StateTable>,
@@ -502,6 +583,10 @@ impl VersionTracker {
     pub fn len(&self) -> usize {
         self.cache.lock().unwrap().len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.cache.lock().unwrap().is_empty()
+    }
 }
 
 impl Default for VersionTracker {
@@ -767,6 +852,67 @@ impl VmContext {
         Ok(Value::Object(partial))
     }
 
+    /// Extract a patch from state based on the DirtyTracker.
+    /// For Replaced fields: extracts the full value from state.
+    /// For Appended fields: emits only the appended values as an array.
+    pub fn extract_partial_state_with_tracker(
+        &self,
+        state_reg: Register,
+        tracker: &DirtyTracker,
+    ) -> Result<Value> {
+        let full_state = &self.registers[state_reg];
+
+        if tracker.is_empty() {
+            return Ok(json!({}));
+        }
+
+        let mut partial = serde_json::Map::new();
+
+        for (path, change) in tracker.iter() {
+            let segments: Vec<&str> = path.split('.').collect();
+
+            let value_to_insert = match change {
+                FieldChange::Replaced => {
+                    let mut current = full_state;
+                    let mut found = true;
+
+                    for segment in &segments {
+                        match current.get(*segment) {
+                            Some(v) => current = v,
+                            None => {
+                                found = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if !found {
+                        continue;
+                    }
+                    current.clone()
+                }
+                FieldChange::Appended(values) => Value::Array(values.clone()),
+            };
+
+            let mut target = &mut partial;
+            for (i, segment) in segments.iter().enumerate() {
+                if i == segments.len() - 1 {
+                    target.insert(segment.to_string(), value_to_insert.clone());
+                } else {
+                    target
+                        .entry(segment.to_string())
+                        .or_insert_with(|| json!({}));
+                    target = target
+                        .get_mut(*segment)
+                        .and_then(|v| v.as_object_mut())
+                        .ok_or("Failed to build nested structure")?;
+                }
+            }
+        }
+
+        Ok(Value::Object(partial))
+    }
+
     fn get_compiled_path(&mut self, path: &str) -> CompiledPath {
         if let Some(compiled) = self.path_cache.get(path) {
             self.cache_hits += 1;
@@ -898,7 +1044,7 @@ impl VmContext {
 
         let mut pc: usize = 0;
         let mut output = Vec::new();
-        let mut dirty_fields: HashSet<String> = HashSet::new();
+        let mut dirty_tracker = DirtyTracker::new();
 
         while pc < handler.len() {
             tracing::debug!(
@@ -913,7 +1059,7 @@ impl VmContext {
                     dest,
                     default,
                 } => {
-                    let value = self.load_field(&event_value, path, default.as_ref())?;
+                    let value = self.load_field(event_value, path, default.as_ref())?;
                     tracing::trace!(
                         "LoadEventField: path={:?}, dest={}, value={:?}",
                         path.segments,
@@ -987,13 +1133,13 @@ impl VmContext {
                     );
 
                     self.set_field_auto_vivify(*object, path, *value)?;
-                    dirty_fields.insert(path.to_string());
+                    dirty_tracker.mark_replaced(path);
                     pc += 1;
                 }
                 OpCode::SetFields { object, fields } => {
                     for (path, value_reg) in fields {
                         self.set_field_auto_vivify(*object, path, *value_reg)?;
-                        dirty_fields.insert(path.to_string());
+                        dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
                 }
@@ -1086,18 +1232,15 @@ impl VmContext {
                     path,
                     value,
                 } => {
-                    tracing::trace!(
-                        "AppendToArray: path={}, value={:?}",
-                        path,
-                        self.registers[*value]
-                    );
+                    let appended_value = self.registers[*value].clone();
+                    tracing::trace!("AppendToArray: path={}, value={:?}", path, appended_value);
                     let max_len = self
                         .states
                         .get(&override_state_id)
                         .map(|s| s.max_array_length())
                         .unwrap_or(DEFAULT_MAX_ARRAY_LENGTH);
                     self.append_to_array(*object, path, *value, max_len)?;
-                    dirty_fields.insert(path.to_string());
+                    dirty_tracker.mark_appended(path, appended_value);
                     pc += 1;
                 }
                 OpCode::GetCurrentTimestamp { dest } => {
@@ -1216,20 +1359,18 @@ impl VmContext {
                 } => {
                     let primary_key = self.registers[*key].clone();
 
-                    if primary_key.is_null() || dirty_fields.is_empty() {
-                        // Skip mutation if no primary key or no dirty fields
+                    if primary_key.is_null() || dirty_tracker.is_empty() {
                         tracing::warn!(
                             "   ⊘ [VM] Skipping mutation for entity '{}': primary_key={}, dirty_fields.len()={}",
                             entity_name,
                             if primary_key.is_null() { "NULL" } else { "present" },
-                            dirty_fields.len()
+                            dirty_tracker.len()
                         );
-                        if dirty_fields.is_empty() {
+                        if dirty_tracker.is_empty() {
                             tracing::warn!("      Reason: No fields were modified by this handler");
                         }
                         if primary_key.is_null() {
                             tracing::warn!("      Reason: Primary key could not be resolved (check __resolved_primary_key or key_resolution)");
-                            // Debug: dump register 15, 17, 19, 20 to understand key loading state
                             tracing::warn!("      Debug: reg[15]={:?}, reg[17]={:?}, reg[19]={:?}, reg[20]={:?}",
                                 self.registers.get(15).map(|v| if v.is_null() { "NULL".to_string() } else { format!("{:?}", v) }),
                                 self.registers.get(17).map(|v| if v.is_null() { "NULL".to_string() } else { format!("{:?}", v) }),
@@ -1238,7 +1379,8 @@ impl VmContext {
                             );
                         }
                     } else {
-                        let patch = self.extract_partial_state(*state, &dirty_fields)?;
+                        let patch =
+                            self.extract_partial_state_with_tracker(*state, &dirty_tracker)?;
                         tracing::debug!(
                             "   Patch structure: {}",
                             serde_json::to_string_pretty(&patch).unwrap_or_default()
@@ -1266,7 +1408,7 @@ impl VmContext {
                         was_set
                     );
                     if was_set {
-                        dirty_fields.insert(path.to_string());
+                        dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
                 }
@@ -1277,7 +1419,7 @@ impl VmContext {
                 } => {
                     let was_updated = self.set_field_max(*object, path, *value)?;
                     if was_updated {
-                        dirty_fields.insert(path.to_string());
+                        dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
                 }
@@ -1475,14 +1617,14 @@ impl VmContext {
                 } => {
                     let was_updated = self.set_field_sum(*object, path, *value)?;
                     if was_updated {
-                        dirty_fields.insert(path.to_string());
+                        dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
                 }
                 OpCode::SetFieldIncrement { object, path } => {
                     let was_updated = self.set_field_increment(*object, path)?;
                     if was_updated {
-                        dirty_fields.insert(path.to_string());
+                        dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
                 }
@@ -1493,7 +1635,7 @@ impl VmContext {
                 } => {
                     let was_updated = self.set_field_min(*object, path, *value)?;
                     if was_updated {
-                        dirty_fields.insert(path.to_string());
+                        dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
                 }
@@ -1534,7 +1676,7 @@ impl VmContext {
                     if was_new {
                         self.registers[100] = Value::Number(serde_json::Number::from(set.len()));
                         self.set_field_auto_vivify(*count_object, count_path, 100)?;
-                        dirty_fields.insert(count_path.to_string());
+                        dirty_tracker.mark_replaced(count_path);
                     }
 
                     pc += 1;
@@ -1547,10 +1689,7 @@ impl VmContext {
                     condition_op,
                     condition_value,
                 } => {
-                    // Load the field value from the event
-                    let field_value = self.load_field(&event_value, condition_field, None)?;
-
-                    // Evaluate the condition
+                    let field_value = self.load_field(event_value, condition_field, None)?;
                     let condition_met =
                         self.evaluate_comparison(&field_value, condition_op, condition_value)?;
 
@@ -1562,7 +1701,7 @@ impl VmContext {
                             val
                         );
                         self.set_field_auto_vivify(*object, path, *value)?;
-                        dirty_fields.insert(path.to_string());
+                        dirty_tracker.mark_replaced(path);
                     } else {
                         tracing::trace!(
                             "ConditionalSetField: condition not met, skipping {}",
@@ -1578,10 +1717,7 @@ impl VmContext {
                     condition_op,
                     condition_value,
                 } => {
-                    // Load the field value from the event
-                    let field_value = self.load_field(&event_value, condition_field, None)?;
-
-                    // Evaluate the condition
+                    let field_value = self.load_field(event_value, condition_field, None)?;
                     let condition_met =
                         self.evaluate_comparison(&field_value, condition_op, condition_value)?;
 
@@ -1592,7 +1728,7 @@ impl VmContext {
                         );
                         let was_updated = self.set_field_increment(*object, path)?;
                         if was_updated {
-                            dirty_fields.insert(path.to_string());
+                            dirty_tracker.mark_replaced(path);
                         }
                     } else {
                         tracing::trace!(
@@ -1606,18 +1742,20 @@ impl VmContext {
                     state,
                     computed_paths,
                 } => {
-                    // Call the registered evaluator if one exists
                     if let Some(evaluator) = entity_evaluator {
+                        let old_values: Vec<_> = computed_paths
+                            .iter()
+                            .map(|path| Self::get_value_at_path(&self.registers[*state], path))
+                            .collect();
+
                         let state_value = &mut self.registers[*state];
-                        match evaluator(state_value) {
-                            Ok(()) => {
-                                // Mark computed fields as dirty so they're included in mutations
-                                for path in computed_paths {
-                                    dirty_fields.insert(path.clone());
+                        if evaluator(state_value).is_ok() {
+                            for (path, old_value) in computed_paths.iter().zip(old_values.iter()) {
+                                let new_value =
+                                    Self::get_value_at_path(&self.registers[*state], path);
+                                if new_value != *old_value {
+                                    dirty_tracker.mark_replaced(path);
                                 }
-                            }
-                            Err(_e) => {
-                                // Silently ignore evaluation errors
                             }
                         }
                     }
@@ -1759,6 +1897,14 @@ impl VmContext {
         }
 
         Ok(current.clone())
+    }
+
+    fn get_value_at_path(value: &Value, path: &str) -> Option<Value> {
+        let mut current = value;
+        for segment in path.split('.') {
+            current = current.get(segment)?;
+        }
+        Some(current.clone())
     }
 
     fn set_field_auto_vivify(
