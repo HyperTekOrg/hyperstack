@@ -210,8 +210,8 @@ impl Runtime {
                 let mut interval = tokio::time::interval(Duration::from_secs(30));
                 loop {
                     interval.tick().await;
-                    let (state_buses, list_buses) = bus.bus_counts().await;
-                    let cache_stats = cache.stats().await;
+                    let (_state_buses, _list_buses) = bus.bus_counts().await;
+                    let _cache_stats = cache.stats().await;
                 }
             })
         };
