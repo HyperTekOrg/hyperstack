@@ -33,6 +33,7 @@ yellowstone-vixen-yellowstone-grpc-source = { workspace = true }
 hyperstack-interpreter = { version = "0.2.2", path = "../../interpreter" }
 
 # Async utilities
+tokio-util = "0.7"
 smallvec = "1.15"
 hex = "0.4"
 lru = "0.12"

@@ -50,7 +50,6 @@ export interface HyperSDKConfig {
   reconnectIntervals?: number[];
   maxReconnectAttempts?: number;
   initialSubscriptions?: Subscription[];
-  supportsUnsubscribe?: boolean;
   autoSubscribeDefault?: boolean;
 }
 
@@ -59,7 +58,6 @@ export const DEFAULT_CONFIG: HyperSDKConfig = {
   reconnectIntervals: [1000, 2000, 4000, 8000, 16000],
   maxReconnectAttempts: 5,
   initialSubscriptions: [],
-  supportsUnsubscribe: false,
   autoSubscribeDefault: true,
 };
 

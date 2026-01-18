@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Callable
 
 from hyperstack.websocket import WebSocketManager
 from hyperstack.store import Store, Mode
-from hyperstack.types import Subscription, Frame
+from hyperstack.types import Subscription, Unsubscription, Frame
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ class HyperStackClient:
     async def _on_connect(self) -> None:
         """Send queued subscriptions on connect."""
         while self._pending_subs:
-            await self._send_subscription(self._pending_subs.pop(0))
+            await self._send_sub(self._pending_subs.pop(0))
 
         if self._user_on_connect:
             await self._user_on_connect()
@@ -110,6 +110,21 @@ class HyperStackClient:
             logger.info(f"Subscribed: {sub.view}")
         except Exception as e:
             logger.error(f"Subscribe failed: {e}")
+
+    async def unsubscribe(self, view: str, key: Optional[str] = None) -> None:
+        """Unsubscribe from a view."""
+        store_key = f"{view}:{key or '*'}"
+        self._stores.pop(store_key, None)
+
+        if not self.ws_manager.ws or not self.ws_manager.is_running:
+            return
+
+        try:
+            unsub = Unsubscription(view=view, key=key)
+            await self.ws_manager.ws.send(json.dumps(unsub.to_dict()))
+            logger.info(f"Unsubscribed: {view}")
+        except Exception as e:
+            logger.error(f"Unsubscribe failed: {e}")
 
     async def _on_message(self, message) -> None:
         """

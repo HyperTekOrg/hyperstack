@@ -3,7 +3,7 @@ use crate::cache::EntityCache;
 use crate::view::ViewIndex;
 use crate::websocket::client_manager::ClientManager;
 use crate::websocket::frame::{Mode, SnapshotEntity, SnapshotFrame};
-use crate::websocket::subscription::Subscription;
+use crate::websocket::subscription::{ClientMessage, Subscription};
 use anyhow::Result;
 use bytes::Bytes;
 use futures_util::StreamExt;
@@ -14,6 +14,7 @@ use std::time::Instant;
 
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::accept_async;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -190,14 +191,69 @@ async fn handle_connection(
                             if let Ok(text) = msg.to_text() {
                                 debug!("Received text message from client {}: {}", client_id, text);
 
-                                if let Ok(subscription) = serde_json::from_str::<Subscription>(text) {
+                                if let Ok(client_msg) = serde_json::from_str::<ClientMessage>(text) {
+                                    match client_msg {
+                                        ClientMessage::Subscribe(subscription) => {
+                                            let view_id = subscription.view.clone();
+                                            let sub_key = subscription.sub_key();
+                                            client_manager.update_subscription(client_id, subscription.clone());
+
+                                            if let Some(ref m) = metrics {
+                                                m.record_subscription_created(&view_id);
+                                            }
+                                            active_subscriptions.push(view_id);
+
+                                            let cancel_token = CancellationToken::new();
+                                            client_manager.add_client_subscription(
+                                                client_id,
+                                                sub_key,
+                                                cancel_token.clone(),
+                                            ).await;
+
+                                            attach_client_to_bus(
+                                                client_id,
+                                                subscription,
+                                                &client_manager,
+                                                &bus_manager,
+                                                &entity_cache,
+                                                &view_index,
+                                                cancel_token,
+                                                metrics.clone(),
+                                            ).await;
+                                        }
+                                        ClientMessage::Unsubscribe(unsub) => {
+                                            let sub_key = unsub.sub_key();
+                                            let removed = client_manager
+                                                .remove_client_subscription(client_id, &sub_key)
+                                                .await;
+
+                                            if removed {
+                                                info!("Client {} unsubscribed from {}", client_id, sub_key);
+                                                if let Some(ref m) = metrics {
+                                                    m.record_subscription_removed(&unsub.view);
+                                                }
+                                            }
+                                        }
+                                        ClientMessage::Ping => {
+                                            debug!("Received ping from client {}", client_id);
+                                        }
+                                    }
+                                } else if let Ok(subscription) = serde_json::from_str::<Subscription>(text) {
                                     let view_id = subscription.view.clone();
+                                    let sub_key = subscription.sub_key();
                                     client_manager.update_subscription(client_id, subscription.clone());
 
                                     if let Some(ref m) = metrics {
                                         m.record_subscription_created(&view_id);
                                     }
                                     active_subscriptions.push(view_id);
+
+                                    let cancel_token = CancellationToken::new();
+                                    client_manager.add_client_subscription(
+                                        client_id,
+                                        sub_key,
+                                        cancel_token.clone(),
+                                    ).await;
 
                                     attach_client_to_bus(
                                         client_id,
@@ -206,6 +262,7 @@ async fn handle_connection(
                                         &bus_manager,
                                         &entity_cache,
                                         &view_index,
+                                        cancel_token,
                                         metrics.clone(),
                                     ).await;
                                 } else {
@@ -227,6 +284,9 @@ async fn handle_connection(
         }
     }
 
+    client_manager
+        .cancel_all_client_subscriptions(client_id)
+        .await;
     client_manager.remove_client(client_id);
 
     if let Some(ref m) = metrics {
@@ -276,8 +336,53 @@ async fn handle_connection(
                             if let Ok(text) = msg.to_text() {
                                 debug!("Received text message from client {}: {}", client_id, text);
 
-                                if let Ok(subscription) = serde_json::from_str::<Subscription>(text) {
+                                if let Ok(client_msg) = serde_json::from_str::<ClientMessage>(text) {
+                                    match client_msg {
+                                        ClientMessage::Subscribe(subscription) => {
+                                            let sub_key = subscription.sub_key();
+                                            client_manager.update_subscription(client_id, subscription.clone());
+
+                                            let cancel_token = CancellationToken::new();
+                                            client_manager.add_client_subscription(
+                                                client_id,
+                                                sub_key,
+                                                cancel_token.clone(),
+                                            ).await;
+
+                                            attach_client_to_bus(
+                                                client_id,
+                                                subscription,
+                                                &client_manager,
+                                                &bus_manager,
+                                                &entity_cache,
+                                                &view_index,
+                                                cancel_token,
+                                            ).await;
+                                        }
+                                        ClientMessage::Unsubscribe(unsub) => {
+                                            let sub_key = unsub.sub_key();
+                                            let removed = client_manager
+                                                .remove_client_subscription(client_id, &sub_key)
+                                                .await;
+
+                                            if removed {
+                                                info!("Client {} unsubscribed from {}", client_id, sub_key);
+                                            }
+                                        }
+                                        ClientMessage::Ping => {
+                                            debug!("Received ping from client {}", client_id);
+                                        }
+                                    }
+                                } else if let Ok(subscription) = serde_json::from_str::<Subscription>(text) {
+                                    let sub_key = subscription.sub_key();
                                     client_manager.update_subscription(client_id, subscription.clone());
+
+                                    let cancel_token = CancellationToken::new();
+                                    client_manager.add_client_subscription(
+                                        client_id,
+                                        sub_key,
+                                        cancel_token.clone(),
+                                    ).await;
 
                                     attach_client_to_bus(
                                         client_id,
@@ -286,6 +391,7 @@ async fn handle_connection(
                                         &bus_manager,
                                         &entity_cache,
                                         &view_index,
+                                        cancel_token,
                                     ).await;
                                 } else {
                                     debug!("Received non-subscription message from client {}: {}", client_id, text);
@@ -306,6 +412,9 @@ async fn handle_connection(
         }
     }
 
+    client_manager
+        .cancel_all_client_subscriptions(client_id)
+        .await;
     client_manager.remove_client(client_id);
     info!("Client {} disconnected", client_id);
 
@@ -320,6 +429,7 @@ async fn attach_client_to_bus(
     bus_manager: &BusManager,
     entity_cache: &EntityCache,
     view_index: &ViewIndex,
+    cancel_token: CancellationToken,
     metrics: Option<Arc<Metrics>>,
 ) {
     let view_id = &subscription.view;
@@ -348,13 +458,24 @@ async fn attach_client_to_bus(
             let client_mgr = client_manager.clone();
             let metrics_clone = metrics.clone();
             tokio::spawn(async move {
-                while rx.changed().await.is_ok() {
-                    let data = rx.borrow().clone();
-                    if client_mgr.send_to_client(client_id, data).is_err() {
-                        break;
-                    }
-                    if let Some(ref m) = metrics_clone {
-                        m.record_ws_message_sent();
+                loop {
+                    tokio::select! {
+                        _ = cancel_token.cancelled() => {
+                            debug!("State subscription cancelled for client {}", client_id);
+                            break;
+                        }
+                        result = rx.changed() => {
+                            if result.is_err() {
+                                break;
+                            }
+                            let data = rx.borrow().clone();
+                            if client_mgr.send_to_client(client_id, data).is_err() {
+                                break;
+                            }
+                            if let Some(ref m) = metrics_clone {
+                                m.record_ws_message_sent();
+                            }
+                        }
                     }
                 }
             });
@@ -394,16 +515,29 @@ async fn attach_client_to_bus(
             let sub = subscription.clone();
             let metrics_clone = metrics.clone();
             tokio::spawn(async move {
-                while let Ok(envelope) = rx.recv().await {
-                    if sub.matches(&envelope.entity, &envelope.key) {
-                        if client_mgr
-                            .send_to_client(client_id, envelope.payload.clone())
-                            .is_err()
-                        {
+                loop {
+                    tokio::select! {
+                        _ = cancel_token.cancelled() => {
+                            debug!("List subscription cancelled for client {}", client_id);
                             break;
                         }
-                        if let Some(ref m) = metrics_clone {
-                            m.record_ws_message_sent();
+                        result = rx.recv() => {
+                            match result {
+                                Ok(envelope) => {
+                                    if sub.matches(&envelope.entity, &envelope.key) {
+                                        if client_mgr
+                                            .send_to_client(client_id, envelope.payload.clone())
+                                            .is_err()
+                                        {
+                                            break;
+                                        }
+                                        if let Some(ref m) = metrics_clone {
+                                            m.record_ws_message_sent();
+                                        }
+                                    }
+                                }
+                                Err(_) => break,
+                            }
                         }
                     }
                 }
@@ -425,6 +559,7 @@ async fn attach_client_to_bus(
     bus_manager: &BusManager,
     entity_cache: &EntityCache,
     view_index: &ViewIndex,
+    cancel_token: CancellationToken,
 ) {
     let view_id = &subscription.view;
 
@@ -448,10 +583,21 @@ async fn attach_client_to_bus(
 
             let client_mgr = client_manager.clone();
             tokio::spawn(async move {
-                while rx.changed().await.is_ok() {
-                    let data = rx.borrow().clone();
-                    if client_mgr.send_to_client(client_id, data).is_err() {
-                        break;
+                loop {
+                    tokio::select! {
+                        _ = cancel_token.cancelled() => {
+                            debug!("State subscription cancelled for client {}", client_id);
+                            break;
+                        }
+                        result = rx.changed() => {
+                            if result.is_err() {
+                                break;
+                            }
+                            let data = rx.borrow().clone();
+                            if client_mgr.send_to_client(client_id, data).is_err() {
+                                break;
+                            }
+                        }
                     }
                 }
             });
@@ -487,13 +633,26 @@ async fn attach_client_to_bus(
             let client_mgr = client_manager.clone();
             let sub = subscription.clone();
             tokio::spawn(async move {
-                while let Ok(envelope) = rx.recv().await {
-                    if sub.matches(&envelope.entity, &envelope.key)
-                        && client_mgr
-                            .send_to_client(client_id, envelope.payload.clone())
-                            .is_err()
-                    {
-                        break;
+                loop {
+                    tokio::select! {
+                        _ = cancel_token.cancelled() => {
+                            debug!("List subscription cancelled for client {}", client_id);
+                            break;
+                        }
+                        result = rx.recv() => {
+                            match result {
+                                Ok(envelope) => {
+                                    if sub.matches(&envelope.entity, &envelope.key)
+                                        && client_mgr
+                                            .send_to_client(client_id, envelope.payload.clone())
+                                            .is_err()
+                                    {
+                                        break;
+                                    }
+                                }
+                                Err(_) => break,
+                            }
+                        }
                     }
                 }
             });

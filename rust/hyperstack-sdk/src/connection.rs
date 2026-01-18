@@ -1,6 +1,6 @@
 use crate::config::ConnectionConfig;
 use crate::frame::{parse_frame, Frame};
-use crate::subscription::{Subscription, SubscriptionRegistry};
+use crate::subscription::{ClientMessage, Subscription, SubscriptionRegistry, Unsubscription};
 use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
@@ -18,8 +18,7 @@ pub enum ConnectionState {
 
 pub enum ConnectionCommand {
     Subscribe(Subscription),
-    #[allow(dead_code)]
-    Unsubscribe(Subscription),
+    Unsubscribe(Unsubscription),
     Disconnect,
 }
 
@@ -80,12 +79,19 @@ impl ConnectionManager {
         }
     }
 
-    #[allow(dead_code)]
     pub async fn subscribe(&self, sub: Subscription) {
         let _ = self
             .inner
             .command_tx
             .send(ConnectionCommand::Subscribe(sub))
+            .await;
+    }
+
+    pub async fn unsubscribe(&self, unsub: Unsubscription) {
+        let _ = self
+            .inner
+            .command_tx
+            .send(ConnectionCommand::Unsubscribe(unsub))
             .await;
     }
 
@@ -122,7 +128,8 @@ fn spawn_connection_loop(
 
                     let subs = subscriptions.read().await.all();
                     for sub in subs {
-                        if let Ok(msg) = serde_json::to_string(&sub) {
+                        let client_msg = ClientMessage::Subscribe(sub);
+                        if let Ok(msg) = serde_json::to_string(&client_msg) {
                             let _ = ws_tx.send(Message::Text(msg)).await;
                         }
                     }
@@ -163,12 +170,23 @@ fn spawn_connection_loop(
                                 match cmd {
                                     Some(ConnectionCommand::Subscribe(sub)) => {
                                         subscriptions.write().await.add(sub.clone());
-                                        if let Ok(msg) = serde_json::to_string(&sub) {
+                                        let client_msg = ClientMessage::Subscribe(sub);
+                                        if let Ok(msg) = serde_json::to_string(&client_msg) {
                                             let _ = ws_tx.send(Message::Text(msg)).await;
                                         }
                                     }
-                                    Some(ConnectionCommand::Unsubscribe(sub)) => {
+                                    Some(ConnectionCommand::Unsubscribe(unsub)) => {
+                                        let sub = Subscription {
+                                            view: unsub.view.clone(),
+                                            key: unsub.key.clone(),
+                                            partition: None,
+                                            filters: None,
+                                        };
                                         subscriptions.write().await.remove(&sub);
+                                        let client_msg = ClientMessage::Unsubscribe(unsub);
+                                        if let Ok(msg) = serde_json::to_string(&client_msg) {
+                                            let _ = ws_tx.send(Message::Text(msg)).await;
+                                        }
                                     }
                                     Some(ConnectionCommand::Disconnect) => {
                                         let _ = ws_tx.close().await;
@@ -183,7 +201,9 @@ fn spawn_connection_loop(
                                 }
                             }
                             _ = ping_timer.tick() => {
-                                let _ = ws_tx.send(Message::Ping(vec![])).await;
+                                if let Ok(msg) = serde_json::to_string(&ClientMessage::Ping) {
+                                    let _ = ws_tx.send(Message::Text(msg)).await;
+                                }
                             }
                         }
                     }

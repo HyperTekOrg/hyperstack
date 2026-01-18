@@ -50,9 +50,27 @@ class Subscription:
     partition: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        result: Dict[str, Any] = {"view": self.view}
+        result: Dict[str, Any] = {"type": "subscribe", "view": self.view}
         if self.key is not None:
             result["key"] = self.key
         if self.partition is not None:
             result["partition"] = self.partition
         return result
+
+    def sub_key(self) -> str:
+        return f"{self.view}:{self.key or '*'}"
+
+
+@dataclass
+class Unsubscription:
+    view: str
+    key: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        result: Dict[str, Any] = {"type": "unsubscribe", "view": self.view}
+        if self.key is not None:
+            result["key"] = self.key
+        return result
+
+    def sub_key(self) -> str:
+        return f"{self.view}:{self.key or '*'}"

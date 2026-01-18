@@ -10,8 +10,8 @@ from hyperstack.errors import ConnectionError
 
 logger = logging.getLogger(__name__)
 
+
 class WebSocketManager:
-    
     def __init__(
         self,
         url: str,
@@ -44,7 +44,7 @@ class WebSocketManager:
         self.receive_task: Optional[asyncio.Task] = None
         self.ping_task: Optional[asyncio.Task] = None
         self.message_handler: Optional[Callable] = None
-    
+
     def set_message_handler(self, handler: Callable) -> None:
         """
         Set the callback function for handling incoming WebSocket messages.
@@ -59,7 +59,7 @@ class WebSocketManager:
             await asyncio.sleep(self.ping_interval)
             if self.is_running and self.ws:
                 try:
-                    await self.ws.send(json.dumps({"type": "ping"}))
+                    await self.ws.send('{"type":"ping"}')
                     logger.debug("Sent keep-alive ping")
                 except Exception as e:
                     logger.warning(f"Ping failed: {e}")
@@ -73,21 +73,21 @@ class WebSocketManager:
         if self.ping_task:
             self.ping_task.cancel()
             self.ping_task = None
-    
+
     async def connect(self) -> None:
         """
         Establish WebSocket connection with automatic retry logic.
-        
+
         Attempts to connect using the configured reconnect intervals.
         Starts the message receiving loop once connected.
-        
+
         Raises:
             ConnectionError: If all connection attempts fail
         """
         if self.is_running and self.ws:
             logger.info("Already connected")
             return
-        
+
         attempt = 0
         while attempt < len(self.reconnect_intervals):
             try:
@@ -104,18 +104,20 @@ class WebSocketManager:
                     await self.on_connect()
 
                 return
-                
+
             except Exception as e:
                 attempt += 1
                 if attempt >= len(self.reconnect_intervals):
-                    raise ConnectionError(f"Connection failed after {attempt} attempts: {e}")
-                
+                    raise ConnectionError(
+                        f"Connection failed after {attempt} attempts: {e}"
+                    )
+
                 wait = self.reconnect_intervals[attempt - 1]
                 logger.warning(f"Retrying in {wait}s (attempt {attempt})")
                 await asyncio.sleep(wait)
-        
+
         raise ConnectionError("Failed to connect")
-    
+
     async def disconnect(self) -> None:
         """Close WebSocket connection and cleanup resources."""
         self.is_running = False
@@ -136,17 +138,17 @@ class WebSocketManager:
             await self.on_disconnect()
 
         logger.info("Disconnected")
-    
+
     async def receive_messages(self) -> None:
         """
         Continuously receive and process WebSocket messages.
-        
+
         Handles incoming messages via the configured message handler.
         Automatically triggers reconnection on WebSocket errors if still running.
         """
         if not self.ws:
             return
-        
+
         try:
             async for message in self.ws:
                 if self.message_handler:
@@ -156,7 +158,7 @@ class WebSocketManager:
                         logger.error(f"Frame error: {e}")
                         if self.on_error:
                             await self.on_error(e)
-        
+
         except WebSocketException as e:
             logger.error(f"WebSocket error: {e}")
             if self.on_error:
@@ -165,19 +167,19 @@ class WebSocketManager:
             self._stop_ping()
             if self.is_running:
                 await self.handle_reconnect()
-        
+
         except Exception as e:
             logger.error(f"Receive error: {e}")
             if self.on_error:
                 await self.on_error(e)
-    
+
     async def handle_reconnect(self) -> None:
         self.reconnect_attempts += 1
-        
+
         if self.reconnect_attempts > len(self.reconnect_intervals):
             logger.error("Max reconnect attempts reached")
             return
-        
+
         wait = self.reconnect_intervals[self.reconnect_attempts - 1]
         logger.info(f"Reconnecting in {wait}s (attempt {self.reconnect_attempts})")
         await asyncio.sleep(wait)

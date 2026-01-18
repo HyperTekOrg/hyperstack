@@ -1,6 +1,14 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum ClientMessage {
+    Subscribe(Subscription),
+    Unsubscribe(Unsubscription),
+    Ping,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Subscription {
     pub view: String,
@@ -10,6 +18,40 @@ pub struct Subscription {
     pub partition: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filters: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Unsubscription {
+    pub view: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+}
+
+impl Unsubscription {
+    pub fn new(view: impl Into<String>) -> Self {
+        Self {
+            view: view.into(),
+            key: None,
+        }
+    }
+
+    pub fn with_key(mut self, key: impl Into<String>) -> Self {
+        self.key = Some(key.into());
+        self
+    }
+
+    pub fn sub_key(&self) -> String {
+        format!("{}:{}", self.view, self.key.as_deref().unwrap_or("*"),)
+    }
+}
+
+impl From<&Subscription> for Unsubscription {
+    fn from(sub: &Subscription) -> Self {
+        Self {
+            view: sub.view.clone(),
+            key: sub.key.clone(),
+        }
+    }
 }
 
 impl Subscription {

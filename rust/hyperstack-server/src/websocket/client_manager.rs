@@ -3,11 +3,13 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use futures_util::stream::SplitSink;
 use futures_util::SinkExt;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::net::TcpStream;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, RwLock};
 use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
@@ -43,6 +45,7 @@ pub struct ClientInfo {
     pub subscription: Option<Subscription>,
     pub last_seen: SystemTime,
     pub sender: mpsc::Sender<Message>,
+    subscriptions: Arc<RwLock<HashMap<String, CancellationToken>>>,
 }
 
 impl ClientInfo {
@@ -52,6 +55,7 @@ impl ClientInfo {
             subscription: None,
             last_seen: SystemTime::now(),
             sender,
+            subscriptions: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -61,6 +65,38 @@ impl ClientInfo {
 
     pub fn is_stale(&self, timeout: Duration) -> bool {
         self.last_seen.elapsed().unwrap_or(Duration::MAX) > timeout
+    }
+
+    pub async fn add_subscription(&self, sub_key: String, token: CancellationToken) {
+        let mut subs = self.subscriptions.write().await;
+        if let Some(old_token) = subs.insert(sub_key.clone(), token) {
+            old_token.cancel();
+            debug!("Replaced existing subscription: {}", sub_key);
+        }
+    }
+
+    pub async fn remove_subscription(&self, sub_key: &str) -> bool {
+        let mut subs = self.subscriptions.write().await;
+        if let Some(token) = subs.remove(sub_key) {
+            token.cancel();
+            debug!("Cancelled subscription: {}", sub_key);
+            true
+        } else {
+            debug!("Subscription not found for cancellation: {}", sub_key);
+            false
+        }
+    }
+
+    pub async fn cancel_all_subscriptions(&self) {
+        let subs = self.subscriptions.read().await;
+        for (sub_key, token) in subs.iter() {
+            token.cancel();
+            debug!("Cancelled subscription on disconnect: {}", sub_key);
+        }
+    }
+
+    pub async fn subscription_count(&self) -> usize {
+        self.subscriptions.read().await.len()
     }
 }
 
@@ -234,6 +270,31 @@ impl ClientManager {
     /// Check if a client exists.
     pub fn has_client(&self, client_id: Uuid) -> bool {
         self.clients.contains_key(&client_id)
+    }
+
+    pub async fn add_client_subscription(
+        &self,
+        client_id: Uuid,
+        sub_key: String,
+        token: CancellationToken,
+    ) {
+        if let Some(client) = self.clients.get(&client_id) {
+            client.add_subscription(sub_key, token).await;
+        }
+    }
+
+    pub async fn remove_client_subscription(&self, client_id: Uuid, sub_key: &str) -> bool {
+        if let Some(client) = self.clients.get(&client_id) {
+            client.remove_subscription(sub_key).await
+        } else {
+            false
+        }
+    }
+
+    pub async fn cancel_all_client_subscriptions(&self, client_id: Uuid) {
+        if let Some(client) = self.clients.get(&client_id) {
+            client.cancel_all_subscriptions().await;
+        }
     }
 
     /// Remove stale clients that haven't been seen within the timeout period.

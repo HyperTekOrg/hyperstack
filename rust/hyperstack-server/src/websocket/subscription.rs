@@ -1,5 +1,17 @@
 use serde::{Deserialize, Serialize};
 
+/// Client message types for subscription management
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum ClientMessage {
+    /// Subscribe to a view
+    Subscribe(Subscription),
+    /// Unsubscribe from a view
+    Unsubscribe(Unsubscription),
+    /// Keep-alive ping (no response needed)
+    Ping,
+}
+
 /// Client subscription to a specific view
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Subscription {
@@ -8,6 +20,24 @@ pub struct Subscription {
     pub key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub partition: Option<String>,
+}
+
+/// Client unsubscription request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Unsubscription {
+    pub view: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+}
+
+impl Unsubscription {
+    /// Generate the subscription key used for tracking
+    pub fn sub_key(&self) -> String {
+        match &self.key {
+            Some(k) => format!("{}:{}", self.view, k),
+            None => format!("{}:*", self.view),
+        }
+    }
 }
 
 impl Subscription {
@@ -21,6 +51,13 @@ impl Subscription {
 
     pub fn matches(&self, view_id: &str, key: &str) -> bool {
         self.matches_view(view_id) && self.matches_key(key)
+    }
+
+    pub fn sub_key(&self) -> String {
+        match &self.key {
+            Some(k) => format!("{}:{}", self.view, k),
+            None => format!("{}:*", self.view),
+        }
     }
 }
 
@@ -76,5 +113,96 @@ mod tests {
         assert!(sub.matches("SettlementGame/list", "835"));
         assert!(sub.matches("SettlementGame/list", "836"));
         assert!(!sub.matches("SettlementGame/state", "835"));
+    }
+
+    #[test]
+    fn test_client_message_subscribe_parse() {
+        let json = json!({
+            "type": "subscribe",
+            "view": "SettlementGame/list",
+            "key": "835"
+        });
+
+        let msg: ClientMessage = serde_json::from_value(json).unwrap();
+        match msg {
+            ClientMessage::Subscribe(sub) => {
+                assert_eq!(sub.view, "SettlementGame/list");
+                assert_eq!(sub.key, Some("835".to_string()));
+            }
+            _ => panic!("Expected Subscribe"),
+        }
+    }
+
+    #[test]
+    fn test_client_message_unsubscribe_parse() {
+        let json = json!({
+            "type": "unsubscribe",
+            "view": "SettlementGame/list",
+            "key": "835"
+        });
+
+        let msg: ClientMessage = serde_json::from_value(json).unwrap();
+        match msg {
+            ClientMessage::Unsubscribe(unsub) => {
+                assert_eq!(unsub.view, "SettlementGame/list");
+                assert_eq!(unsub.key, Some("835".to_string()));
+            }
+            _ => panic!("Expected Unsubscribe"),
+        }
+    }
+
+    #[test]
+    fn test_client_message_ping_parse() {
+        let json = json!({ "type": "ping" });
+
+        let msg: ClientMessage = serde_json::from_value(json).unwrap();
+        assert!(matches!(msg, ClientMessage::Ping));
+    }
+
+    #[test]
+    fn test_legacy_subscription_parse_as_subscribe() {
+        let json = json!({
+            "view": "SettlementGame/list",
+            "key": "835"
+        });
+
+        let sub: Subscription = serde_json::from_value(json).unwrap();
+        assert_eq!(sub.view, "SettlementGame/list");
+        assert_eq!(sub.key, Some("835".to_string()));
+    }
+
+    #[test]
+    fn test_sub_key_with_key() {
+        let sub = Subscription {
+            view: "SettlementGame/list".to_string(),
+            key: Some("835".to_string()),
+            partition: None,
+        };
+        assert_eq!(sub.sub_key(), "SettlementGame/list:835");
+    }
+
+    #[test]
+    fn test_sub_key_without_key() {
+        let sub = Subscription {
+            view: "SettlementGame/list".to_string(),
+            key: None,
+            partition: None,
+        };
+        assert_eq!(sub.sub_key(), "SettlementGame/list:*");
+    }
+
+    #[test]
+    fn test_unsubscription_sub_key() {
+        let unsub = Unsubscription {
+            view: "SettlementGame/list".to_string(),
+            key: Some("835".to_string()),
+        };
+        assert_eq!(unsub.sub_key(), "SettlementGame/list:835");
+
+        let unsub_all = Unsubscription {
+            view: "SettlementGame/list".to_string(),
+            key: None,
+        };
+        assert_eq!(unsub_all.sub_key(), "SettlementGame/list:*");
     }
 }

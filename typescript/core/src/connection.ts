@@ -142,7 +142,8 @@ export class ConnectionManager {
     const subKey = this.makeSubKey(subscription);
 
     if (this.currentState === 'connected' && this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(subscription));
+      const subMsg = { type: 'subscribe', ...subscription };
+      this.ws.send(JSON.stringify(subMsg));
       this.activeSubscriptions.add(subKey);
     } else {
       this.subscriptionQueue.push(subscription);
@@ -152,7 +153,15 @@ export class ConnectionManager {
   unsubscribe(view: string, key?: string): void {
     const subscription: Subscription = { view, key };
     const subKey = this.makeSubKey(subscription);
-    this.activeSubscriptions.delete(subKey);
+    
+    if (this.activeSubscriptions.has(subKey)) {
+      this.activeSubscriptions.delete(subKey);
+      
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        const unsubMsg = { type: 'unsubscribe', view, key };
+        this.ws.send(JSON.stringify(unsubMsg));
+      }
+    }
   }
 
   isConnected(): boolean {
@@ -182,7 +191,8 @@ export class ConnectionManager {
       };
 
       if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify(subscription));
+        const subMsg = { type: 'subscribe', ...subscription };
+        this.ws.send(JSON.stringify(subMsg));
       }
     }
   }
@@ -234,7 +244,7 @@ export class ConnectionManager {
     this.stopPingInterval();
     this.pingInterval = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ type: 'ping' }));
+        this.ws.send('{"type":"ping"}');
       }
     }, 15000);
   }

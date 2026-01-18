@@ -142,18 +142,17 @@ export class ConnectionManager {
   subscribe(subscription: Subscription): void {
     if (this.currentState === 'connected' && this.ws && this.ws.readyState === WebSocket.OPEN) {
       console.log('[Hyperstack] Subscribing to:', subscription.view);
-      const message = JSON.stringify(subscription);
-      this.ws.send(message);
+      const subMsg = { type: 'subscribe', ...subscription };
+      this.ws.send(JSON.stringify(subMsg));
     } else {
       this.subscriptionQueue.push(subscription);
     }
   }
 
-  // Unsubscribe support (feature-gated by server capabilities)
-  unsubscribe(_view: string, _key?: string): void {
-    if (this.config.supportsUnsubscribe && this.currentState === 'connected' && this.ws) {
-      // only send unsubscribe if server supports it - TO DO
-      console.warn('Unsubscribe not yet implemented on server side');
+  unsubscribe(view: string, key?: string): void {
+    if (this.currentState === 'connected' && this.ws?.readyState === WebSocket.OPEN) {
+      const unsubMsg = { type: 'unsubscribe', view, key };
+      this.ws.send(JSON.stringify(unsubMsg));
     }
   }
 
@@ -207,7 +206,7 @@ export class ConnectionManager {
     this.stopPingInterval();
     this.pingInterval = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ type: 'ping' }));
+        this.ws.send('{"type":"ping"}');
       }
     }, 15000);
   }
