@@ -370,9 +370,6 @@ hs up my-stack
 
 # Check status
 hs status
-
-# View logs if issues
-hs logs
 ```
 
 ### Branch Deploys
@@ -416,7 +413,7 @@ hs stack rollback my-stack --to 2
 | `Not authenticated`  | Run `hs auth login`                        |
 | `Stack not found`    | Check `hs stack list` for available stacks |
 | `AST file not found` | Run `cargo build` to generate AST          |
-| `Build failed`       | Check `hs logs` for details                |
+| `Build failed`       | Try again                                  |
 | `Config invalid`     | Run `hs config validate`                   |
 
 ---
