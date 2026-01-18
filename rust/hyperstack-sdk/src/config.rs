@@ -1,3 +1,4 @@
+use crate::store::DEFAULT_MAX_ENTRIES_PER_VIEW;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -7,6 +8,7 @@ pub struct HyperStackConfig {
     pub max_reconnect_attempts: u32,
     pub ping_interval: Duration,
     pub initial_data_timeout: Duration,
+    pub max_entries_per_view: Option<usize>,
 }
 
 impl Default for HyperStackConfig {
@@ -23,6 +25,7 @@ impl Default for HyperStackConfig {
             max_reconnect_attempts: 5,
             ping_interval: Duration::from_secs(15),
             initial_data_timeout: Duration::from_secs(5),
+            max_entries_per_view: Some(DEFAULT_MAX_ENTRIES_PER_VIEW),
         }
     }
 }

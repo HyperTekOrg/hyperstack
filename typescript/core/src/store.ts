@@ -1,6 +1,69 @@
 import type { EntityFrame, SnapshotFrame, Frame } from './frame';
 import { isSnapshotFrame } from './frame';
 import type { Update, RichUpdate, SubscribeCallback, UnsubscribeFn } from './types';
+import { DEFAULT_MAX_ENTRIES_PER_VIEW } from './types';
+
+export interface EntityStoreConfig {
+  maxEntriesPerView?: number | null;
+}
+
+class ViewData<T = unknown> {
+  private entities: Map<string, T> = new Map();
+  private accessOrder: string[] = [];
+
+  get(key: string): T | undefined {
+    return this.entities.get(key);
+  }
+
+  set(key: string, value: T): void {
+    if (!this.entities.has(key)) {
+      this.accessOrder.push(key);
+    } else {
+      this.touch(key);
+    }
+    this.entities.set(key, value);
+  }
+
+  delete(key: string): boolean {
+    const idx = this.accessOrder.indexOf(key);
+    if (idx !== -1) {
+      this.accessOrder.splice(idx, 1);
+    }
+    return this.entities.delete(key);
+  }
+
+  has(key: string): boolean {
+    return this.entities.has(key);
+  }
+
+  values(): IterableIterator<T> {
+    return this.entities.values();
+  }
+
+  keys(): IterableIterator<string> {
+    return this.entities.keys();
+  }
+
+  get size(): number {
+    return this.entities.size;
+  }
+
+  touch(key: string): void {
+    const idx = this.accessOrder.indexOf(key);
+    if (idx !== -1) {
+      this.accessOrder.splice(idx, 1);
+      this.accessOrder.push(key);
+    }
+  }
+
+  evictOldest(): string | undefined {
+    const oldest = this.accessOrder.shift();
+    if (oldest !== undefined) {
+      this.entities.delete(oldest);
+    }
+    return oldest;
+  }
+}
 
 function isObject(item: unknown): item is Record<string, unknown> {
   return item !== null && typeof item === 'object' && !Array.isArray(item);
@@ -48,9 +111,23 @@ type EntityUpdateCallback = (viewPath: string, key: string, update: Update<unkno
 type RichUpdateCallback = (viewPath: string, key: string, update: RichUpdate<unknown>) => void;
 
 export class EntityStore {
-  private entities: Map<string, Map<string, unknown>> = new Map();
+  private views: Map<string, ViewData<unknown>> = new Map();
   private updateCallbacks: Set<EntityUpdateCallback> = new Set();
   private richUpdateCallbacks: Set<RichUpdateCallback> = new Set();
+  private maxEntriesPerView: number | null;
+
+  constructor(config: EntityStoreConfig = {}) {
+    this.maxEntriesPerView = config.maxEntriesPerView === undefined
+      ? DEFAULT_MAX_ENTRIES_PER_VIEW
+      : config.maxEntriesPerView;
+  }
+
+  private enforceMaxEntries(viewData: ViewData<unknown>): void {
+    if (this.maxEntriesPerView === null) return;
+    while (viewData.size > this.maxEntriesPerView) {
+      viewData.evictOldest();
+    }
+  }
 
   handleFrame<T>(frame: Frame<T>): void {
     if (isSnapshotFrame(frame)) {
@@ -62,16 +139,16 @@ export class EntityStore {
 
   private handleSnapshotFrame<T>(frame: SnapshotFrame<T>): void {
     const viewPath = frame.entity;
-    let viewMap = this.entities.get(viewPath);
+    let viewData = this.views.get(viewPath);
 
-    if (!viewMap) {
-      viewMap = new Map();
-      this.entities.set(viewPath, viewMap);
+    if (!viewData) {
+      viewData = new ViewData();
+      this.views.set(viewPath, viewData);
     }
 
     for (const entity of frame.data) {
-      const previousValue = viewMap.get(entity.key) as T | undefined;
-      viewMap.set(entity.key, entity.data);
+      const previousValue = viewData.get(entity.key) as T | undefined;
+      viewData.set(entity.key, entity.data);
       this.notifyUpdate(viewPath, entity.key, {
         type: 'upsert',
         key: entity.key,
@@ -79,23 +156,25 @@ export class EntityStore {
       });
       this.notifyRichUpdate(viewPath, entity.key, previousValue, entity.data, 'upsert');
     }
+    this.enforceMaxEntries(viewData);
   }
 
   private handleEntityFrame<T>(frame: EntityFrame<T>): void {
     const viewPath = frame.entity;
-    let viewMap = this.entities.get(viewPath);
+    let viewData = this.views.get(viewPath);
 
-    if (!viewMap) {
-      viewMap = new Map();
-      this.entities.set(viewPath, viewMap);
+    if (!viewData) {
+      viewData = new ViewData();
+      this.views.set(viewPath, viewData);
     }
 
-    const previousValue = viewMap.get(frame.key) as T | undefined;
+    const previousValue = viewData.get(frame.key) as T | undefined;
 
     switch (frame.op) {
       case 'create':
       case 'upsert':
-        viewMap.set(frame.key, frame.data);
+        viewData.set(frame.key, frame.data);
+        this.enforceMaxEntries(viewData);
         this.notifyUpdate(viewPath, frame.key, {
           type: 'upsert',
           key: frame.key,
@@ -105,12 +184,13 @@ export class EntityStore {
         break;
 
       case 'patch': {
-        const existing = viewMap.get(frame.key);
+        const existing = viewData.get(frame.key);
         const appendPaths = frame.append ?? [];
         const merged = existing
           ? deepMergeWithAppend(existing, frame.data as Partial<unknown>, appendPaths)
           : frame.data;
-        viewMap.set(frame.key, merged);
+        viewData.set(frame.key, merged);
+        this.enforceMaxEntries(viewData);
         this.notifyUpdate(viewPath, frame.key, {
           type: 'patch',
           key: frame.key,
@@ -121,7 +201,7 @@ export class EntityStore {
       }
 
       case 'delete':
-        viewMap.delete(frame.key);
+        viewData.delete(frame.key);
         this.notifyUpdate(viewPath, frame.key, {
           type: 'delete',
           key: frame.key,
@@ -134,48 +214,48 @@ export class EntityStore {
   }
 
   getAll<T>(viewPath: string): T[] {
-    const viewMap = this.entities.get(viewPath);
-    if (!viewMap) return [];
-    return Array.from(viewMap.values()) as T[];
+    const viewData = this.views.get(viewPath);
+    if (!viewData) return [];
+    return Array.from(viewData.values()) as T[];
   }
 
   get<T>(viewPath: string, key: string): T | null {
-    const viewMap = this.entities.get(viewPath);
-    if (!viewMap) return null;
-    const value = viewMap.get(key);
+    const viewData = this.views.get(viewPath);
+    if (!viewData) return null;
+    const value = viewData.get(key);
     return value !== undefined ? (value as T) : null;
   }
 
   getAllSync<T>(viewPath: string): T[] | undefined {
-    const viewMap = this.entities.get(viewPath);
-    if (!viewMap) return undefined;
-    return Array.from(viewMap.values()) as T[];
+    const viewData = this.views.get(viewPath);
+    if (!viewData) return undefined;
+    return Array.from(viewData.values()) as T[];
   }
 
   getSync<T>(viewPath: string, key: string): T | null | undefined {
-    const viewMap = this.entities.get(viewPath);
-    if (!viewMap) return undefined;
-    const value = viewMap.get(key);
+    const viewData = this.views.get(viewPath);
+    if (!viewData) return undefined;
+    const value = viewData.get(key);
     return value !== undefined ? (value as T) : null;
   }
 
   keys(viewPath: string): string[] {
-    const viewMap = this.entities.get(viewPath);
-    if (!viewMap) return [];
-    return Array.from(viewMap.keys());
+    const viewData = this.views.get(viewPath);
+    if (!viewData) return [];
+    return Array.from(viewData.keys());
   }
 
   size(viewPath: string): number {
-    const viewMap = this.entities.get(viewPath);
-    return viewMap?.size ?? 0;
+    const viewData = this.views.get(viewPath);
+    return viewData?.size ?? 0;
   }
 
   clear(): void {
-    this.entities.clear();
+    this.views.clear();
   }
 
   clearView(viewPath: string): void {
-    this.entities.delete(viewPath);
+    this.views.delete(viewPath);
   }
 
   onUpdate(callback: EntityUpdateCallback): UnsubscribeFn {

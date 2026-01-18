@@ -45,18 +45,22 @@ export interface HyperStackOptions<TStack extends StackDefinition> {
   maxReconnectAttempts?: number;
 }
 
+export const DEFAULT_MAX_ENTRIES_PER_VIEW = 10_000;
+
 export interface HyperStackConfig {
   websocketUrl?: string;
   reconnectIntervals?: number[];
   maxReconnectAttempts?: number;
   initialSubscriptions?: Subscription[];
+  maxEntriesPerView?: number | null;
 }
 
 export const DEFAULT_CONFIG: Required<
-  Pick<HyperStackConfig, 'reconnectIntervals' | 'maxReconnectAttempts'>
+  Pick<HyperStackConfig, 'reconnectIntervals' | 'maxReconnectAttempts' | 'maxEntriesPerView'>
 > = {
   reconnectIntervals: [1000, 2000, 4000, 8000, 16000],
   maxReconnectAttempts: 5,
+  maxEntriesPerView: DEFAULT_MAX_ENTRIES_PER_VIEW,
 };
 
 export class HyperStackError extends Error {

@@ -9,8 +9,71 @@ import {
   DEFAULT_CONFIG,
   HyperSDKConfig,
   ViewMode,
-  isSnapshotFrame
+  isSnapshotFrame,
+  DEFAULT_MAX_ENTRIES_PER_VIEW,
 } from './types';
+
+class ViewData<T = unknown> {
+  private entities: Map<string, T> = new Map();
+  private accessOrder: string[] = [];
+
+  get(key: string): T | undefined {
+    return this.entities.get(key);
+  }
+
+  set(key: string, value: T): void {
+    if (!this.entities.has(key)) {
+      this.accessOrder.push(key);
+    } else {
+      this.touch(key);
+    }
+    this.entities.set(key, value);
+  }
+
+  delete(key: string): boolean {
+    const idx = this.accessOrder.indexOf(key);
+    if (idx !== -1) {
+      this.accessOrder.splice(idx, 1);
+    }
+    return this.entities.delete(key);
+  }
+
+  has(key: string): boolean {
+    return this.entities.has(key);
+  }
+
+  values(): IterableIterator<T> {
+    return this.entities.values();
+  }
+
+  keys(): string[] {
+    return Array.from(this.entities.keys());
+  }
+
+  get size(): number {
+    return this.entities.size;
+  }
+
+  touch(key: string): void {
+    const idx = this.accessOrder.indexOf(key);
+    if (idx !== -1) {
+      this.accessOrder.splice(idx, 1);
+      this.accessOrder.push(key);
+    }
+  }
+
+  evictOldest(): string | undefined {
+    const oldest = this.accessOrder.shift();
+    if (oldest !== undefined) {
+      this.entities.delete(oldest);
+    }
+    return oldest;
+  }
+
+  toMap(): Map<string, T> {
+    return new Map(this.entities);
+  }
+}
 
 function isObject(item: any): item is Record<string, any> {
   return item && typeof item === 'object' && !Array.isArray(item);
@@ -98,6 +161,8 @@ interface HyperStore extends HyperState {
   subscriptionRefs: Map<SubKey, SubscriptionTracker>; // the "phone book" of active subscriptions, maps subscription identifiers → { subscription details, how many components are using it }
   connectionManager: ConnectionManager;               // WebSocket connection instance
   viewCache: ViewCache;                               // metadata tracking per view
+  viewDataMap: Map<string, ViewData<unknown>>;        // LRU-tracked view data
+  maxEntriesPerView: number | null;                   // max entries before eviction
 }
 
 export function createHyperStore(config: Partial<HyperSDKConfig> = {}) {
@@ -117,6 +182,17 @@ export function createHyperStore(config: Partial<HyperSDKConfig> = {}) {
       }
     });
 
+    const maxEntriesPerView = config.maxEntriesPerView === undefined
+      ? DEFAULT_MAX_ENTRIES_PER_VIEW
+      : config.maxEntriesPerView;
+
+    const enforceMaxEntries = (viewData: ViewData<unknown>, max: number | null) => {
+      if (max === null) return;
+      while (viewData.size > max) {
+        viewData.evictOldest();
+      }
+    };
+
     return {
       connectionState: 'disconnected' as ConnectionState,
       lastError: undefined,
@@ -125,47 +201,57 @@ export function createHyperStore(config: Partial<HyperSDKConfig> = {}) {
       subscriptionRefs: new Map(),
       connectionManager,
       viewCache: {},
+      viewDataMap: new Map(),
+      maxEntriesPerView,
 
       handleFrame: <T>(frame: Frame<T>) => {
         set((state) => {
-          const newEntities = new Map(state.entities);
+          const newViewDataMap = new Map(state.viewDataMap);
           const viewPath = frame.entity;
-          const entityMap = new Map(newEntities.get(viewPath) || new Map());
+          let viewData = newViewDataMap.get(viewPath);
+          if (!viewData) {
+            viewData = new ViewData();
+            newViewDataMap.set(viewPath, viewData);
+          }
 
           if (isSnapshotFrame(frame)) {
             for (const entity of frame.data) {
-              entityMap.set(entity.key, entity.data);
+              viewData.set(entity.key, entity.data);
             }
+            enforceMaxEntries(viewData, state.maxEntriesPerView);
           } else {
             switch (frame.op) {
               case 'upsert':
               case 'create':
-                entityMap.set(frame.key, frame.data);
+                viewData.set(frame.key, frame.data);
+                enforceMaxEntries(viewData, state.maxEntriesPerView);
                 break;
               case 'patch':
-                const existing = entityMap.get(frame.key);
+                const existing = viewData.get(frame.key);
                 const appendPaths = frame.append ?? [];
                 if (existing && typeof existing === 'object' && typeof frame.data === 'object') {
-                  entityMap.set(
+                  viewData.set(
                     frame.key,
                     deepMergeWithAppend(existing, frame.data as any, appendPaths)
                   );
                 } else {
-                  entityMap.set(frame.key, frame.data);
+                  viewData.set(frame.key, frame.data);
                 }
+                enforceMaxEntries(viewData, state.maxEntriesPerView);
                 break;
               case 'delete':
-                entityMap.delete(frame.key);
+                viewData.delete(frame.key);
                 break;
             }
           }
 
-          newEntities.set(viewPath, entityMap);
+          const newEntities = new Map(state.entities);
+          newEntities.set(viewPath, viewData.toMap());
 
           const newViewCache = { ...state.viewCache };
           const currentMetadata = newViewCache[viewPath];
 
-          const keys = Array.from(entityMap.keys());
+          const keys = viewData.keys();
           newViewCache[viewPath] = {
             mode: (frame.mode === 'state' || frame.mode === 'list') ? frame.mode : 'list',
             keys,
@@ -176,6 +262,7 @@ export function createHyperStore(config: Partial<HyperSDKConfig> = {}) {
           return {
             ...state,
             entities: newEntities,
+            viewDataMap: newViewDataMap,
             recentFrames: [frame as EntityFrame<T>, ...state.recentFrames],
             viewCache: newViewCache
           };

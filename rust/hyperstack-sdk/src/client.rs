@@ -3,7 +3,7 @@ use crate::connection::{ConnectionManager, ConnectionState};
 use crate::entity::{Entity, EntityData};
 use crate::error::HyperStackError;
 use crate::frame::Frame;
-use crate::store::SharedStore;
+use crate::store::{SharedStore, StoreConfig};
 use crate::stream::{EntityStream, KeyFilter, RichEntityStream};
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -165,9 +165,22 @@ impl HyperStackBuilder {
         self
     }
 
+    pub fn max_entries_per_view(mut self, max: usize) -> Self {
+        self.config.max_entries_per_view = Some(max);
+        self
+    }
+
+    pub fn unlimited_entries(mut self) -> Self {
+        self.config.max_entries_per_view = None;
+        self
+    }
+
     pub async fn connect(self) -> Result<HyperStack, HyperStackError> {
         let url = self.url.ok_or(HyperStackError::MissingUrl)?;
-        let store = SharedStore::new();
+        let store_config = StoreConfig {
+            max_entries_per_view: self.config.max_entries_per_view,
+        };
+        let store = SharedStore::with_config(store_config);
         let store_clone = store.clone();
 
         let (frame_tx, mut frame_rx) = mpsc::channel::<Frame>(1000);

@@ -46,12 +46,15 @@ export interface HyperState<T = unknown> {
   recentFrames: EntityFrame<T>[];
 }
 
+export const DEFAULT_MAX_ENTRIES_PER_VIEW = 10_000;
+
 export interface HyperSDKConfig {
   websocketUrl?: string;
   reconnectIntervals?: number[];
   maxReconnectAttempts?: number;
   initialSubscriptions?: Subscription[];
   autoSubscribeDefault?: boolean;
+  maxEntriesPerView?: number | null;
 }
 
 export const DEFAULT_CONFIG: HyperSDKConfig = {
@@ -60,6 +63,7 @@ export const DEFAULT_CONFIG: HyperSDKConfig = {
   maxReconnectAttempts: 5,
   initialSubscriptions: [],
   autoSubscribeDefault: true,
+  maxEntriesPerView: DEFAULT_MAX_ENTRIES_PER_VIEW,
 };
 
 export class HyperStreamError extends Error {
