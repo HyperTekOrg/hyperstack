@@ -212,14 +212,6 @@ impl Runtime {
                     interval.tick().await;
                     let (state_buses, list_buses) = bus.bus_counts().await;
                     let cache_stats = cache.stats().await;
-                    eprintln!(
-                        "📊 [STATS] buses: {} state, {} list | cache: {} views, {} entities | top: {:?}",
-                        state_buses,
-                        list_buses,
-                        cache_stats.view_count,
-                        cache_stats.total_entities,
-                        cache_stats.top_views
-                    );
                 }
             })
         };
