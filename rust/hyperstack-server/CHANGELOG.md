@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.2.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.2.2...hyperstack-server-v0.2.3) (2026-01-18)
+
+
+### Features
+
+* add append hints to frame protocol for granular array updates ([ce2213f](https://github.com/HyperTekOrg/hyperstack/commit/ce2213fc5a2c242cb4833ab417ff3d71f918812f))
+* implement proper unsubscribe support across server and all SDKs ([81118cb](https://github.com/HyperTekOrg/hyperstack/commit/81118cb103720bdf8424cb71aab63d24d26e434c))
+* **server:** add trace context propagation and expanded telemetry ([0dbd8ed](https://github.com/HyperTekOrg/hyperstack/commit/0dbd8ed49780dd2f8f793b6af2425b47d9ccb151))
+
+
+### Bug Fixes
+
+* increase cache limits 5x to reduce eviction pressure ([49ed3c4](https://github.com/HyperTekOrg/hyperstack/commit/49ed3c4148fbbdc8ad61817ebf31d5989552b181))
+* prefix unused stats variables to satisfy clippy ([70741c6](https://github.com/HyperTekOrg/hyperstack/commit/70741c680297a84a8136be5104f1dc42d03e2d99))
+* preserve VM state across reconnections and add memory management ([7fba770](https://github.com/HyperTekOrg/hyperstack/commit/7fba770df913dd0fbd06e43b402c6c288b25acbb))
+* reduce memory allocations in VM and projector ([d265a4f](https://github.com/HyperTekOrg/hyperstack/commit/d265a4fc358799f33d549412932cce9919b5dc56))
+* **server:** resolve WebSocket connection hang from lock contention ([0596c47](https://github.com/HyperTekOrg/hyperstack/commit/0596c47b932075ab3c513b8cf11da3d1b0190778))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.2.2 to 0.2.3
+
 ## [0.2.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.2.1...hyperstack-server-v0.2.2) (2026-01-16)
 
 
