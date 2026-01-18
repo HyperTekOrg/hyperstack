@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.2.2...hyperstack-cli-v0.2.3) (2026-01-18)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-cli:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.2.2 to 0.2.3
+
 ## [0.2.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.2.1...hyperstack-cli-v0.2.2) (2026-01-16)
 
 

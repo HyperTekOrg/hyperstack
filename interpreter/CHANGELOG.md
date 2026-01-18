@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.2.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.2.2...hyperstack-interpreter-v0.2.3) (2026-01-18)
+
+
+### Features
+
+* add append hints to frame protocol for granular array updates ([ce2213f](https://github.com/HyperTekOrg/hyperstack/commit/ce2213fc5a2c242cb4833ab417ff3d71f918812f))
+* **interpreter:** add canonical logging and OpenTelemetry metrics ([e07de40](https://github.com/HyperTekOrg/hyperstack/commit/e07de40b0a4523dea4958b485b493aed8bbc20b6))
+* **interpreter:** implement granular dirty tracking for field emissions ([c490c9c](https://github.com/HyperTekOrg/hyperstack/commit/c490c9ccb912f872ab92fadbfab674fc3ba56090))
+
+
+### Bug Fixes
+
+* increase cache limits 5x to reduce eviction pressure ([49ed3c4](https://github.com/HyperTekOrg/hyperstack/commit/49ed3c4148fbbdc8ad61817ebf31d5989552b181))
+* **interpreter:** add bounded LRU caches to prevent unbounded memory growth ([4d9042e](https://github.com/HyperTekOrg/hyperstack/commit/4d9042e2ca115fe41827fcdeac037bea8a1b5589))
+* reduce memory allocations in VM and projector ([d265a4f](https://github.com/HyperTekOrg/hyperstack/commit/d265a4fc358799f33d549412932cce9919b5dc56))
+* use derive macro for LogLevel Default impl ([c2e30ed](https://github.com/HyperTekOrg/hyperstack/commit/c2e30ed0e1968e00f1b789e7d2cfb04dd4cb4867))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-macros bumped from 0.2.2 to 0.2.3
+
 ## [0.2.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.2.1...hyperstack-interpreter-v0.2.2) (2026-01-16)
 
 

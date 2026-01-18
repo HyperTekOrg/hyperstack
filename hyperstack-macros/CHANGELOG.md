@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.2.2...hyperstack-macros-v0.2.3) (2026-01-18)
+
+
+### Features
+
+* add append hints to frame protocol for granular array updates ([ce2213f](https://github.com/HyperTekOrg/hyperstack/commit/ce2213fc5a2c242cb4833ab417ff3d71f918812f))
+* **server:** add trace context propagation and expanded telemetry ([0dbd8ed](https://github.com/HyperTekOrg/hyperstack/commit/0dbd8ed49780dd2f8f793b6af2425b47d9ccb151))
+
+
+### Bug Fixes
+
+* preserve VM state across reconnections and add memory management ([7fba770](https://github.com/HyperTekOrg/hyperstack/commit/7fba770df913dd0fbd06e43b402c6c288b25acbb))
+
 ## [0.2.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.2.1...hyperstack-macros-v0.2.2) (2026-01-16)
 
 
