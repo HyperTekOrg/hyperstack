@@ -1,6 +1,6 @@
 {
   "name": "hyperstack-typescript",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "type": "module",
   "description": "Pure TypeScript SDK for the Hyperstack Solana streaming platform",
   "main": "dist/index.js",
