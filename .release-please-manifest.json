@@ -1,10 +1,10 @@
 {
-  "hyperstack": "0.2.4",
-  "interpreter": "0.2.4",
-  "hyperstack-macros": "0.2.4",
-  "cli": "0.2.4",
-  "rust/hyperstack-sdk": "0.2.4",
-  "rust/hyperstack-server": "0.2.4",
-  "typescript/react": "0.2.4",
-  "typescript/core": "0.2.4"
+  "hyperstack": "0.2.5",
+  "interpreter": "0.2.5",
+  "hyperstack-macros": "0.2.5",
+  "cli": "0.2.5",
+  "rust/hyperstack-sdk": "0.2.5",
+  "rust/hyperstack-server": "0.2.5",
+  "typescript/react": "0.2.5",
+  "typescript/core": "0.2.5"
 }
