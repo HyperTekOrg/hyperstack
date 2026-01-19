@@ -22,16 +22,16 @@ export default defineConfig({
       // Contributors only need to add frontmatter to control ordering
       sidebar: [
         {
-          label: "Getting Started",
-          autogenerate: { directory: "getting-started" },
+          label: "Using Stacks",
+          autogenerate: { directory: "using-stacks" },
+        },
+        {
+          label: "Building Stacks",
+          autogenerate: { directory: "building-stacks" },
         },
         {
           label: "Concepts",
           autogenerate: { directory: "concepts" },
-        },
-        {
-          label: "Stacks (Rust DSL)",
-          autogenerate: { directory: "stacks" },
         },
         {
           label: "SDKs",
@@ -43,10 +43,6 @@ export default defineConfig({
             {
               label: "Rust",
               autogenerate: { directory: "sdks/rust" },
-            },
-            {
-              label: "Python",
-              autogenerate: { directory: "sdks/python" },
             },
           ],
         },

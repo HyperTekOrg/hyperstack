@@ -1,0 +1,116 @@
+---
+title: Installation
+sidebar:
+  order: 2
+---
+
+Set up your environment for building Hyperstack stacks.
+
+:::tip[Just want to use an existing stack?]
+If you're consuming data from a deployed stack, see [Using Stacks → Installation](/using-stacks/installation) instead.
+:::
+
+---
+
+## Prerequisites
+
+- **Rust** 1.70+ ([install via rustup](https://rustup.rs/))
+- A code editor with Rust support (VS Code + rust-analyzer recommended)
+
+---
+
+## CLI
+
+The Hyperstack CLI (`hs`) handles project initialization, deployment, and SDK generation.
+
+```bash
+cargo install hyperstack-cli
+```
+
+Verify the installation:
+
+```bash
+hs --version
+```
+
+:::note[PATH configuration]
+Ensure `~/.cargo/bin` is in your PATH. Most Rust installations configure this automatically.
+:::
+
+---
+
+## Rust Dependencies
+
+Add the Hyperstack crate to your stack project's `Cargo.toml`:
+
+```toml
+[dependencies]
+hyperstack = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+```
+
+This gives you access to:
+- `#[hyperstack]` — The main macro for defining stacks
+- `#[entity]`, `#[map]`, `#[aggregate]` — Field-level attributes
+- `Stream` derive macro — Generates streaming infrastructure
+
+---
+
+## Project Initialization
+
+Create a new stack project:
+
+```bash
+cargo new my-stack --lib
+cd my-stack
+```
+
+Initialize Hyperstack configuration:
+
+```bash
+hs init
+```
+
+This creates `hyperstack.toml` and a `.hyperstack/` directory for generated AST files.
+
+**hyperstack.toml:**
+
+```toml
+[project]
+name = "my-stack"
+
+[sdk]
+output_dir = "./generated"
+```
+
+Validate your setup:
+
+```bash
+hs config validate
+```
+
+---
+
+## Environment Variables
+
+| Variable             | Description           | Default        |
+| -------------------- | --------------------- | -------------- |
+| `HYPERSTACK_API_URL` | Override API endpoint | Production API |
+
+---
+
+## Next Steps
+
+- [Overview](/building-stacks/overview) — Understand the declarative model
+- [Your First Stack](/building-stacks/your-first-stack) — Build an end-to-end streaming app
+- [Macros Reference](/building-stacks/macros) — Complete attribute documentation
+
+---
+
+## Troubleshooting
+
+| Issue                   | Solution                                |
+| ----------------------- | --------------------------------------- |
+| `hs: command not found` | Add `~/.cargo/bin` to your PATH         |
+| `cargo build` fails     | Ensure `hyperstack = "0.2"` is in Cargo.toml |
+| `hs init` fails         | Check you're in a valid Cargo project   |

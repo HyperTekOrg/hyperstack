@@ -1,0 +1,70 @@
+---
+title: Installation
+sidebar:
+  order: 1
+---
+
+Install the Hyperstack SDK to connect to real-time data streams.
+
+:::tip[Want to create your own stack?]
+If you're building a custom data feed, see [Building Stacks → Installation](/building-stacks/installation) instead.
+:::
+
+---
+
+## TypeScript (Core)
+
+For Node.js, Vue, Svelte, or vanilla JS:
+
+```bash
+npm install hyperstack-typescript
+```
+
+Framework-agnostic with AsyncIterable-based streaming. No peer dependencies.
+
+---
+
+## TypeScript (React)
+
+For React applications:
+
+```bash
+npm install hyperstack-react
+```
+
+**Peer dependencies:** `react` ^19.0.0, `zustand` ^4.0.0
+
+```bash
+npm install react zustand
+```
+
+:::note[Which package?]
+- **React/Next.js** → `hyperstack-react`
+- **Everything else** → `hyperstack-typescript`
+:::
+
+---
+
+## Rust
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+hyperstack-sdk = "0.2"
+```
+
+---
+
+## Next Steps
+
+- [Quickstart](/using-stacks/quickstart) — Connect to a live stack in 5 minutes
+
+---
+
+## Troubleshooting
+
+| Issue                               | Solution                                   |
+| ----------------------------------- | ------------------------------------------ |
+| `Cannot find module 'hyperstack-*'` | Run `npm install` for the relevant package |
+| Peer dependency warnings            | Install `react` and `zustand` explicitly   |
