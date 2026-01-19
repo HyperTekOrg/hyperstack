@@ -99,14 +99,25 @@ impl CanonicalLog {
             }
         }
 
-        let json_str = serde_json::to_string(&self.data).unwrap_or_else(|_| "{}".to_string());
+        // Emit as a structured field so OTEL/Axiom can parse it, rather than embedding JSON in message body
+        let canonical = serde_json::to_string(&self.data).unwrap_or_else(|_| "{}".to_string());
 
         match self.level {
-            LogLevel::Trace => tracing::trace!(target: "hyperstack::canonical", "{}", json_str),
-            LogLevel::Debug => tracing::debug!(target: "hyperstack::canonical", "{}", json_str),
-            LogLevel::Info => tracing::info!(target: "hyperstack::canonical", "{}", json_str),
-            LogLevel::Warn => tracing::warn!(target: "hyperstack::canonical", "{}", json_str),
-            LogLevel::Error => tracing::error!(target: "hyperstack::canonical", "{}", json_str),
+            LogLevel::Trace => {
+                tracing::trace!(target: "hyperstack::canonical", canonical = %canonical, "canonical_event")
+            }
+            LogLevel::Debug => {
+                tracing::debug!(target: "hyperstack::canonical", canonical = %canonical, "canonical_event")
+            }
+            LogLevel::Info => {
+                tracing::info!(target: "hyperstack::canonical", canonical = %canonical, "canonical_event")
+            }
+            LogLevel::Warn => {
+                tracing::warn!(target: "hyperstack::canonical", canonical = %canonical, "canonical_event")
+            }
+            LogLevel::Error => {
+                tracing::error!(target: "hyperstack::canonical", canonical = %canonical, "canonical_event")
+            }
         }
     }
 }
