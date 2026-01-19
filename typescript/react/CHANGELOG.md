@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.2.3...hyperstack-react-v0.2.4) (2026-01-19)
+
+
+### Bug Fixes
+
+* restore active subscriptions on websocket reconnect ([ccabd0f](https://github.com/HyperTekOrg/hyperstack/commit/ccabd0f92b1936143273002d19c1a45537b58968))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-typescript bumped from 0.2.3 to 0.2.4
+
 ## [0.2.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.2.2...hyperstack-react-v0.2.3) (2026-01-18)
 
 
