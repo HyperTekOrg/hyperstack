@@ -13,6 +13,7 @@ export class ConnectionManager {
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private currentState: ConnectionState = 'disconnected';
   private subscriptionQueue: Subscription[] = [];
+  private activeSubscriptions: Set<string> = new Set(); // Track active subscriptions for reconnect
 
   private onFrame?: FrameHandler;
   private onStateChange?: StateHandler;
@@ -45,34 +46,34 @@ export class ConnectionManager {
     if (this.ws?.readyState === WebSocket.OPEN ||
       this.ws?.readyState === WebSocket.CONNECTING ||
       this.currentState === 'connecting') {
-      console.log('Connection already exists or in progress, skipping connect');
       return;
     }
 
-    console.log('[Hyperstack] Connecting to WebSocket...');
-    this.updateState('connecting'); // update UI state immediately
+    this.updateState('connecting');
 
     try {
       this.ws = new WebSocket(this.config.websocketUrl!);
 
       this.ws.onopen = () => {
-        console.log('[Hyperstack] WebSocket connected');
-        this.reconnectAttempts = 0;     // reset retry counter on successful connect
-        this.updateState('connected');  // notify store/UI of successful connection
+        const wasReconnect = this.reconnectAttempts > 0;
+        this.reconnectAttempts = 0;
+        this.updateState('connected');
         
-        this.startPingInterval();       // start keep-alive ping
+        this.startPingInterval();
 
-        // send global subscriptions first (from config)
         if (this.config.initialSubscriptions) {
           for (const sub of this.config.initialSubscriptions) {
             this.subscribe(sub);
           }
         }
 
-        // flush queued subscriptions from when we were offline
         while (this.subscriptionQueue.length > 0) {
           const sub = this.subscriptionQueue.shift()!;
           this.subscribe(sub);
+        }
+
+        if (wasReconnect) {
+          this.resubscribeActive();
         }
       };
 
@@ -104,14 +105,10 @@ export class ConnectionManager {
         this.updateState('error', 'WebSocket connection error'); // Notify store/UI of errors
       };
 
-      // connection lost handler with auto-reconnection
       this.ws.onclose = () => {
-        console.log('WebSocket disconnected');
         this.stopPingInterval();
         this.ws = null;
 
-        // only auto-reconnect if we didn't explicitly disconnect
-        // this preserves subscriptions across temporary network issues
         if (this.currentState !== 'disconnected') {
           this.handleReconnect();
         }
@@ -140,19 +137,48 @@ export class ConnectionManager {
   }
 
   subscribe(subscription: Subscription): void {
+    const subKey = this.makeSubKey(subscription);
+    
     if (this.currentState === 'connected' && this.ws && this.ws.readyState === WebSocket.OPEN) {
-      console.log('[Hyperstack] Subscribing to:', subscription.view);
       const subMsg = { type: 'subscribe', ...subscription };
       this.ws.send(JSON.stringify(subMsg));
+      this.activeSubscriptions.add(subKey);
     } else {
       this.subscriptionQueue.push(subscription);
     }
   }
 
   unsubscribe(view: string, key?: string): void {
-    if (this.currentState === 'connected' && this.ws?.readyState === WebSocket.OPEN) {
-      const unsubMsg = { type: 'unsubscribe', view, key };
-      this.ws.send(JSON.stringify(unsubMsg));
+    const subscription: Subscription = { view, key };
+    const subKey = this.makeSubKey(subscription);
+    
+    if (this.activeSubscriptions.has(subKey)) {
+      this.activeSubscriptions.delete(subKey);
+      
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        const unsubMsg = { type: 'unsubscribe', view, key };
+        this.ws.send(JSON.stringify(unsubMsg));
+      }
+    }
+  }
+
+  private makeSubKey(subscription: Subscription): string {
+    return `${subscription.view}:${subscription.key ?? '*'}:${subscription.partition ?? ''}`;
+  }
+
+  private resubscribeActive(): void {
+    for (const subKey of this.activeSubscriptions) {
+      const [view, key, partition] = subKey.split(':');
+      const subscription: Subscription = {
+        view: view ?? '',
+        key: key === '*' ? undefined : key,
+        partition: partition || undefined,
+      };
+
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        const subMsg = { type: 'subscribe', ...subscription };
+        this.ws.send(JSON.stringify(subMsg));
+      }
     }
   }
 
@@ -187,10 +213,8 @@ export class ConnectionManager {
 
     this.reconnectAttempts++;
 
-    // delayed reconnection with exponential backoff
     this.reconnectTimeout = setTimeout(() => {
-      console.log(`Reconnect attempt ${this.reconnectAttempts} after ${delay}ms delay`);
-      this.connect(); // recursive call - will restore subscriptions on success
+      this.connect();
     }, delay);
   }
 
