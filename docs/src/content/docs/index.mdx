@@ -39,6 +39,7 @@ import { PUMPFUN_TOKEN_STACK, PumpfunToken } from './generated/pumpfun-stack';
 
 function App() {
 return (
+
 <HyperstackProvider 
       websocketUrl="wss://pumpfun-token-rfx6zp.stack.usehyperstack.com"
     >
@@ -54,6 +55,7 @@ const { data: tokens, isLoading } = stack.views.tokens.list.use();
 if (isLoading) return <div>Connecting...</div>;
 
 return (
+
 <ul>
 {tokens?.map(token => (
 <li key={token.mint}>{token.name} - {token.symbol}</li>
