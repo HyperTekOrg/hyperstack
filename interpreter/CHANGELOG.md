@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.2.4...hyperstack-interpreter-v0.2.5) (2026-01-19)
+
+
+### Bug Fixes
+
+* emit canonical log data as structured field for OTEL/Axiom parsing ([247e807](https://github.com/HyperTekOrg/hyperstack/commit/247e807019b793a2194d3c9d670c4ab2a01615ac))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-macros bumped from 0.2.4 to 0.2.5
+
 ## [0.2.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.2.3...hyperstack-interpreter-v0.2.4) (2026-01-19)
 
 
