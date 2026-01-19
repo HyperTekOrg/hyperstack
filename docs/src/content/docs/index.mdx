@@ -38,30 +38,31 @@ import { HyperstackProvider, useHyperstack } from 'hyperstack-react';
 import { PUMPFUN_TOKEN_STACK, PumpfunToken } from './generated/pumpfun-stack';
 
 function App() {
-  return (
-    <HyperstackProvider 
+return (
+<HyperstackProvider 
       websocketUrl="wss://pumpfun-token-rfx6zp.stack.usehyperstack.com"
     >
-      <TokenFeed />
-    </HyperstackProvider>
-  );
+<TokenFeed />
+</HyperstackProvider>
+);
 }
 
 function TokenFeed() {
-  const stack = useHyperstack(PUMPFUN_TOKEN_STACK);
-  const { data: tokens, isLoading } = stack.views.tokens.list.use();
+const stack = useHyperstack(PUMPFUN_TOKEN_STACK);
+const { data: tokens, isLoading } = stack.views.tokens.list.use();
 
-  if (isLoading) return <div>Connecting...</div>;
+if (isLoading) return <div>Connecting...</div>;
 
-  return (
-    <ul>
-      {tokens?.map(token => (
-        <li key={token.mint}>{token.name} - {token.symbol}</li>
-      ))}
-    </ul>
-  );
+return (
+<ul>
+{tokens?.map(token => (
+<li key={token.mint}>{token.name} - {token.symbol}</li>
+))}
+</ul>
+);
 }
-```
+
+````
 </TabItem>
 <TabItem label="TypeScript">
 ```typescript
@@ -79,7 +80,8 @@ for await (const update of hs.views.tokens.list.watch()) {
     console.log('Token updated:', update.data.name, update.data.symbol);
   }
 }
-```
+````
+
 </TabItem>
 <TabItem label="Rust">
 ```rust
@@ -88,9 +90,9 @@ use pumpfun_stack::PumpfunTokenEntity;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let hs = HyperStack::connect(
-        "wss://pumpfun-token-rfx6zp.stack.usehyperstack.com"
-    ).await?;
+let hs = HyperStack::connect(
+"wss://pumpfun-token-rfx6zp.stack.usehyperstack.com"
+).await?;
 
     // Stream updates as they happen on-chain
     let mut stream = hs.watch::<PumpfunTokenEntity>();
@@ -104,8 +106,10 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+
 }
-```
+
+````
 </TabItem>
 </Tabs>
 
@@ -114,7 +118,8 @@ The type-safe SDK for any deployed stack can be generated with the CLI:
 ```bash
 hs sdk create typescript pumpfun-token --output ./generated
 hs sdk create rust pumpfun-token --output ./generated
-```
+````
+
 :::
 
 ---
@@ -171,6 +176,7 @@ hs up
 ```
 
 Output:
+
 ```
 ✔ Stack pushed (v1)
 ✔ Build completed
@@ -189,15 +195,15 @@ Then connect using the examples above.
 
 ## Capabilities
 
-| Feature | Description |
-|---------|-------------|
-| **Account state** | Map fields directly from on-chain accounts |
-| **Instructions** | Extract arguments and accounts from program instructions |
-| **Aggregations** | Compute Sum, Count, Max, Min, UniqueCount across events |
-| **Computed fields** | Derive values from other fields |
-| **PDA resolution** | Automatically resolve related accounts |
-| **Real-time streaming** | Updates pushed via WebSocket as they happen on-chain |
-| **Type-safe SDKs** | Generated TypeScript and Rust clients with full type inference |
+| Feature                 | Description                                                    |
+| ----------------------- | -------------------------------------------------------------- |
+| **Account state**       | Map fields directly from on-chain accounts                     |
+| **Instructions**        | Extract arguments and accounts from program instructions       |
+| **Aggregations**        | Compute Sum, Count, Max, Min, UniqueCount across events        |
+| **Computed fields**     | Derive values from other fields                                |
+| **PDA resolution**      | Automatically resolve related accounts                         |
+| **Real-time streaming** | Updates pushed via WebSocket as they happen on-chain           |
+| **Type-safe SDKs**      | Generated TypeScript and Rust clients with full type inference |
 
 ---
 
