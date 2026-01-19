@@ -1,48 +1,205 @@
 ---
 title: Hyperstack
-description: Real-time streaming data pipelines for Solana
+description: Programmable data feeds for Solana
 ---
 
-import { Card, CardGrid } from "@astrojs/starlight/components";
+import { Card, CardGrid, Tabs, TabItem } from "@astrojs/starlight/components";
 
-## What is Hyperstack?
+**Hyperstack is a system for programmable data feeds on Solana.**
 
-Hyperstack is **data infrastructure as code** for Solana. Define a schema that connects your onchain accounts and we create the backend infrastructure for you.
+Stream any on-chain data to your app in real-time. No custom indexers. No RPC polling. No infrastructure to manage.
 
-**We handle:**
+Define the data you need, deploy it, and start streaming in minutes.
 
-- Streaming onchain data from RPC nodes
-- Indexing the schema you defined
-- WebSocket streaming of that schema into your app
-- Generating type-safe client code to sync the schema into your app
+---
 
-## Quick Example
+## What Hyperstack Handles
 
-import { Tabs, TabItem } from "@astrojs/starlight/components";
+Building real-time Solana data pipelines typically requires:
+
+- **Yellowstone gRPC** connections to stream raw transaction data
+- **Custom parsers** for every account type and instruction
+- **State management** to track entity lifecycles and compute aggregations
+- **WebSocket infrastructure** to fan out updates to clients
+- **Type definitions** kept in sync between backend and frontend
+
+Hyperstack replaces all of this with a declarative definition and managed infrastructure.
+
+---
+
+## Stream an Existing Feed
+
+If someone has already deployed a Hyperstack feed, you can connect and start streaming immediately.
 
 <Tabs>
 <TabItem label="React">
 ```tsx
-function TokenList() {
-  const stack = useHyperstack(MY_PROGRAM_STACK);
-  const { data: tokens } = stack.views.tokens.list.use();
+import { HyperstackProvider, useHyperstack } from 'hyperstack-react';
+import { PUMPFUN_TOKEN_STACK, PumpfunToken } from './generated/pumpfun-stack';
 
-return tokens?.map(token => <TokenCard key={token.mint} {...token} />);
+function App() {
+  return (
+    <HyperstackProvider 
+      websocketUrl="wss://pumpfun-token-rfx6zp.stack.usehyperstack.com"
+    >
+      <TokenFeed />
+    </HyperstackProvider>
+  );
 }
 
-````
+function TokenFeed() {
+  const stack = useHyperstack(PUMPFUN_TOKEN_STACK);
+  const { data: tokens, isLoading } = stack.views.tokens.list.use();
+
+  if (isLoading) return <div>Connecting...</div>;
+
+  return (
+    <ul>
+      {tokens?.map(token => (
+        <li key={token.mint}>{token.name} - {token.symbol}</li>
+      ))}
+    </ul>
+  );
+}
+```
 </TabItem>
 <TabItem label="TypeScript">
 ```typescript
-const hs = await HyperStack.connect('wss://my-stack.stack.usehyperstack.com');
+import { HyperStack } from 'hyperstack-typescript';
+import { PUMPFUN_TOKEN_STACK } from './generated/pumpfun-stack';
 
+const hs = await HyperStack.connect(
+  'wss://pumpfun-token-rfx6zp.stack.usehyperstack.com',
+  { stack: PUMPFUN_TOKEN_STACK }
+);
+
+// Stream updates as they happen on-chain
 for await (const update of hs.views.tokens.list.watch()) {
-  console.log('Token:', update.data);
+  if (update.type === 'upsert') {
+    console.log('Token updated:', update.data.name, update.data.symbol);
+  }
 }
-````
+```
+</TabItem>
+<TabItem label="Rust">
+```rust
+use hyperstack_sdk::prelude::*;
+use pumpfun_stack::PumpfunTokenEntity;
 
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let hs = HyperStack::connect(
+        "wss://pumpfun-token-rfx6zp.stack.usehyperstack.com"
+    ).await?;
+
+    // Stream updates as they happen on-chain
+    let mut stream = hs.watch::<PumpfunTokenEntity>();
+    while let Some(update) = stream.next().await {
+        match update {
+            Update::Upsert { data, .. } => {
+                println!("Token: {} ({})", data.name, data.symbol);
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+```
 </TabItem>
 </Tabs>
+
+:::note[Generate the SDK]
+The type-safe SDK for any deployed stack can be generated with the CLI:
+```bash
+hs sdk create typescript pumpfun-token --output ./generated
+hs sdk create rust pumpfun-token --output ./generated
+```
+:::
+
+---
+
+## Create Your Own Feed
+
+To stream data from your own Solana program, define a stack in Rust and deploy it.
+
+### 1. Define Your Data Shape
+
+Create a Rust crate with your stack definition:
+
+```rust
+use hyperstack::{hyperstack, Stream};
+
+#[hyperstack(idl = "my_program.json")]
+pub mod my_stack {
+    /// Track token data from your program
+    #[entity(name = "Token")]
+    #[derive(Stream)]
+    pub struct Token {
+        // Primary key from instruction
+        #[from_instruction(CreateToken::mint, primary_key)]
+        pub mint: String,
+
+        // Map fields from account state
+        #[map(TokenAccount::name)]
+        pub name: String,
+
+        #[map(TokenAccount::symbol)]
+        pub symbol: String,
+
+        // Aggregate values from events
+        #[aggregate(from = Trade, field = amount, strategy = Sum)]
+        pub total_volume: u64,
+
+        // Compute derived values
+        #[computed(total_volume / 1_000_000)]
+        pub volume_in_millions: u64,
+    }
+}
+```
+
+### 2. Build and Deploy
+
+```bash
+# Build generates the AST
+cargo build
+
+# Deploy to Hyperstack Cloud
+hs auth login
+hs init
+hs up
+```
+
+Output:
+```
+✔ Stack pushed (v1)
+✔ Build completed
+🚀 Deployed: wss://my-stack.stack.usehyperstack.com
+```
+
+### 3. Generate SDK and Connect
+
+```bash
+hs sdk create typescript my-stack
+```
+
+Then connect using the examples above.
+
+---
+
+## Capabilities
+
+| Feature | Description |
+|---------|-------------|
+| **Account state** | Map fields directly from on-chain accounts |
+| **Instructions** | Extract arguments and accounts from program instructions |
+| **Aggregations** | Compute Sum, Count, Max, Min, UniqueCount across events |
+| **Computed fields** | Derive values from other fields |
+| **PDA resolution** | Automatically resolve related accounts |
+| **Real-time streaming** | Updates pushed via WebSocket as they happen on-chain |
+| **Type-safe SDKs** | Generated TypeScript and Rust clients with full type inference |
+
+---
 
 ## Start Here
 
@@ -53,28 +210,22 @@ for await (const update of hs.views.tokens.list.watch()) {
     [Get started →](/getting-started/installation/)
 
   </Card>
-  <Card title="React Quickstart" icon="rocket">
-    Build your first real-time React app in 5 minutes.
+  <Card title="Your First Stack" icon="rocket">
+    Build and deploy a complete stack in 15 minutes.
 
-    [Start building →](/getting-started/quickstart/)
-
-  </Card>
-  <Card title="TypeScript SDK" icon="seti:typescript">
-    Pure TypeScript for Node.js, Vue, Svelte, etc.
-
-    [View SDK →](/sdks/typescript/overview/)
+    [Start building →](/getting-started/your-first-stack/)
 
   </Card>
   <Card title="How It Works" icon="information">
-    Understand the architecture and key concepts.
+    Architecture, data flow, and key concepts.
 
     [Learn more →](/concepts/overview/)
 
   </Card>
-  <Card title="CLI Commands" icon="seti:powershell">
-    Full reference for the Hyperstack CLI.
+  <Card title="Stack Macros" icon="document">
+    Full reference for mapping and aggregation macros.
 
-    [View commands →](/cli/commands/)
+    [View reference →](/stacks/macros/)
 
   </Card>
 </CardGrid>
