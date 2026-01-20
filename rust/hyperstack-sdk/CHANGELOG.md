@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-sdk-v0.3.1...hyperstack-sdk-v0.3.2) (2026-01-20)
+
+
+### Bug Fixes
+
+* update SDKs to detect and decompress raw gzip binary frames ([2441b54](https://github.com/HyperTekOrg/hyperstack/commit/2441b54e7f3dbf53cea428e0aa6bcd81b9a06e60))
+
 ## [0.3.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-sdk-v0.3.0...hyperstack-sdk-v0.3.1) (2026-01-20)
 
 

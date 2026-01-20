@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.3.1...hyperstack-typescript-v0.3.2) (2026-01-20)
+
+
+### Bug Fixes
+
+* prevent duplicate WebSocket subscriptions from same client ([8135fdf](https://github.com/HyperTekOrg/hyperstack/commit/8135fdf28461b1906a03fe78c3f9ae50362ccb96))
+* send snapshots in batches for faster initial page loads ([d4a8c40](https://github.com/HyperTekOrg/hyperstack/commit/d4a8c405bbd5859f40825d99a3b044c64ede6985))
+* update SDKs to detect and decompress raw gzip binary frames ([2441b54](https://github.com/HyperTekOrg/hyperstack/commit/2441b54e7f3dbf53cea428e0aa6bcd81b9a06e60))
+
 ## [0.3.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.3.0...hyperstack-typescript-v0.3.1) (2026-01-20)
 
 
