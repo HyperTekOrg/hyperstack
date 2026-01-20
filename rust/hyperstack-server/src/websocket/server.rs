@@ -201,17 +201,22 @@ async fn handle_connection(
                                             let sub_key = subscription.sub_key();
                                             client_manager.update_subscription(client_id, subscription.clone());
 
+                                            let cancel_token = CancellationToken::new();
+                                            let is_new = client_manager.add_client_subscription(
+                                                client_id,
+                                                sub_key.clone(),
+                                                cancel_token.clone(),
+                                            ).await;
+
+                                            if !is_new {
+                                                debug!("Client {} already subscribed to {}, ignoring duplicate", client_id, sub_key);
+                                                continue;
+                                            }
+
                                             if let Some(ref m) = metrics {
                                                 m.record_subscription_created(&view_id);
                                             }
                                             active_subscriptions.push(view_id);
-
-                                            let cancel_token = CancellationToken::new();
-                                            client_manager.add_client_subscription(
-                                                client_id,
-                                                sub_key,
-                                                cancel_token.clone(),
-                                            ).await;
 
                                             attach_client_to_bus(
                                                 client_id,
@@ -246,17 +251,22 @@ async fn handle_connection(
                                     let sub_key = subscription.sub_key();
                                     client_manager.update_subscription(client_id, subscription.clone());
 
+                                    let cancel_token = CancellationToken::new();
+                                    let is_new = client_manager.add_client_subscription(
+                                        client_id,
+                                        sub_key.clone(),
+                                        cancel_token.clone(),
+                                    ).await;
+
+                                    if !is_new {
+                                        debug!("Client {} already subscribed to {}, ignoring duplicate", client_id, sub_key);
+                                        continue;
+                                    }
+
                                     if let Some(ref m) = metrics {
                                         m.record_subscription_created(&view_id);
                                     }
                                     active_subscriptions.push(view_id);
-
-                                    let cancel_token = CancellationToken::new();
-                                    client_manager.add_client_subscription(
-                                        client_id,
-                                        sub_key,
-                                        cancel_token.clone(),
-                                    ).await;
 
                                     attach_client_to_bus(
                                         client_id,
@@ -346,11 +356,16 @@ async fn handle_connection(
                                             client_manager.update_subscription(client_id, subscription.clone());
 
                                             let cancel_token = CancellationToken::new();
-                                            client_manager.add_client_subscription(
+                                            let is_new = client_manager.add_client_subscription(
                                                 client_id,
-                                                sub_key,
+                                                sub_key.clone(),
                                                 cancel_token.clone(),
                                             ).await;
+
+                                            if !is_new {
+                                                debug!("Client {} already subscribed to {}, ignoring duplicate", client_id, sub_key);
+                                                continue;
+                                            }
 
                                             attach_client_to_bus(
                                                 client_id,
@@ -381,11 +396,16 @@ async fn handle_connection(
                                     client_manager.update_subscription(client_id, subscription.clone());
 
                                     let cancel_token = CancellationToken::new();
-                                    client_manager.add_client_subscription(
+                                    let is_new = client_manager.add_client_subscription(
                                         client_id,
-                                        sub_key,
+                                        sub_key.clone(),
                                         cancel_token.clone(),
                                     ).await;
+
+                                    if !is_new {
+                                        debug!("Client {} already subscribed to {}, ignoring duplicate", client_id, sub_key);
+                                        continue;
+                                    }
 
                                     attach_client_to_bus(
                                         client_id,

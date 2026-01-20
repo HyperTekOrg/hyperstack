@@ -67,11 +67,14 @@ impl ClientInfo {
         self.last_seen.elapsed().unwrap_or(Duration::MAX) > timeout
     }
 
-    pub async fn add_subscription(&self, sub_key: String, token: CancellationToken) {
+    pub async fn add_subscription(&self, sub_key: String, token: CancellationToken) -> bool {
         let mut subs = self.subscriptions.write().await;
         if let Some(old_token) = subs.insert(sub_key.clone(), token) {
             old_token.cancel();
             debug!("Replaced existing subscription: {}", sub_key);
+            false
+        } else {
+            true
         }
     }
 
@@ -277,9 +280,11 @@ impl ClientManager {
         client_id: Uuid,
         sub_key: String,
         token: CancellationToken,
-    ) {
+    ) -> bool {
         if let Some(client) = self.clients.get(&client_id) {
-            client.add_subscription(sub_key, token).await;
+            client.add_subscription(sub_key, token).await
+        } else {
+            false
         }
     }
 
