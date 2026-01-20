@@ -1,6 +1,6 @@
 {
   "name": "hyperstack-stacks",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "description": "Protocol stacks for Hyperstack - ready-to-use Solana data streams",
   "type": "module",
   "main": "dist/index.cjs",
@@ -18,7 +18,11 @@
       "require": "./dist/pumpfun/index.cjs"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsup",
     "prepublishOnly": "npm run build"
@@ -28,14 +32,24 @@
     "hyperstack-typescript": ">=0.2.0"
   },
   "peerDependenciesMeta": {
-    "hyperstack-react": { "optional": true },
-    "hyperstack-typescript": { "optional": true }
+    "hyperstack-react": {
+      "optional": true
+    },
+    "hyperstack-typescript": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "tsup": "^8.0.0",
     "typescript": "^5.0.0"
   },
-  "keywords": ["hyperstack", "solana", "blockchain", "streaming", "pumpfun"],
+  "keywords": [
+    "hyperstack",
+    "solana",
+    "blockchain",
+    "streaming",
+    "pumpfun"
+  ],
   "author": "HyperTek",
   "license": "MIT",
   "repository": {

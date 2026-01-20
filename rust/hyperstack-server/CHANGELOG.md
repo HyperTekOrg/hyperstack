@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.2.5...hyperstack-server-v0.3.0) (2026-01-20)
+
+
+### Features
+
+* add gzip compression for large WebSocket payloads ([cb694e9](https://github.com/HyperTekOrg/hyperstack/commit/cb694e9ef74ff99345e5f054820207f743d55e1d))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.2.5 to 0.3.0
+
 ## [0.2.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.2.4...hyperstack-server-v0.2.5) (2026-01-19)
 
 

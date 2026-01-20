@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.3.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.2.5...hyperstack-interpreter-v0.3.0) (2026-01-20)
+
+
+### Features
+
+* **cli:** add --module flag for Rust SDK generation ([42812e6](https://github.com/HyperTekOrg/hyperstack/commit/42812e673d5b763792b96937d8dd6dee20314253))
+* **sdk:** add default export to generated TypeScript SDK ([b24f39f](https://github.com/HyperTekOrg/hyperstack/commit/b24f39f0899bfe53d4307f5b0fa06733178006e2))
+
+
+### Bug Fixes
+
+* remove needless borrow in rust codegen ([398047b](https://github.com/HyperTekOrg/hyperstack/commit/398047b5c8308ccb05c4426ffecbdd1daf6d6f7b))
+* remove unused serde_helpers module from Rust SDK generator ([57e2d13](https://github.com/HyperTekOrg/hyperstack/commit/57e2d13dbcd9bbceaa5cd5bbaf8e1d37f7df99a7))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-macros bumped from 0.2.5 to 0.3.0
+
 ## [0.2.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.2.4...hyperstack-interpreter-v0.2.5) (2026-01-19)
 
 

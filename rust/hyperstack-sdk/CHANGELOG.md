@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-sdk-v0.2.5...hyperstack-sdk-v0.3.0) (2026-01-20)
+
+
+### Features
+
+* add gzip compression for large WebSocket payloads ([cb694e9](https://github.com/HyperTekOrg/hyperstack/commit/cb694e9ef74ff99345e5f054820207f743d55e1d))
+
 ## [0.2.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-sdk-v0.2.4...hyperstack-sdk-v0.2.5) (2026-01-19)
 
 
