@@ -80,8 +80,6 @@ export class ConnectionManager {
           try {
             let frame: Frame;
 
-            console.log('[hyperstack] onmessage received, data type:', typeof event.data, event.data instanceof Blob ? 'Blob' : event.data instanceof ArrayBuffer ? 'ArrayBuffer' : 'string');
-
             if (event.data instanceof ArrayBuffer) {
               frame = parseFrame(event.data);
             } else if (event.data instanceof Blob) {
@@ -95,7 +93,6 @@ export class ConnectionManager {
               );
             }
 
-            console.log('[hyperstack] Parsed frame:', { op: frame.op, entity: frame.entity });
             this.notifyFrameHandlers(frame);
           } catch (error) {
             console.error('[hyperstack] Error parsing frame:', error);

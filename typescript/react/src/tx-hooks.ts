@@ -25,13 +25,10 @@ export function createTxMutationHook(
           throw new Error('Wallet not connected. Please provide a wallet adapter to HyperstackProvider.');
         }
 
-        console.log('[Hyperstack] Submitting transaction:', instructionOrTx);
-
         let txSignature: string;
         let instructionsToRefresh: Array<{ instruction: string; params: any }> = [];
 
         if (Array.isArray(instructionOrTx)) {
-          console.log('[Hyperstack] Processing multiple instructions');
           txSignature = await runtime.wallet.signAndSend(instructionOrTx);
           instructionsToRefresh = instructionOrTx.filter(
             inst => inst && typeof inst === 'object' && inst.instruction && inst.params !== undefined
@@ -41,11 +38,9 @@ export function createTxMutationHook(
           instructionOrTx.instruction &&
           instructionOrTx.params !== undefined
         ) {
-          console.log('[Hyperstack] Processing single instruction');
           txSignature = await runtime.wallet.signAndSend(instructionOrTx);
           instructionsToRefresh = [instructionOrTx];
         } else {
-          console.log('[Hyperstack] Processing raw transaction');
           txSignature = await runtime.wallet.signAndSend(instructionOrTx);
         }
 

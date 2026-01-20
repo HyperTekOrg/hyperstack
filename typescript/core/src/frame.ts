@@ -54,10 +54,8 @@ function parseAndDecompress(jsonString: string): Frame {
   const parsed = JSON.parse(jsonString);
 
   if (isCompressedFrame(parsed)) {
-    console.log('[hyperstack] Received compressed frame, decompressing...');
     const decompressedJson = decompressGzip(parsed.data);
     const frame = JSON.parse(decompressedJson) as Frame;
-    console.log('[hyperstack] Decompressed frame:', { op: frame.op, entity: frame.entity, dataLength: Array.isArray(frame.data) ? frame.data.length : 'n/a' });
     return frame;
   }
 
