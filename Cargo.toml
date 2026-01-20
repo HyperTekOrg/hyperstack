@@ -11,6 +11,7 @@ members = [
 ]
 exclude = [
     "stacks/pumpfun",
+    "stacks/ore",
     "examples/rust-client",
 ]
 
