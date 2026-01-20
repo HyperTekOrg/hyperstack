@@ -1,83 +1,103 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+mod serde_helpers {
+    use serde::{Deserialize, Deserializer};
+
+    pub fn deserialize_number_from_any<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum NumOrNull {
+            Num(f64),
+            Null,
+        }
+        match NumOrNull::deserialize(deserializer)? {
+            NumOrNull::Num(n) => Ok(Some(n)),
+            NumOrNull::Null => Ok(None),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PumpfunTokenId {
     #[serde(default)]
     pub mint: Option<String>,
-    #[serde(default, rename = "bondingCurve")]
+    #[serde(default)]
     pub bonding_curve: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PumpfunTokenInfo {
     #[serde(default)]
-    pub name: Option<String>,
+    pub name: Option<Option<String>>,
     #[serde(default)]
-    pub symbol: Option<String>,
+    pub symbol: Option<Option<String>>,
     #[serde(default)]
-    pub uri: Option<String>,
-    #[serde(default, rename = "isComplete")]
-    pub is_complete: Option<bool>,
+    pub uri: Option<Option<String>>,
+    #[serde(default)]
+    pub is_complete: Option<Option<bool>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PumpfunTokenReserves {
-    #[serde(default, rename = "virtualTokenReserves")]
-    pub virtual_token_reserves: Option<u64>,
-    #[serde(default, rename = "virtualSolReserves")]
-    pub virtual_sol_reserves: Option<u64>,
-    #[serde(default, rename = "realTokenReserves")]
-    pub real_token_reserves: Option<u64>,
-    #[serde(default, rename = "realSolReserves")]
-    pub real_sol_reserves: Option<u64>,
-    #[serde(default, rename = "tokenTotalSupply")]
-    pub token_total_supply: Option<u64>,
-    #[serde(default, rename = "currentPriceSol")]
-    pub current_price_sol: Option<f64>,
-    #[serde(default, rename = "marketCapSol")]
-    pub market_cap_sol: Option<f64>,
+    #[serde(default)]
+    pub virtual_token_reserves: Option<Option<u64>>,
+    #[serde(default)]
+    pub virtual_sol_reserves: Option<Option<u64>>,
+    #[serde(default)]
+    pub real_token_reserves: Option<Option<u64>>,
+    #[serde(default)]
+    pub real_sol_reserves: Option<Option<u64>>,
+    #[serde(default)]
+    pub token_total_supply: Option<Option<u64>>,
+    #[serde(default)]
+    pub current_price_sol: Option<Option<f64>>,
+    #[serde(default)]
+    pub market_cap_sol: Option<Option<f64>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PumpfunTokenTrading {
-    #[serde(default, rename = "totalBuyVolume")]
-    pub total_buy_volume: Option<u64>,
-    #[serde(default, rename = "totalSellVolume")]
-    pub total_sell_volume: Option<u64>,
-    #[serde(default, rename = "totalTrades")]
-    pub total_trades: Option<u64>,
-    #[serde(default, rename = "buyCount")]
-    pub buy_count: Option<u64>,
-    #[serde(default, rename = "sellCount")]
-    pub sell_count: Option<u64>,
-    #[serde(default, rename = "uniqueTraders")]
-    pub unique_traders: Option<u64>,
-    #[serde(default, rename = "largestTrade")]
-    pub largest_trade: Option<u64>,
-    #[serde(default, rename = "smallestTrade")]
-    pub smallest_trade: Option<u64>,
-    #[serde(default, rename = "lastTradeTimestamp")]
-    pub last_trade_timestamp: Option<i64>,
-    #[serde(default, rename = "lastTradePrice")]
-    pub last_trade_price: Option<f64>,
-    #[serde(default, rename = "whaleTradeCount")]
-    pub whale_trade_count: Option<u64>,
-    #[serde(default, rename = "lastWhaleAddress")]
-    pub last_whale_address: Option<String>,
-    #[serde(default, rename = "totalVolume")]
-    pub total_volume: Option<u64>,
-    #[serde(default, rename = "averageTradeSize")]
-    pub average_trade_size: Option<f64>,
+    #[serde(default)]
+    pub total_buy_volume: Option<Option<u64>>,
+    #[serde(default)]
+    pub total_sell_volume: Option<Option<u64>>,
+    #[serde(default)]
+    pub total_trades: Option<Option<u64>>,
+    #[serde(default)]
+    pub buy_count: Option<Option<u64>>,
+    #[serde(default)]
+    pub sell_count: Option<Option<u64>>,
+    #[serde(default)]
+    pub unique_traders: Option<Option<u64>>,
+    #[serde(default)]
+    pub largest_trade: Option<Option<u64>>,
+    #[serde(default)]
+    pub smallest_trade: Option<Option<u64>>,
+    #[serde(default)]
+    pub last_trade_timestamp: Option<Option<i64>>,
+    #[serde(default)]
+    pub last_trade_price: Option<Option<f64>>,
+    #[serde(default)]
+    pub whale_trade_count: Option<Option<u64>>,
+    #[serde(default)]
+    pub last_whale_address: Option<Option<String>>,
+    #[serde(default)]
+    pub total_volume: Option<Option<u64>>,
+    #[serde(default)]
+    pub average_trade_size: Option<Option<f64>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PumpfunTokenEvents {
     #[serde(default)]
-    pub create: Option<Create>,
+    pub create: Option<Option<serde_json::Value>>,
     #[serde(default)]
-    pub buys: Option<Vec<EventWrapper<Buy>>>,
+    pub buys: Option<Vec<serde_json::Value>>,
     #[serde(default)]
-    pub sells: Option<Vec<EventWrapper<Sell>>>,
+    pub sells: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -92,129 +112,129 @@ pub struct PumpfunToken {
     pub trading: PumpfunTokenTrading,
     #[serde(default)]
     pub events: PumpfunTokenEvents,
-    #[serde(default, rename = "bondingCurveSnapshot")]
-    pub bonding_curve_snapshot: Option<BondingCurve>,
+    #[serde(default)]
+    pub bonding_curve_snapshot: Option<Option<serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Create {
-    #[serde(default)]
+    #[serde(rename = "mint", default)]
     pub mint: Option<String>,
-    #[serde(default, rename = "mintAuthority")]
+    #[serde(rename = "mintAuthority", default)]
     pub mint_authority: Option<String>,
-    #[serde(default, rename = "bondingCurve")]
+    #[serde(rename = "bondingCurve", default)]
     pub bonding_curve: Option<String>,
-    #[serde(default, rename = "associatedBondingCurve")]
+    #[serde(rename = "associatedBondingCurve", default)]
     pub associated_bonding_curve: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "global", default)]
     pub global: Option<String>,
-    #[serde(default, rename = "mplTokenMetadata")]
+    #[serde(rename = "mplTokenMetadata", default)]
     pub mpl_token_metadata: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "metadata", default)]
     pub metadata: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "user", default)]
     pub user: Option<String>,
-    #[serde(default, rename = "systemProgram")]
+    #[serde(rename = "systemProgram", default)]
     pub system_program: Option<String>,
-    #[serde(default, rename = "tokenProgram")]
+    #[serde(rename = "tokenProgram", default)]
     pub token_program: Option<String>,
-    #[serde(default, rename = "associatedTokenProgram")]
+    #[serde(rename = "associatedTokenProgram", default)]
     pub associated_token_program: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "rent", default)]
     pub rent: Option<String>,
-    #[serde(default, rename = "eventAuthority")]
+    #[serde(rename = "eventAuthority", default)]
     pub event_authority: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "program", default)]
     pub program: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "name", default)]
     pub name: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "symbol", default)]
     pub symbol: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "uri", default)]
     pub uri: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "creator", default)]
     pub creator: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Buy {
-    #[serde(default)]
+    #[serde(rename = "global", default)]
     pub global: Option<String>,
-    #[serde(default, rename = "feeRecipient")]
+    #[serde(rename = "feeRecipient", default)]
     pub fee_recipient: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "mint", default)]
     pub mint: Option<String>,
-    #[serde(default, rename = "bondingCurve")]
+    #[serde(rename = "bondingCurve", default)]
     pub bonding_curve: Option<String>,
-    #[serde(default, rename = "associatedBondingCurve")]
+    #[serde(rename = "associatedBondingCurve", default)]
     pub associated_bonding_curve: Option<String>,
-    #[serde(default, rename = "associatedUser")]
+    #[serde(rename = "associatedUser", default)]
     pub associated_user: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "user", default)]
     pub user: Option<String>,
-    #[serde(default, rename = "systemProgram")]
+    #[serde(rename = "systemProgram", default)]
     pub system_program: Option<String>,
-    #[serde(default, rename = "tokenProgram")]
+    #[serde(rename = "tokenProgram", default)]
     pub token_program: Option<String>,
-    #[serde(default, rename = "creatorVault")]
+    #[serde(rename = "creatorVault", default)]
     pub creator_vault: Option<String>,
-    #[serde(default, rename = "eventAuthority")]
+    #[serde(rename = "eventAuthority", default)]
     pub event_authority: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "program", default)]
     pub program: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "amount", default)]
     pub amount: Option<u64>,
-    #[serde(default, rename = "maxSolCost")]
+    #[serde(rename = "maxSolCost", default)]
     pub max_sol_cost: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Sell {
-    #[serde(default)]
+    #[serde(rename = "global", default)]
     pub global: Option<String>,
-    #[serde(default, rename = "feeRecipient")]
+    #[serde(rename = "feeRecipient", default)]
     pub fee_recipient: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "mint", default)]
     pub mint: Option<String>,
-    #[serde(default, rename = "bondingCurve")]
+    #[serde(rename = "bondingCurve", default)]
     pub bonding_curve: Option<String>,
-    #[serde(default, rename = "associatedBondingCurve")]
+    #[serde(rename = "associatedBondingCurve", default)]
     pub associated_bonding_curve: Option<String>,
-    #[serde(default, rename = "associatedUser")]
+    #[serde(rename = "associatedUser", default)]
     pub associated_user: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "user", default)]
     pub user: Option<String>,
-    #[serde(default, rename = "systemProgram")]
+    #[serde(rename = "systemProgram", default)]
     pub system_program: Option<String>,
-    #[serde(default, rename = "creatorVault")]
+    #[serde(rename = "creatorVault", default)]
     pub creator_vault: Option<String>,
-    #[serde(default, rename = "tokenProgram")]
+    #[serde(rename = "tokenProgram", default)]
     pub token_program: Option<String>,
-    #[serde(default, rename = "eventAuthority")]
+    #[serde(rename = "eventAuthority", default)]
     pub event_authority: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "program", default)]
     pub program: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "amount", default)]
     pub amount: Option<u64>,
-    #[serde(default, rename = "minSolOutput")]
+    #[serde(rename = "minSolOutput", default)]
     pub min_sol_output: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct BondingCurve {
-    #[serde(default, rename = "virtualTokenReserves")]
+    #[serde(rename = "virtualTokenReserves", default)]
     pub virtual_token_reserves: Option<u64>,
-    #[serde(default, rename = "virtualSolReserves")]
+    #[serde(rename = "virtualSolReserves", default)]
     pub virtual_sol_reserves: Option<u64>,
-    #[serde(default, rename = "realTokenReserves")]
+    #[serde(rename = "realTokenReserves", default)]
     pub real_token_reserves: Option<u64>,
-    #[serde(default, rename = "realSolReserves")]
+    #[serde(rename = "realSolReserves", default)]
     pub real_sol_reserves: Option<u64>,
-    #[serde(default, rename = "tokenTotalSupply")]
+    #[serde(rename = "tokenTotalSupply", default)]
     pub token_total_supply: Option<u64>,
-    #[serde(default)]
+    #[serde(rename = "complete", default)]
     pub complete: Option<bool>,
-    #[serde(default)]
+    #[serde(rename = "creator", default)]
     pub creator: Option<String>,
 }
 
@@ -224,7 +244,7 @@ pub struct EventWrapper<T> {
     pub timestamp: i64,
     pub data: T,
     #[serde(default)]
-    pub slot: Option<u64>,
+    pub slot: Option<f64>,
     #[serde(default)]
     pub signature: Option<String>,
 }

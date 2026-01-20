@@ -1,54 +1,54 @@
-export interface PumpfunTokenId {
-  mint?: string;
-  bondingCurve?: string;
-}
-
-export interface PumpfunTokenInfo {
-  name?: string | null;
-  symbol?: string | null;
-  uri?: string | null;
-  isComplete?: boolean | null;
-}
-
-export interface PumpfunTokenReserves {
-  virtualTokenReserves?: number | null;
-  virtualSolReserves?: number | null;
-  realTokenReserves?: number | null;
-  realSolReserves?: number | null;
-  tokenTotalSupply?: number | null;
-  currentPriceSol?: number | null;
-  marketCapSol?: number | null;
-}
-
-export interface PumpfunTokenTrading {
-  totalBuyVolume?: number | null;
-  totalSellVolume?: number | null;
-  totalTrades?: number | null;
-  buyCount?: number | null;
-  sellCount?: number | null;
-  uniqueTraders?: number | null;
-  largestTrade?: number | null;
-  smallestTrade?: number | null;
-  lastTradeTimestamp?: number | null;
-  lastTradePrice?: number | null;
-  whaleTradeCount?: number | null;
-  lastWhaleAddress?: string | null;
-  totalVolume?: number | null;
-  averageTradeSize?: number | null;
-}
-
 export interface PumpfunTokenEvents {
-  create?: Create | null;
   buys?: EventWrapper<Buy>[];
+  create?: Create | null;
   sells?: EventWrapper<Sell>[];
 }
 
+export interface PumpfunTokenId {
+  bondingCurve?: string;
+  mint?: string;
+}
+
+export interface PumpfunTokenInfo {
+  isComplete?: boolean | null;
+  name?: string | null;
+  symbol?: string | null;
+  uri?: string | null;
+}
+
+export interface PumpfunTokenReserves {
+  currentPriceSol?: number | null;
+  marketCapSol?: number | null;
+  realSolReserves?: number | null;
+  realTokenReserves?: number | null;
+  tokenTotalSupply?: number | null;
+  virtualSolReserves?: number | null;
+  virtualTokenReserves?: number | null;
+}
+
+export interface PumpfunTokenTrading {
+  averageTradeSize?: number | null;
+  buyCount?: number | null;
+  largestTrade?: number | null;
+  lastTradePrice?: number | null;
+  lastTradeTimestamp?: number | null;
+  lastWhaleAddress?: string | null;
+  sellCount?: number | null;
+  smallestTrade?: number | null;
+  totalBuyVolume?: number | null;
+  totalSellVolume?: number | null;
+  totalTrades?: number | null;
+  totalVolume?: number | null;
+  uniqueTraders?: number | null;
+  whaleTradeCount?: number | null;
+}
+
 export interface PumpfunToken {
+  events?: PumpfunTokenEvents;
   id?: PumpfunTokenId;
   info?: PumpfunTokenInfo;
   reserves?: PumpfunTokenReserves;
   trading?: PumpfunTokenTrading;
-  events?: PumpfunTokenEvents;
   bondingCurveSnapshot?: BondingCurve | null;
 }
 
@@ -117,28 +117,58 @@ export interface BondingCurve {
   creator?: string;
 }
 
+export interface BuysEvent {
+  amount: number;
+  maxSolCost: number;
+}
+
+export interface CreateEvent { }
+
+export interface SellsEvent { }
+
+/**
+ * Wrapper for event data that includes context metadata.
+ * Events are automatically wrapped in this structure at runtime.
+ */
 export interface EventWrapper<T> {
+  /** Unix timestamp when the event was processed */
   timestamp: number;
+  /** The event-specific data */
   data: T;
+  /** Optional blockchain slot number */
   slot?: number;
+  /** Optional transaction signature */
   signature?: string;
 }
 
+// ============================================================================
+// View Definition Types (framework-agnostic)
+// ============================================================================
+
+/** View definition with embedded entity type */
 export interface ViewDef<T, TMode extends 'state' | 'list'> {
   readonly mode: TMode;
   readonly view: string;
+  /** Phantom field for type inference - not present at runtime */
   readonly _entity?: T;
 }
 
+/** Helper to create typed state view definitions */
 function stateView<T>(view: string): ViewDef<T, 'state'> {
   return { mode: 'state', view } as const;
 }
 
+/** Helper to create typed list view definitions */
 function listView<T>(view: string): ViewDef<T, 'list'> {
   return { mode: 'list', view } as const;
 }
 
-export const PUMPFUN_STACK = {
+// ============================================================================
+// Stack Definition
+// ============================================================================
+
+/** Stack definition for PumpfunToken */
+export const PUMPFUNTOKEN_STACK = {
   name: 'pumpfun-token',
   views: {
     pumpfunToken: {
@@ -148,6 +178,7 @@ export const PUMPFUN_STACK = {
   },
 } as const;
 
-export type PumpfunStack = typeof PUMPFUN_STACK;
+/** Type alias for the stack */
+export type PumpfunTokenStack = typeof PUMPFUNTOKEN_STACK;
 
-export default PUMPFUN_STACK;
+export default PUMPFUNTOKEN_STACK;
