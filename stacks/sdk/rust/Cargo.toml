@@ -14,7 +14,8 @@ categories = ["api-bindings", "web-programming"]
 [features]
 default = ["pumpfun"]
 pumpfun = []
-full = ["pumpfun"]
+ore = []
+full = ["pumpfun", "ore"]
 
 [dependencies]
 hyperstack-sdk = { version = "0.3.2", path = "../../../rust/hyperstack-sdk" }

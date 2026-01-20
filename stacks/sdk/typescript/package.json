@@ -16,6 +16,11 @@
       "types": "./dist/pumpfun/index.d.ts",
       "import": "./dist/pumpfun/index.js",
       "require": "./dist/pumpfun/index.cjs"
+    },
+    "./ore": {
+      "types": "./dist/ore/index.d.ts",
+      "import": "./dist/ore/index.js",
+      "require": "./dist/ore/index.cjs"
     }
   },
   "files": [
