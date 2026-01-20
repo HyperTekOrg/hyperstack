@@ -39,6 +39,9 @@ pub struct SdkConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rust_crate_prefix: Option<String>,
+
+    #[serde(default)]
+    pub rust_module_mode: bool,
 }
 
 fn default_output_dir() -> String {
@@ -65,13 +68,14 @@ pub struct StackConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 
-    /// Override TypeScript output to a specific file path (e.g., "./src/pumpfun/index.ts")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub typescript_output_file: Option<String>,
 
-    /// Override Rust output to a specific crate directory (e.g., "./src/pumpfun")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rust_output_crate: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rust_module: Option<bool>,
 }
 
 impl HyperstackConfig {

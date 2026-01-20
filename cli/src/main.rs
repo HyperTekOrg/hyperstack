@@ -146,6 +146,10 @@ enum CreateCommands {
         /// Crate name for generated Rust crate
         #[arg(long)]
         crate_name: Option<String>,
+
+        /// Generate as a module (mod.rs) instead of a standalone crate
+        #[arg(long)]
+        module: bool,
     },
 }
 
@@ -347,7 +351,10 @@ fn run(cli: Cli) -> anyhow::Result<()> {
                     stack_name,
                     output,
                     crate_name,
-                } => commands::sdk::create_rust(&cli.config, &stack_name, output, crate_name),
+                    module,
+                } => {
+                    commands::sdk::create_rust(&cli.config, &stack_name, output, crate_name, module)
+                }
             },
             SdkCommands::List => commands::sdk::list(&cli.config),
         },

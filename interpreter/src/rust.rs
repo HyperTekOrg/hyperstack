@@ -16,12 +16,17 @@ impl RustOutput {
             self.lib_rs, self.types_rs, self.entity_rs
         )
     }
+
+    pub fn mod_rs(&self) -> String {
+        self.lib_rs.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct RustConfig {
     pub crate_name: String,
     pub sdk_version: String,
+    pub module_mode: bool,
 }
 
 impl Default for RustConfig {
@@ -29,6 +34,7 @@ impl Default for RustConfig {
         Self {
             crate_name: "generated-stack".to_string(),
             sdk_version: "0.2".to_string(),
+            module_mode: false,
         }
     }
 }
@@ -52,6 +58,17 @@ pub fn write_rust_crate(
     std::fs::write(crate_dir.join("src/lib.rs"), &output.lib_rs)?;
     std::fs::write(crate_dir.join("src/types.rs"), &output.types_rs)?;
     std::fs::write(crate_dir.join("src/entity.rs"), &output.entity_rs)?;
+    Ok(())
+}
+
+pub fn write_rust_module(
+    output: &RustOutput,
+    module_dir: &std::path::Path,
+) -> Result<(), std::io::Error> {
+    std::fs::create_dir_all(module_dir)?;
+    std::fs::write(module_dir.join("mod.rs"), &output.mod_rs())?;
+    std::fs::write(module_dir.join("types.rs"), &output.types_rs)?;
+    std::fs::write(module_dir.join("entity.rs"), &output.entity_rs)?;
     Ok(())
 }
 
@@ -302,10 +319,15 @@ impl<T: Default> Default for EventWrapper<T> {
 
     fn generate_entity_rs(&self) -> String {
         let entity_name = &self.entity_name;
+        let types_import = if self.config.module_mode {
+            "super::types"
+        } else {
+            "crate::types"
+        };
 
         format!(
             r#"use hyperstack_sdk::Entity;
-use crate::types::{entity_name};
+use {types_import}::{entity_name};
 
 pub struct {entity_name}Entity;
 
@@ -323,6 +345,7 @@ impl Entity for {entity_name}Entity {{
     }}
 }}
 "#,
+            types_import = types_import,
             entity_name = entity_name
         )
     }

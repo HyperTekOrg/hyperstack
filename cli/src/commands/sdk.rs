@@ -204,6 +204,7 @@ pub fn create_rust(
     stack_name: &str,
     output_override: Option<String>,
     crate_name_override: Option<String>,
+    module_flag: bool,
 ) -> Result<()> {
     println!(
         "{} Looking for stack '{}'...",
@@ -213,7 +214,18 @@ pub fn create_rust(
 
     let config = HyperstackConfig::load_optional(config_path)?;
 
-    let (ast, crate_dir, crate_name) = find_stack_for_rust(
+    let stack_config = config.as_ref().and_then(|c| c.find_stack(stack_name));
+
+    let as_module = module_flag
+        || stack_config.and_then(|s| s.rust_module).unwrap_or_else(|| {
+            config
+                .as_ref()
+                .and_then(|c| c.sdk.as_ref())
+                .map(|s| s.rust_module_mode)
+                .unwrap_or(false)
+        });
+
+    let (ast, output_dir, crate_name) = find_stack_for_rust(
         stack_name,
         config.as_ref(),
         output_override,
@@ -230,7 +242,10 @@ pub fn create_rust(
         println!("  Program ID: {}", pid);
     }
 
-    println!("  Output: {}", crate_dir.display());
+    println!("  Output: {}", output_dir.display());
+    if as_module {
+        println!("  Mode: module (mod.rs)");
+    }
 
     println!("\n{} Generating Rust SDK...", "→".blue().bold());
 
@@ -242,7 +257,8 @@ pub fn create_rust(
 
     let rust_config = hyperstack_interpreter::rust::RustConfig {
         crate_name: crate_name.clone(),
-        sdk_version: "0.1".to_string(),
+        sdk_version: "0.2".to_string(),
+        module_mode: as_module,
     };
 
     let output = hyperstack_interpreter::rust::compile_serializable_spec(
@@ -252,17 +268,31 @@ pub fn create_rust(
     )
     .map_err(|e| anyhow::anyhow!("Failed to compile Rust: {}", e))?;
 
-    hyperstack_interpreter::rust::write_rust_crate(&output, &crate_dir)
-        .with_context(|| format!("Failed to write Rust crate to {}", crate_dir.display()))?;
+    if as_module {
+        hyperstack_interpreter::rust::write_rust_module(&output, &output_dir)
+            .with_context(|| format!("Failed to write Rust module to {}", output_dir.display()))?;
 
-    println!("{} Successfully generated Rust SDK!", "✓".green().bold());
-    println!("  Crate: {}", crate_dir.display().to_string().bold());
-    println!("\n  Add to your Cargo.toml:");
-    println!(
-        "    {} = {{ path = \"{}\" }}",
-        crate_name.cyan(),
-        crate_dir.display()
-    );
+        println!("{} Successfully generated Rust module!", "✓".green().bold());
+        println!("  Module: {}", output_dir.display().to_string().bold());
+        println!("\n  Add to your lib.rs:");
+        let module_name = output_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("module");
+        println!("    pub mod {};", module_name.cyan());
+    } else {
+        hyperstack_interpreter::rust::write_rust_crate(&output, &output_dir)
+            .with_context(|| format!("Failed to write Rust crate to {}", output_dir.display()))?;
+
+        println!("{} Successfully generated Rust SDK!", "✓".green().bold());
+        println!("  Crate: {}", output_dir.display().to_string().bold());
+        println!("\n  Add to your Cargo.toml:");
+        println!(
+            "    {} = {{ path = \"{}\" }}",
+            crate_name.cyan(),
+            output_dir.display()
+        );
+    }
 
     Ok(())
 }

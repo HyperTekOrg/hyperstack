@@ -47,6 +47,7 @@ pub fn init(config_path: &str) -> Result<()> {
             description: None,
             typescript_output_file: None,
             rust_output_crate: None,
+            rust_module: None,
         })
         .collect();
 
@@ -61,6 +62,7 @@ pub fn init(config_path: &str) -> Result<()> {
             rust_output_dir: None,
             typescript_package: None,
             rust_crate_prefix: None,
+            rust_module_mode: false,
         }),
         build: None,
     };
