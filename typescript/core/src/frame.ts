@@ -22,6 +22,8 @@ export interface SnapshotFrame<T = unknown> {
   entity: string;
   op: 'snapshot';
   data: SnapshotEntity<T>[];
+  /** Indicates if this is the final snapshot batch. When false, more batches will follow. */
+  complete?: boolean;
 }
 
 export type Frame<T = unknown> = EntityFrame<T> | SnapshotFrame<T>;

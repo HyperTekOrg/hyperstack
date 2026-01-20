@@ -13,6 +13,8 @@ use tokio::sync::RwLock;
 
 const DEFAULT_MAX_ENTITIES_PER_VIEW: usize = 500;
 const DEFAULT_MAX_ARRAY_LENGTH: usize = 100;
+const DEFAULT_INITIAL_SNAPSHOT_BATCH_SIZE: usize = 50;
+const DEFAULT_SUBSEQUENT_SNAPSHOT_BATCH_SIZE: usize = 100;
 
 /// Configuration for the entity cache
 #[derive(Debug, Clone)]
@@ -21,6 +23,10 @@ pub struct EntityCacheConfig {
     pub max_entities_per_view: usize,
     /// Maximum array length before oldest elements are evicted
     pub max_array_length: usize,
+    /// Number of entities to send in the first snapshot batch (for fast initial render)
+    pub initial_snapshot_batch_size: usize,
+    /// Number of entities to send in subsequent snapshot batches
+    pub subsequent_snapshot_batch_size: usize,
 }
 
 impl Default for EntityCacheConfig {
@@ -28,6 +34,8 @@ impl Default for EntityCacheConfig {
         Self {
             max_entities_per_view: DEFAULT_MAX_ENTITIES_PER_VIEW,
             max_array_length: DEFAULT_MAX_ARRAY_LENGTH,
+            initial_snapshot_batch_size: DEFAULT_INITIAL_SNAPSHOT_BATCH_SIZE,
+            subsequent_snapshot_batch_size: DEFAULT_SUBSEQUENT_SNAPSHOT_BATCH_SIZE,
         }
     }
 }
@@ -120,6 +128,14 @@ impl EntityCache {
         self.len(view_id).await == 0
     }
 
+    /// Get the snapshot batch configuration
+    pub fn snapshot_config(&self) -> SnapshotBatchConfig {
+        SnapshotBatchConfig {
+            initial_batch_size: self.config.initial_snapshot_batch_size,
+            subsequent_batch_size: self.config.subsequent_snapshot_batch_size,
+        }
+    }
+
     /// Clear all cached entities for a view
     pub async fn clear(&self, view_id: &str) {
         let mut caches = self.caches.write().await;
@@ -159,6 +175,12 @@ pub struct CacheStats {
     pub view_count: usize,
     pub total_entities: usize,
     pub top_views: Vec<(String, usize)>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SnapshotBatchConfig {
+    pub initial_batch_size: usize,
+    pub subsequent_batch_size: usize,
 }
 
 impl Default for EntityCache {
@@ -343,6 +365,7 @@ mod tests {
         let config = EntityCacheConfig {
             max_entities_per_view: 1000,
             max_array_length: 3,
+            ..Default::default()
         };
         let cache = EntityCache::with_config(config);
 
@@ -372,6 +395,7 @@ mod tests {
         let config = EntityCacheConfig {
             max_entities_per_view: 1000,
             max_array_length: 3,
+            ..Default::default()
         };
         let cache = EntityCache::with_config(config);
 
@@ -411,6 +435,7 @@ mod tests {
         let config = EntityCacheConfig {
             max_entities_per_view: 2,
             max_array_length: 100,
+            ..Default::default()
         };
         let cache = EntityCache::with_config(config);
 
@@ -505,5 +530,28 @@ mod tests {
         deep_merge_with_append(&mut base, patch, &["stats.events".to_string()], 100);
 
         assert_eq!(base["stats"]["events"].as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn test_snapshot_config_defaults() {
+        let cache = EntityCache::new();
+        let config = cache.snapshot_config();
+
+        assert_eq!(config.initial_batch_size, 50);
+        assert_eq!(config.subsequent_batch_size, 100);
+    }
+
+    #[test]
+    fn test_snapshot_config_custom() {
+        let config = EntityCacheConfig {
+            initial_snapshot_batch_size: 25,
+            subsequent_snapshot_batch_size: 75,
+            ..Default::default()
+        };
+        let cache = EntityCache::with_config(config);
+        let snapshot_config = cache.snapshot_config();
+
+        assert_eq!(snapshot_config.initial_batch_size, 25);
+        assert_eq!(snapshot_config.subsequent_batch_size, 75);
     }
 }

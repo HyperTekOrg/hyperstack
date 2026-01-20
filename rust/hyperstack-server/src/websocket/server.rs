@@ -1,5 +1,5 @@
 use crate::bus::BusManager;
-use crate::cache::EntityCache;
+use crate::cache::{EntityCache, SnapshotBatchConfig};
 use crate::compression::maybe_compress;
 use crate::view::ViewIndex;
 use crate::websocket::client_manager::ClientManager;
@@ -20,6 +20,16 @@ use uuid::Uuid;
 
 #[cfg(feature = "otel")]
 use crate::metrics::Metrics;
+
+struct SubscriptionContext<'a> {
+    client_id: Uuid,
+    client_manager: &'a ClientManager,
+    bus_manager: &'a BusManager,
+    entity_cache: &'a EntityCache,
+    view_index: &'a ViewIndex,
+    #[cfg(feature = "otel")]
+    metrics: Option<Arc<Metrics>>,
+}
 
 pub struct WebSocketServer {
     bind_addr: SocketAddr,
@@ -172,6 +182,15 @@ async fn handle_connection(
 
     client_manager.add_client(client_id, ws_sender);
 
+    let ctx = SubscriptionContext {
+        client_id,
+        client_manager: &client_manager,
+        bus_manager: &bus_manager,
+        entity_cache: &entity_cache,
+        view_index: &view_index,
+        metrics: metrics.clone(),
+    };
+
     let mut active_subscriptions: Vec<String> = Vec::new();
 
     loop {
@@ -218,16 +237,7 @@ async fn handle_connection(
                                             }
                                             active_subscriptions.push(view_id);
 
-                                            attach_client_to_bus(
-                                                client_id,
-                                                subscription,
-                                                &client_manager,
-                                                &bus_manager,
-                                                &entity_cache,
-                                                &view_index,
-                                                cancel_token,
-                                                metrics.clone(),
-                                            ).await;
+                                            attach_client_to_bus(&ctx, subscription, cancel_token).await;
                                         }
                                         ClientMessage::Unsubscribe(unsub) => {
                                             let sub_key = unsub.sub_key();
@@ -268,16 +278,7 @@ async fn handle_connection(
                                     }
                                     active_subscriptions.push(view_id);
 
-                                    attach_client_to_bus(
-                                        client_id,
-                                        subscription,
-                                        &client_manager,
-                                        &bus_manager,
-                                        &entity_cache,
-                                        &view_index,
-                                        cancel_token,
-                                        metrics.clone(),
-                                    ).await;
+                                    attach_client_to_bus(&ctx, subscription, cancel_token).await;
                                 } else {
                                     debug!("Received non-subscription message from client {}: {}", client_id, text);
                                 }
@@ -333,6 +334,14 @@ async fn handle_connection(
 
     client_manager.add_client(client_id, ws_sender);
 
+    let ctx = SubscriptionContext {
+        client_id,
+        client_manager: &client_manager,
+        bus_manager: &bus_manager,
+        entity_cache: &entity_cache,
+        view_index: &view_index,
+    };
+
     loop {
         tokio::select! {
             ws_msg = ws_receiver.next() => {
@@ -367,15 +376,7 @@ async fn handle_connection(
                                                 continue;
                                             }
 
-                                            attach_client_to_bus(
-                                                client_id,
-                                                subscription,
-                                                &client_manager,
-                                                &bus_manager,
-                                                &entity_cache,
-                                                &view_index,
-                                                cancel_token,
-                                            ).await;
+                                            attach_client_to_bus(&ctx, subscription, cancel_token).await;
                                         }
                                         ClientMessage::Unsubscribe(unsub) => {
                                             let sub_key = unsub.sub_key();
@@ -407,15 +408,7 @@ async fn handle_connection(
                                         continue;
                                     }
 
-                                    attach_client_to_bus(
-                                        client_id,
-                                        subscription,
-                                        &client_manager,
-                                        &bus_manager,
-                                        &entity_cache,
-                                        &view_index,
-                                        cancel_token,
-                                    ).await;
+                                    attach_client_to_bus(&ctx, subscription, cancel_token).await;
                                 } else {
                                     debug!("Received non-subscription message from client {}: {}", client_id, text);
                                 }
@@ -444,20 +437,78 @@ async fn handle_connection(
     Ok(())
 }
 
+async fn send_snapshot_batches(
+    client_id: Uuid,
+    entities: &[SnapshotEntity],
+    mode: Mode,
+    view_id: &str,
+    client_manager: &ClientManager,
+    batch_config: &SnapshotBatchConfig,
+    #[cfg(feature = "otel")] metrics: Option<&Arc<Metrics>>,
+) -> Result<()> {
+    let total = entities.len();
+    if total == 0 {
+        return Ok(());
+    }
+
+    let mut offset = 0;
+    let mut batch_num = 0;
+
+    while offset < total {
+        let batch_size = if batch_num == 0 {
+            batch_config.initial_batch_size
+        } else {
+            batch_config.subsequent_batch_size
+        };
+
+        let end = (offset + batch_size).min(total);
+        let batch_data: Vec<SnapshotEntity> = entities[offset..end].to_vec();
+        let is_complete = end >= total;
+
+        let snapshot_frame = SnapshotFrame {
+            mode,
+            export: view_id.to_string(),
+            op: "snapshot",
+            data: batch_data,
+            complete: is_complete,
+        };
+
+        if let Ok(json_payload) = serde_json::to_vec(&snapshot_frame) {
+            let payload = maybe_compress(&json_payload);
+            if client_manager
+                .send_compressed_async(client_id, payload)
+                .await
+                .is_err()
+            {
+                return Err(anyhow::anyhow!("Failed to send snapshot batch"));
+            }
+            #[cfg(feature = "otel")]
+            if let Some(m) = metrics {
+                m.record_ws_message_sent();
+            }
+        }
+
+        offset = end;
+        batch_num += 1;
+    }
+
+    debug!(
+        "Sent {} snapshot batches ({} entities) for {} to client {}",
+        batch_num, total, view_id, client_id
+    );
+
+    Ok(())
+}
+
 #[cfg(feature = "otel")]
 async fn attach_client_to_bus(
-    client_id: Uuid,
+    ctx: &SubscriptionContext<'_>,
     subscription: Subscription,
-    client_manager: &ClientManager,
-    bus_manager: &BusManager,
-    entity_cache: &EntityCache,
-    view_index: &ViewIndex,
     cancel_token: CancellationToken,
-    metrics: Option<Arc<Metrics>>,
 ) {
     let view_id = &subscription.view;
 
-    let view_spec = match view_index.get_view(view_id) {
+    let view_spec = match ctx.view_index.get_view(view_id) {
         Some(spec) => spec,
         None => {
             warn!("Unknown view ID: {}", view_id);
@@ -468,18 +519,19 @@ async fn attach_client_to_bus(
     match view_spec.mode {
         Mode::State => {
             let key = subscription.key.as_deref().unwrap_or("");
-            let mut rx = bus_manager.get_or_create_state_bus(view_id, key).await;
+            let mut rx = ctx.bus_manager.get_or_create_state_bus(view_id, key).await;
 
             if !rx.borrow().is_empty() {
                 let data = rx.borrow().clone();
-                let _ = client_manager.send_to_client(client_id, data);
-                if let Some(ref m) = metrics {
+                let _ = ctx.client_manager.send_to_client(ctx.client_id, data);
+                if let Some(ref m) = ctx.metrics {
                     m.record_ws_message_sent();
                 }
             }
 
-            let client_mgr = client_manager.clone();
-            let metrics_clone = metrics.clone();
+            let client_id = ctx.client_id;
+            let client_mgr = ctx.client_manager.clone();
+            let metrics_clone = ctx.metrics.clone();
             let view_id_clone = view_id.clone();
             let key_clone = key.to_string();
             tokio::spawn(
@@ -509,9 +561,9 @@ async fn attach_client_to_bus(
             );
         }
         Mode::List | Mode::Append => {
-            let mut rx = bus_manager.get_or_create_list_bus(view_id).await;
+            let mut rx = ctx.bus_manager.get_or_create_list_bus(view_id).await;
 
-            let snapshots = entity_cache.get_all(view_id).await;
+            let snapshots = ctx.entity_cache.get_all(view_id).await;
             let snapshot_entities: Vec<SnapshotEntity> = snapshots
                 .into_iter()
                 .filter(|(key, _)| subscription.matches_key(key))
@@ -519,30 +571,28 @@ async fn attach_client_to_bus(
                 .collect();
 
             if !snapshot_entities.is_empty() {
-                let snapshot_frame = SnapshotFrame {
-                    mode: view_spec.mode,
-                    export: view_id.clone(),
-                    op: "snapshot",
-                    data: snapshot_entities,
-                };
-                if let Ok(json_payload) = serde_json::to_vec(&snapshot_frame) {
-                    let payload = maybe_compress(&json_payload);
-                    if client_manager
-                        .send_compressed_async(client_id, payload)
-                        .await
-                        .is_err()
-                    {
-                        return;
-                    }
-                    if let Some(ref m) = metrics {
-                        m.record_ws_message_sent();
-                    }
+                let batch_config = ctx.entity_cache.snapshot_config();
+                if send_snapshot_batches(
+                    ctx.client_id,
+                    &snapshot_entities,
+                    view_spec.mode,
+                    view_id,
+                    ctx.client_manager,
+                    &batch_config,
+                    #[cfg(feature = "otel")]
+                    ctx.metrics.as_ref(),
+                )
+                .await
+                .is_err()
+                {
+                    return;
                 }
             }
 
-            let client_mgr = client_manager.clone();
+            let client_id = ctx.client_id;
+            let client_mgr = ctx.client_manager.clone();
             let sub = subscription.clone();
-            let metrics_clone = metrics.clone();
+            let metrics_clone = ctx.metrics.clone();
             let view_id_clone = view_id.clone();
             let mode = view_spec.mode;
             tokio::spawn(
@@ -581,23 +631,19 @@ async fn attach_client_to_bus(
 
     info!(
         "Client {} subscribed to {} (mode: {:?})",
-        client_id, view_id, view_spec.mode
+        ctx.client_id, view_id, view_spec.mode
     );
 }
 
 #[cfg(not(feature = "otel"))]
 async fn attach_client_to_bus(
-    client_id: Uuid,
+    ctx: &SubscriptionContext<'_>,
     subscription: Subscription,
-    client_manager: &ClientManager,
-    bus_manager: &BusManager,
-    entity_cache: &EntityCache,
-    view_index: &ViewIndex,
     cancel_token: CancellationToken,
 ) {
     let view_id = &subscription.view;
 
-    let view_spec = match view_index.get_view(view_id) {
+    let view_spec = match ctx.view_index.get_view(view_id) {
         Some(spec) => spec,
         None => {
             warn!("Unknown view ID: {}", view_id);
@@ -608,14 +654,15 @@ async fn attach_client_to_bus(
     match view_spec.mode {
         Mode::State => {
             let key = subscription.key.as_deref().unwrap_or("");
-            let mut rx = bus_manager.get_or_create_state_bus(view_id, key).await;
+            let mut rx = ctx.bus_manager.get_or_create_state_bus(view_id, key).await;
 
             if !rx.borrow().is_empty() {
                 let data = rx.borrow().clone();
-                let _ = client_manager.send_to_client(client_id, data);
+                let _ = ctx.client_manager.send_to_client(ctx.client_id, data);
             }
 
-            let client_mgr = client_manager.clone();
+            let client_id = ctx.client_id;
+            let client_mgr = ctx.client_manager.clone();
             let view_id_clone = view_id.clone();
             let key_clone = key.to_string();
             tokio::spawn(
@@ -642,9 +689,9 @@ async fn attach_client_to_bus(
             );
         }
         Mode::List | Mode::Append => {
-            let mut rx = bus_manager.get_or_create_list_bus(view_id).await;
+            let mut rx = ctx.bus_manager.get_or_create_list_bus(view_id).await;
 
-            let snapshots = entity_cache.get_all(view_id).await;
+            let snapshots = ctx.entity_cache.get_all(view_id).await;
             let snapshot_entities: Vec<SnapshotEntity> = snapshots
                 .into_iter()
                 .filter(|(key, _)| subscription.matches_key(key))
@@ -652,25 +699,24 @@ async fn attach_client_to_bus(
                 .collect();
 
             if !snapshot_entities.is_empty() {
-                let snapshot_frame = SnapshotFrame {
-                    mode: view_spec.mode,
-                    export: view_id.clone(),
-                    op: "snapshot",
-                    data: snapshot_entities,
-                };
-                if let Ok(json_payload) = serde_json::to_vec(&snapshot_frame) {
-                    let payload = maybe_compress(&json_payload);
-                    if client_manager
-                        .send_compressed_async(client_id, payload)
-                        .await
-                        .is_err()
-                    {
-                        return;
-                    }
+                let batch_config = ctx.entity_cache.snapshot_config();
+                if send_snapshot_batches(
+                    ctx.client_id,
+                    &snapshot_entities,
+                    view_spec.mode,
+                    view_id,
+                    ctx.client_manager,
+                    &batch_config,
+                )
+                .await
+                .is_err()
+                {
+                    return;
                 }
             }
 
-            let client_mgr = client_manager.clone();
+            let client_id = ctx.client_id;
+            let client_mgr = ctx.client_manager.clone();
             let sub = subscription.clone();
             let view_id_clone = view_id.clone();
             let mode = view_spec.mode;
@@ -706,6 +752,6 @@ async fn attach_client_to_bus(
 
     info!(
         "Client {} subscribed to {} (mode: {:?})",
-        client_id, view_id, view_spec.mode
+        ctx.client_id, view_id, view_spec.mode
     );
 }

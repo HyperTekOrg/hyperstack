@@ -40,6 +40,15 @@ pub struct SnapshotFrame {
     pub export: String,
     pub op: &'static str,
     pub data: Vec<SnapshotEntity>,
+    /// Indicates whether this is the final snapshot batch.
+    /// When `false`, more snapshot batches will follow.
+    /// When `true`, the snapshot is complete and live streaming begins.
+    #[serde(default = "default_complete")]
+    pub complete: bool,
+}
+
+fn default_complete() -> bool {
+    true
 }
 
 impl Frame {
@@ -87,5 +96,73 @@ mod tests {
         assert_eq!(json["mode"], "list");
         assert_eq!(json["entity"], "SettlementGame/list");
         assert_eq!(json["key"], "123");
+    }
+
+    #[test]
+    fn test_snapshot_frame_complete_serialization() {
+        let frame = SnapshotFrame {
+            mode: Mode::List,
+            export: "tokens/list".to_string(),
+            op: "snapshot",
+            data: vec![SnapshotEntity {
+                key: "abc".to_string(),
+                data: serde_json::json!({"id": "abc"}),
+            }],
+            complete: false,
+        };
+
+        let json = serde_json::to_value(&frame).unwrap();
+        assert_eq!(json["complete"], false);
+        assert_eq!(json["op"], "snapshot");
+    }
+
+    #[test]
+    fn test_snapshot_frame_complete_defaults_to_true_on_deserialize() {
+        #[derive(Debug, Deserialize)]
+        struct TestSnapshotFrame {
+            #[allow(dead_code)]
+            mode: Mode,
+            #[allow(dead_code)]
+            #[serde(rename = "entity")]
+            export: String,
+            #[allow(dead_code)]
+            op: String,
+            #[allow(dead_code)]
+            data: Vec<SnapshotEntity>,
+            #[serde(default = "super::default_complete")]
+            complete: bool,
+        }
+
+        let json_without_complete = serde_json::json!({
+            "mode": "list",
+            "entity": "tokens/list",
+            "op": "snapshot",
+            "data": []
+        });
+
+        let frame: TestSnapshotFrame = serde_json::from_value(json_without_complete).unwrap();
+        assert!(frame.complete);
+    }
+
+    #[test]
+    fn test_snapshot_frame_batching_fields() {
+        let first_batch = SnapshotFrame {
+            mode: Mode::List,
+            export: "tokens/list".to_string(),
+            op: "snapshot",
+            data: vec![],
+            complete: false,
+        };
+
+        let final_batch = SnapshotFrame {
+            mode: Mode::List,
+            export: "tokens/list".to_string(),
+            op: "snapshot",
+            data: vec![],
+            complete: true,
+        };
+
+        assert!(!first_batch.complete);
+        assert!(final_batch.complete);
     }
 }
