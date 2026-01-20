@@ -149,3 +149,6 @@ infra/overlays/local/rendered/
 .opencode
 .astro
 docs/.astro
+
+# Examples - ignore lock files since they use local file: links
+examples/*/package-lock.json
