@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.2.5...hyperstack-typescript-v0.3.0) (2026-01-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* EntityStore removed from core exports, replaced by StorageAdapter interface
+
+### Features
+
+* add gzip compression for large WebSocket payloads ([cb694e9](https://github.com/HyperTekOrg/hyperstack/commit/cb694e9ef74ff99345e5f054820207f743d55e1d))
+* Pluggable storage adapter architecture for React SDK ([60dac5e](https://github.com/HyperTekOrg/hyperstack/commit/60dac5e2d22f2dc388fc229efdf4068a95aa756f))
+
 ## [0.2.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.2.4...hyperstack-typescript-v0.2.5) (2026-01-19)
 
 

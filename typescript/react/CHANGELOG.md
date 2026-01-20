@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.3.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.2.5...hyperstack-react-v0.3.0) (2026-01-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* EntityStore removed from core exports, replaced by StorageAdapter interface
+
+### Features
+
+* add gzip compression for large WebSocket payloads ([cb694e9](https://github.com/HyperTekOrg/hyperstack/commit/cb694e9ef74ff99345e5f054820207f743d55e1d))
+* Pluggable storage adapter architecture for React SDK ([60dac5e](https://github.com/HyperTekOrg/hyperstack/commit/60dac5e2d22f2dc388fc229efdf4068a95aa756f))
+
+
+### Bug Fixes
+
+* **react:** correct types.test.ts imports and assertions ([c1634b4](https://github.com/HyperTekOrg/hyperstack/commit/c1634b4986b2509bbddff6e470585f6b74366c81))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * devDependencies
+    * hyperstack-typescript bumped from file:../core to 0.3.0
+  * peerDependencies
+    * hyperstack-typescript bumped from ^0.2.5 to ^0.3.0
+
 ## [0.2.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.2.4...hyperstack-react-v0.2.5) (2026-01-19)
 
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.2.5...hyperstack-cli-v0.3.0) (2026-01-20)
+
+
+### Features
+
+* **cli:** add --module flag for Rust SDK generation ([42812e6](https://github.com/HyperTekOrg/hyperstack/commit/42812e673d5b763792b96937d8dd6dee20314253))
+* **cli:** add per-stack output path overrides for SDK generation ([ebbabfd](https://github.com/HyperTekOrg/hyperstack/commit/ebbabfd241b1084f4800a037d6525e9fac2bb8fe))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.2.5 to 0.3.0
+
 ## [0.2.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.2.4...hyperstack-cli-v0.2.5) (2026-01-19)
 
 
