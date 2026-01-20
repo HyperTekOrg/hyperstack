@@ -283,11 +283,11 @@ hs sdk create rust my-stack --module  # Generate as module instead of crate
 
 **Options:**
 
-| Flag                    | Description                                      |
-| ----------------------- | ------------------------------------------------ |
-| `--output, -o <path>`   | Output directory path (overrides config)         |
-| `--crate-name <name>`   | Custom crate name for generated Rust crate       |
-| `--module`              | Generate as a module (mod.rs) instead of a standalone crate |
+| Flag                  | Description                                                 |
+| --------------------- | ----------------------------------------------------------- |
+| `--output, -o <path>` | Output directory path (overrides config)                    |
+| `--crate-name <name>` | Custom crate name for generated Rust crate                  |
+| `--module`            | Generate as a module (mod.rs) instead of a standalone crate |
 
 The `--module` flag generates the SDK as a Rust module (with `mod.rs`) that can be embedded directly into an existing crate, rather than creating a standalone crate with its own `Cargo.toml`. This is useful for monorepo setups or when you want to include generated code within your own crate.
 
@@ -327,16 +327,16 @@ rust_module = true                                     # Per-stack: generate as 
 
 ### SDK Configuration Options
 
-| Option | Scope | Description |
-| ------ | ----- | ----------- |
-| `output_dir` | `[sdk]` | Default output directory for both languages |
-| `typescript_output_dir` | `[sdk]` | Override output directory for TypeScript SDKs |
-| `rust_output_dir` | `[sdk]` | Override output directory for Rust SDKs |
-| `typescript_package` | `[sdk]` | Package name for generated TypeScript code |
-| `rust_module_mode` | `[sdk]` | Generate Rust SDKs as modules by default |
-| `typescript_output_file` | `[[stacks]]` | Per-stack TypeScript output file path |
-| `rust_output_crate` | `[[stacks]]` | Per-stack Rust output crate/module directory |
-| `rust_module` | `[[stacks]]` | Per-stack override for module vs crate generation |
+| Option                   | Scope        | Description                                       |
+| ------------------------ | ------------ | ------------------------------------------------- |
+| `output_dir`             | `[sdk]`      | Default output directory for both languages       |
+| `typescript_output_dir`  | `[sdk]`      | Override output directory for TypeScript SDKs     |
+| `rust_output_dir`        | `[sdk]`      | Override output directory for Rust SDKs           |
+| `typescript_package`     | `[sdk]`      | Package name for generated TypeScript code        |
+| `rust_module_mode`       | `[sdk]`      | Generate Rust SDKs as modules by default          |
+| `typescript_output_file` | `[[stacks]]` | Per-stack TypeScript output file path             |
+| `rust_output_crate`      | `[[stacks]]` | Per-stack Rust output crate/module directory      |
+| `rust_module`            | `[[stacks]]` | Per-stack override for module vs crate generation |
 
 For most projects, you only need:
 
