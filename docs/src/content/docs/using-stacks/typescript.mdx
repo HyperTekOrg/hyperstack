@@ -1,0 +1,391 @@
+---
+title: TypeScript Guide
+sidebar:
+  order: 4
+description: Use Hyperstack with Node.js, Vue, Svelte, or vanilla JavaScript.
+---
+
+Use Hyperstack's core TypeScript SDK for Node.js scripts, Vue, Svelte, SolidJS, or any non-React environment.
+
+:::tip[Using React?]
+See the [React Guide](/using-stacks/react) for hooks and providers designed for React apps.
+:::
+
+---
+
+## Installation
+
+```bash
+npm install hyperstack-typescript
+```
+
+No peer dependencies. Works anywhere JavaScript runs.
+
+---
+
+## Quick Start
+
+```typescript
+import { HyperStack } from 'hyperstack-typescript';
+
+// Connect to a deployed stack
+const hs = await HyperStack.connect(
+  'wss://pumpfun-token-rfx6zp.stack.usehyperstack.com'
+);
+
+// Stream updates as they happen
+for await (const update of hs.subscribe('PumpfunToken/list')) {
+  if (update.type === 'upsert') {
+    console.log('Token:', update.data.name, update.data.symbol);
+  }
+}
+```
+
+---
+
+## Connection
+
+### Basic Connection
+
+```typescript
+const hs = await HyperStack.connect('wss://your-stack.stack.usehyperstack.com');
+```
+
+### With Options
+
+```typescript
+const hs = await HyperStack.connect('wss://your-stack.stack.usehyperstack.com', {
+  // Maximum entries per view (prevents memory issues on long-running clients)
+  maxEntriesPerView: 5000, // default: 10000
+  
+  // Or disable limiting entirely (not recommended for long sessions)
+  // maxEntriesPerView: null,
+});
+```
+
+### Connection State
+
+```typescript
+// Check current state
+console.log(hs.connectionState); 
+// 'connected' | 'connecting' | 'disconnected' | 'reconnecting' | 'error'
+
+// Listen for changes
+const unsubscribe = hs.onConnectionStateChange((state) => {
+  console.log('Connection state:', state);
+});
+
+// Later: stop listening
+unsubscribe();
+```
+
+### Disconnect
+
+```typescript
+await hs.disconnect();
+```
+
+---
+
+## Streaming Data
+
+### Subscribe to Updates
+
+The SDK uses `AsyncIterable` for streaming — modern, memory-efficient, and easy to use:
+
+```typescript
+interface Token {
+  mint: string;
+  name: string;
+  symbol: string;
+  price?: number;
+}
+
+// Stream all updates
+for await (const update of hs.subscribe<Token>('Token/list')) {
+  switch (update.type) {
+    case 'upsert':
+      console.log('Token updated:', update.key, update.data);
+      break;
+    case 'delete':
+      console.log('Token removed:', update.key);
+      break;
+  }
+}
+```
+
+### Rich Diffs
+
+Get before/after state for each update:
+
+```typescript
+for await (const update of hs.subscribeRich<Token>('Token/list')) {
+  if (update.type === 'updated') {
+    console.log('Before:', update.before);
+    console.log('After:', update.after);
+    
+    // Example: detect price changes
+    if (update.before.price !== update.after.price) {
+      console.log(`Price changed: ${update.before.price} → ${update.after.price}`);
+    }
+  }
+}
+```
+
+### Watch a Single Entity
+
+```typescript
+const mintAddress = 'So11111111111111111111111111111111111111112';
+
+for await (const update of hs.subscribe<Token>('Token/state', { key: mintAddress })) {
+  console.log('Token updated:', update.data);
+}
+```
+
+---
+
+## One-Shot Queries
+
+Not streaming — just fetch the current state:
+
+```typescript
+// Get all tokens
+const tokens = await hs.get<Token[]>('Token/list');
+console.log(`Found ${tokens.length} tokens`);
+
+// Get a single token
+const token = await hs.get<Token>('Token/state', { key: mintAddress });
+console.log('Token:', token?.name);
+```
+
+---
+
+## Framework Integration
+
+### Vue 3
+
+```typescript
+// composables/useHyperstack.ts
+import { ref, onMounted, onUnmounted } from 'vue';
+import { HyperStack } from 'hyperstack-typescript';
+
+export function useTokenList() {
+  const tokens = ref<Token[]>([]);
+  const isLoading = ref(true);
+  let hs: HyperStack | null = null;
+  let controller: AbortController | null = null;
+
+  onMounted(async () => {
+    hs = await HyperStack.connect('wss://your-stack.stack.usehyperstack.com');
+    controller = new AbortController();
+    
+    isLoading.value = false;
+    
+    try {
+      for await (const update of hs.subscribe<Token>('Token/list')) {
+        if (controller.signal.aborted) break;
+        
+        if (update.type === 'upsert') {
+          const idx = tokens.value.findIndex(t => t.mint === update.key);
+          if (idx >= 0) {
+            tokens.value[idx] = update.data;
+          } else {
+            tokens.value.push(update.data);
+          }
+        } else if (update.type === 'delete') {
+          tokens.value = tokens.value.filter(t => t.mint !== update.key);
+        }
+      }
+    } catch (e) {
+      if (!controller.signal.aborted) throw e;
+    }
+  });
+
+  onUnmounted(() => {
+    controller?.abort();
+    hs?.disconnect();
+  });
+
+  return { tokens, isLoading };
+}
+```
+
+```vue
+<!-- TokenList.vue -->
+<script setup lang="ts">
+import { useTokenList } from './composables/useHyperstack';
+
+const { tokens, isLoading } = useTokenList();
+</script>
+
+<template>
+  <div v-if="isLoading">Connecting...</div>
+  <ul v-else>
+    <li v-for="token in tokens" :key="token.mint">
+      {{ token.name }} ({{ token.symbol }})
+    </li>
+  </ul>
+</template>
+```
+
+### Svelte
+
+```typescript
+// stores/hyperstack.ts
+import { writable } from 'svelte/store';
+import { HyperStack } from 'hyperstack-typescript';
+
+export function createTokenStore() {
+  const { subscribe, update } = writable<Token[]>([]);
+  let hs: HyperStack | null = null;
+
+  async function connect() {
+    hs = await HyperStack.connect('wss://your-stack.stack.usehyperstack.com');
+    
+    for await (const event of hs.subscribe<Token>('Token/list')) {
+      update(tokens => {
+        if (event.type === 'upsert') {
+          const idx = tokens.findIndex(t => t.mint === event.key);
+          if (idx >= 0) {
+            tokens[idx] = event.data;
+            return [...tokens];
+          }
+          return [...tokens, event.data];
+        } else {
+          return tokens.filter(t => t.mint !== event.key);
+        }
+      });
+    }
+  }
+
+  function disconnect() {
+    hs?.disconnect();
+  }
+
+  return { subscribe, connect, disconnect };
+}
+```
+
+```svelte
+<!-- TokenList.svelte -->
+<script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
+  import { createTokenStore } from './stores/hyperstack';
+
+  const tokenStore = createTokenStore();
+  
+  onMount(() => tokenStore.connect());
+  onDestroy(() => tokenStore.disconnect());
+</script>
+
+<ul>
+  {#each $tokenStore as token (token.mint)}
+    <li>{token.name} ({token.symbol})</li>
+  {/each}
+</ul>
+```
+
+### Node.js Script
+
+```typescript
+// monitor.ts
+import { HyperStack } from 'hyperstack-typescript';
+
+async function main() {
+  const hs = await HyperStack.connect(
+    'wss://pumpfun-token-rfx6zp.stack.usehyperstack.com'
+  );
+
+  console.log('Monitoring for new tokens...\n');
+
+  for await (const update of hs.subscribe<Token>('Token/list')) {
+    if (update.type === 'upsert') {
+      const token = update.data;
+      
+      // Example: Alert on high-volume tokens
+      if (token.totalVolume && token.totalVolume > 1000000) {
+        console.log(`🚨 High volume token: ${token.name}`);
+        console.log(`   Volume: ${token.totalVolume}`);
+        console.log(`   Mint: ${token.mint}\n`);
+      }
+    }
+  }
+}
+
+main().catch(console.error);
+```
+
+Run with:
+```bash
+npx tsx monitor.ts
+```
+
+---
+
+## Error Handling
+
+```typescript
+try {
+  const hs = await HyperStack.connect('wss://your-stack.stack.usehyperstack.com');
+  
+  for await (const update of hs.subscribe('Token/list')) {
+    // Process updates
+  }
+} catch (error) {
+  if (error instanceof HyperStackError) {
+    console.error('Hyperstack error:', error.message);
+    console.error('Code:', error.code);
+  } else {
+    throw error;
+  }
+}
+```
+
+---
+
+## API Reference
+
+### `HyperStack.connect(url, options?)`
+
+Establishes a WebSocket connection.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxEntriesPerView` | `number \| null` | `10000` | Max entries per view (LRU eviction) |
+
+### `hs.subscribe<T>(viewPath, params?)`
+
+Returns an `AsyncIterable` of updates.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `viewPath` | `string` | View path (e.g., `'Token/list'`) |
+| `params.key` | `string` | For state views, the entity key |
+
+### `hs.subscribeRich<T>(viewPath, params?)`
+
+Like `subscribe` but includes before/after diffs.
+
+### `hs.get<T>(viewPath, params?)`
+
+One-shot query, returns current state.
+
+### `hs.connectionState`
+
+Current connection state string.
+
+### `hs.onConnectionStateChange(callback)`
+
+Subscribe to connection state changes. Returns unsubscribe function.
+
+### `hs.disconnect()`
+
+Close the connection.
+
+---
+
+## Next Steps
+
+- [React Guide](/using-stacks/react) — If you're using React
+- [Build Your Own Stack](/building-stacks/workflow) — Create custom data streams
+- [API Reference](/sdks/typescript/overview) — Complete SDK documentation

@@ -1,0 +1,163 @@
+---
+title: Workflow
+sidebar:
+  order: 1
+description: The end-to-end process of building and deploying a Hyperstack data pipeline.
+---
+
+Building a stack follows a straightforward four-step workflow: define your data model in Rust, compile to generate the AST, deploy to Hyperstack Cloud, and connect from your application.
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  1. Write   │     │  2. Build   │     │  3. Deploy  │     │ 4. Connect  │
+│    Rust     │ ──▶ │    AST      │ ──▶ │   via CLI   │ ──▶ │   from App  │
+│             │     │             │     │             │     │             │
+│ #[hyperstack]    │ cargo build │     │   hs up     │     │  SDK/WS     │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+```
+
+---
+
+## Step 1: Write Your Stack Definition
+
+A stack definition is a Rust module that declares how on-chain Solana data maps to your application's data model. You define **entities** (the data objects you want) and **mappings** (where the data comes from).
+
+```rust
+use hyperstack::{hyperstack, Stream};
+
+#[hyperstack(idl = "my_program.json")]
+pub mod my_stack {
+    #[entity]
+    #[derive(Stream)]
+    pub struct Token {
+        #[map(TokenAccount::mint, primary_key)]
+        pub mint: String,
+
+        #[map(TokenAccount::amount)]
+        pub balance: u64,
+
+        #[aggregate(from = Transfer, field = amount, strategy = Sum)]
+        pub total_transferred: u64,
+    }
+}
+```
+
+The Rust code is purely declarative—you're describing **what** data you want, not **how** to fetch it. Hyperstack handles all the account parsing, event processing, and state management.
+
+→ [Stack Definitions](/building-stacks/stack-definitions) — Learn the full DSL syntax
+
+---
+
+## Step 2: Build to Generate AST
+
+When you compile your Rust project, Hyperstack macros transform your definition into a JSON **Abstract Syntax Tree (AST)**. This AST is the portable representation of your data pipeline.
+
+```bash
+cargo build
+```
+
+After building, you'll find the generated AST in `.hyperstack/`:
+
+```
+my-stack/
+├── src/lib.rs
+├── Cargo.toml
+└── .hyperstack/
+    └── Token.ast.json    # Generated pipeline specification
+```
+
+The AST contains everything Hyperstack needs to execute your pipeline: field mappings, aggregation logic, key resolution rules, and more.
+
+---
+
+## Step 3: Deploy with the CLI
+
+The Hyperstack CLI (`hs`) handles deployment to Hyperstack Cloud. A single command pushes your AST, builds the execution environment, and deploys to a global edge network.
+
+```bash
+# First time: authenticate
+hs auth login
+
+# Initialize project config (creates hyperstack.toml)
+hs init
+
+# Deploy your stack
+hs up my-stack
+```
+
+On success, you'll receive a WebSocket URL:
+
+```
+✔ Stack pushed (v1)
+✔ Build completed
+🚀 Deployed to: wss://my-stack.stack.usehyperstack.com
+```
+
+→ [CLI Reference](/cli/commands) — Full command documentation
+
+---
+
+## Step 4: Connect from Your Application
+
+Once deployed, your stack streams real-time data over WebSocket. Connect using the SDK for your platform:
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+<Tabs>
+<TabItem label="React">
+
+```tsx
+import { HyperstackProvider, useHyperstack } from "hyperstack-react";
+
+// Wrap your app
+<HyperstackProvider websocketUrl="wss://my-stack.stack.usehyperstack.com">
+  <App />
+</HyperstackProvider>
+
+// In your component
+const stack = useHyperstack(MyStack);
+const { data: tokens } = stack.views.tokens.list.use();
+```
+
+</TabItem>
+<TabItem label="TypeScript">
+
+```typescript
+import { HyperStack } from "hyperstack-typescript";
+
+const hs = await HyperStack.connect("wss://my-stack.stack.usehyperstack.com");
+
+for await (const update of hs.views.tokens.list.watch()) {
+  console.log("Token updated:", update.data);
+}
+```
+
+</TabItem>
+</Tabs>
+
+→ [Your First Stack](/building-stacks/your-first-stack) — Complete tutorial with working code
+
+---
+
+## Development Loop
+
+During development, the typical iteration cycle is:
+
+1. **Edit** your Rust definition (`src/lib.rs`)
+2. **Build** to regenerate the AST (`cargo build`)
+3. **Deploy** the updated stack (`hs up`)
+4. **Test** in your application
+
+The CLI detects changes and performs incremental deployments, so iteration is fast.
+
+---
+
+## Next Steps
+
+| Goal | Page |
+|------|------|
+| Understand the DSL in depth | [Stack Definitions](/building-stacks/stack-definitions) |
+| Set up your development environment | [Installation](/building-stacks/installation) |
+| Build a complete example | [Your First Stack](/building-stacks/your-first-stack) |
+| Learn all available macros | [Macro Reference](/building-stacks/macros) |
+| Master aggregation strategies | [Population Strategies](/building-stacks/strategies) |

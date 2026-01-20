@@ -1,0 +1,324 @@
+---
+title: React Guide
+sidebar:
+  order: 3
+description: Build real-time Solana apps with React and Hyperstack.
+---
+
+Build a complete React application with real-time Solana data streaming.
+
+:::tip[Haven't tried Hyperstack yet?]
+Start with [Try It Now](/using-stacks/try-it-now) to see Hyperstack in action before building a full app.
+:::
+
+---
+
+## Installation
+
+```bash
+npm install hyperstack-react zustand
+```
+
+**Peer dependencies:** React 19+, Zustand 4+
+
+---
+
+## Project Setup
+
+### 1. Create Your Stack Definition
+
+Define the data types and views your app will use:
+
+```typescript
+// src/stack.ts
+import { defineStack, createListView, createStateView } from 'hyperstack-react';
+
+// Define your entity type
+interface Token {
+  mint: string;
+  name: string;
+  symbol: string;
+  price?: number;
+  totalVolume?: number;
+  createdAt: number;
+}
+
+// Create the stack definition
+export const TokenStack = defineStack({
+  name: 'my-tokens',
+
+  views: {
+    tokens: {
+      // List view: all entities as an array
+      list: createListView<Token>('Token/list'),
+      // State view: single entity by key
+      state: createStateView<Token>('Token/state'),
+    },
+  },
+
+  // Optional: shared utility functions
+  helpers: {
+    formatPrice: (price: number) => `${price.toFixed(6)} SOL`,
+    shortMint: (mint: string) => `${mint.slice(0, 4)}...${mint.slice(-4)}`,
+  },
+});
+```
+
+### 2. Wrap Your App with the Provider
+
+```tsx
+// src/main.tsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { HyperstackProvider } from 'hyperstack-react';
+import App from './App';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <HyperstackProvider
+      websocketUrl="wss://your-stack.stack.usehyperstack.com"
+      autoConnect={true}
+    >
+      <App />
+    </HyperstackProvider>
+  </React.StrictMode>
+);
+```
+
+Replace `your-stack` with your deployed stack name, or use a [public stack](/using-stacks/try-it-now#available-public-stacks) for testing.
+
+---
+
+## Using Views
+
+### List View: All Entities
+
+```tsx
+import { useHyperstack } from 'hyperstack-react';
+import { TokenStack } from './stack';
+
+function TokenList() {
+  const stack = useHyperstack(TokenStack);
+  const { data: tokens, isLoading, error } = stack.views.tokens.list.use();
+
+  if (isLoading) return <div>Connecting...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+
+  return (
+    <ul>
+      {tokens?.map((token) => (
+        <li key={token.mint}>
+          {token.name} ({token.symbol})
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### State View: Single Entity
+
+```tsx
+function TokenDetail({ mint }: { mint: string }) {
+  const stack = useHyperstack(TokenStack);
+  const { data: token, isLoading } = stack.views.tokens.state.use({ key: mint });
+
+  if (isLoading) return <div>Loading...</div>;
+  if (!token) return <div>Token not found</div>;
+
+  return (
+    <div>
+      <h2>{token.name}</h2>
+      <p>Symbol: {token.symbol}</p>
+      <p>Mint: {stack.helpers.shortMint(token.mint)}</p>
+      {token.price && <p>Price: {stack.helpers.formatPrice(token.price)}</p>}
+    </div>
+  );
+}
+```
+
+---
+
+## View Options
+
+### Filtering
+
+```tsx
+// Filter by field values
+const { data: recentTokens } = stack.views.tokens.list.use({
+  where: { 
+    createdAt: { gte: Date.now() - 86400000 } // Last 24 hours
+  },
+  limit: 10,
+});
+```
+
+### Conditional Subscription
+
+```tsx
+// Only subscribe when we have a mint address
+const { data: token } = stack.views.tokens.state.use(
+  { key: mintAddress },
+  { enabled: !!mintAddress }
+);
+```
+
+### Initial Data
+
+```tsx
+// Show placeholder while connecting
+const { data: tokens } = stack.views.tokens.list.use(
+  {},
+  { initialData: [] }
+);
+```
+
+---
+
+## Data Transformation
+
+Transform data as it arrives from the server:
+
+```typescript
+const TokenStack = defineStack({
+  name: 'my-tokens',
+  views: {
+    tokens: {
+      list: createListView<Token>('Token/list', {
+        transform: (raw) => ({
+          ...raw,
+          // Compute derived fields
+          priceInUsd: raw.price ? raw.price * solPrice : undefined,
+          isNew: Date.now() - raw.createdAt < 3600000,
+        }),
+      }),
+    },
+  },
+});
+```
+
+---
+
+## Connection State
+
+Monitor WebSocket health:
+
+```tsx
+import { useConnectionState } from 'hyperstack-react';
+
+function ConnectionStatus() {
+  const state = useConnectionState();
+  
+  const statusColors = {
+    connected: 'green',
+    connecting: 'yellow',
+    reconnecting: 'orange',
+    disconnected: 'gray',
+    error: 'red',
+  };
+
+  return (
+    <div style={{ color: statusColors[state] }}>
+      {state === 'connected' ? 'Live' : state}
+    </div>
+  );
+}
+```
+
+---
+
+## Complete Example
+
+Here's a full component combining everything:
+
+```tsx
+// src/App.tsx
+import { useHyperstack, useConnectionState } from 'hyperstack-react';
+import { TokenStack } from './stack';
+
+function App() {
+  const stack = useHyperstack(TokenStack);
+  const connectionState = useConnectionState();
+  
+  const { data: tokens, isLoading, error } = stack.views.tokens.list.use({
+    limit: 20,
+  });
+
+  return (
+    <div className="app">
+      <header>
+        <h1>Live Token Feed</h1>
+        <span className={`status ${connectionState}`}>
+          {connectionState}
+        </span>
+      </header>
+
+      <main>
+        {isLoading && <p>Connecting to stream...</p>}
+        {error && <p className="error">Error: {error.message}</p>}
+        
+        {tokens && (
+          <>
+            <p>{tokens.length} tokens streaming</p>
+            <div className="token-grid">
+              {tokens.map((token) => (
+                <div key={token.mint} className="token-card">
+                  <h3>{token.name}</h3>
+                  <p className="symbol">{token.symbol}</p>
+                  <p className="mint">{stack.helpers.shortMint(token.mint)}</p>
+                  {token.price && (
+                    <p className="price">{stack.helpers.formatPrice(token.price)}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default App;
+```
+
+---
+
+## Hook Reference
+
+### `useHyperstack(stackDefinition)`
+
+Returns a typed interface to your stack's views and helpers.
+
+```typescript
+const stack = useHyperstack(TokenStack);
+// stack.views.tokens.list.use()
+// stack.views.tokens.state.use({ key })
+// stack.helpers.formatPrice(price)
+```
+
+### `useConnectionState()`
+
+Returns the current WebSocket connection state.
+
+```typescript
+const state = useConnectionState();
+// 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error'
+```
+
+### View `.use()` Return Value
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `data` | `T \| T[] \| undefined` | The current data |
+| `isLoading` | `boolean` | True until first data received |
+| `error` | `Error \| undefined` | Connection or subscription error |
+| `refresh` | `() => void` | Manually trigger a refresh |
+
+---
+
+## Next Steps
+
+- [TypeScript Guide](/using-stacks/typescript) — Use Hyperstack without React
+- [Build Your Own Stack](/building-stacks/workflow) — Create custom data streams
+- [API Reference](/sdks/typescript/overview) — Full SDK documentation

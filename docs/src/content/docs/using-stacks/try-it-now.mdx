@@ -1,0 +1,233 @@
+---
+title: Try It Now
+sidebar:
+  order: 1
+  badge: Start Here
+description: Stream real-time Solana data in under 2 minutes. No signup required.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Stream live Solana data to your app in under 2 minutes. No account needed.
+
+We'll connect to a public stack that streams real-time token data from [pump.fun](https://pump.fun) — one of Solana's most active token launchpads.
+
+---
+
+## What You'll See
+
+By the end of this page, you'll have code running that:
+- Connects to a live WebSocket streaming real Solana data
+- Receives token updates as they happen on-chain
+- Displays data that changes in real-time — no polling, no refreshing
+
+---
+
+## Quick Start
+
+<Tabs>
+<TabItem label="React">
+
+### 1. Install
+
+```bash
+npm install hyperstack-react zustand
+```
+
+### 2. Create a simple app
+
+```tsx
+// App.tsx
+import { HyperstackProvider, useHyperstack } from 'hyperstack-react';
+import { defineStack, createListView } from 'hyperstack-react';
+
+// Define the data shape we're receiving
+interface PumpfunToken {
+  mint: string;
+  name: string;
+  symbol: string;
+  creator: string;
+  timestamp: number;
+}
+
+// Connect our types to the stack
+const PumpfunStack = defineStack({
+  name: 'pumpfun-tokens',
+  views: {
+    tokens: {
+      list: createListView<PumpfunToken>('PumpfunToken/list'),
+    },
+  },
+});
+
+function TokenFeed() {
+  const stack = useHyperstack(PumpfunStack);
+  const { data: tokens, isLoading } = stack.views.tokens.list.use();
+
+  if (isLoading) return <div>Connecting to Solana...</div>;
+
+  return (
+    <div>
+      <h1>Live Pump.fun Tokens</h1>
+      <p>{tokens?.length || 0} tokens streaming</p>
+      <ul>
+        {tokens?.slice(0, 10).map((token) => (
+          <li key={token.mint}>
+            <strong>{token.name}</strong> ({token.symbol})
+            <br />
+            <small>Mint: {token.mint.slice(0, 8)}...</small>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <HyperstackProvider 
+      websocketUrl="wss://pumpfun-token-rfx6zp.stack.usehyperstack.com"
+    >
+      <TokenFeed />
+    </HyperstackProvider>
+  );
+}
+```
+
+### 3. Run it
+
+```bash
+npm run dev
+```
+
+Watch as new tokens appear in real-time as they're created on Solana.
+
+</TabItem>
+<TabItem label="TypeScript / Node.js">
+
+### 1. Install
+
+```bash
+npm install hyperstack-typescript
+```
+
+### 2. Create a script
+
+```typescript
+// stream.ts
+import { HyperStack } from 'hyperstack-typescript';
+
+interface PumpfunToken {
+  mint: string;
+  name: string;
+  symbol: string;
+  creator: string;
+  timestamp: number;
+}
+
+async function main() {
+  console.log('Connecting to Solana via Hyperstack...\n');
+
+  const hs = await HyperStack.connect(
+    'wss://pumpfun-token-rfx6zp.stack.usehyperstack.com'
+  );
+
+  console.log('Connected! Streaming live pump.fun tokens:\n');
+
+  // Stream updates as they happen on-chain
+  for await (const update of hs.subscribe<PumpfunToken>('PumpfunToken/list')) {
+    if (update.type === 'upsert') {
+      const token = update.data;
+      console.log(`New token: ${token.name} (${token.symbol})`);
+      console.log(`  Mint: ${token.mint}`);
+      console.log(`  Creator: ${token.creator.slice(0, 8)}...`);
+      console.log('');
+    }
+  }
+}
+
+main().catch(console.error);
+```
+
+### 3. Run it
+
+```bash
+npx tsx stream.ts
+```
+
+You'll see new tokens appear in your terminal as they're created on Solana.
+
+</TabItem>
+<TabItem label="Browser Console">
+
+For the fastest possible test, open your browser console and paste:
+
+```javascript
+const ws = new WebSocket('wss://pumpfun-token-rfx6zp.stack.usehyperstack.com');
+
+ws.onopen = () => {
+  console.log('Connected to Hyperstack!');
+  ws.send(JSON.stringify({ 
+    type: 'subscribe', 
+    view: 'PumpfunToken/list' 
+  }));
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  if (data.type === 'upsert') {
+    console.log('New token:', data.data.name, `(${data.data.symbol})`);
+  }
+};
+```
+
+Watch your console as real Solana transactions stream in.
+
+</TabItem>
+</Tabs>
+
+---
+
+## What Just Happened?
+
+You connected to a **Hyperstack Stack** — a deployed data pipeline that:
+
+1. **Watches Solana** for specific program activity (in this case, pump.fun token creates)
+2. **Transforms raw transactions** into structured data (token name, symbol, mint address)
+3. **Streams updates** to all connected clients via WebSocket
+
+The stack is already deployed and running. You just consumed it.
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│     Solana      │ ──▶ │   Hyperstack    │ ──▶ │    Your App     │
+│   (on-chain)    │     │   (streaming)   │     │   (real-time)   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+No RPC calls. No polling. No custom indexer. Just real-time data.
+
+---
+
+## Next Steps
+
+Now that you've seen Hyperstack in action:
+
+- [Core Concepts](/using-stacks/concepts) — Understand Stacks, Views, and real-time updates
+- [React Guide](/using-stacks/react) — Build a complete React app with Hyperstack
+- [TypeScript Guide](/using-stacks/typescript) — Use Hyperstack in Node.js, Vue, Svelte, or vanilla JS
+- [Build Your Own Stack](/building-stacks/workflow) — Create custom data streams for any Solana program
+
+---
+
+## Available Public Stacks
+
+The pump.fun stack used above is one of several public stacks you can experiment with:
+
+| Stack | WebSocket URL | Data |
+|-------|--------------|------|
+| Pump.fun Tokens | `wss://pumpfun-token-rfx6zp.stack.usehyperstack.com` | New token launches |
+
+:::tip[Want your own stack?]
+Public stacks are great for learning, but for production you'll want your own. See [Building Stacks](/building-stacks/workflow) to create custom data streams.
+:::
