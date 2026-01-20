@@ -31,7 +31,7 @@ Define the data types and views your app will use:
 
 ```typescript
 // src/stack.ts
-import { defineStack, createListView, createStateView } from 'hyperstack-react';
+import { defineStack, createListView, createStateView } from "hyperstack-react";
 
 // Define your entity type
 interface Token {
@@ -45,14 +45,14 @@ interface Token {
 
 // Create the stack definition
 export const TokenStack = defineStack({
-  name: 'my-tokens',
+  name: "my-tokens",
 
   views: {
     tokens: {
       // List view: all entities as an array
-      list: createListView<Token>('Token/list'),
+      list: createListView<Token>("Token/list"),
       // State view: single entity by key
-      state: createStateView<Token>('Token/state'),
+      state: createStateView<Token>("Token/state"),
     },
   },
 
@@ -68,12 +68,12 @@ export const TokenStack = defineStack({
 
 ```tsx
 // src/main.tsx
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import { HyperstackProvider } from 'hyperstack-react';
-import App from './App';
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { HyperstackProvider } from "hyperstack-react";
+import App from "./App";
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <HyperstackProvider
       websocketUrl="wss://your-stack.stack.usehyperstack.com"
@@ -81,7 +81,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     >
       <App />
     </HyperstackProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );
 ```
 
@@ -94,8 +94,8 @@ Replace `your-stack` with your deployed stack name, or use a [public stack](/usi
 ### List View: All Entities
 
 ```tsx
-import { useHyperstack } from 'hyperstack-react';
-import { TokenStack } from './stack';
+import { useHyperstack } from "hyperstack-react";
+import { TokenStack } from "./stack";
 
 function TokenList() {
   const stack = useHyperstack(TokenStack);
@@ -121,7 +121,9 @@ function TokenList() {
 ```tsx
 function TokenDetail({ mint }: { mint: string }) {
   const stack = useHyperstack(TokenStack);
-  const { data: token, isLoading } = stack.views.tokens.state.use({ key: mint });
+  const { data: token, isLoading } = stack.views.tokens.state.use({
+    key: mint,
+  });
 
   if (isLoading) return <div>Loading...</div>;
   if (!token) return <div>Token not found</div>;
@@ -146,8 +148,8 @@ function TokenDetail({ mint }: { mint: string }) {
 ```tsx
 // Filter by field values
 const { data: recentTokens } = stack.views.tokens.list.use({
-  where: { 
-    createdAt: { gte: Date.now() - 86400000 } // Last 24 hours
+  where: {
+    createdAt: { gte: Date.now() - 86400000 }, // Last 24 hours
   },
   limit: 10,
 });
@@ -159,7 +161,7 @@ const { data: recentTokens } = stack.views.tokens.list.use({
 // Only subscribe when we have a mint address
 const { data: token } = stack.views.tokens.state.use(
   { key: mintAddress },
-  { enabled: !!mintAddress }
+  { enabled: !!mintAddress },
 );
 ```
 
@@ -167,10 +169,7 @@ const { data: token } = stack.views.tokens.state.use(
 
 ```tsx
 // Show placeholder while connecting
-const { data: tokens } = stack.views.tokens.list.use(
-  {},
-  { initialData: [] }
-);
+const { data: tokens } = stack.views.tokens.list.use({}, { initialData: [] });
 ```
 
 ---
@@ -181,10 +180,10 @@ Transform data as it arrives from the server:
 
 ```typescript
 const TokenStack = defineStack({
-  name: 'my-tokens',
+  name: "my-tokens",
   views: {
     tokens: {
-      list: createListView<Token>('Token/list', {
+      list: createListView<Token>("Token/list", {
         transform: (raw) => ({
           ...raw,
           // Compute derived fields
@@ -204,22 +203,22 @@ const TokenStack = defineStack({
 Monitor WebSocket health:
 
 ```tsx
-import { useConnectionState } from 'hyperstack-react';
+import { useConnectionState } from "hyperstack-react";
 
 function ConnectionStatus() {
   const state = useConnectionState();
-  
+
   const statusColors = {
-    connected: 'green',
-    connecting: 'yellow',
-    reconnecting: 'orange',
-    disconnected: 'gray',
-    error: 'red',
+    connected: "green",
+    connecting: "yellow",
+    reconnecting: "orange",
+    disconnected: "gray",
+    error: "red",
   };
 
   return (
     <div style={{ color: statusColors[state] }}>
-      {state === 'connected' ? 'Live' : state}
+      {state === "connected" ? "Live" : state}
     </div>
   );
 }
@@ -233,14 +232,18 @@ Here's a full component combining everything:
 
 ```tsx
 // src/App.tsx
-import { useHyperstack, useConnectionState } from 'hyperstack-react';
-import { TokenStack } from './stack';
+import { useHyperstack, useConnectionState } from "hyperstack-react";
+import { TokenStack } from "./stack";
 
 function App() {
   const stack = useHyperstack(TokenStack);
   const connectionState = useConnectionState();
-  
-  const { data: tokens, isLoading, error } = stack.views.tokens.list.use({
+
+  const {
+    data: tokens,
+    isLoading,
+    error,
+  } = stack.views.tokens.list.use({
     limit: 20,
   });
 
@@ -248,15 +251,13 @@ function App() {
     <div className="app">
       <header>
         <h1>Live Token Feed</h1>
-        <span className={`status ${connectionState}`}>
-          {connectionState}
-        </span>
+        <span className={`status ${connectionState}`}>{connectionState}</span>
       </header>
 
       <main>
         {isLoading && <p>Connecting to stream...</p>}
         {error && <p className="error">Error: {error.message}</p>}
-        
+
         {tokens && (
           <>
             <p>{tokens.length} tokens streaming</p>
@@ -267,7 +268,9 @@ function App() {
                   <p className="symbol">{token.symbol}</p>
                   <p className="mint">{stack.helpers.shortMint(token.mint)}</p>
                   {token.price && (
-                    <p className="price">{stack.helpers.formatPrice(token.price)}</p>
+                    <p className="price">
+                      {stack.helpers.formatPrice(token.price)}
+                    </p>
                   )}
                 </div>
               ))}
@@ -308,12 +311,12 @@ const state = useConnectionState();
 
 ### View `.use()` Return Value
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `data` | `T \| T[] \| undefined` | The current data |
-| `isLoading` | `boolean` | True until first data received |
-| `error` | `Error \| undefined` | Connection or subscription error |
-| `refresh` | `() => void` | Manually trigger a refresh |
+| Property    | Type                    | Description                      |
+| ----------- | ----------------------- | -------------------------------- |
+| `data`      | `T \| T[] \| undefined` | The current data                 |
+| `isLoading` | `boolean`               | True until first data received   |
+| `error`     | `Error \| undefined`    | Connection or subscription error |
+| `refresh`   | `() => void`            | Manually trigger a refresh       |
 
 ---
 

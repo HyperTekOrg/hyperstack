@@ -65,6 +65,7 @@ pub struct PumpfunToken {
 ```
 
 This tells Hyperstack:
+
 - Create a `PumpfunToken` entity for each `Create` instruction
 - Map the `name` field from the account state
 - Sum all `Trade` amounts into `total_volume`
@@ -93,8 +94,8 @@ Returns a single entity by its primary key. Updates when that specific entity ch
 
 ```typescript
 // Get one token by mint address
-const { data: token } = stack.views.tokens.state.use({ 
-  key: "So11111111111111111111111111111111111111112" 
+const { data: token } = stack.views.tokens.state.use({
+  key: "So11111111111111111111111111111111111111112",
 });
 // token: PumpfunToken | undefined
 ```
@@ -103,10 +104,10 @@ const { data: token } = stack.views.tokens.state.use({
 
 Views are addressed using the format `{EntityName}/{mode}`:
 
-| View Path | Returns | Use Case |
-|-----------|---------|----------|
-| `Token/list` | `Token[]` | Show all tokens |
-| `Token/state` | `Token` | Show one token by key |
+| View Path     | Returns   | Use Case              |
+| ------------- | --------- | --------------------- |
+| `Token/list`  | `Token[]` | Show all tokens       |
+| `Token/state` | `Token`   | Show one token by key |
 
 ---
 
@@ -123,17 +124,17 @@ Unlike traditional APIs where you poll for changes, Hyperstack **pushes** update
 
 ### Update Types
 
-| Type | Meaning |
-|------|---------|
+| Type     | Meaning                       |
+| -------- | ----------------------------- |
 | `upsert` | Entity was created or updated |
-| `delete` | Entity was removed |
+| `delete` | Entity was removed            |
 
 ```typescript
-for await (const update of hs.subscribe('Token/list')) {
-  if (update.type === 'upsert') {
-    console.log('Token changed:', update.data);
-  } else if (update.type === 'delete') {
-    console.log('Token removed:', update.key);
+for await (const update of hs.subscribe("Token/list")) {
+  if (update.type === "upsert") {
+    console.log("Token changed:", update.data);
+  } else if (update.type === "delete") {
+    console.log("Token removed:", update.key);
   }
 }
 ```
@@ -145,7 +146,7 @@ for await (const update of hs.subscribe('Token/list')) {
 When consuming a stack, you define a **client-side interface** that tells the SDK about your data types:
 
 ```typescript
-import { defineStack, createListView, createStateView } from 'hyperstack-react';
+import { defineStack, createListView, createStateView } from "hyperstack-react";
 
 interface Token {
   mint: string;
@@ -155,15 +156,15 @@ interface Token {
 }
 
 export const TokenStack = defineStack({
-  name: 'my-tokens',
-  
+  name: "my-tokens",
+
   views: {
     tokens: {
-      list: createListView<Token>('Token/list'),
-      state: createStateView<Token>('Token/state'),
+      list: createListView<Token>("Token/list"),
+      state: createStateView<Token>("Token/state"),
     },
   },
-  
+
   // Optional: utility functions
   helpers: {
     formatVolume: (vol: number) => `${(vol / 1e9).toFixed(2)} SOL`,
@@ -172,6 +173,7 @@ export const TokenStack = defineStack({
 ```
 
 This gives you:
+
 - **Type safety** — TypeScript knows what fields exist
 - **Autocomplete** — Your IDE helps you access the right views
 - **Helpers** — Shared formatting/transformation logic
@@ -185,13 +187,13 @@ disconnected → connecting → connected → (reconnecting) → connected
                                      ↘ error
 ```
 
-| State | Meaning |
-|-------|---------|
-| `disconnected` | Not connected |
-| `connecting` | Establishing WebSocket connection |
-| `connected` | Active and receiving updates |
+| State          | Meaning                                |
+| -------------- | -------------------------------------- |
+| `disconnected` | Not connected                          |
+| `connecting`   | Establishing WebSocket connection      |
+| `connected`    | Active and receiving updates           |
 | `reconnecting` | Connection lost, attempting to restore |
-| `error` | Failed to connect (check URL, network) |
+| `error`        | Failed to connect (check URL, network) |
 
 The SDK handles reconnection automatically. Your subscriptions resume when the connection is restored.
 
@@ -199,13 +201,13 @@ The SDK handles reconnection automatically. Your subscriptions resume when the c
 
 ## Summary
 
-| Concept | What It Is |
-|---------|------------|
-| **Stack** | A deployed data pipeline transforming Solana events into structured data |
-| **Entity** | A data object tracked by the stack (e.g., Token, Game, User) |
-| **View** | A way to access entities (list for all, state for one) |
-| **Update** | A real-time push when data changes |
-| **Client Definition** | TypeScript interface connecting your app to a stack |
+| Concept               | What It Is                                                               |
+| --------------------- | ------------------------------------------------------------------------ |
+| **Stack**             | A deployed data pipeline transforming Solana events into structured data |
+| **Entity**            | A data object tracked by the stack (e.g., Token, Game, User)             |
+| **View**              | A way to access entities (list for all, state for one)                   |
+| **Update**            | A real-time push when data changes                                       |
+| **Client Definition** | TypeScript interface connecting your app to a stack                      |
 
 ---
 

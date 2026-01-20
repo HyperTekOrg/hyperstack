@@ -17,6 +17,7 @@ We'll connect to a public stack that streams real-time token data from [pump.fun
 ## What You'll See
 
 By the end of this page, you'll have code running that:
+
 - Connects to a live WebSocket streaming real Solana data
 - Receives token updates as they happen on-chain
 - Displays data that changes in real-time — no polling, no refreshing
@@ -38,8 +39,8 @@ npm install hyperstack-react zustand
 
 ```tsx
 // App.tsx
-import { HyperstackProvider, useHyperstack } from 'hyperstack-react';
-import { defineStack, createListView } from 'hyperstack-react';
+import { HyperstackProvider, useHyperstack } from "hyperstack-react";
+import { defineStack, createListView } from "hyperstack-react";
 
 // Define the data shape we're receiving
 interface PumpfunToken {
@@ -52,10 +53,10 @@ interface PumpfunToken {
 
 // Connect our types to the stack
 const PumpfunStack = defineStack({
-  name: 'pumpfun-tokens',
+  name: "pumpfun-tokens",
   views: {
     tokens: {
-      list: createListView<PumpfunToken>('PumpfunToken/list'),
+      list: createListView<PumpfunToken>("PumpfunToken/list"),
     },
   },
 });
@@ -85,9 +86,7 @@ function TokenFeed() {
 
 export default function App() {
   return (
-    <HyperstackProvider 
-      websocketUrl="wss://pumpfun-token-rfx6zp.stack.usehyperstack.com"
-    >
+    <HyperstackProvider websocketUrl="wss://pumpfun-token-rfx6zp.stack.usehyperstack.com">
       <TokenFeed />
     </HyperstackProvider>
   );
@@ -115,7 +114,7 @@ npm install hyperstack-typescript
 
 ```typescript
 // stream.ts
-import { HyperStack } from 'hyperstack-typescript';
+import { HyperStack } from "hyperstack-typescript";
 
 interface PumpfunToken {
   mint: string;
@@ -126,22 +125,22 @@ interface PumpfunToken {
 }
 
 async function main() {
-  console.log('Connecting to Solana via Hyperstack...\n');
+  console.log("Connecting to Solana via Hyperstack...\n");
 
   const hs = await HyperStack.connect(
-    'wss://pumpfun-token-rfx6zp.stack.usehyperstack.com'
+    "wss://pumpfun-token-rfx6zp.stack.usehyperstack.com",
   );
 
-  console.log('Connected! Streaming live pump.fun tokens:\n');
+  console.log("Connected! Streaming live pump.fun tokens:\n");
 
   // Stream updates as they happen on-chain
-  for await (const update of hs.subscribe<PumpfunToken>('PumpfunToken/list')) {
-    if (update.type === 'upsert') {
+  for await (const update of hs.subscribe<PumpfunToken>("PumpfunToken/list")) {
+    if (update.type === "upsert") {
       const token = update.data;
       console.log(`New token: ${token.name} (${token.symbol})`);
       console.log(`  Mint: ${token.mint}`);
       console.log(`  Creator: ${token.creator.slice(0, 8)}...`);
-      console.log('');
+      console.log("");
     }
   }
 }
@@ -163,20 +162,22 @@ You'll see new tokens appear in your terminal as they're created on Solana.
 For the fastest possible test, open your browser console and paste:
 
 ```javascript
-const ws = new WebSocket('wss://pumpfun-token-rfx6zp.stack.usehyperstack.com');
+const ws = new WebSocket("wss://pumpfun-token-rfx6zp.stack.usehyperstack.com");
 
 ws.onopen = () => {
-  console.log('Connected to Hyperstack!');
-  ws.send(JSON.stringify({ 
-    type: 'subscribe', 
-    view: 'PumpfunToken/list' 
-  }));
+  console.log("Connected to Hyperstack!");
+  ws.send(
+    JSON.stringify({
+      type: "subscribe",
+      view: "PumpfunToken/list",
+    }),
+  );
 };
 
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
-  if (data.type === 'upsert') {
-    console.log('New token:', data.data.name, `(${data.data.symbol})`);
+  if (data.type === "upsert") {
+    console.log("New token:", data.data.name, `(${data.data.symbol})`);
   }
 };
 ```
@@ -224,8 +225,8 @@ Now that you've seen Hyperstack in action:
 
 The pump.fun stack used above is one of several public stacks you can experiment with:
 
-| Stack | WebSocket URL | Data |
-|-------|--------------|------|
+| Stack           | WebSocket URL                                        | Data               |
+| --------------- | ---------------------------------------------------- | ------------------ |
 | Pump.fun Tokens | `wss://pumpfun-token-rfx6zp.stack.usehyperstack.com` | New token launches |
 
 :::tip[Want your own stack?]
