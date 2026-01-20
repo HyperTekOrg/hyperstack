@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.3.0...hyperstack-react-v0.3.1) (2026-01-20)
+
+
+### Bug Fixes
+
+* move hyperstack-typescript from peerDep to dependency in react SDK ([e994632](https://github.com/HyperTekOrg/hyperstack/commit/e994632866cf7b01a3ad01741e14911cc7139fff))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-typescript bumped from ^0.3.0 to ^0.3.1
+
 ## [0.3.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.2.5...hyperstack-react-v0.3.0) (2026-01-20)
 
 
