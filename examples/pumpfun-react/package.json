@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "hyperstack-typescript": "^0.3",
     "hyperstack-react": "^0.3",
     "hyperstack-stacks": "^0.3",
     "react": "^19.0.0",

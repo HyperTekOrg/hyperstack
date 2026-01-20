@@ -39,10 +39,10 @@
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
-    "hyperstack-typescript": "^0.2.5",
     "zustand": "^4.0.0 || ^5.0.0"
   },
   "dependencies": {
+    "hyperstack-typescript": "^0.3.0",
     "zustand": "^4.0.0"
   },
   "devDependencies": {
@@ -51,7 +51,6 @@
     "@types/jest": "^29.0.0",
     "@types/react": "^19.0.0",
     "eslint": "^8.0.0",
-    "hyperstack-typescript": "file:../core",
     "jest": "^29.0.0",
     "rollup": "^3.0.0",
     "rollup-plugin-dts": "^6.0.0",
