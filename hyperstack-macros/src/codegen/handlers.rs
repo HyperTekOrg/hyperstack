@@ -49,7 +49,7 @@ pub fn build_handler_code(
     let emit = handler.emit;
 
     quote! {
-        hyperstack_interpreter::ast::TypedHandlerSpec::<#state_name>::new(
+        hyperstack::runtime::hyperstack_interpreter::ast::TypedHandlerSpec::<#state_name>::new(
             #source_code,
             #key_resolution_code,
             vec![
@@ -77,7 +77,7 @@ pub fn build_handler_fn(
     let handler_code = build_handler_code(handler, state_name);
 
     quote! {
-        fn #handler_name() -> hyperstack_interpreter::ast::TypedHandlerSpec<#state_name> {
+        fn #handler_name() -> hyperstack::runtime::hyperstack_interpreter::ast::TypedHandlerSpec<#state_name> {
             #handler_code
         }
     }
@@ -105,7 +105,7 @@ fn build_source_spec_code(source: &SourceSpec) -> TokenStream {
             };
 
             quote! {
-                hyperstack_interpreter::ast::SourceSpec::Source {
+                hyperstack::runtime::hyperstack_interpreter::ast::SourceSpec::Source {
                     program_id: #program_id_code,
                     discriminator: #discriminator_code,
                     type_name: #type_name.to_string(),
@@ -121,7 +121,7 @@ fn build_key_resolution_code(strategy: &KeyResolutionStrategy) -> TokenStream {
         KeyResolutionStrategy::Embedded { primary_field } => {
             let field_path_code = build_field_path_code(primary_field);
             quote! {
-                hyperstack_interpreter::ast::KeyResolutionStrategy::Embedded {
+                hyperstack::runtime::hyperstack_interpreter::ast::KeyResolutionStrategy::Embedded {
                     primary_field: #field_path_code,
                 }
             }
@@ -129,7 +129,7 @@ fn build_key_resolution_code(strategy: &KeyResolutionStrategy) -> TokenStream {
         KeyResolutionStrategy::Lookup { primary_field } => {
             let field_path_code = build_field_path_code(primary_field);
             quote! {
-                hyperstack_interpreter::ast::KeyResolutionStrategy::Lookup {
+                hyperstack::runtime::hyperstack_interpreter::ast::KeyResolutionStrategy::Lookup {
                     primary_field: #field_path_code,
                 }
             }
@@ -141,7 +141,7 @@ fn build_key_resolution_code(strategy: &KeyResolutionStrategy) -> TokenStream {
             let field_path_code = build_field_path_code(primary_field);
             let compute_code = build_compute_function_code(compute_partition);
             quote! {
-                hyperstack_interpreter::ast::KeyResolutionStrategy::Computed {
+                hyperstack::runtime::hyperstack_interpreter::ast::KeyResolutionStrategy::Computed {
                     primary_field: #field_path_code,
                     compute_partition: #compute_code,
                 }
@@ -155,7 +155,7 @@ fn build_key_resolution_code(strategy: &KeyResolutionStrategy) -> TokenStream {
             let lookup_code = build_field_path_code(lookup_field);
             let timestamp_code = build_field_path_code(timestamp_field);
             quote! {
-                hyperstack_interpreter::ast::KeyResolutionStrategy::TemporalLookup {
+                hyperstack::runtime::hyperstack_interpreter::ast::KeyResolutionStrategy::TemporalLookup {
                     lookup_field: #lookup_code,
                     timestamp_field: #timestamp_code,
                     index_name: #index_name.to_string(),
@@ -169,7 +169,7 @@ fn build_key_resolution_code(strategy: &KeyResolutionStrategy) -> TokenStream {
 fn build_field_path_code(path: &FieldPath) -> TokenStream {
     let segments: Vec<&str> = path.segments.iter().map(|s| s.as_str()).collect();
     quote! {
-        hyperstack_interpreter::ast::FieldPath::new(&[#(#segments),*])
+        hyperstack::runtime::hyperstack_interpreter::ast::FieldPath::new(&[#(#segments),*])
     }
 }
 
@@ -177,16 +177,16 @@ fn build_field_path_code(path: &FieldPath) -> TokenStream {
 fn build_compute_function_code(func: &crate::ast::ComputeFunction) -> TokenStream {
     match func {
         crate::ast::ComputeFunction::Sum => {
-            quote! { hyperstack_interpreter::ast::ComputeFunction::Sum }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComputeFunction::Sum }
         }
         crate::ast::ComputeFunction::Concat => {
-            quote! { hyperstack_interpreter::ast::ComputeFunction::Concat }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComputeFunction::Concat }
         }
         crate::ast::ComputeFunction::Format(fmt) => {
-            quote! { hyperstack_interpreter::ast::ComputeFunction::Format(#fmt.to_string()) }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComputeFunction::Format(#fmt.to_string()) }
         }
         crate::ast::ComputeFunction::Custom(name) => {
-            quote! { hyperstack_interpreter::ast::ComputeFunction::Custom(#name.to_string()) }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComputeFunction::Custom(#name.to_string()) }
         }
     }
 }
@@ -198,7 +198,7 @@ fn build_field_mapping_code(mapping: &SerializableFieldMapping) -> TokenStream {
     let population_code = build_population_strategy_code(&mapping.population);
 
     let base_mapping = quote! {
-        hyperstack_interpreter::ast::TypedFieldMapping::new(
+        hyperstack::runtime::hyperstack_interpreter::ast::TypedFieldMapping::new(
             #target_path.to_string(),
             #source_code,
             #population_code,
@@ -229,7 +229,7 @@ fn build_mapping_source_code(source: &MappingSource) -> TokenStream {
             let default_code = match default {
                 Some(val) => {
                     let val_str = serde_json::to_string(val).unwrap_or_else(|_| "null".to_string());
-                    quote! { Some(serde_json::from_str(#val_str).unwrap_or(serde_json::Value::Null)) }
+                    quote! { Some(hyperstack::runtime::serde_json::from_str(#val_str).unwrap_or(hyperstack::runtime::serde_json::Value::Null)) }
                 }
                 None => quote! { None },
             };
@@ -241,7 +241,7 @@ fn build_mapping_source_code(source: &MappingSource) -> TokenStream {
                 None => quote! { None },
             };
             quote! {
-                hyperstack_interpreter::ast::MappingSource::FromSource {
+                hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::FromSource {
                     path: #path_code,
                     default: #default_code,
                     transform: #transform_code,
@@ -251,8 +251,8 @@ fn build_mapping_source_code(source: &MappingSource) -> TokenStream {
         MappingSource::Constant(val) => {
             let val_str = serde_json::to_string(val).unwrap_or_else(|_| "null".to_string());
             quote! {
-                hyperstack_interpreter::ast::MappingSource::Constant(
-                    serde_json::from_str(#val_str).unwrap_or(serde_json::Value::Null)
+                hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::Constant(
+                    hyperstack::runtime::serde_json::from_str(#val_str).unwrap_or(hyperstack::runtime::serde_json::Value::Null)
                 )
             }
         }
@@ -260,7 +260,7 @@ fn build_mapping_source_code(source: &MappingSource) -> TokenStream {
             let inputs_code: Vec<TokenStream> = inputs.iter().map(build_field_path_code).collect();
             let func_code = build_compute_function_code(function);
             quote! {
-                hyperstack_interpreter::ast::MappingSource::Computed {
+                hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::Computed {
                     inputs: vec![#(#inputs_code),*],
                     function: #func_code,
                 }
@@ -268,7 +268,7 @@ fn build_mapping_source_code(source: &MappingSource) -> TokenStream {
         }
         MappingSource::FromState { path } => {
             quote! {
-                hyperstack_interpreter::ast::MappingSource::FromState {
+                hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::FromState {
                     path: #path.to_string(),
                 }
             }
@@ -282,13 +282,13 @@ fn build_mapping_source_code(source: &MappingSource) -> TokenStream {
                 })
                 .collect();
             quote! {
-                hyperstack_interpreter::ast::MappingSource::AsEvent {
+                hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::AsEvent {
                     fields: vec![#(#fields_code),*],
                 }
             }
         }
         MappingSource::WholeSource => {
-            quote! { hyperstack_interpreter::ast::MappingSource::WholeSource }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::WholeSource }
         }
         MappingSource::AsCapture { field_transforms } => {
             let transform_insertions: Vec<TokenStream> = field_transforms
@@ -303,7 +303,7 @@ fn build_mapping_source_code(source: &MappingSource) -> TokenStream {
 
             if transform_insertions.is_empty() {
                 quote! {
-                    hyperstack_interpreter::ast::MappingSource::AsCapture {
+                    hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::AsCapture {
                         field_transforms: std::collections::BTreeMap::new(),
                     }
                 }
@@ -312,7 +312,7 @@ fn build_mapping_source_code(source: &MappingSource) -> TokenStream {
                     {
                         let mut field_transforms = std::collections::BTreeMap::new();
                         #(#transform_insertions)*
-                        hyperstack_interpreter::ast::MappingSource::AsCapture {
+                        hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::AsCapture {
                             field_transforms,
                         }
                     }
@@ -321,7 +321,7 @@ fn build_mapping_source_code(source: &MappingSource) -> TokenStream {
         }
         MappingSource::FromContext { field } => {
             quote! {
-                hyperstack_interpreter::ast::MappingSource::FromContext {
+                hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::FromContext {
                     field: #field.to_string(),
                 }
             }
@@ -333,25 +333,31 @@ fn build_mapping_source_code(source: &MappingSource) -> TokenStream {
 fn build_population_strategy_code(strategy: &PopulationStrategy) -> TokenStream {
     match strategy {
         PopulationStrategy::SetOnce => {
-            quote! { hyperstack_interpreter::ast::PopulationStrategy::SetOnce }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::PopulationStrategy::SetOnce }
         }
         PopulationStrategy::LastWrite => {
-            quote! { hyperstack_interpreter::ast::PopulationStrategy::LastWrite }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::PopulationStrategy::LastWrite }
         }
         PopulationStrategy::Append => {
-            quote! { hyperstack_interpreter::ast::PopulationStrategy::Append }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::PopulationStrategy::Append }
         }
         PopulationStrategy::Merge => {
-            quote! { hyperstack_interpreter::ast::PopulationStrategy::Merge }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::PopulationStrategy::Merge }
         }
-        PopulationStrategy::Max => quote! { hyperstack_interpreter::ast::PopulationStrategy::Max },
-        PopulationStrategy::Sum => quote! { hyperstack_interpreter::ast::PopulationStrategy::Sum },
+        PopulationStrategy::Max => {
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::PopulationStrategy::Max }
+        }
+        PopulationStrategy::Sum => {
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::PopulationStrategy::Sum }
+        }
         PopulationStrategy::Count => {
-            quote! { hyperstack_interpreter::ast::PopulationStrategy::Count }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::PopulationStrategy::Count }
         }
-        PopulationStrategy::Min => quote! { hyperstack_interpreter::ast::PopulationStrategy::Min },
+        PopulationStrategy::Min => {
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::PopulationStrategy::Min }
+        }
         PopulationStrategy::UniqueCount => {
-            quote! { hyperstack_interpreter::ast::PopulationStrategy::UniqueCount }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::PopulationStrategy::UniqueCount }
         }
     }
 }
@@ -360,22 +366,22 @@ fn build_population_strategy_code(strategy: &PopulationStrategy) -> TokenStream 
 fn build_transformation_code(transform: &Transformation) -> TokenStream {
     match transform {
         Transformation::HexEncode => {
-            quote! { hyperstack_interpreter::ast::Transformation::HexEncode }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::Transformation::HexEncode }
         }
         Transformation::HexDecode => {
-            quote! { hyperstack_interpreter::ast::Transformation::HexDecode }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::Transformation::HexDecode }
         }
         Transformation::Base58Encode => {
-            quote! { hyperstack_interpreter::ast::Transformation::Base58Encode }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::Transformation::Base58Encode }
         }
         Transformation::Base58Decode => {
-            quote! { hyperstack_interpreter::ast::Transformation::Base58Decode }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::Transformation::Base58Decode }
         }
         Transformation::ToString => {
-            quote! { hyperstack_interpreter::ast::Transformation::ToString }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::Transformation::ToString }
         }
         Transformation::ToNumber => {
-            quote! { hyperstack_interpreter::ast::Transformation::ToNumber }
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::Transformation::ToNumber }
         }
     }
 }

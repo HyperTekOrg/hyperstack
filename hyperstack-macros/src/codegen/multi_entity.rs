@@ -1,8 +1,4 @@
 //! Multi-entity bytecode builder generation.
-//!
-//! Generates the `create_multi_entity_bytecode` function for pipelines with multiple entities.
-//!
-//! Note: Some functions may be unused in certain configurations.
 
 #![allow(dead_code)]
 
@@ -13,10 +9,6 @@ use super::core::to_snake_case;
 use crate::parse::proto::ProtoAnalysis;
 use crate::proto_codegen;
 
-/// Generate multi-entity bytecode builder function.
-///
-/// This creates the `create_multi_entity_bytecode` function that combines
-/// multiple entity specs into a single runtime bytecode.
 pub fn generate_multi_entity_builder(
     entity_names: &[String],
     proto_analyses: &[(String, ProtoAnalysis)],
@@ -63,8 +55,8 @@ pub fn generate_multi_entity_builder(
 
         #proto_router_setup
 
-        pub fn create_multi_entity_bytecode() -> hyperstack_interpreter::compiler::MultiEntityBytecode {
-            let mut bytecode = hyperstack_interpreter::compiler::MultiEntityBytecode::new()
+        pub fn create_multi_entity_bytecode() -> hyperstack::runtime::hyperstack_interpreter::compiler::MultiEntityBytecode {
+            let mut bytecode = hyperstack::runtime::hyperstack_interpreter::compiler::MultiEntityBytecode::new()
                 #(#builder_calls)*
                 .build();
 
@@ -75,22 +67,18 @@ pub fn generate_multi_entity_builder(
     }
 }
 
-/// Generate a spec loader function that loads the AST file for an entity.
 pub fn generate_entity_spec_loader(entity_name: &str) -> TokenStream {
     let spec_fn_name = format_ident!("create_{}_spec", to_snake_case(entity_name));
     let state_name = format_ident!("{}", entity_name);
 
     quote! {
-        pub fn #spec_fn_name() -> hyperstack_interpreter::ast::TypedStreamSpec<#state_name> {
-            // Load AST file at compile time
+        pub fn #spec_fn_name() -> hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec<#state_name> {
             let ast_json = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/.hyperstack/", #entity_name, ".ast.json"));
 
-            // Deserialize the AST
-            let serializable_spec: hyperstack_interpreter::ast::SerializableStreamSpec = serde_json::from_str(ast_json)
+            let serializable_spec: hyperstack::runtime::hyperstack_interpreter::ast::SerializableStreamSpec = hyperstack::runtime::serde_json::from_str(ast_json)
                 .expect(&format!("Failed to parse AST file for {}", #entity_name));
 
-            // Convert to typed spec (this preserves instruction_hooks!)
-            hyperstack_interpreter::ast::TypedStreamSpec::from_serializable(serializable_spec)
+            hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec::from_serializable(serializable_spec)
         }
     }
 }

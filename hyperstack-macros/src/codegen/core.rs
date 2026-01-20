@@ -68,7 +68,7 @@ pub fn generate_set_field_code(target_field: &str, source: &MappingSource) -> To
         } => {
             let field_str = path.segments.last().cloned().unwrap_or_default();
             quote! {
-                if let Some(value) = ctx.data::<serde_json::Value>(#field_str) {
+                if let Some(value) = ctx.data::<hyperstack::runtime::serde_json::Value>(#field_str) {
                     ctx.set(#target_field, value);
                 }
             }
@@ -77,17 +77,19 @@ pub fn generate_set_field_code(target_field: &str, source: &MappingSource) -> To
             // Convert serde_json::Value to a string representation for embedding
             let value_str = serde_json::to_string(value).unwrap_or_else(|_| "null".to_string());
             quote! {
-                ctx.set(#target_field, serde_json::from_str::<serde_json::Value>(#value_str).unwrap_or(serde_json::Value::Null));
+                ctx.set(#target_field, hyperstack::runtime::serde_json::from_str::<hyperstack::runtime::serde_json::Value>(#value_str).unwrap_or(hyperstack::runtime::serde_json::Value::Null));
             }
         }
         MappingSource::FromContext { field } => match field.as_str() {
             "slot" => {
-                quote! { ctx.set(#target_field, serde_json::json!(ctx.slot().unwrap_or(0))); }
+                quote! { ctx.set(#target_field, hyperstack::runtime::serde_json::json!(ctx.slot().unwrap_or(0))); }
             }
             "signature" => {
-                quote! { ctx.set(#target_field, serde_json::json!(ctx.signature().unwrap_or_default())); }
+                quote! { ctx.set(#target_field, hyperstack::runtime::serde_json::json!(ctx.signature().unwrap_or_default())); }
             }
-            "timestamp" => quote! { ctx.set(#target_field, serde_json::json!(ctx.timestamp())); },
+            "timestamp" => {
+                quote! { ctx.set(#target_field, hyperstack::runtime::serde_json::json!(ctx.timestamp())); }
+            }
             _ => quote! {},
         },
         _ => quote! {},
@@ -122,8 +124,8 @@ pub fn generate_parsed_condition_code(condition: &ParsedCondition) -> TokenStrea
                         _ => unreachable!(),
                     };
                     quote! {
-                        ctx.data::<serde_json::Value>(#field_str)
-                            .map(|v| v #op_code serde_json::from_str::<serde_json::Value>(#value_str).unwrap_or(serde_json::Value::Null))
+                        ctx.data::<hyperstack::runtime::serde_json::Value>(#field_str)
+                            .map(|v| v #op_code hyperstack::runtime::serde_json::from_str::<hyperstack::runtime::serde_json::Value>(#value_str).unwrap_or(hyperstack::runtime::serde_json::Value::Null))
                             .unwrap_or(false)
                     }
                 }
@@ -142,7 +144,7 @@ pub fn generate_parsed_condition_code(condition: &ParsedCondition) -> TokenStrea
                     quote! {
                         {
                             let field_val: Option<i64> = ctx.data(#field_str);
-                            let compare_val: Option<i64> = serde_json::from_str(#value_str).ok();
+                            let compare_val: Option<i64> = hyperstack::runtime::serde_json::from_str(#value_str).ok();
                             match (field_val, compare_val) {
                                 (Some(f), Some(c)) => f #op_code c,
                                 _ => false

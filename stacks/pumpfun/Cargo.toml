@@ -9,16 +9,8 @@ path = "src/lib.rs"
 
 [dependencies]
 hyperstack = { path = "../../hyperstack", features = ["full"] }
-hyperstack-macros = { path = "../../hyperstack-macros" }
-hyperstack-interpreter = { path = "../../interpreter" }
 
+# Required for user struct definitions and IDL-generated types
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 borsh = { version = "1.5", features = ["derive"] }
-smallvec = "1.15"
-tracing = "0.1"
-bs58 = "0.5"
 solana-pubkey = { version = "2.2", features = ["serde", "borsh"] }
-
-yellowstone-vixen = "0.6.0-alpha.0"
-yellowstone-vixen-core = "0.6.0-alpha.0"

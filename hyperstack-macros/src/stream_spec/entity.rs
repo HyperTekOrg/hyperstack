@@ -490,11 +490,11 @@ pub fn process_entity_struct_with_idl(
 
     let game_event_struct = if has_events && !skip_game_event {
         quote! {
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+            #[derive(Debug, Clone, hyperstack::runtime::serde::Serialize, hyperstack::runtime::serde::Deserialize)]
             pub struct GameEvent {
                 pub timestamp: i64,
                 #[serde(flatten)]
-                pub data: serde_json::Value,
+                pub data: hyperstack::runtime::serde_json::Value,
             }
         }
     } else {
@@ -506,14 +506,14 @@ pub fn process_entity_struct_with_idl(
         .map(|(field_name, temporal_field)| {
             if let Some(tf) = temporal_field {
                 quote! {
-                    hyperstack_interpreter::ast::LookupIndexSpec {
+                    hyperstack::runtime::hyperstack_interpreter::ast::LookupIndexSpec {
                         field_name: #field_name.to_string(),
                         temporal_field: Some(#tf.to_string()),
                     }
                 }
             } else {
                 quote! {
-                    hyperstack_interpreter::ast::LookupIndexSpec {
+                    hyperstack::runtime::hyperstack_interpreter::ast::LookupIndexSpec {
                         field_name: #field_name.to_string(),
                         temporal_field: None,
                     }
@@ -532,7 +532,7 @@ pub fn process_entity_struct_with_idl(
         quote! {
             /// No-op evaluate_computed_fields (no computed fields defined)
             pub fn evaluate_computed_fields(
-                _state: &mut serde_json::Value
+                _state: &mut hyperstack::runtime::serde_json::Value
             ) -> Result<(), Box<dyn std::error::Error>> {
                 Ok(())
             }
@@ -551,7 +551,7 @@ pub fn process_entity_struct_with_idl(
     let module_name = format_ident!("{}", to_snake_case(&entity_name));
 
     let output = quote! {
-        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+        #[derive(Debug, Clone, hyperstack::runtime::serde::Serialize, hyperstack::runtime::serde::Deserialize)]
         pub struct #state_name {
             #(#state_fields),*
         }
@@ -564,16 +564,16 @@ pub fn process_entity_struct_with_idl(
             #(#accessor_defs)*
         }
 
-        pub fn #spec_fn_name() -> hyperstack_interpreter::ast::TypedStreamSpec<#state_name> {
+        pub fn #spec_fn_name() -> hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec<#state_name> {
             // Load AST file at compile time (includes instruction_hooks!)
             let ast_json = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/.hyperstack/", stringify!(#name), ".ast.json"));
 
             // Deserialize the AST
-            let serializable_spec: hyperstack_interpreter::ast::SerializableStreamSpec = serde_json::from_str(ast_json)
+            let serializable_spec: hyperstack::runtime::hyperstack_interpreter::ast::SerializableStreamSpec = hyperstack::runtime::serde_json::from_str(ast_json)
                 .expect(&format!("Failed to parse AST file for {}", stringify!(#name)));
 
             // Convert to typed spec (this preserves instruction_hooks and all other fields!)
-            hyperstack_interpreter::ast::TypedStreamSpec::from_serializable(serializable_spec)
+            hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec::from_serializable(serializable_spec)
         }
 
         // Generated from declarative PDA macros
@@ -741,7 +741,7 @@ fn generate_computed_fields_hook(
                     let field_str = field.as_str();
                     quote! {
                         #field_ident: obj.get(#field_str)
-                            .and_then(|v| serde_json::from_value(v.clone()).ok())
+                            .and_then(|v| hyperstack::runtime::serde_json::from_value(v.clone()).ok())
                     }
                 })
                 .collect();
@@ -754,7 +754,7 @@ fn generate_computed_fields_hook(
                 }
 
                 impl #section_struct_ident {
-                    fn from_object(obj: &serde_json::Map<String, serde_json::Value>) -> Self {
+                    fn from_object(obj: &hyperstack::runtime::serde_json::Map<String, hyperstack::runtime::serde_json::Value>) -> Self {
                         Self {
                             #(#field_extractors),*
                         }
@@ -791,13 +791,13 @@ fn generate_computed_fields_hook(
                     let state = &section_parent_state;
                     #expr_code
                 };
-                section_obj.insert(#field_str.to_string(), serde_json::to_value(computed_value)?);
+                section_obj.insert(#field_str.to_string(), hyperstack::runtime::serde_json::to_value(computed_value)?);
 
                 // Re-extract the field with a new binding for dependent computed fields
                 // This allows subsequent computed fields to reference this computed value
                 let #field_ident: #field_type = section_obj
                     .get(#field_str)
-                    .and_then(|v| serde_json::from_value(v.clone()).ok());
+                    .and_then(|v| hyperstack::runtime::serde_json::from_value(v.clone()).ok());
             }
         }).collect();
 
@@ -812,8 +812,8 @@ fn generate_computed_fields_hook(
 
         quote! {
             fn #eval_fn_name(
-                section_obj: &mut serde_json::Map<String, serde_json::Value>,
-                section_parent_state: &serde_json::Value,
+                section_obj: &mut hyperstack::runtime::serde_json::Map<String, hyperstack::runtime::serde_json::Value>,
+                section_parent_state: &hyperstack::runtime::serde_json::Value,
                 #(#cross_section_params),*
             ) -> Result<(), Box<dyn std::error::Error>> {
                 // Create local bindings for all fields in the current section
@@ -822,7 +822,7 @@ fn generate_computed_fields_hook(
                     ($name:ident, $ty:ty) => {
                         let $name: Option<$ty> = section_obj
                             .get(stringify!($name))
-                            .and_then(|v| serde_json::from_value(v.clone()).ok());
+                            .and_then(|v| hyperstack::runtime::serde_json::from_value(v.clone()).ok());
                     };
                 }
 
@@ -913,7 +913,7 @@ fn generate_computed_fields_hook(
                         }
                     }
                 } else {
-                    tracing::trace!("Skipping computed fields for section '{}' (dependencies not available)", #section_str);
+                    hyperstack::runtime::tracing::trace!("Skipping computed fields for section '{}' (dependencies not available)", #section_str);
                 }
             }
         }
@@ -935,7 +935,7 @@ fn generate_computed_fields_hook(
         /// Evaluate all computed fields for the entity state
         /// This should be called after aggregations complete but before hooks run
         pub fn evaluate_computed_fields(
-            state: &mut serde_json::Value
+            state: &mut hyperstack::runtime::serde_json::Value
         ) -> Result<(), Box<dyn std::error::Error>> {
             #(#eval_calls)*
             Ok(())

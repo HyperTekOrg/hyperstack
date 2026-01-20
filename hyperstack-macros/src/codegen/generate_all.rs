@@ -162,7 +162,7 @@ pub fn generate_all_from_spec(
             #(#handler_fns)*
 
             /// Returns all handler calls for spec creation
-            pub fn handler_calls() -> Vec<hyperstack_interpreter::ast::TypedHandlerSpec<#state_name_ident>> {
+            pub fn handler_calls() -> Vec<hyperstack::runtime::hyperstack_interpreter::ast::TypedHandlerSpec<#state_name_ident>> {
                 vec![#(#handler_calls),*]
             }
         }

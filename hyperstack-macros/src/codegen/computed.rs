@@ -158,7 +158,7 @@ pub fn generate_computed_evaluator(computed_field_specs: &[ComputedFieldSpec]) -
         return quote! {
             /// No-op evaluate_computed_fields (no computed fields defined)
             pub fn evaluate_computed_fields(
-                _state: &mut serde_json::Value
+                _state: &mut hyperstack::runtime::serde_json::Value
             ) -> Result<(), Box<dyn std::error::Error>> {
                 Ok(())
             }
@@ -198,7 +198,7 @@ pub fn generate_computed_evaluator(computed_field_specs: &[ComputedFieldSpec]) -
                 let computed_value = { #expr_code };
                 if let Some(section_value) = state.get_mut(#section_str) {
                     if let Some(section_obj) = section_value.as_object_mut() {
-                        section_obj.insert(#field_name.to_string(), serde_json::to_value(computed_value)?);
+                        section_obj.insert(#field_name.to_string(), hyperstack::runtime::serde_json::to_value(computed_value)?);
                     }
                 }
             }
@@ -219,7 +219,7 @@ pub fn generate_computed_evaluator(computed_field_specs: &[ComputedFieldSpec]) -
     quote! {
         /// Evaluate all computed fields for the entity state
         pub fn evaluate_computed_fields(
-            state: &mut serde_json::Value
+            state: &mut hyperstack::runtime::serde_json::Value
         ) -> Result<(), Box<dyn std::error::Error>> {
             #(#section_evals)*
             Ok(())

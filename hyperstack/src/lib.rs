@@ -56,6 +56,24 @@ pub use hyperstack_server as server;
 #[cfg(feature = "sdk")]
 pub use hyperstack_sdk as sdk;
 
+#[cfg(feature = "runtime")]
+#[doc(hidden)]
+pub mod runtime {
+    pub use ::anyhow;
+    pub use ::bs58;
+    pub use ::dotenvy;
+    pub use ::serde;
+    pub use ::serde_json;
+    pub use ::smallvec;
+    pub use ::tokio;
+    pub use ::tracing;
+    pub use ::yellowstone_vixen;
+    pub use ::yellowstone_vixen_core;
+    pub use ::yellowstone_vixen_yellowstone_grpc_source;
+    pub use hyperstack_interpreter;
+    pub use hyperstack_server;
+}
+
 /// Prelude module for convenient imports
 pub mod prelude {
     // Re-export commonly used items from interpreter

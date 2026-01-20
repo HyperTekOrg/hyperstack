@@ -131,15 +131,15 @@ pub fn generate_proto_router_setup(proto_analyses: &[(String, ProtoAnalysis)]) -
             registrations.push(quote! {
                 router.register(
                     #type_url.to_string(),
-                    #decoder_fn_name as hyperstack_interpreter::proto_router::ProtoDecoder,
+                    #decoder_fn_name as hyperstack::runtime::hyperstack_interpreter::proto_router::ProtoDecoder,
                 );
             });
         }
     }
 
     quote! {
-        fn setup_proto_router() -> hyperstack_interpreter::proto_router::ProtoRouter {
-            let mut router = hyperstack_interpreter::proto_router::ProtoRouter::new();
+        fn setup_proto_router() -> hyperstack::runtime::hyperstack_interpreter::proto_router::ProtoRouter {
+            let mut router = hyperstack::runtime::hyperstack_interpreter::proto_router::ProtoRouter::new();
 
             #(#registrations)*
 

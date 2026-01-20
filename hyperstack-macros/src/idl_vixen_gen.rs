@@ -1,7 +1,4 @@
 //! IDL-based Vixen runtime generation.
-//!
-//! This module generates Vixen runtime integration code for stream_spec processing.
-//! Some functions here are kept for backward compatibility but may be unused.
 
 #![allow(dead_code)]
 
@@ -11,11 +8,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Path;
 
-/// Extract the type name from a path and convert it to the event type string
-/// For accounts: generated_sdk::accounts::BondingCurve -> "BondingCurveState"
-/// For instructions: generated_sdk::instructions::Create -> "CreateIxState"
 fn path_to_event_type(path: &Path, is_instruction: bool) -> String {
-    // Get the last segment (the actual type name)
     let type_name = path
         .segments
         .last()
@@ -23,15 +16,12 @@ fn path_to_event_type(path: &Path, is_instruction: bool) -> String {
         .unwrap_or_default();
 
     if is_instruction {
-        // Instructions use IxState suffix
         format!("{}IxState", type_name)
     } else {
-        // Accounts use State suffix
         format!("{}State", type_name)
     }
 }
 
-/// Generate both resolver registries (public function for use in lib.rs)
 pub fn generate_resolver_registries(resolver_hooks: &[ResolverHookSpec]) -> TokenStream {
     let resolver_registry = generate_resolver_registry(resolver_hooks);
     let instruction_hook_registry = generate_instruction_hook_registry(resolver_hooks);
@@ -42,7 +32,6 @@ pub fn generate_resolver_registries(resolver_hooks: &[ResolverHookSpec]) -> Toke
     }
 }
 
-/// Generate resolver registry for account types
 fn generate_resolver_registry(resolver_hooks: &[ResolverHookSpec]) -> TokenStream {
     let key_resolvers: Vec<_> = resolver_hooks
         .iter()
@@ -50,32 +39,26 @@ fn generate_resolver_registry(resolver_hooks: &[ResolverHookSpec]) -> TokenStrea
         .collect();
 
     if key_resolvers.is_empty() {
-        // Generate empty default function when no resolvers
         return quote! {
-            /// Get resolver function for a given account type (no resolvers registered)
-            fn get_resolver_for_account_type(_account_type: &str) -> Option<fn(&str, &serde_json::Value, &mut hyperstack_interpreter::resolvers::ResolveContext) -> hyperstack_interpreter::resolvers::KeyResolution> {
+            fn get_resolver_for_account_type(_account_type: &str) -> Option<fn(&str, &hyperstack::runtime::serde_json::Value, &mut hyperstack::runtime::hyperstack_interpreter::resolvers::ResolveContext) -> hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution> {
                 None
             }
         };
     }
 
-    // Generate match arms for each resolver
     let resolver_arms = key_resolvers.iter().map(|hook| {
-        // Convert path to event type (e.g., generated_sdk::accounts::BondingCurve -> "BondingCurveState")
         let event_type = path_to_event_type(&hook.account_type_path, false);
         let fn_name = &hook.fn_name;
 
         quote! {
             #event_type => {
-                // Call user's resolver function
                 Some(#fn_name)
             }
         }
     });
 
     quote! {
-        /// Get resolver function for a given account type
-        fn get_resolver_for_account_type(account_type: &str) -> Option<fn(&str, &serde_json::Value, &mut hyperstack_interpreter::resolvers::ResolveContext) -> hyperstack_interpreter::resolvers::KeyResolution> {
+        fn get_resolver_for_account_type(account_type: &str) -> Option<fn(&str, &hyperstack::runtime::serde_json::Value, &mut hyperstack::runtime::hyperstack_interpreter::resolvers::ResolveContext) -> hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution> {
             match account_type {
                 #(#resolver_arms)*
                 _ => None
@@ -84,7 +67,6 @@ fn generate_resolver_registry(resolver_hooks: &[ResolverHookSpec]) -> TokenStrea
     }
 }
 
-/// Generate instruction hook registry
 fn generate_instruction_hook_registry(resolver_hooks: &[ResolverHookSpec]) -> TokenStream {
     let instruction_hooks: Vec<_> = resolver_hooks
         .iter()
@@ -92,16 +74,13 @@ fn generate_instruction_hook_registry(resolver_hooks: &[ResolverHookSpec]) -> To
         .collect();
 
     if instruction_hooks.is_empty() {
-        // Generate empty default function when no hooks
         return quote! {
-            /// Get instruction hooks for a given instruction type (no hooks registered)
-            fn get_instruction_hooks(_instruction_type: &str) -> Vec<fn(&mut hyperstack_interpreter::resolvers::InstructionContext)> {
+            fn get_instruction_hooks(_instruction_type: &str) -> Vec<fn(&mut hyperstack::runtime::hyperstack_interpreter::resolvers::InstructionContext)> {
                 Vec::new()
             }
         };
     }
 
-    // Group hooks by instruction type to avoid duplicate match arms
     use std::collections::HashMap as StdHashMap;
     let mut hooks_by_instruction: StdHashMap<String, Vec<&syn::Ident>> = StdHashMap::new();
 
@@ -113,7 +92,6 @@ fn generate_instruction_hook_registry(resolver_hooks: &[ResolverHookSpec]) -> To
             .push(&hook.fn_name);
     }
 
-    // Generate match arms with all hooks for each instruction type
     let hook_arms = hooks_by_instruction.iter().map(|(event_type, hook_fns)| {
         quote! {
             #event_type => {
@@ -123,8 +101,7 @@ fn generate_instruction_hook_registry(resolver_hooks: &[ResolverHookSpec]) -> To
     });
 
     quote! {
-        /// Get instruction hooks for a given instruction type
-        fn get_instruction_hooks(instruction_type: &str) -> Vec<fn(&mut hyperstack_interpreter::resolvers::InstructionContext)> {
+        fn get_instruction_hooks(instruction_type: &str) -> Vec<fn(&mut hyperstack::runtime::hyperstack_interpreter::resolvers::InstructionContext)> {
             match instruction_type {
                 #(#hook_arms)*
                 _ => Vec::new()
@@ -133,7 +110,6 @@ fn generate_instruction_hook_registry(resolver_hooks: &[ResolverHookSpec]) -> To
     }
 }
 
-/// Generates the spec function for hyperstack-server integration (with registries)
 pub fn generate_spec_function(
     idl: &IdlSpec,
     program_id: &str,
@@ -148,43 +124,21 @@ pub fn generate_spec_function(
     }
 }
 
-/// Generates the spec function for hyperstack-server integration without resolver registries
 pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &str) -> TokenStream {
     let program_name = idl.get_name();
     let state_enum_name = format_ident!("{}State", to_pascal_case(program_name));
     let instruction_enum_name = format_ident!("{}Instruction", to_pascal_case(program_name));
 
     quote! {
-
-        /// Creates a hyperstack-server Spec with bytecode and parsers
-        ///
-        /// This function returns a complete specification that can be used
-        /// with the hyperstack-server builder API.
-        ///
-        /// # Example
-        /// ```ignore
-        /// use hyperstack_server::Server;
-        ///
-        /// #[tokio::main]
-        /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-        ///     Server::builder()
-        ///         .spec(spec())
-        ///         .websocket()
-        ///         .bind("[::]:8877")
-        ///         .start()
-        ///         .await
-        /// }
-        /// ```
-        pub fn spec() -> hyperstack_server::Spec {
+        pub fn spec() -> hyperstack::runtime::hyperstack_server::Spec {
             let bytecode = create_multi_entity_bytecode();
             let program_id = parsers::PROGRAM_ID_STR.to_string();
 
-            hyperstack_server::Spec::new(bytecode, program_id)
+            hyperstack::runtime::hyperstack_server::Spec::new(bytecode, program_id)
                 .with_parser_setup(create_parser_setup())
         }
 
-        /// Creates the parser setup function for Vixen runtime integration
-        fn create_parser_setup() -> hyperstack_server::ParserSetupFn {
+        fn create_parser_setup() -> hyperstack::runtime::hyperstack_server::ParserSetupFn {
             use std::sync::Arc;
 
             Arc::new(|mutations_tx, health_monitor, reconnection_config| {
@@ -195,74 +149,71 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
         }
 
         async fn run_vixen_runtime_with_channel(
-            mutations_tx: tokio::sync::mpsc::Sender<hyperstack_server::MutationBatch>,
-            health_monitor: Option<hyperstack_server::HealthMonitor>,
-            reconnection_config: hyperstack_server::ReconnectionConfig,
-        ) -> anyhow::Result<()> {
-            use yellowstone_vixen::config::{BufferConfig, VixenConfig};
-            use yellowstone_vixen_yellowstone_grpc_source::YellowstoneGrpcConfig;
-            use yellowstone_vixen_yellowstone_grpc_source::YellowstoneGrpcSource;
-            use yellowstone_vixen::Pipeline;
+            mutations_tx: hyperstack::runtime::tokio::sync::mpsc::Sender<hyperstack::runtime::hyperstack_server::MutationBatch>,
+            health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
+            reconnection_config: hyperstack::runtime::hyperstack_server::ReconnectionConfig,
+        ) -> hyperstack::runtime::anyhow::Result<()> {
+            use hyperstack::runtime::yellowstone_vixen::config::{BufferConfig, VixenConfig};
+            use hyperstack::runtime::yellowstone_vixen_yellowstone_grpc_source::YellowstoneGrpcConfig;
+            use hyperstack::runtime::yellowstone_vixen_yellowstone_grpc_source::YellowstoneGrpcSource;
+            use hyperstack::runtime::yellowstone_vixen::Pipeline;
             use std::sync::{Arc, Mutex};
-            use tracing::Instrument;
 
-            let env_loaded = dotenvy::from_filename(".env.local").is_ok()
-                || dotenvy::from_filename("backend/tenant-runtime/.env").is_ok()
-                || dotenvy::from_filename(".env").is_ok()
-                || dotenvy::dotenv().is_ok();
+            let env_loaded = hyperstack::runtime::dotenvy::from_filename(".env.local").is_ok()
+                || hyperstack::runtime::dotenvy::from_filename("backend/tenant-runtime/.env").is_ok()
+                || hyperstack::runtime::dotenvy::from_filename(".env").is_ok()
+                || hyperstack::runtime::dotenvy::dotenv().is_ok();
 
             if !env_loaded {
-                tracing::warn!("No .env file found. Make sure environment variables are set.");
+                hyperstack::runtime::tracing::warn!("No .env file found. Make sure environment variables are set.");
             }
 
             let endpoint = std::env::var("YELLOWSTONE_ENDPOINT")
-                .map_err(|_| anyhow::anyhow!(
+                .map_err(|_| hyperstack::runtime::anyhow::anyhow!(
                     "YELLOWSTONE_ENDPOINT environment variable must be set.\n\
                      Example: export YELLOWSTONE_ENDPOINT=http://localhost:10000"
                 ))?;
             let x_token = std::env::var("YELLOWSTONE_X_TOKEN").ok();
 
-            let slot_tracker = hyperstack_server::SlotTracker::new();
+            let slot_tracker = hyperstack::runtime::hyperstack_server::SlotTracker::new();
             let mut attempt = 0u32;
             let mut backoff = reconnection_config.initial_delay;
 
-            // Create bytecode and VM once, outside the reconnection loop
-            // This preserves VM cache state across reconnections
             let bytecode = create_multi_entity_bytecode();
 
-            tracing::info!("🔍 Bytecode Handler Details:");
+            hyperstack::runtime::tracing::info!("Bytecode Handler Details:");
             for (entity_name, entity_bytecode) in &bytecode.entities {
-                tracing::info!("   Entity: {}", entity_name);
+                hyperstack::runtime::tracing::info!("   Entity: {}", entity_name);
                 for (event_type, handler_opcodes) in &entity_bytecode.handlers {
-                    tracing::info!("      {} -> {} opcodes", event_type, handler_opcodes.len());
+                    hyperstack::runtime::tracing::info!("      {} -> {} opcodes", event_type, handler_opcodes.len());
                     if event_type == "BuyIxState" {
-                        tracing::info!("         Opcode types:");
+                        hyperstack::runtime::tracing::info!("         Opcode types:");
                         for (idx, opcode) in handler_opcodes.iter().enumerate() {
-                            tracing::info!("            [{}] {:?}", idx, opcode);
+                            hyperstack::runtime::tracing::info!("            [{}] {:?}", idx, opcode);
                         }
                     }
                 }
             }
 
-            let vm = Arc::new(Mutex::new(hyperstack_interpreter::vm::VmContext::new()));
+            let vm = Arc::new(Mutex::new(hyperstack::runtime::hyperstack_interpreter::vm::VmContext::new()));
             let bytecode_arc = Arc::new(bytecode);
 
             #[derive(Clone)]
             struct VmHandler {
-                vm: Arc<Mutex<hyperstack_interpreter::vm::VmContext>>,
-                bytecode: Arc<hyperstack_interpreter::compiler::MultiEntityBytecode>,
-                mutations_tx: tokio::sync::mpsc::Sender<hyperstack_server::MutationBatch>,
-                health_monitor: Option<hyperstack_server::HealthMonitor>,
-                slot_tracker: hyperstack_server::SlotTracker,
+                vm: Arc<Mutex<hyperstack::runtime::hyperstack_interpreter::vm::VmContext>>,
+                bytecode: Arc<hyperstack::runtime::hyperstack_interpreter::compiler::MultiEntityBytecode>,
+                mutations_tx: hyperstack::runtime::tokio::sync::mpsc::Sender<hyperstack::runtime::hyperstack_server::MutationBatch>,
+                health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
+                slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
             }
 
             impl VmHandler {
                 fn new(
-                    vm: Arc<Mutex<hyperstack_interpreter::vm::VmContext>>,
-                    bytecode: Arc<hyperstack_interpreter::compiler::MultiEntityBytecode>,
-                    mutations_tx: tokio::sync::mpsc::Sender<hyperstack_server::MutationBatch>,
-                    health_monitor: Option<hyperstack_server::HealthMonitor>,
-                    slot_tracker: hyperstack_server::SlotTracker,
+                    vm: Arc<Mutex<hyperstack::runtime::hyperstack_interpreter::vm::VmContext>>,
+                    bytecode: Arc<hyperstack::runtime::hyperstack_interpreter::compiler::MultiEntityBytecode>,
+                    mutations_tx: hyperstack::runtime::tokio::sync::mpsc::Sender<hyperstack::runtime::hyperstack_server::MutationBatch>,
+                    health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
+                    slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
                 ) -> Self {
                     Self { vm, bytecode, mutations_tx, health_monitor, slot_tracker }
                 }
@@ -284,7 +235,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 };
 
                 if from_slot.is_some() {
-                    tracing::info!("Resuming from slot {}", from_slot.unwrap());
+                    hyperstack::runtime::tracing::info!("Resuming from slot {}", from_slot.unwrap());
                 }
 
                 let vixen_config = VixenConfig {
@@ -300,35 +251,16 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                     buffer: BufferConfig::default(),
                 };
 
-            impl yellowstone_vixen::Handler<parsers::#state_enum_name, yellowstone_vixen_core::AccountUpdate> for VmHandler {
-                async fn handle(&self, value: &parsers::#state_enum_name, raw_update: &yellowstone_vixen_core::AccountUpdate)
-                    -> yellowstone_vixen::HandlerResult<()>
+            impl hyperstack::runtime::yellowstone_vixen::Handler<parsers::#state_enum_name, hyperstack::runtime::yellowstone_vixen_core::AccountUpdate> for VmHandler {
+                async fn handle(&self, value: &parsers::#state_enum_name, raw_update: &hyperstack::runtime::yellowstone_vixen_core::AccountUpdate)
+                    -> hyperstack::runtime::yellowstone_vixen::HandlerResult<()>
                 {
                     let slot = raw_update.slot;
                     let account = raw_update.account.as_ref().unwrap();
                     let write_version = account.write_version;
-                    let signature = bs58::encode(account.txn_signature.as_ref().unwrap()).into_string();
-                    let account_address = bs58::encode(&account.pubkey).into_string();
+                    let signature = hyperstack::runtime::bs58::encode(account.txn_signature.as_ref().unwrap()).into_string();
+                    let account_address = hyperstack::runtime::bs58::encode(&account.pubkey).into_string();
                     let event_type = value.event_type();
-                    let sig_short = &signature[..12.min(signature.len())];
-
-                    let span = tracing::info_span!(
-                        "solana.account",
-                        event_type = %event_type,
-                        slot = %slot,
-                        sig = %sig_short,
-                        account = %account_address,
-                    );
-
-                    let mut log = hyperstack_interpreter::CanonicalLog::new();
-                    span.in_scope(|| {
-                        log.set("phase", "account")
-                            .set("event_type", event_type)
-                            .set("account", &account_address)
-                            .set("slot", slot)
-                            .set("write_version", write_version)
-                            .set("sig", sig_short);
-                    });
 
                     if let Some(ref health) = self.health_monitor {
                         health.record_event().await;
@@ -336,14 +268,14 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
 
                     let mut event_value = value.to_value();
                     if let Some(obj) = event_value.as_object_mut() {
-                        obj.insert("__account_address".to_string(), serde_json::json!(account_address));
+                        obj.insert("__account_address".to_string(), hyperstack::runtime::serde_json::json!(account_address));
                     }
 
                     let resolver_result = {
                         let mut vm = self.vm.lock().unwrap();
 
                         if let Some(state_table) = vm.get_state_table_mut(0) {
-                            let mut ctx = hyperstack_interpreter::resolvers::ResolveContext::new(
+                            let mut ctx = hyperstack::runtime::hyperstack_interpreter::resolvers::ResolveContext::new(
                                 0,
                                 slot,
                                 signature.clone(),
@@ -351,32 +283,29 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                             );
 
                             if let Some(resolver_fn) = get_resolver_for_account_type(event_type) {
-                                log.set("key_resolution", "pda_reverse_lookup");
                                 resolver_fn(&account_address, &event_value, &mut ctx)
                             } else {
-                                hyperstack_interpreter::resolvers::KeyResolution::Found(String::new())
+                                hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::Found(String::new())
                             }
                         } else {
-                            hyperstack_interpreter::resolvers::KeyResolution::Found(String::new())
+                            hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::Found(String::new())
                         }
                     };
 
                     match resolver_result {
-                        hyperstack_interpreter::resolvers::KeyResolution::Found(resolved_key) => {
+                        hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::Found(resolved_key) => {
                             if !resolved_key.is_empty() {
-                                log.set("primary_key", &resolved_key);
                                 if let Some(obj) = event_value.as_object_mut() {
-                                    obj.insert("__resolved_primary_key".to_string(), serde_json::json!(resolved_key));
+                                    obj.insert("__resolved_primary_key".to_string(), hyperstack::runtime::serde_json::json!(resolved_key));
                                 }
                             }
                         }
-                        hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(_discriminators) => {
-                            log.set("outcome", "queued");
+                        hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(_discriminators) => {
                             let mut vm = self.vm.lock().unwrap();
 
-                            let queue_result = vm.queue_account_update(
+                            let _ = vm.queue_account_update(
                                 0,
-                                hyperstack_interpreter::QueuedAccountUpdate {
+                                hyperstack::runtime::hyperstack_interpreter::QueuedAccountUpdate {
                                     pda_address: account_address.clone(),
                                     account_type: event_type.to_string(),
                                     account_data: event_value,
@@ -385,42 +314,32 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                     signature,
                                 },
                             );
-                            log.set("pending_queue_size", vm.pending_queue_size as i64);
-                            if let Err(e) = queue_result {
-                                log.set("error", format!("queue_failed: {}", e))
-                                    .set_level(hyperstack_interpreter::LogLevel::Error);
-                            }
                             return Ok(());
                         }
-                        hyperstack_interpreter::resolvers::KeyResolution::Skip => {
-                            log.set("outcome", "skipped").set("skip_reason", "resolver");
+                        hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::Skip => {
                             return Ok(());
                         }
                     }
 
                     let mutations_result = {
                         let mut vm = self.vm.lock().unwrap();
-                        let context = hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
-                        vm.process_event(&self.bytecode, event_value, event_type, Some(&context), Some(&mut log))
+                        let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
+                        vm.process_event(&self.bytecode, event_value, event_type, Some(&context), None)
                             .map_err(|e| e.to_string())
                     };
 
                     match mutations_result {
                         Ok(mutations) => {
                             self.slot_tracker.record(slot);
-                            log.set("outcome", "success").set("mutations", mutations.len() as i64);
                             if !mutations.is_empty() {
-                                let batch = hyperstack_server::MutationBatch::new(
-                                    smallvec::SmallVec::from_vec(mutations)
+                                let batch = hyperstack::runtime::hyperstack_server::MutationBatch::new(
+                                    hyperstack::runtime::smallvec::SmallVec::from_vec(mutations)
                                 );
                                 let _ = self.mutations_tx.send(batch).await;
                             }
                             Ok(())
                         }
                         Err(e) => {
-                            log.set("outcome", "error")
-                                .set("error", &e)
-                                .set_level(hyperstack_interpreter::LogLevel::Error);
                             if let Some(ref health) = self.health_monitor {
                                 health.record_error(format!("VM error for {}: {}", event_type, e)).await;
                             }
@@ -430,32 +349,14 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 }
             }
 
-            impl yellowstone_vixen::Handler<parsers::#instruction_enum_name, yellowstone_vixen_core::instruction::InstructionUpdate> for VmHandler {
-                async fn handle(&self, value: &parsers::#instruction_enum_name, raw_update: &yellowstone_vixen_core::instruction::InstructionUpdate)
-                    -> yellowstone_vixen::HandlerResult<()>
+            impl hyperstack::runtime::yellowstone_vixen::Handler<parsers::#instruction_enum_name, hyperstack::runtime::yellowstone_vixen_core::instruction::InstructionUpdate> for VmHandler {
+                async fn handle(&self, value: &parsers::#instruction_enum_name, raw_update: &hyperstack::runtime::yellowstone_vixen_core::instruction::InstructionUpdate)
+                    -> hyperstack::runtime::yellowstone_vixen::HandlerResult<()>
                 {
                     let slot = raw_update.shared.slot;
                     let txn_index = raw_update.shared.txn_index;
-                    let signature = bs58::encode(&raw_update.shared.signature).into_string();
+                    let signature = hyperstack::runtime::bs58::encode(&raw_update.shared.signature).into_string();
                     let event_type = value.event_type();
-                    let sig_short = &signature[..12.min(signature.len())];
-
-                    let span = tracing::info_span!(
-                        "solana.instruction",
-                        event_type = %event_type,
-                        slot = %slot,
-                        sig = %sig_short,
-                        txn_index = %txn_index,
-                    );
-
-                    let mut log = hyperstack_interpreter::CanonicalLog::new();
-                    span.in_scope(|| {
-                        log.set("phase", "instruction")
-                            .set("event_type", event_type)
-                            .set("slot", slot)
-                            .set("txn_index", txn_index)
-                            .set("sig", sig_short);
-                    });
 
                     if let Some(ref health) = self.health_monitor {
                         health.record_event().await;
@@ -468,9 +369,9 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                     let mutations_result = {
                         let mut vm = self.vm.lock().unwrap();
 
-                        let context = hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
+                        let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
 
-                        let mut result = vm.process_event(&bytecode, event_value.clone(), event_type, Some(&context), Some(&mut log))
+                        let mut result = vm.process_event(&bytecode, event_value.clone(), event_type, Some(&context), None)
                             .map_err(|e| e.to_string());
 
                         if result.is_ok() {
@@ -485,7 +386,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                     })
                                     .unwrap_or_default();
 
-                                let instruction_data = event_value.get("data").unwrap_or(&serde_json::Value::Null);
+                                let instruction_data = event_value.get("data").unwrap_or(&hyperstack::runtime::serde_json::Value::Null);
 
                                 let timestamp = vm.current_context()
                                     .map(|ctx| ctx.timestamp())
@@ -494,9 +395,9 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                         .unwrap()
                                         .as_secs() as i64);
 
-                                let vm_ptr: *mut hyperstack_interpreter::vm::VmContext = &mut *vm as *mut hyperstack_interpreter::vm::VmContext;
+                                let vm_ptr: *mut hyperstack::runtime::hyperstack_interpreter::vm::VmContext = &mut *vm as *mut hyperstack::runtime::hyperstack_interpreter::vm::VmContext;
 
-                                let mut ctx = hyperstack_interpreter::resolvers::InstructionContext::with_metrics(
+                                let mut ctx = hyperstack::runtime::hyperstack_interpreter::resolvers::InstructionContext::with_metrics(
                                     accounts,
                                     0,
                                     &mut *vm,
@@ -518,8 +419,6 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                 drop(ctx);
 
                                 if !dirty_fields.is_empty() {
-                                    log.set("fields_modified", dirty_fields.len() as i64);
-
                                     if let Ok(ref mutations) = result {
                                         if let Some(first_mutation) = mutations.first() {
                                             let _ = vm.update_state_from_register(0, first_mutation.key.clone(), 2);
@@ -528,15 +427,13 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
 
                                     if let Ok(patch) = vm.extract_partial_state(2, &dirty_fields) {
                                         if let Some(mint) = event_value.get("accounts").and_then(|a| a.get("mint")).and_then(|m| m.as_str()) {
-                                            log.set("primary_key", mint);
-
                                             if let Ok(ref mut mutations) = result {
-                                                let mint_value = serde_json::Value::String(mint.to_string());
+                                                let mint_value = hyperstack::runtime::serde_json::Value::String(mint.to_string());
                                                 let found = mutations.iter_mut()
                                                     .find(|m| m.key == mint_value)
                                                     .map(|m| {
-                                                        if let serde_json::Value::Object(ref mut existing_patch_obj) = m.patch {
-                                                            if let serde_json::Value::Object(new_patch_obj) = patch.clone() {
+                                                        if let hyperstack::runtime::serde_json::Value::Object(ref mut existing_patch_obj) = m.patch {
+                                                            if let hyperstack::runtime::serde_json::Value::Object(new_patch_obj) = patch.clone() {
                                                                 for (section_key, new_section_value) in new_patch_obj {
                                                                     if let Some(existing_section) = existing_patch_obj.get_mut(&section_key) {
                                                                         if let (Some(existing_obj), Some(new_obj)) =
@@ -566,7 +463,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                                                             if !existing_patch_obj.contains_key(section) {
                                                                                 existing_patch_obj.insert(
                                                                                     section.to_string(),
-                                                                                    serde_json::json!({})
+                                                                                    hyperstack::runtime::serde_json::json!({})
                                                                                 );
                                                                             }
                                                                             if let Some(patch_section) = existing_patch_obj.get_mut(section) {
@@ -582,7 +479,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                                     });
 
                                                 if found.is_none() {
-                                                    mutations.push(hyperstack_interpreter::Mutation {
+                                                    mutations.push(hyperstack::runtime::hyperstack_interpreter::Mutation {
                                                         export: "Token".to_string(),
                                                         key: mint_value,
                                                         patch: patch.clone(),
@@ -595,18 +492,17 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                 }
 
                                 if !pending_updates.is_empty() {
-                                    log.set("pending_updates_processed", pending_updates.len() as i64);
                                     for update in pending_updates.into_iter() {
                                         let resolved_key = vm.try_pda_reverse_lookup(0, "default_pda_lookup", &update.pda_address);
 
                                         let mut account_data = update.account_data;
                                         if let Some(key) = resolved_key {
                                             if let Some(obj) = account_data.as_object_mut() {
-                                                obj.insert("__resolved_primary_key".to_string(), serde_json::json!(key));
+                                                obj.insert("__resolved_primary_key".to_string(), hyperstack::runtime::serde_json::json!(key));
                                             }
                                         }
 
-                                        let update_context = hyperstack_interpreter::UpdateContext::new_account(
+                                        let update_context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(
                                             update.slot,
                                             update.signature.clone(),
                                             update.write_version,
@@ -626,7 +522,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                             if vm.instructions_executed % 1000 == 0 {
                                 let _ = vm.cleanup_all_expired(0);
                                 let stats = vm.get_memory_stats(0);
-                                hyperstack_interpreter::vm_metrics::record_memory_stats(&stats, #program_name);
+                                hyperstack::runtime::hyperstack_interpreter::vm_metrics::record_memory_stats(&stats, #program_name);
                             }
                         }
 
@@ -636,19 +532,15 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                     match mutations_result {
                         Ok(mutations) => {
                             self.slot_tracker.record(slot);
-                            log.set("outcome", "success").set("mutations", mutations.len() as i64);
                             if !mutations.is_empty() {
-                                let batch = hyperstack_server::MutationBatch::new(
-                                    smallvec::SmallVec::from_vec(mutations)
+                                let batch = hyperstack::runtime::hyperstack_server::MutationBatch::new(
+                                    hyperstack::runtime::smallvec::SmallVec::from_vec(mutations)
                                 );
                                 let _ = self.mutations_tx.send(batch).await;
                             }
                             Ok(())
                         }
                         Err(e) => {
-                            log.set("outcome", "error")
-                                .set("error", &e)
-                                .set_level(hyperstack_interpreter::LogLevel::Error);
                             if let Some(ref health) = self.health_monitor {
                                 health.record_error(format!("VM error for {}: {}", event_type, e)).await;
                             }
@@ -670,11 +562,11 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
             let instruction_parser = parsers::InstructionParser;
 
             if attempt == 0 {
-                tracing::info!("🚀 Starting yellowstone-vixen runtime for {} program", #program_name);
-                tracing::info!("📍 Program ID: {}", parsers::PROGRAM_ID_STR);
-                tracing::info!("📊 Registering parsers:");
-                tracing::info!("   - Account Parser ID: {}", yellowstone_vixen_core::Parser::id(&account_parser));
-                tracing::info!("   - Instruction Parser ID: {}", yellowstone_vixen_core::Parser::id(&instruction_parser));
+                hyperstack::runtime::tracing::info!("Starting yellowstone-vixen runtime for {} program", #program_name);
+                hyperstack::runtime::tracing::info!("Program ID: {}", parsers::PROGRAM_ID_STR);
+                hyperstack::runtime::tracing::info!("Registering parsers:");
+                hyperstack::runtime::tracing::info!("   - Account Parser ID: {}", hyperstack::runtime::yellowstone_vixen_core::Parser::id(&account_parser));
+                hyperstack::runtime::tracing::info!("   - Instruction Parser ID: {}", hyperstack::runtime::yellowstone_vixen_core::Parser::id(&instruction_parser));
             }
 
             if let Some(ref health) = health_monitor {
@@ -688,7 +580,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 health.record_connection().await;
             }
 
-            let result = yellowstone_vixen::Runtime::<YellowstoneGrpcSource>::builder()
+            let result = hyperstack::runtime::yellowstone_vixen::Runtime::<YellowstoneGrpcSource>::builder()
                 .account(account_pipeline)
                 .instruction(instruction_pipeline)
                 .build(vixen_config)
@@ -696,22 +588,22 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 .await;
 
             if let Err(e) = result {
-                tracing::error!("Vixen runtime error: {:?}", e);
+                hyperstack::runtime::tracing::error!("Vixen runtime error: {:?}", e);
             }
 
             attempt += 1;
 
             if let Some(max) = reconnection_config.max_attempts {
                 if attempt >= max {
-                    tracing::error!("Max reconnection attempts ({}) reached, giving up", max);
+                    hyperstack::runtime::tracing::error!("Max reconnection attempts ({}) reached, giving up", max);
                     if let Some(ref health) = health_monitor {
                         health.record_error("Max reconnection attempts reached".into()).await;
                     }
-                    return Err(anyhow::anyhow!("Max reconnection attempts reached"));
+                    return Err(hyperstack::runtime::anyhow::anyhow!("Max reconnection attempts reached"));
                 }
             }
 
-            tracing::warn!(
+            hyperstack::runtime::tracing::warn!(
                 "gRPC stream disconnected. Reconnecting in {:?} (attempt {})",
                 backoff,
                 attempt
@@ -721,7 +613,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 health.record_disconnection().await;
             }
 
-            tokio::time::sleep(backoff).await;
+            hyperstack::runtime::tokio::time::sleep(backoff).await;
 
             backoff = reconnection_config.next_backoff(backoff);
             }

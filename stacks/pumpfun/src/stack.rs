@@ -1,8 +1,8 @@
-use hyperstack_macros::hyperstack;
+use hyperstack::macros::hyperstack;
 
 #[hyperstack(idl = "idl/pump.json")]
 pub mod pumpfun_stream {
-    use hyperstack_macros::Stream;
+    use hyperstack::macros::Stream;
     use serde::{Deserialize, Serialize};
 
     // Entity definition using IDL-generated types

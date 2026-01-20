@@ -1,19 +1,8 @@
 //! VmHandler generation for routing Vixen parser outputs to the bytecode VM.
-//!
-//! This generates the complex handler that includes:
-//! - Resolver integration for account types
-//! - Instruction hook execution
-//! - Unsafe borrow splitting for the VM context
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-/// Generate VmHandler implementation for processing account and instruction updates.
-///
-/// This is the complex handler that includes:
-/// - Resolver integration for account types
-/// - Instruction hook execution
-/// - Unsafe borrow splitting for the VM context
 pub fn generate_vm_handler(
     state_enum_name: &str,
     instruction_enum_name: &str,
@@ -26,11 +15,11 @@ pub fn generate_vm_handler(
     quote! {
         #[derive(Clone)]
         pub struct VmHandler {
-            vm: std::sync::Arc<std::sync::Mutex<hyperstack_interpreter::vm::VmContext>>,
-            bytecode: std::sync::Arc<hyperstack_interpreter::compiler::MultiEntityBytecode>,
-            mutations_tx: tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
-            health_monitor: Option<hyperstack_server::HealthMonitor>,
-            slot_tracker: hyperstack_server::SlotTracker,
+            vm: std::sync::Arc<std::sync::Mutex<hyperstack::runtime::hyperstack_interpreter::vm::VmContext>>,
+            bytecode: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::compiler::MultiEntityBytecode>,
+            mutations_tx: hyperstack::runtime::tokio::sync::mpsc::Sender<hyperstack::runtime::smallvec::SmallVec<[hyperstack::runtime::hyperstack_interpreter::Mutation; 6]>>,
+            health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
+            slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
         }
 
         impl std::fmt::Debug for VmHandler {
@@ -44,11 +33,11 @@ pub fn generate_vm_handler(
 
         impl VmHandler {
             pub fn new(
-                vm: std::sync::Arc<std::sync::Mutex<hyperstack_interpreter::vm::VmContext>>,
-                bytecode: std::sync::Arc<hyperstack_interpreter::compiler::MultiEntityBytecode>,
-                mutations_tx: tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
-                health_monitor: Option<hyperstack_server::HealthMonitor>,
-                slot_tracker: hyperstack_server::SlotTracker,
+                vm: std::sync::Arc<std::sync::Mutex<hyperstack::runtime::hyperstack_interpreter::vm::VmContext>>,
+                bytecode: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::compiler::MultiEntityBytecode>,
+                mutations_tx: hyperstack::runtime::tokio::sync::mpsc::Sender<hyperstack::runtime::smallvec::SmallVec<[hyperstack::runtime::hyperstack_interpreter::Mutation; 6]>>,
+                health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
+                slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
             ) -> Self {
                 Self {
                     vm,
@@ -60,78 +49,65 @@ pub fn generate_vm_handler(
             }
         }
 
-        // Account handler implementation
-        impl yellowstone_vixen::Handler<parsers::#state_enum, yellowstone_vixen_core::AccountUpdate> for VmHandler {
+        impl hyperstack::runtime::yellowstone_vixen::Handler<parsers::#state_enum, hyperstack::runtime::yellowstone_vixen_core::AccountUpdate> for VmHandler {
             async fn handle(
                 &self,
                 value: &parsers::#state_enum,
-                raw_update: &yellowstone_vixen_core::AccountUpdate,
-            ) -> yellowstone_vixen::HandlerResult<()> {
+                raw_update: &hyperstack::runtime::yellowstone_vixen_core::AccountUpdate,
+            ) -> hyperstack::runtime::yellowstone_vixen::HandlerResult<()> {
                 let slot = raw_update.slot;
                 let account = raw_update.account.as_ref().unwrap();
                 let write_version = account.write_version;
-                let signature = bs58::encode(account.txn_signature.as_ref().unwrap()).into_string();
+                let signature = hyperstack::runtime::bs58::encode(account.txn_signature.as_ref().unwrap()).into_string();
 
-                // Record event received for health monitoring
                 if let Some(ref health) = self.health_monitor {
                     health.record_event().await;
                 }
 
-                // Extract account address from raw_update
-                let account_address = bs58::encode(&account.pubkey).into_string();
+                let account_address = hyperstack::runtime::bs58::encode(&account.pubkey).into_string();
 
                 let event_type = value.event_type();
                 let mut event_value = value.to_value();
 
-                // Add account address to event value
                 if let Some(obj) = event_value.as_object_mut() {
-                    obj.insert("__account_address".to_string(), serde_json::json!(account_address));
+                    obj.insert("__account_address".to_string(), hyperstack::runtime::serde_json::json!(account_address));
                 }
 
-                // Check if this account type has a resolver and handle the resolution
                 let resolver_result = {
                     let mut vm = self.vm.lock().unwrap();
 
-                    // Get state table to access reverse lookups
                     if let Some(state_table) = vm.get_state_table_mut(0) {
-                        let mut ctx = hyperstack_interpreter::resolvers::ResolveContext::new(
+                        let mut ctx = hyperstack::runtime::hyperstack_interpreter::resolvers::ResolveContext::new(
                             0,
                             slot,
                             signature.clone(),
                             &mut state_table.pda_reverse_lookups,
                         );
 
-                        // Call the resolver if one exists for this account type
                         if let Some(resolver_fn) = get_resolver_for_account_type(event_type) {
                             resolver_fn(&account_address, &event_value, &mut ctx)
                         } else {
-                            // No resolver defined, process normally
-                            hyperstack_interpreter::resolvers::KeyResolution::Found(String::new())
+                            hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::Found(String::new())
                         }
                     } else {
-                        // No state table, process normally
-                        hyperstack_interpreter::resolvers::KeyResolution::Found(String::new())
+                        hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::Found(String::new())
                     }
                 };
 
-                // Handle the resolution result
                 match resolver_result {
-                    hyperstack_interpreter::resolvers::KeyResolution::Found(resolved_key) => {
-                        // If a primary key was resolved, override it in the event value
+                    hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::Found(resolved_key) => {
                         if !resolved_key.is_empty() {
                             if let Some(obj) = event_value.as_object_mut() {
-                                obj.insert("__resolved_primary_key".to_string(), serde_json::json!(resolved_key));
+                                obj.insert("__resolved_primary_key".to_string(), hyperstack::runtime::serde_json::json!(resolved_key));
                             }
                         }
-                        // Continue with normal processing
                     }
-                    hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(_discriminators) => {
-                        // Queue this update for later processing
+                    hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(_discriminators) => {
                         let mut vm = self.vm.lock().unwrap();
 
                         if let Err(_e) = vm.queue_account_update(
-                            0, // state_id
-                            hyperstack_interpreter::QueuedAccountUpdate {
+                            0,
+                            hyperstack::runtime::hyperstack_interpreter::QueuedAccountUpdate {
                                 pda_address: account_address.clone(),
                                 account_type: event_type.to_string(),
                                 account_data: event_value,
@@ -140,12 +116,10 @@ pub fn generate_vm_handler(
                                 signature,
                             },
                         ) {
-                            // Silently ignore queue errors
                         }
-                        return Ok(()); // Don't process now, wait for queue flush
+                        return Ok(());
                     }
-                    hyperstack_interpreter::resolvers::KeyResolution::Skip => {
-                        // Skip this update entirely
+                    hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::Skip => {
                         return Ok(());
                     }
                 }
@@ -153,7 +127,7 @@ pub fn generate_vm_handler(
                 let mutations_result = {
                     let mut vm = self.vm.lock().unwrap();
 
-                    let context = hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
+                    let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
 
                     vm.process_event(&self.bytecode, event_value, event_type, Some(&context), None)
                         .map_err(|e| e.to_string())
@@ -163,7 +137,7 @@ pub fn generate_vm_handler(
                     Ok(mutations) => {
                         self.slot_tracker.record(slot);
                         if !mutations.is_empty() {
-                            let _ = self.mutations_tx.send(smallvec::SmallVec::from_vec(mutations)).await;
+                            let _ = self.mutations_tx.send(hyperstack::runtime::smallvec::SmallVec::from_vec(mutations)).await;
                         }
                         Ok(())
                     }
@@ -177,42 +151,37 @@ pub fn generate_vm_handler(
             }
         }
 
-        impl yellowstone_vixen::Handler<parsers::#instruction_enum, yellowstone_vixen_core::instruction::InstructionUpdate> for VmHandler {
+        impl hyperstack::runtime::yellowstone_vixen::Handler<parsers::#instruction_enum, hyperstack::runtime::yellowstone_vixen_core::instruction::InstructionUpdate> for VmHandler {
             async fn handle(
                 &self,
                 value: &parsers::#instruction_enum,
-                raw_update: &yellowstone_vixen_core::instruction::InstructionUpdate,
-            ) -> yellowstone_vixen::HandlerResult<()> {
+                raw_update: &hyperstack::runtime::yellowstone_vixen_core::instruction::InstructionUpdate,
+            ) -> hyperstack::runtime::yellowstone_vixen::HandlerResult<()> {
                 let slot = raw_update.shared.slot;
                 let txn_index = raw_update.shared.txn_index;
-                let signature = bs58::encode(&raw_update.shared.signature).into_string();
+                let signature = hyperstack::runtime::bs58::encode(&raw_update.shared.signature).into_string();
 
-                // Record event received for health monitoring
                 if let Some(ref health) = self.health_monitor {
                     health.record_event().await;
                 }
 
-                // raw_update.accounts are already KeyBytes<32>, no conversion needed
                 let static_keys_vec = &raw_update.accounts;
                 let event_type = value.event_type();
 
-                // Use to_value_with_accounts to get event value with named accounts from IDL
                 let event_value = value.to_value_with_accounts(static_keys_vec);
 
                 let bytecode = self.bytecode.clone();
                 let mutations_result = {
                     let mut vm = self.vm.lock().unwrap();
 
-                    let context = hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
+                    let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
 
                     let mut result = vm.process_event(&bytecode, event_value.clone(), event_type, Some(&context), None)
                         .map_err(|e| e.to_string());
 
-                    // After processing instruction, call any registered after-instruction hooks
                     if result.is_ok() {
                         let hooks = get_instruction_hooks(event_type);
                         if !hooks.is_empty() {
-                            // Extract accounts map from event_value
                             let accounts = event_value.get("accounts")
                                 .and_then(|a| a.as_object())
                                 .map(|obj| {
@@ -222,10 +191,8 @@ pub fn generate_vm_handler(
                                 })
                                 .unwrap_or_default();
 
-                            // Extract instruction data
-                            let instruction_data = event_value.get("data").unwrap_or(&serde_json::Value::Null);
+                            let instruction_data = event_value.get("data").unwrap_or(&hyperstack::runtime::serde_json::Value::Null);
 
-                            // Get timestamp from context
                             let timestamp = vm.current_context()
                                 .map(|ctx| ctx.timestamp())
                                 .unwrap_or_else(|| std::time::SystemTime::now()
@@ -233,16 +200,15 @@ pub fn generate_vm_handler(
                                     .unwrap()
                                     .as_secs() as i64);
 
-                            // SAFETY: We're carefully splitting the mutable borrow of vm into disjoint parts.
-                            let vm_ptr: *mut hyperstack_interpreter::vm::VmContext = &mut *vm as *mut hyperstack_interpreter::vm::VmContext;
+                            // SAFETY: Carefully splitting mutable borrow into disjoint parts
+                            let vm_ptr: *mut hyperstack::runtime::hyperstack_interpreter::vm::VmContext = &mut *vm as *mut hyperstack::runtime::hyperstack_interpreter::vm::VmContext;
 
-                            // Build InstructionContext with metrics support
-                            let mut ctx = hyperstack_interpreter::resolvers::InstructionContext::with_metrics(
+                            let mut ctx = hyperstack::runtime::hyperstack_interpreter::resolvers::InstructionContext::with_metrics(
                                 accounts,
-                                0, // state_id
+                                0,
                                 &mut *vm,
                                 unsafe { (*vm_ptr).registers_mut() },
-                                2, // state_reg - register 2 holds the entity state
+                                2,
                                 unsafe { (*vm_ptr).path_cache() },
                                 instruction_data,
                                 Some(context.slot.unwrap_or(0)),
@@ -250,33 +216,25 @@ pub fn generate_vm_handler(
                                 timestamp,
                             );
 
-                            // Call each registered hook
                             for hook_fn in hooks.iter() {
                                 hook_fn(&mut ctx);
                             }
 
-                            // Collect data from ctx before dropping it
                             let dirty_fields: std::collections::HashSet<String> = ctx.dirty_tracker().dirty_paths();
                             let pending_updates = ctx.take_pending_updates();
 
-                            // Drop ctx to release the mutable borrows before we use vm again
                             drop(ctx);
 
-                            // Generate additional mutations from fields modified by hooks
                             if !dirty_fields.is_empty() {
-                                // Extract the dirty fields from state to create a patch
                                 if let Ok(patch) = vm.extract_partial_state(2, &dirty_fields) {
-                                    // Find or create mutation for the current entity
                                     if let Some(mint) = event_value.get("accounts").and_then(|a| a.get("mint")).and_then(|m| m.as_str()) {
-                                        // Merge this patch into mutations from result
                                         if let Ok(ref mut mutations) = result {
-                                            let mint_value = serde_json::Value::String(mint.to_string());
+                                            let mint_value = hyperstack::runtime::serde_json::Value::String(mint.to_string());
                                             let found = mutations.iter_mut()
                                                 .find(|m| m.key == mint_value)
                                                 .map(|m| {
-                                                    // Deep merge patch into existing mutation's patch
-                                                    if let serde_json::Value::Object(ref mut existing_patch_obj) = m.patch {
-                                                        if let serde_json::Value::Object(new_patch_obj) = patch.clone() {
+                                                    if let hyperstack::runtime::serde_json::Value::Object(ref mut existing_patch_obj) = m.patch {
+                                                        if let hyperstack::runtime::serde_json::Value::Object(new_patch_obj) = patch.clone() {
                                                             for (section_key, new_section_value) in new_patch_obj {
                                                                 if let Some(existing_section) = existing_patch_obj.get_mut(&section_key) {
                                                                     if let (Some(existing_obj), Some(new_obj)) =
@@ -292,34 +250,24 @@ pub fn generate_vm_handler(
                                                                 }
                                                             }
 
-                                                            // Re-evaluate computed fields using full accumulated state
-                                                            // The patch only contains dirty fields, but computed fields may reference
-                                                            // other sections (e.g., last_trade_price references reserves.*)
-                                                            // So we evaluate on full state and copy computed values back to patch
                                                             let mut full_state_for_eval = vm.registers_mut()[2].clone();
                                                             if let Err(_e) = evaluate_computed_fields(&mut full_state_for_eval) {
-                                                                // Ignore errors
                                                             }
-                                                            // Copy only computed field values from full state back to patch
-                                                            // Uses computed_field_paths() to know which fields to copy
                                                             for path in computed_field_paths() {
                                                                 let parts: Vec<&str> = path.split('.').collect();
                                                                 if parts.len() >= 2 {
                                                                     let section = parts[0];
                                                                     let field = parts[1];
-                                                                    // Get value from full state
                                                                     if let Some(value) = full_state_for_eval
                                                                         .get(section)
                                                                         .and_then(|s| s.get(field))
                                                                     {
-                                                                        // Ensure section exists in patch
                                                                         if !existing_patch_obj.contains_key(section) {
                                                                             existing_patch_obj.insert(
                                                                                 section.to_string(),
-                                                                                serde_json::json!({})
+                                                                                hyperstack::runtime::serde_json::json!({})
                                                                             );
                                                                         }
-                                                                        // Insert computed value into patch
                                                                         if let Some(patch_section) = existing_patch_obj.get_mut(section) {
                                                                             if let Some(obj) = patch_section.as_object_mut() {
                                                                                 obj.insert(field.to_string(), value.clone());
@@ -333,7 +281,7 @@ pub fn generate_vm_handler(
                                                 });
 
                                             if found.is_none() {
-                                                mutations.push(hyperstack_interpreter::Mutation {
+                                                mutations.push(hyperstack::runtime::hyperstack_interpreter::Mutation {
                                                     export: #entity_name_lit.to_string(),
                                                     key: mint_value,
                                                     patch: patch.clone(),
@@ -345,7 +293,6 @@ pub fn generate_vm_handler(
                                 }
                             }
 
-                            // Reprocess any pending updates that were queued
                             if !pending_updates.is_empty() {
                                 for update in pending_updates {
                                     let resolved_key = vm.try_pda_reverse_lookup(0, "default_pda_lookup", &update.pda_address);
@@ -353,11 +300,11 @@ pub fn generate_vm_handler(
                                     let mut account_data = update.account_data;
                                     if let Some(key) = resolved_key {
                                         if let Some(obj) = account_data.as_object_mut() {
-                                            obj.insert("__resolved_primary_key".to_string(), serde_json::json!(key));
+                                            obj.insert("__resolved_primary_key".to_string(), hyperstack::runtime::serde_json::json!(key));
                                         }
                                     }
 
-                                    let update_context = hyperstack_interpreter::UpdateContext::new_account(
+                                    let update_context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(
                                         update.slot,
                                         update.signature.clone(),
                                         update.write_version,
@@ -378,7 +325,7 @@ pub fn generate_vm_handler(
                         if vm.instructions_executed % 1000 == 0 {
                             let _ = vm.cleanup_all_expired(0);
                             let stats = vm.get_memory_stats(0);
-                            hyperstack_interpreter::vm_metrics::record_memory_stats(&stats, #entity_name_lit);
+                            hyperstack::runtime::hyperstack_interpreter::vm_metrics::record_memory_stats(&stats, #entity_name_lit);
                         }
                     }
 
@@ -389,7 +336,7 @@ pub fn generate_vm_handler(
                     Ok(mutations) => {
                         self.slot_tracker.record(slot);
                         if !mutations.is_empty() {
-                            let _ = self.mutations_tx.send(smallvec::SmallVec::from_vec(mutations)).await;
+                            let _ = self.mutations_tx.send(hyperstack::runtime::smallvec::SmallVec::from_vec(mutations)).await;
                         }
                         Ok(())
                     }

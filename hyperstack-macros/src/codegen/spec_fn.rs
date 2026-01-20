@@ -15,17 +15,15 @@ pub fn generate_spec_function(
     let _instruction_enum = format_ident!("{}", instruction_enum_name);
 
     quote! {
-        /// Creates a hyperstack-server Spec with bytecode and parsers
-        pub fn spec() -> hyperstack_server::Spec {
+        pub fn spec() -> hyperstack::runtime::hyperstack_server::Spec {
             let bytecode = create_multi_entity_bytecode();
             let program_id = parsers::PROGRAM_ID_STR.to_string();
 
-            hyperstack_server::Spec::new(bytecode, program_id)
+            hyperstack::runtime::hyperstack_server::Spec::new(bytecode, program_id)
                 .with_parser_setup(create_parser_setup())
         }
 
-        /// Creates the parser setup function for Vixen runtime integration
-        fn create_parser_setup() -> hyperstack_server::ParserSetupFn {
+        fn create_parser_setup() -> hyperstack::runtime::hyperstack_server::ParserSetupFn {
             use std::sync::Arc;
 
             Arc::new(|mutations_tx, health_monitor, reconnection_config| {
@@ -35,35 +33,32 @@ pub fn generate_spec_function(
             })
         }
 
-        /// Runs the Vixen runtime with reconnection support
         async fn run_vixen_runtime_with_channel(
-            mutations_tx: tokio::sync::mpsc::Sender<smallvec::SmallVec<[hyperstack_interpreter::Mutation; 6]>>,
-            health_monitor: Option<hyperstack_server::HealthMonitor>,
-            reconnection_config: hyperstack_server::ReconnectionConfig,
-        ) -> anyhow::Result<()> {
-            use yellowstone_vixen::config::{BufferConfig, VixenConfig};
-            use yellowstone_vixen_yellowstone_grpc_source::YellowstoneGrpcConfig;
-            use yellowstone_vixen_yellowstone_grpc_source::YellowstoneGrpcSource;
-            use yellowstone_vixen::Pipeline;
+            mutations_tx: hyperstack::runtime::tokio::sync::mpsc::Sender<hyperstack::runtime::smallvec::SmallVec<[hyperstack::runtime::hyperstack_interpreter::Mutation; 6]>>,
+            health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
+            reconnection_config: hyperstack::runtime::hyperstack_server::ReconnectionConfig,
+        ) -> hyperstack::runtime::anyhow::Result<()> {
+            use hyperstack::runtime::yellowstone_vixen::config::{BufferConfig, VixenConfig};
+            use hyperstack::runtime::yellowstone_vixen_yellowstone_grpc_source::YellowstoneGrpcConfig;
+            use hyperstack::runtime::yellowstone_vixen_yellowstone_grpc_source::YellowstoneGrpcSource;
+            use hyperstack::runtime::yellowstone_vixen::Pipeline;
 
-            let _ = dotenvy::from_filename(".env.local")
-                .or_else(|_| dotenvy::from_filename(".env"))
-                .or_else(|_| dotenvy::dotenv());
+            let _ = hyperstack::runtime::dotenvy::from_filename(".env.local")
+                .or_else(|_| hyperstack::runtime::dotenvy::from_filename(".env"))
+                .or_else(|_| hyperstack::runtime::dotenvy::dotenv());
 
             let endpoint = std::env::var("YELLOWSTONE_ENDPOINT")
-                .map_err(|_| anyhow::anyhow!(
+                .map_err(|_| hyperstack::runtime::anyhow::anyhow!(
                     "YELLOWSTONE_ENDPOINT environment variable must be set"
                 ))?;
             let x_token = std::env::var("YELLOWSTONE_X_TOKEN").ok();
 
-            let slot_tracker = hyperstack_server::SlotTracker::new();
+            let slot_tracker = hyperstack::runtime::hyperstack_server::SlotTracker::new();
             let mut attempt = 0u32;
             let mut backoff = reconnection_config.initial_delay;
 
-            // Create bytecode and VM once, outside the reconnection loop
-            // This preserves VM cache state across reconnections
             let bytecode = std::sync::Arc::new(create_multi_entity_bytecode());
-            let vm = std::sync::Arc::new(std::sync::Mutex::new(hyperstack_interpreter::vm::VmContext::new()));
+            let vm = std::sync::Arc::new(std::sync::Mutex::new(hyperstack::runtime::hyperstack_interpreter::vm::VmContext::new()));
 
             loop {
                 let from_slot = {
@@ -72,7 +67,7 @@ pub fn generate_spec_function(
                 };
 
                 if from_slot.is_some() {
-                    tracing::info!("Resuming from slot {}", from_slot.unwrap());
+                    hyperstack::runtime::tracing::info!("Resuming from slot {}", from_slot.unwrap());
                 }
 
                 let vixen_config = VixenConfig {
@@ -100,8 +95,8 @@ pub fn generate_spec_function(
                 let instruction_parser = parsers::InstructionParser;
 
                 if attempt == 0 {
-                    tracing::info!("Starting yellowstone-vixen runtime for {} program", #program_name);
-                    tracing::info!("Program ID: {}", parsers::PROGRAM_ID_STR);
+                    hyperstack::runtime::tracing::info!("Starting yellowstone-vixen runtime for {} program", #program_name);
+                    hyperstack::runtime::tracing::info!("Program ID: {}", parsers::PROGRAM_ID_STR);
                 }
 
                 if let Some(ref health) = health_monitor {
@@ -115,7 +110,7 @@ pub fn generate_spec_function(
                     health.record_connection().await;
                 }
 
-                let result = yellowstone_vixen::Runtime::<YellowstoneGrpcSource>::builder()
+                let result = hyperstack::runtime::yellowstone_vixen::Runtime::<YellowstoneGrpcSource>::builder()
                     .account(account_pipeline)
                     .instruction(instruction_pipeline)
                     .build(vixen_config)
@@ -123,22 +118,22 @@ pub fn generate_spec_function(
                     .await;
 
                 if let Err(e) = result {
-                    tracing::error!("Vixen runtime error: {:?}", e);
+                    hyperstack::runtime::tracing::error!("Vixen runtime error: {:?}", e);
                 }
 
                 attempt += 1;
 
                 if let Some(max) = reconnection_config.max_attempts {
                     if attempt >= max {
-                        tracing::error!("Max reconnection attempts ({}) reached, giving up", max);
+                        hyperstack::runtime::tracing::error!("Max reconnection attempts ({}) reached, giving up", max);
                         if let Some(ref health) = health_monitor {
                             health.record_error("Max reconnection attempts reached".into()).await;
                         }
-                        return Err(anyhow::anyhow!("Max reconnection attempts reached"));
+                        return Err(hyperstack::runtime::anyhow::anyhow!("Max reconnection attempts reached"));
                     }
                 }
 
-                tracing::warn!(
+                hyperstack::runtime::tracing::warn!(
                     "gRPC stream disconnected. Reconnecting in {:?} (attempt {})",
                     backoff,
                     attempt
@@ -148,7 +143,7 @@ pub fn generate_spec_function(
                     health.record_disconnection().await;
                 }
 
-                tokio::time::sleep(backoff).await;
+                hyperstack::runtime::tokio::time::sleep(backoff).await;
 
                 backoff = reconnection_config.next_backoff(backoff);
             }

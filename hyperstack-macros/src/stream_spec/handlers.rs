@@ -389,16 +389,16 @@ pub fn process_event_fields_for_mapping(
             // Check for transforms
             if let Some(transform_ident) = event_attr.field_transforms.get(&field_name) {
                 captured_fields.push(quote! {
-                    Box::new(hyperstack_interpreter::ast::MappingSource::FromSource {
-                        path: hyperstack_interpreter::ast::FieldPath::new(&[#(#field_path),*]),
+                    Box::new(hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::FromSource {
+                        path: hyperstack::runtime::hyperstack_interpreter::ast::FieldPath::new(&[#(#field_path),*]),
                         default: None,
-                        transform: Some(hyperstack_interpreter::ast::Transformation::#transform_ident),
+                        transform: Some(hyperstack::runtime::hyperstack_interpreter::ast::Transformation::#transform_ident),
                     })
                 });
             } else {
                 captured_fields.push(quote! {
-                    Box::new(hyperstack_interpreter::ast::MappingSource::FromSource {
-                        path: hyperstack_interpreter::ast::FieldPath::new(&[#(#field_path),*]),
+                    Box::new(hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::FromSource {
+                        path: hyperstack::runtime::hyperstack_interpreter::ast::FieldPath::new(&[#(#field_path),*]),
                         default: None,
                         transform: None,
                     })
@@ -411,16 +411,16 @@ pub fn process_event_fields_for_mapping(
             if let Some(transform_str) = event_attr.field_transforms_legacy.get(field_name) {
                 let transform_ident = format_ident!("{}", transform_str);
                 captured_fields.push(quote! {
-                    Box::new(hyperstack_interpreter::ast::MappingSource::FromSource {
-                        path: hyperstack_interpreter::ast::FieldPath::new(&["data", #field_name]),
+                    Box::new(hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::FromSource {
+                        path: hyperstack::runtime::hyperstack_interpreter::ast::FieldPath::new(&["data", #field_name]),
                         default: None,
-                        transform: Some(hyperstack_interpreter::ast::Transformation::#transform_ident),
+                        transform: Some(hyperstack::runtime::hyperstack_interpreter::ast::Transformation::#transform_ident),
                     })
                 });
             } else {
                 captured_fields.push(quote! {
-                    Box::new(hyperstack_interpreter::ast::MappingSource::FromSource {
-                        path: hyperstack_interpreter::ast::FieldPath::new(&["data", #field_name]),
+                    Box::new(hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::FromSource {
+                        path: hyperstack::runtime::hyperstack_interpreter::ast::FieldPath::new(&["data", #field_name]),
                         default: None,
                         transform: None,
                     })
@@ -478,13 +478,13 @@ pub fn generate_resolver_functions(
                 functions.push(quote! {
                     pub fn #fn_name(
                         account_address: &str,
-                        _account_data: &serde_json::Value,
-                        ctx: &mut hyperstack_interpreter::resolvers::ResolveContext,
-                    ) -> hyperstack_interpreter::resolvers::KeyResolution {
+                        _account_data: &hyperstack::runtime::serde_json::Value,
+                        ctx: &mut hyperstack::runtime::hyperstack_interpreter::resolvers::ResolveContext,
+                    ) -> hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution {
                         if let Some(key) = ctx.pda_reverse_lookup(account_address) {
-                            return hyperstack_interpreter::resolvers::KeyResolution::Found(key);
+                            return hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::Found(key);
                         }
-                        hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(&[#(#disc_bytes),*])
+                        hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(&[#(#disc_bytes),*])
                     }
                 });
             }
@@ -515,12 +515,12 @@ pub fn generate_pda_registration_functions(
         // 2. The instruction hooks need to be registered in the AST/bytecode system
         // 3. These will be called through the bytecode VM's instruction processing
         functions.push(quote! {
-            pub fn #fn_name(ctx: &mut hyperstack_interpreter::resolvers::InstructionContext) {
-                if let (Some(primary_key), Some(pda)) = (ctx.account(#primary_key_field), ctx.account(#pda_field)) {
-                    ctx.register_pda_reverse_lookup(&pda, &primary_key);
-                }
-            }
-        });
+                    pub fn #fn_name(ctx: &mut hyperstack::runtime::hyperstack_interpreter::resolvers::InstructionContext) {
+                        if let (Some(primary_key), Some(pda)) = (ctx.account(#primary_key_field), ctx.account(#pda_field)) {
+                            ctx.register_pda_reverse_lookup(&pda, &primary_key);
+                        }
+                    }
+                });
     }
 
     quote! { #(#functions)* }

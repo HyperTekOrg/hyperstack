@@ -220,7 +220,8 @@ pub fn process_struct_with_context(
         let is_instruction = mappings.iter().any(|m| m.is_instruction);
 
         let mut field_mapping_code = Vec::new();
-        let mut primary_field_path = quote! { hyperstack_interpreter::ast::FieldPath::new(&[]) };
+        let mut primary_field_path =
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::FieldPath::new(&[]) };
         let mut has_primary_key = false;
         let mut lookup_primary_field = None;
 
@@ -233,36 +234,36 @@ pub fn process_struct_with_context(
             let mapping_expr = if mapping.is_whole_source && !is_instruction {
                 // Whole account capture - use WholeSource for accounts (not instructions)
                 quote! {
-                    hyperstack_interpreter::ast::TypedFieldMapping::new(
+                    hyperstack::runtime::hyperstack_interpreter::ast::TypedFieldMapping::new(
                         #target_field.to_string(),
-                        hyperstack_interpreter::ast::MappingSource::WholeSource,
-                        hyperstack_interpreter::ast::PopulationStrategy::#strategy_ident,
+                        hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::WholeSource,
+                        hyperstack::runtime::hyperstack_interpreter::ast::PopulationStrategy::#strategy_ident,
                     )
                 }
             } else if mapping.is_whole_source {
                 // Whole instruction capture - use "data" path to capture entire instruction
                 quote! {
-                    hyperstack_interpreter::ast::TypedFieldMapping::new(
+                    hyperstack::runtime::hyperstack_interpreter::ast::TypedFieldMapping::new(
                         #target_field.to_string(),
-                        hyperstack_interpreter::ast::MappingSource::FromSource {
-                            path: hyperstack_interpreter::ast::FieldPath::new(&["data"]),
+                        hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::FromSource {
+                            path: hyperstack::runtime::hyperstack_interpreter::ast::FieldPath::new(&["data"]),
                             default: None,
                             transform: None,
                         },
-                        hyperstack_interpreter::ast::PopulationStrategy::#strategy_ident,
+                        hyperstack::runtime::hyperstack_interpreter::ast::PopulationStrategy::#strategy_ident,
                     )
                 }
             } else {
                 // Normal field mapping
                 quote! {
-                    hyperstack_interpreter::ast::TypedFieldMapping::new(
+                    hyperstack::runtime::hyperstack_interpreter::ast::TypedFieldMapping::new(
                         #target_field.to_string(),
-                        hyperstack_interpreter::ast::MappingSource::FromSource {
-                            path: hyperstack_interpreter::ast::FieldPath::new(&[#source_field]),
+                        hyperstack::runtime::hyperstack_interpreter::ast::MappingSource::FromSource {
+                            path: hyperstack::runtime::hyperstack_interpreter::ast::FieldPath::new(&[#source_field]),
                             default: None,
                             transform: None,
                         },
-                        hyperstack_interpreter::ast::PopulationStrategy::#strategy_ident,
+                        hyperstack::runtime::hyperstack_interpreter::ast::PopulationStrategy::#strategy_ident,
                     )
                 }
             };
@@ -270,7 +271,7 @@ pub fn process_struct_with_context(
             let mapping_expr = if let Some(ref transform_str) = mapping.transform {
                 let transform_ident = format_ident!("{}", transform_str);
                 quote! {
-                    #mapping_expr.with_transform(hyperstack_interpreter::ast::Transformation::#transform_ident)
+                    #mapping_expr.with_transform(hyperstack::runtime::hyperstack_interpreter::ast::Transformation::#transform_ident)
                 }
             } else {
                 mapping_expr
@@ -281,27 +282,27 @@ pub fn process_struct_with_context(
             if mapping.is_primary_key {
                 has_primary_key = true;
                 primary_field_path = quote! {
-                    hyperstack_interpreter::ast::FieldPath::new(&[#source_field])
+                    hyperstack::runtime::hyperstack_interpreter::ast::FieldPath::new(&[#source_field])
                 };
             }
 
             if primary_keys.contains(&mapping.target_field_name) {
                 lookup_primary_field = Some(quote! {
-                    hyperstack_interpreter::ast::FieldPath::new(&[#source_field])
+                    hyperstack::runtime::hyperstack_interpreter::ast::FieldPath::new(&[#source_field])
                 });
             }
         }
 
         let key_resolution = if has_primary_key {
             quote! {
-                hyperstack_interpreter::ast::KeyResolutionStrategy::Embedded {
+                hyperstack::runtime::hyperstack_interpreter::ast::KeyResolutionStrategy::Embedded {
                     primary_field: #primary_field_path,
                 }
             }
         } else {
             let lookup_field = if let Some(ref join_field_name) = join_key {
                 quote! {
-                    hyperstack_interpreter::ast::FieldPath::new(&[#join_field_name])
+                    hyperstack::runtime::hyperstack_interpreter::ast::FieldPath::new(&[#join_field_name])
                 }
             } else {
                 lookup_primary_field.unwrap_or_else(|| {
@@ -310,21 +311,21 @@ pub fn process_struct_with_context(
                             if mapping.target_field_name == *pk {
                                 let source_field = &mapping.source_field_name;
                                 return quote! {
-                                    hyperstack_interpreter::ast::FieldPath::new(&[#source_field])
+                                    hyperstack::runtime::hyperstack_interpreter::ast::FieldPath::new(&[#source_field])
                                 };
                             }
                         }
                         let event_field = pk.split('.').next_back().unwrap_or(pk);
                         return quote! {
-                            hyperstack_interpreter::ast::FieldPath::new(&[#event_field])
+                            hyperstack::runtime::hyperstack_interpreter::ast::FieldPath::new(&[#event_field])
                         };
                     }
-                    quote! { hyperstack_interpreter::ast::FieldPath::new(&[]) }
+                    quote! { hyperstack::runtime::hyperstack_interpreter::ast::FieldPath::new(&[]) }
                 })
             };
 
             quote! {
-                hyperstack_interpreter::ast::KeyResolutionStrategy::Lookup {
+                hyperstack::runtime::hyperstack_interpreter::ast::KeyResolutionStrategy::Lookup {
                     primary_field: #lookup_field,
                 }
             }
@@ -332,9 +333,9 @@ pub fn process_struct_with_context(
 
         let type_suffix = if is_instruction { "IxState" } else { "State" };
         handler_fns.push(quote! {
-            fn #handler_name() -> hyperstack_interpreter::ast::TypedHandlerSpec<#state_name> {
-                hyperstack_interpreter::ast::TypedHandlerSpec::new(
-                    hyperstack_interpreter::ast::SourceSpec::Source {
+            fn #handler_name() -> hyperstack::runtime::hyperstack_interpreter::ast::TypedHandlerSpec<#state_name> {
+                hyperstack::runtime::hyperstack_interpreter::ast::TypedHandlerSpec::new(
+                    hyperstack::runtime::hyperstack_interpreter::ast::SourceSpec::Source {
                         program_id: None,
                         discriminator: None,
                         type_name: format!("{}{}", #account_type, #type_suffix),
@@ -355,11 +356,11 @@ pub fn process_struct_with_context(
 
     let game_event_struct = if has_events && !skip_game_event {
         quote! {
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+            #[derive(Debug, Clone, hyperstack::runtime::serde::Serialize, hyperstack::runtime::serde::Deserialize)]
             pub struct GameEvent {
                 pub timestamp: i64,
                 #[serde(flatten)]
-                pub data: serde_json::Value,
+                pub data: hyperstack::runtime::serde_json::Value,
             }
         }
     } else {
@@ -371,14 +372,14 @@ pub fn process_struct_with_context(
         .map(|(field_name, temporal_field)| {
             if let Some(tf) = temporal_field {
                 quote! {
-                    hyperstack_interpreter::ast::LookupIndexSpec {
+                    hyperstack::runtime::hyperstack_interpreter::ast::LookupIndexSpec {
                         field_name: #field_name.to_string(),
                         temporal_field: Some(#tf.to_string()),
                     }
                 }
             } else {
                 quote! {
-                    hyperstack_interpreter::ast::LookupIndexSpec {
+                    hyperstack::runtime::hyperstack_interpreter::ast::LookupIndexSpec {
                         field_name: #field_name.to_string(),
                         temporal_field: None,
                     }
@@ -404,7 +405,7 @@ pub fn process_struct_with_context(
     );
 
     let output = quote! {
-        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+        #[derive(Debug, Clone, hyperstack::runtime::serde::Serialize, hyperstack::runtime::serde::Deserialize)]
         pub struct #state_name {
             #(#state_fields),*
         }
@@ -417,10 +418,10 @@ pub fn process_struct_with_context(
             #(#accessor_defs)*
         }
 
-        pub fn create_spec() -> hyperstack_interpreter::ast::TypedStreamSpec<#state_name> {
-            hyperstack_interpreter::ast::TypedStreamSpec::new(
+        pub fn create_spec() -> hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec<#state_name> {
+            hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec::new(
                 stringify!(#name).to_string(),
-                hyperstack_interpreter::ast::IdentitySpec {
+                hyperstack::runtime::hyperstack_interpreter::ast::IdentitySpec {
                     primary_keys: vec![#(#primary_keys.to_string()),*],
                     lookup_indexes: vec![
                         #(#lookup_index_creations),*

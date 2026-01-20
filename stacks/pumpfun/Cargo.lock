@@ -10,14 +10,13 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "ahash"
-version = "0.8.12"
+version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
+checksum = "891477e0c6a8957309ee5c45a6368af3ae14bb510732d2684ffa19af310920f9"
 dependencies = [
- "cfg-if",
+ "getrandom 0.2.17",
  "once_cell",
  "version_check",
- "zerocopy",
 ]
 
 [[package]]
@@ -269,7 +268,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "115e54d64eb62cdebad391c19efc9dce4981c690c85a33a12199d99bb9546fee"
 dependencies = [
  "borsh-derive 0.10.4",
- "hashbrown 0.13.2",
+ "hashbrown 0.12.3",
 ]
 
 [[package]]
@@ -590,6 +589,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dotenvy"
+version = "0.15.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
+
+[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -832,12 +837,6 @@ name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
-
-[[package]]
-name = "hashbrown"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
 dependencies = [
  "ahash",
 ]
@@ -987,17 +986,28 @@ dependencies = [
 
 [[package]]
 name = "hyperstack"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
+ "anyhow",
+ "bs58",
+ "dotenvy",
  "hyperstack-interpreter",
  "hyperstack-macros",
  "hyperstack-sdk",
  "hyperstack-server",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "tokio",
+ "tracing",
+ "yellowstone-vixen",
+ "yellowstone-vixen-core",
+ "yellowstone-vixen-yellowstone-grpc-source",
 ]
 
 [[package]]
 name = "hyperstack-interpreter"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "bs58",
  "dashmap",
@@ -1018,7 +1028,7 @@ dependencies = [
 
 [[package]]
 name = "hyperstack-macros"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "hex",
  "proc-macro2",
@@ -1031,10 +1041,9 @@ dependencies = [
 
 [[package]]
 name = "hyperstack-sdk"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
- "base64",
  "flate2",
  "futures-util",
  "pin-project-lite",
@@ -1049,7 +1058,7 @@ dependencies = [
 
 [[package]]
 name = "hyperstack-server"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -1722,17 +1731,9 @@ name = "pumpfun-stack"
 version = "0.1.0"
 dependencies = [
  "borsh 1.6.0",
- "bs58",
  "hyperstack",
- "hyperstack-interpreter",
- "hyperstack-macros",
  "serde",
- "serde_json",
- "smallvec",
  "solana-pubkey",
- "tracing",
- "yellowstone-vixen",
- "yellowstone-vixen-core",
 ]
 
 [[package]]
