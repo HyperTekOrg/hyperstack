@@ -281,9 +281,14 @@ hs sdk create rust settlement-game --output ./crates/game-sdk
 
 # With custom crate name
 hs sdk create rust settlement-game --crate-name game-sdk
+
+# Generate as a module instead of a standalone crate
+hs sdk create rust settlement-game --module --output ./src/stacks/game
 ```
 
-This generates a crate with:
+### Crate vs Module Output
+
+By default, the CLI generates a **standalone crate** with its own `Cargo.toml`:
 
 ```
 generated/settlement-game-stack/
@@ -294,12 +299,49 @@ generated/settlement-game-stack/
     └── entity.rs   # Entity trait implementations
 ```
 
+With the `--module` flag, the CLI generates a **module** that can be embedded in an existing crate:
+
+```
+src/stacks/game/
+├── mod.rs      # Re-exports
+├── types.rs    # Data structs
+└── entity.rs   # Entity trait implementations
+```
+
+The module mode is useful for:
+- Monorepo setups where you want generated code alongside your source
+- Avoiding extra crate dependencies
+- Embedding multiple stacks within a single crate
+
+### Configuration
+
+You can set module mode as the default in `hyperstack.toml`:
+
+```toml
+[sdk]
+rust_module_mode = true  # Generate all Rust SDKs as modules
+
+# Or per-stack:
+[[stacks]]
+name = "game"
+ast = "SettlementGame"
+rust_module = true  # This stack generates as a module
+```
+
+### Using the Generated Code
+
 Add the generated crate to your `Cargo.toml`:
 
 ```toml
 [dependencies]
 hyperstack-sdk = "0.2"
 settlement-game-stack = { path = "./generated/settlement-game-stack" }
+```
+
+Or if using module mode, add to your `lib.rs`:
+
+```rust
+pub mod game;  // Points to src/game/mod.rs
 ```
 
 ---

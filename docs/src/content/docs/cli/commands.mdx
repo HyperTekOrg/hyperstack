@@ -278,7 +278,18 @@ Generate Rust SDK crate.
 hs sdk create rust my-stack
 hs sdk create rust my-stack --output ./crates/
 hs sdk create rust my-stack --crate-name my-stack-sdk
+hs sdk create rust my-stack --module  # Generate as module instead of crate
 ```
+
+**Options:**
+
+| Flag                    | Description                                      |
+| ----------------------- | ------------------------------------------------ |
+| `--output, -o <path>`   | Output directory path (overrides config)         |
+| `--crate-name <name>`   | Custom crate name for generated Rust crate       |
+| `--module`              | Generate as a module (mod.rs) instead of a standalone crate |
+
+The `--module` flag generates the SDK as a Rust module (with `mod.rs`) that can be embedded directly into an existing crate, rather than creating a standalone crate with its own `Cargo.toml`. This is useful for monorepo setups or when you want to include generated code within your own crate.
 
 ---
 
@@ -292,8 +303,11 @@ name = "my-project"
 
 # SDK generation settings
 [sdk]
-output_dir = "./generated"
-typescript_package = "@myorg/my-sdk"
+output_dir = "./generated"                              # Default output for both languages
+typescript_output_dir = "./frontend/src/generated"     # Override for TypeScript only
+rust_output_dir = "./crates/generated"                 # Override for Rust only
+typescript_package = "@myorg/my-sdk"                   # Package name for TypeScript
+rust_module_mode = false                               # Generate Rust SDKs as modules by default
 
 # Build preferences
 [build]
@@ -301,12 +315,28 @@ watch_by_default = true
 
 # Stack definitions
 # Auto-discovered from .hyperstack/*.ast.json
-# Define explicitly for custom naming:
+# Define explicitly for custom naming or per-stack overrides:
 [[stacks]]
 name = "my-game"
-ast = "SettlementGame"  # Entity name or path to .ast.json
+ast = "SettlementGame"                                 # Entity name or path to .ast.json
 description = "Settlement game tracking"
+typescript_output_file = "./src/generated/game.ts"    # Per-stack TypeScript output path
+rust_output_crate = "./crates/game-stack"             # Per-stack Rust output path
+rust_module = true                                     # Per-stack: generate as module instead of crate
 ```
+
+### SDK Configuration Options
+
+| Option | Scope | Description |
+| ------ | ----- | ----------- |
+| `output_dir` | `[sdk]` | Default output directory for both languages |
+| `typescript_output_dir` | `[sdk]` | Override output directory for TypeScript SDKs |
+| `rust_output_dir` | `[sdk]` | Override output directory for Rust SDKs |
+| `typescript_package` | `[sdk]` | Package name for generated TypeScript code |
+| `rust_module_mode` | `[sdk]` | Generate Rust SDKs as modules by default |
+| `typescript_output_file` | `[[stacks]]` | Per-stack TypeScript output file path |
+| `rust_output_crate` | `[[stacks]]` | Per-stack Rust output crate/module directory |
+| `rust_module` | `[[stacks]]` | Per-stack override for module vs crate generation |
 
 For most projects, you only need:
 
