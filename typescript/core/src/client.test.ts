@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseFrame, isSnapshotFrame } from './frame';
-import { deflate } from 'pako';
+import { gzip } from 'pako';
 
 describe('HyperStack SDK', () => {
   it('should export HyperStack class', async () => {
@@ -57,7 +57,7 @@ describe('Frame parsing', () => {
     }
   });
 
-  it('should decompress gzip-compressed snapshot frames', () => {
+  it('should decompress raw gzip binary frames', () => {
     const originalFrame = {
       mode: 'list',
       entity: 'test/list',
@@ -69,15 +69,12 @@ describe('Frame parsing', () => {
     };
 
     const jsonString = JSON.stringify(originalFrame);
-    const compressed = deflate(new TextEncoder().encode(jsonString));
-    const base64 = btoa(String.fromCharCode(...compressed));
+    const compressed = gzip(new TextEncoder().encode(jsonString));
 
-    const compressedFrame = JSON.stringify({
-      compressed: 'gzip',
-      data: base64,
-    });
+    expect(compressed[0]).toBe(0x1f);
+    expect(compressed[1]).toBe(0x8b);
 
-    const result = parseFrame(compressedFrame);
+    const result = parseFrame(compressed.buffer);
     expect(result.op).toBe('snapshot');
     expect(result.entity).toBe('test/list');
     expect(isSnapshotFrame(result)).toBe(true);
@@ -88,4 +85,5 @@ describe('Frame parsing', () => {
       expect(result.data[1].key).toBe('2');
     }
   });
+
 });

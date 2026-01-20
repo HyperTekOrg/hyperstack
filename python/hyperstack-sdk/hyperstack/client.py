@@ -141,9 +141,7 @@ class HyperStackClient:
             None
         """
         try:
-            text = message.decode("utf-8") if isinstance(message, bytes) else message
-
-            frame = Frame.from_dict(json.loads(text))
+            frame = Frame.from_message(message)
             logger.debug(
                 f"Frame: entity={frame.entity}, op={frame.op}, key={frame.key}"
             )

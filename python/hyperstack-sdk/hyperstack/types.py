@@ -1,9 +1,11 @@
-import base64
 import gzip
 import json
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass, field
+
+
+GZIP_MAGIC = bytes([0x1F, 0x8B])
 
 
 class Mode(str, Enum):
@@ -27,12 +29,18 @@ class ConnectionState(str, Enum):
     RECONNECTING = "reconnecting"
 
 
-def decompress_frame(data: Dict[str, Any]) -> Dict[str, Any]:
-    if data.get("compressed") == "gzip" and "data" in data:
-        compressed_bytes = base64.b64decode(data["data"])
-        decompressed = gzip.decompress(compressed_bytes)
-        return json.loads(decompressed.decode("utf-8"))
-    return data
+def is_gzip(data: bytes) -> bool:
+    return len(data) >= 2 and data[:2] == GZIP_MAGIC
+
+
+def parse_message(data: Union[bytes, str]) -> Dict[str, Any]:
+    if isinstance(data, bytes):
+        if is_gzip(data):
+            decompressed = gzip.decompress(data)
+            return json.loads(decompressed.decode("utf-8"))
+        data = data.decode("utf-8")
+
+    return json.loads(data)
 
 
 @dataclass
@@ -46,7 +54,6 @@ class Frame:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Frame":
-        data = decompress_frame(data)
         return cls(
             mode=data["mode"],
             entity=data.get("export") or data.get("entity", ""),
@@ -54,6 +61,18 @@ class Frame:
             key=data.get("key", ""),
             data=data.get("data", {}),
             append=data.get("append", []),
+        )
+
+    @classmethod
+    def from_message(cls, data: Union[bytes, str]) -> "Frame":
+        parsed = parse_message(data)
+        return cls(
+            mode=parsed["mode"],
+            entity=parsed.get("export") or parsed.get("entity", ""),
+            op=parsed["op"],
+            key=parsed.get("key", ""),
+            data=parsed.get("data", {}),
+            append=parsed.get("append", []),
         )
 
 

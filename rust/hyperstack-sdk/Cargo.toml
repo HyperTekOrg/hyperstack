@@ -18,7 +18,6 @@ native-tls = ["tokio-tungstenite/native-tls"]
 
 [dependencies]
 anyhow = "1.0"
-base64 = "0.22"
 flate2 = "1.0"
 futures-util = { version = "0.3", features = ["sink"] }
 pin-project-lite = "0.2"

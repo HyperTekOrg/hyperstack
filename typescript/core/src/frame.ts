@@ -26,40 +26,11 @@ export interface SnapshotFrame<T = unknown> {
 
 export type Frame<T = unknown> = EntityFrame<T> | SnapshotFrame<T>;
 
-interface CompressedFrame {
-  compressed: 'gzip';
-  data: string;
-}
+const GZIP_MAGIC_0 = 0x1f;
+const GZIP_MAGIC_1 = 0x8b;
 
-function isCompressedFrame(obj: unknown): obj is CompressedFrame {
-  return (
-    typeof obj === 'object' &&
-    obj !== null &&
-    (obj as CompressedFrame).compressed === 'gzip' &&
-    typeof (obj as CompressedFrame).data === 'string'
-  );
-}
-
-function decompressGzip(base64Data: string): string {
-  const binaryString = atob(base64Data);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  const decompressed = inflate(bytes);
-  return new TextDecoder().decode(decompressed);
-}
-
-function parseAndDecompress(jsonString: string): Frame {
-  const parsed = JSON.parse(jsonString);
-
-  if (isCompressedFrame(parsed)) {
-    const decompressedJson = decompressGzip(parsed.data);
-    const frame = JSON.parse(decompressedJson) as Frame;
-    return frame;
-  }
-
-  return parsed as Frame;
+function isGzipData(data: Uint8Array): boolean {
+  return data.length >= 2 && data[0] === GZIP_MAGIC_0 && data[1] === GZIP_MAGIC_1;
 }
 
 export function isSnapshotFrame<T>(frame: Frame<T>): frame is SnapshotFrame<T> {
@@ -68,12 +39,19 @@ export function isSnapshotFrame<T>(frame: Frame<T>): frame is SnapshotFrame<T> {
 
 export function parseFrame(data: ArrayBuffer | string): Frame {
   if (typeof data === 'string') {
-    return parseAndDecompress(data);
+    return JSON.parse(data) as Frame;
   }
 
-  const decoder = new TextDecoder('utf-8');
-  const jsonString = decoder.decode(data);
-  return parseAndDecompress(jsonString);
+  const bytes = new Uint8Array(data);
+
+  if (isGzipData(bytes)) {
+    const decompressed = inflate(bytes);
+    const jsonString = new TextDecoder().decode(decompressed);
+    return JSON.parse(jsonString) as Frame;
+  }
+
+  const jsonString = new TextDecoder('utf-8').decode(data);
+  return JSON.parse(jsonString) as Frame;
 }
 
 export async function parseFrameFromBlob(blob: Blob): Promise<Frame> {
