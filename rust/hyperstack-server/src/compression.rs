@@ -3,70 +3,95 @@
 //! Since tokio-tungstenite doesn't support permessage-deflate, we implement
 //! application-level gzip compression for large payloads (like snapshots).
 //!
-//! The compressed payload is sent as a JSON wrapper:
-//! ```json
-//! { "compressed": "gzip", "data": "<base64-encoded-gzip-data>" }
-//! ```
+//! Compressed payloads are sent as raw binary gzip data. Clients detect
+//! compression by checking for the gzip magic bytes (0x1f, 0x8b) at the
+//! start of binary WebSocket frames.
 //!
-//! Clients detect the `compressed` field and decompress accordingly.
+//! This approach eliminates the ~33% overhead of base64 encoding that was
+//! previously used with JSON-wrapped compressed data.
 
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
-use serde::Serialize;
 use std::io::Write;
 
 /// Minimum payload size (in bytes) before compression is applied.
 /// Payloads smaller than this are sent uncompressed.
 const COMPRESSION_THRESHOLD: usize = 1024; // 1KB
 
-/// Wrapper for compressed payloads sent over WebSocket.
-#[derive(Serialize)]
-struct CompressedFrame {
-    compressed: &'static str,
-    data: String,
+/// Result of attempting to compress a payload.
+#[derive(Debug)]
+pub enum CompressedPayload {
+    /// Payload was compressed - contains raw gzip bytes.
+    /// Should be sent as a binary WebSocket frame.
+    Compressed(Bytes),
+    /// Payload was not compressed - contains original JSON bytes.
+    /// Should be sent as a text WebSocket frame (or binary, both work).
+    Uncompressed(Bytes),
+}
+
+impl CompressedPayload {
+    /// Returns true if the payload is compressed.
+    pub fn is_compressed(&self) -> bool {
+        matches!(self, CompressedPayload::Compressed(_))
+    }
+
+    /// Consumes self and returns the inner bytes.
+    pub fn into_bytes(self) -> Bytes {
+        match self {
+            CompressedPayload::Compressed(b) => b,
+            CompressedPayload::Uncompressed(b) => b,
+        }
+    }
+
+    /// Returns a reference to the inner bytes.
+    pub fn as_bytes(&self) -> &Bytes {
+        match self {
+            CompressedPayload::Compressed(b) => b,
+            CompressedPayload::Uncompressed(b) => b,
+        }
+    }
 }
 
 /// Compress a payload if it exceeds the threshold.
 ///
-/// Returns the original bytes if:
+/// Returns `CompressedPayload::Uncompressed` if:
 /// - Payload is below threshold
 /// - Compression fails
 /// - Compressed size is larger than original (unlikely for JSON)
 ///
-/// Returns a compressed wrapper JSON if compression is beneficial.
-pub fn maybe_compress(payload: &[u8]) -> Bytes {
+/// Returns `CompressedPayload::Compressed` with raw gzip bytes if compression
+/// is beneficial. The gzip data starts with magic bytes 0x1f 0x8b which clients
+/// use to detect compression.
+pub fn maybe_compress(payload: &[u8]) -> CompressedPayload {
     if payload.len() < COMPRESSION_THRESHOLD {
-        return Bytes::copy_from_slice(payload);
+        return CompressedPayload::Uncompressed(Bytes::copy_from_slice(payload));
     }
 
     match compress_gzip(payload) {
         Ok(compressed) => {
             // Only use compression if it actually reduces size
-            // Account for base64 overhead (~33%) and JSON wrapper (~30 bytes)
-            let estimated_compressed_size = (compressed.len() * 4 / 3) + 40;
-            if estimated_compressed_size < payload.len() {
-                let frame = CompressedFrame {
-                    compressed: "gzip",
-                    data: BASE64.encode(&compressed),
-                };
-                match serde_json::to_vec(&frame) {
-                    Ok(json) => Bytes::from(json),
-                    Err(_) => Bytes::copy_from_slice(payload),
-                }
+            if compressed.len() < payload.len() {
+                CompressedPayload::Compressed(Bytes::from(compressed))
             } else {
-                Bytes::copy_from_slice(payload)
+                CompressedPayload::Uncompressed(Bytes::copy_from_slice(payload))
             }
         }
-        Err(_) => Bytes::copy_from_slice(payload),
+        Err(_) => CompressedPayload::Uncompressed(Bytes::copy_from_slice(payload)),
     }
 }
 
-/// Compress data using gzip.
 fn compress_gzip(data: &[u8]) -> std::io::Result<Vec<u8>> {
     let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
     encoder.write_all(data)?;
     encoder.finish()
+}
+
+/// Gzip magic bytes - used by clients to detect compressed frames.
+pub const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
+
+/// Check if bytes start with gzip magic bytes.
+pub fn is_gzip(data: &[u8]) -> bool {
+    data.len() >= 2 && data[0] == GZIP_MAGIC[0] && data[1] == GZIP_MAGIC[1]
 }
 
 #[cfg(test)]
@@ -78,12 +103,12 @@ mod tests {
     fn test_small_payload_not_compressed() {
         let small = b"hello";
         let result = maybe_compress(small);
-        assert_eq!(result.as_ref(), small);
+        assert!(!result.is_compressed());
+        assert_eq!(result.as_bytes().as_ref(), small);
     }
 
     #[test]
-    fn test_large_payload_compressed() {
-        // Create a large JSON payload similar to snapshots
+    fn test_large_payload_compressed_as_raw_gzip() {
         let entities: Vec<_> = (0..100)
             .map(|i| {
                 json!({
@@ -107,40 +132,42 @@ mod tests {
         let original_size = payload.len();
         let result = maybe_compress(&payload);
 
-        // Should be compressed
-        let result_str = std::str::from_utf8(&result).unwrap();
-        let parsed: serde_json::Value = serde_json::from_str(result_str).unwrap();
+        assert!(result.is_compressed());
 
-        assert_eq!(parsed["compressed"], "gzip");
-        assert!(parsed["data"].is_string());
-
-        // Compressed should be smaller
+        let bytes = result.as_bytes();
         assert!(
-            result.len() < original_size,
+            is_gzip(bytes),
+            "Compressed data should start with gzip magic bytes"
+        );
+
+        assert!(
+            bytes.len() < original_size,
             "Compressed {} should be < original {}",
-            result.len(),
+            bytes.len(),
             original_size
         );
 
         println!(
             "Original: {} bytes, Compressed: {} bytes, Ratio: {:.1}%",
             original_size,
-            result.len(),
-            (result.len() as f64 / original_size as f64) * 100.0
+            bytes.len(),
+            (bytes.len() as f64 / original_size as f64) * 100.0
         );
     }
 
     #[test]
-    fn test_incompressible_data_not_wrapped() {
-        // Random-ish data that doesn't compress well
-        // But still make it look like valid JSON so we can test the size comparison
-        let data: Vec<u8> = (0..2000).map(|i| (i % 256) as u8).collect();
+    fn test_gzip_magic_detection() {
+        assert!(is_gzip(&[0x1f, 0x8b, 0x08]));
+        assert!(!is_gzip(&[0x7b, 0x22]));
+        assert!(!is_gzip(&[0x1f]));
+        assert!(!is_gzip(&[]));
+    }
 
-        // This won't be valid JSON, so it will just return as-is due to size check
-        let result = maybe_compress(&data);
-
-        // For truly incompressible data, we should get the original back
-        // (either because compression failed or didn't help)
-        assert!(!result.is_empty());
+    #[test]
+    fn test_small_data_not_compressed() {
+        let data = b"small";
+        let result = maybe_compress(data);
+        assert!(!result.is_compressed());
+        assert_eq!(result.as_bytes().as_ref(), data);
     }
 }

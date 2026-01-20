@@ -528,7 +528,7 @@ async fn attach_client_to_bus(
                 if let Ok(json_payload) = serde_json::to_vec(&snapshot_frame) {
                     let payload = maybe_compress(&json_payload);
                     if client_manager
-                        .send_to_client_async(client_id, Arc::new(payload))
+                        .send_compressed_async(client_id, payload)
                         .await
                         .is_err()
                     {
@@ -661,7 +661,7 @@ async fn attach_client_to_bus(
                 if let Ok(json_payload) = serde_json::to_vec(&snapshot_frame) {
                     let payload = maybe_compress(&json_payload);
                     if client_manager
-                        .send_to_client_async(client_id, Arc::new(payload))
+                        .send_compressed_async(client_id, payload)
                         .await
                         .is_err()
                     {

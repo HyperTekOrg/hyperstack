@@ -1,4 +1,5 @@
 use super::subscription::Subscription;
+use crate::compression::CompressedPayload;
 use bytes::Bytes;
 use dashmap::DashMap;
 use futures_util::stream::SplitSink;
@@ -234,6 +235,33 @@ impl ClientManager {
         };
 
         let msg = Message::Binary((*data).clone());
+        sender
+            .send(msg)
+            .await
+            .map_err(|_| SendError::ClientDisconnected)
+    }
+
+    /// Send a potentially compressed payload to a client (async).
+    ///
+    /// Compressed payloads are sent as binary frames (raw gzip).
+    /// Uncompressed payloads are sent as text frames (JSON).
+    pub async fn send_compressed_async(
+        &self,
+        client_id: Uuid,
+        payload: CompressedPayload,
+    ) -> Result<(), SendError> {
+        let sender = {
+            let client = self
+                .clients
+                .get(&client_id)
+                .ok_or(SendError::ClientNotFound)?;
+            client.sender.clone()
+        };
+
+        let msg = match payload {
+            CompressedPayload::Compressed(bytes) => Message::Binary(bytes),
+            CompressedPayload::Uncompressed(bytes) => Message::Binary(bytes),
+        };
         sender
             .send(msg)
             .await
