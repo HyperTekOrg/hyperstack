@@ -1,24 +1,4 @@
-use serde::{Deserialize, Deserializer, Serialize};
-
-mod serde_helpers {
-    use serde::{Deserialize, Deserializer};
-
-    pub fn deserialize_number_from_any<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum NumOrNull {
-            Num(f64),
-            Null,
-        }
-        match NumOrNull::deserialize(deserializer)? {
-            NumOrNull::Num(n) => Ok(Some(n)),
-            NumOrNull::Null => Ok(None),
-        }
-    }
-}
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PumpfunTokenId {

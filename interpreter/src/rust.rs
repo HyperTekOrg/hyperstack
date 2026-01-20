@@ -111,8 +111,7 @@ pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState}};
 
     fn generate_types_rs(&self) -> String {
         let mut output = String::new();
-        output.push_str("use serde::{Deserialize, Deserializer, Serialize};\n\n");
-        output.push_str(&self.generate_serde_helpers());
+        output.push_str("use serde::{Deserialize, Serialize};\n\n");
 
         let mut generated = HashSet::new();
 
@@ -297,31 +296,6 @@ impl<T: Default> Default for EventWrapper<T> {
         }
     }
 }
-"#
-        .to_string()
-    }
-
-    fn generate_serde_helpers(&self) -> String {
-        r#"mod serde_helpers {
-    use serde::{Deserialize, Deserializer};
-
-    pub fn deserialize_number_from_any<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum NumOrNull {
-            Num(f64),
-            Null,
-        }
-        match NumOrNull::deserialize(deserializer)? {
-            NumOrNull::Num(n) => Ok(Some(n)),
-            NumOrNull::Null => Ok(None),
-        }
-    }
-}
-
 "#
         .to_string()
     }
