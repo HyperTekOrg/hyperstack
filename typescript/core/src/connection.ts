@@ -95,7 +95,6 @@ export class ConnectionManager {
 
             this.notifyFrameHandlers(frame);
           } catch (error) {
-            console.error('[hyperstack] Error parsing frame:', error);
             this.updateState('error', 'Failed to parse frame from server');
           }
         };
@@ -144,21 +143,16 @@ export class ConnectionManager {
 
     if (this.currentState === 'connected' && this.ws?.readyState === WebSocket.OPEN) {
       if (this.activeSubscriptions.has(subKey)) {
-        console.log('[hyperstack] Skipping already active subscription:', subKey);
         return;
       }
       const subMsg = { type: 'subscribe', ...subscription };
-      console.log('[hyperstack] Sending subscribe:', subKey);
       this.ws.send(JSON.stringify(subMsg));
       this.activeSubscriptions.add(subKey);
     } else {
       const alreadyQueued = this.subscriptionQueue.some(
         (s) => this.makeSubKey(s) === subKey
       );
-      if (alreadyQueued) {
-        console.log('[hyperstack] Skipping duplicate queue entry:', subKey);
-      } else {
-        console.log('[hyperstack] Queuing subscription:', subKey, '| Queue:', this.subscriptionQueue.map(s => this.makeSubKey(s)));
+      if (!alreadyQueued) {
         this.subscriptionQueue.push(subscription);
       }
     }
@@ -187,7 +181,6 @@ export class ConnectionManager {
   }
 
   private flushSubscriptionQueue(): void {
-    console.log('[hyperstack] Flushing subscription queue:', this.subscriptionQueue.map(s => this.makeSubKey(s)));
     while (this.subscriptionQueue.length > 0) {
       const sub = this.subscriptionQueue.shift();
       if (sub) {
@@ -197,7 +190,6 @@ export class ConnectionManager {
   }
 
   private resubscribeActive(): void {
-    console.log('[hyperstack] Resubscribing active:', Array.from(this.activeSubscriptions));
     for (const subKey of this.activeSubscriptions) {
       const [view, key, partition] = subKey.split(':');
       const subscription: Subscription = {
@@ -208,7 +200,6 @@ export class ConnectionManager {
 
       if (this.ws?.readyState === WebSocket.OPEN) {
         const subMsg = { type: 'subscribe', ...subscription };
-        console.log('[hyperstack] Resubscribe sending:', subKey);
         this.ws.send(JSON.stringify(subMsg));
       }
     }
