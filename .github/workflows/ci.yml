@@ -71,9 +71,6 @@ jobs:
   typescript-react:
     name: TypeScript React
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: typescript/react
     steps:
       - uses: actions/checkout@v4
 
@@ -81,16 +78,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: typescript/react/package-lock.json
+
+      - name: Build core dependency
+        working-directory: typescript/core
+        run: npm ci && npm run build
 
       - name: Install dependencies
+        working-directory: typescript/react
         run: npm ci
 
       - name: Build
+        working-directory: typescript/react
         run: npm run build
 
       - name: Test
+        working-directory: typescript/react
         run: npm test
 
   typescript-stacks:
