@@ -7,19 +7,19 @@ import type {
   StackDefinition,
   TypedViews,
 } from './types';
-import type { EntityStore } from './store';
+import type { StorageAdapter } from './storage/adapter';
 import type { SubscriptionRegistry } from './subscription';
 import { createUpdateStream, createRichUpdateStream } from './stream';
 
 export function createTypedStateView<T>(
   viewDef: ViewDef<T, 'state'>,
-  store: EntityStore,
+  storage: StorageAdapter,
   subscriptionRegistry: SubscriptionRegistry
 ): TypedStateView<T> {
   return {
     watch(key: string): AsyncIterable<Update<T>> {
       return createUpdateStream<T>(
-        store,
+        storage,
         subscriptionRegistry,
         { view: viewDef.view, key },
         key
@@ -28,7 +28,7 @@ export function createTypedStateView<T>(
 
     watchRich(key: string): AsyncIterable<RichUpdate<T>> {
       return createRichUpdateStream<T>(
-        store,
+        storage,
         subscriptionRegistry,
         { view: viewDef.view, key },
         key
@@ -36,35 +36,35 @@ export function createTypedStateView<T>(
     },
 
     async get(key: string): Promise<T | null> {
-      return store.get<T>(viewDef.view, key);
+      return storage.get<T>(viewDef.view, key);
     },
 
     getSync(key: string): T | null | undefined {
-      return store.getSync<T>(viewDef.view, key);
+      return storage.getSync<T>(viewDef.view, key);
     },
   };
 }
 
 export function createTypedListView<T>(
   viewDef: ViewDef<T, 'list'>,
-  store: EntityStore,
+  storage: StorageAdapter,
   subscriptionRegistry: SubscriptionRegistry
 ): TypedListView<T> {
   return {
     watch(): AsyncIterable<Update<T>> {
-      return createUpdateStream<T>(store, subscriptionRegistry, { view: viewDef.view });
+      return createUpdateStream<T>(storage, subscriptionRegistry, { view: viewDef.view });
     },
 
     watchRich(): AsyncIterable<RichUpdate<T>> {
-      return createRichUpdateStream<T>(store, subscriptionRegistry, { view: viewDef.view });
+      return createRichUpdateStream<T>(storage, subscriptionRegistry, { view: viewDef.view });
     },
 
     async get(): Promise<T[]> {
-      return store.getAll<T>(viewDef.view);
+      return storage.getAll<T>(viewDef.view);
     },
 
     getSync(): T[] | undefined {
-      return store.getAllSync<T>(viewDef.view);
+      return storage.getAllSync<T>(viewDef.view);
     },
   };
 }
@@ -80,7 +80,7 @@ type InferViewGroup<TGroup> = {
 
 export function createTypedViews<TStack extends StackDefinition>(
   stack: TStack,
-  store: EntityStore,
+  storage: StorageAdapter,
   subscriptionRegistry: SubscriptionRegistry
 ): TypedViews<TStack['views']> {
   const views = {} as Record<string, unknown>;
@@ -90,11 +90,11 @@ export function createTypedViews<TStack extends StackDefinition>(
     const typedGroup: Partial<InferViewGroup<typeof group>> = {};
 
     if (group.state) {
-      typedGroup.state = createTypedStateView(group.state, store, subscriptionRegistry) as never;
+      typedGroup.state = createTypedStateView(group.state, storage, subscriptionRegistry) as never;
     }
 
     if (group.list) {
-      typedGroup.list = createTypedListView(group.list, store, subscriptionRegistry) as never;
+      typedGroup.list = createTypedListView(group.list, storage, subscriptionRegistry) as never;
     }
 
     views[viewName] = typedGroup;

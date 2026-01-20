@@ -1,3 +1,4 @@
+import type { StoreApi, UseBoundStore } from 'zustand';
 import { useHyperstackContext } from './provider';
 import { createStateViewHook, createListViewHook } from './view-hooks';
 import { createTxMutationHook } from './tx-hooks';
@@ -12,6 +13,7 @@ import {
   ViewGroup
 } from './types';
 import { HyperstackRuntime } from './runtime';
+import type { HyperStackStore } from './zustand-adapter';
 
 type BuildViewInterface<TViews extends Record<string, ViewGroup>> = {
   [K in keyof TViews]: TViews[K] extends { state: ViewDef<infer S, 'state'>; list: ViewDef<infer L, 'list'> }
@@ -59,7 +61,7 @@ type StackClient<TStack extends StackDefinition> = {
         useMutation: () => UseMutationReturn;
       }
     : { useMutation: () => UseMutationReturn };
-  store: HyperstackRuntime['store'];
+  zustandStore: UseBoundStore<StoreApi<HyperStackStore>>;
   runtime: HyperstackRuntime;
 };
 
@@ -103,7 +105,7 @@ export function useHyperstack<TStack extends StackDefinition>(
   return {
     views,
     tx,
-    store: runtime.store,
+    zustandStore: runtime.zustandStore,
     runtime
   } as StackClient<TStack>;
 }

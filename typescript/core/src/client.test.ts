@@ -14,9 +14,14 @@ describe('HyperStack SDK', () => {
     expect(ConnectionManager).toBeDefined();
   });
 
-  it('should export EntityStore', async () => {
-    const { EntityStore } = await import('./index');
-    expect(EntityStore).toBeDefined();
+  it('should export MemoryAdapter', async () => {
+    const { MemoryAdapter } = await import('./index');
+    expect(MemoryAdapter).toBeDefined();
+  });
+
+  it('should export FrameProcessor', async () => {
+    const { FrameProcessor } = await import('./index');
+    expect(FrameProcessor).toBeDefined();
   });
 });
 

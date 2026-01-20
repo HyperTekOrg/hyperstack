@@ -57,13 +57,11 @@ export function createStateViewHook<T>(
 
       const data = useSyncExternalStore(
         (callback) => {
-          const unsubscribe = runtime.store.subscribe(() => {
-            callback();
-          });
+          const unsubscribe = runtime.zustandStore.subscribe(callback);
           return unsubscribe;
         },
         () => {
-          const rawData = runtime.store.getState().entities.get(viewDef.view)?.get(keyString);
+          const rawData = runtime.zustandStore.getState().entities.get(viewDef.view)?.get(keyString);
           return rawData as T | undefined;
         }
       );
@@ -144,13 +142,11 @@ export function createListViewHook<T>(
 
       const data = useSyncExternalStore(
         (callback) => {
-          const unsubscribe = runtime.store.subscribe(() => {
-            callback();
-          });
+          const unsubscribe = runtime.zustandStore.subscribe(callback);
           return unsubscribe;
         },
         () => {
-          const baseMap = runtime.store.getState().entities.get(viewDef.view) as Map<string, unknown> | undefined;
+          const baseMap = runtime.zustandStore.getState().entities.get(viewDef.view) as Map<string, unknown> | undefined;
 
           if (!baseMap) {
             if (cachedDataRef.current !== undefined) {
@@ -188,7 +184,7 @@ export function createListViewHook<T>(
             items = items.slice(0, params.limit);
           }
 
-          lastMapRef.current = runtime.store.getState().entities.get(viewDef.view) as Map<string, unknown> | undefined;
+          lastMapRef.current = runtime.zustandStore.getState().entities.get(viewDef.view) as Map<string, unknown> | undefined;
           cachedDataRef.current = items;
           return items;
         }

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, ReactNode, useSyncExternalStore } from 'react';
-import { HyperstackConfig, NetworkConfig, ConnectionState } from './types';
+import type { ConnectionState } from 'hyperstack-typescript';
+import type { HyperstackConfig, NetworkConfig } from './types';
 import { createRuntime, HyperstackRuntime } from './runtime';
 
 interface HyperstackContextValue {
@@ -61,7 +62,7 @@ export function HyperstackProvider({
   }, [config.network, config.websocketUrl]);
 
   const runtimeRef = useRef<HyperstackRuntime | null>(null);
-  
+
   if (!runtimeRef.current) {
     try {
       runtimeRef.current = createRuntime({
@@ -74,14 +75,14 @@ export function HyperstackProvider({
       throw error;
     }
   }
-  
+
   const runtime = runtimeRef.current;
 
   const isMountedRef = useRef(true);
-  
+
   useEffect(() => {
     isMountedRef.current = true;
-    
+
     if (config.autoConnect !== false) {
       try {
         runtime.connection.connect();
@@ -95,6 +96,7 @@ export function HyperstackProvider({
       setTimeout(() => {
         if (!isMountedRef.current) {
           try {
+            runtime.subscriptionRegistry.clear();
             runtime.connection.disconnect();
           } catch (error) {
             console.error('[Hyperstack] Failed to disconnect:', error);
@@ -128,11 +130,34 @@ export function useConnectionState(): ConnectionState {
   const { runtime } = useHyperstackContext();
   return useSyncExternalStore(
     (callback) => {
-      const unsubscribe = runtime.store.subscribe(() => {
-        callback();
-      });
+      const unsubscribe = runtime.zustandStore.subscribe(callback);
       return unsubscribe;
     },
-    () => runtime.store.getState().connectionState
+    () => runtime.zustandStore.getState().connectionState
+  );
+}
+
+export function useView<T>(viewPath: string): T[] {
+  const { runtime } = useHyperstackContext();
+  return useSyncExternalStore(
+    (callback) => runtime.zustandStore.subscribe(callback),
+    () => {
+      const viewMap = runtime.zustandStore.getState().entities.get(viewPath);
+      if (!viewMap) return [];
+      return Array.from(viewMap.values()) as T[];
+    }
+  );
+}
+
+export function useEntity<T>(viewPath: string, key: string): T | null {
+  const { runtime } = useHyperstackContext();
+  return useSyncExternalStore(
+    (callback) => runtime.zustandStore.subscribe(callback),
+    () => {
+      const viewMap = runtime.zustandStore.getState().entities.get(viewPath);
+      if (!viewMap) return null;
+      const value = viewMap.get(key);
+      return value !== undefined ? (value as T) : null;
+    }
   );
 }

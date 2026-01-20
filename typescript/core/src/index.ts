@@ -1,7 +1,13 @@
 export { HyperStack } from './client';
+export type { HyperStackOptionsWithStorage } from './client';
 export { ConnectionManager } from './connection';
-export { EntityStore } from './store';
 export { SubscriptionRegistry } from './subscription';
+
+export { FrameProcessor } from './frame-processor';
+export type { FrameProcessorConfig } from './frame-processor';
+
+export type { StorageAdapter, UpdateCallback, RichUpdateCallback, StorageAdapterConfig } from './storage/adapter';
+export { MemoryAdapter } from './storage/memory-adapter';
 
 export { parseFrame, parseFrameFromBlob, isValidFrame, isSnapshotFrame } from './frame';
 export type { EntityFrame, SnapshotFrame, SnapshotEntity, Frame, FrameMode, FrameOp } from './frame';
@@ -32,4 +38,4 @@ export type {
   ConnectionStateCallback,
 } from './types';
 
-export { DEFAULT_CONFIG, HyperStackError } from './types';
+export { DEFAULT_CONFIG, DEFAULT_MAX_ENTRIES_PER_VIEW, HyperStackError } from './types';

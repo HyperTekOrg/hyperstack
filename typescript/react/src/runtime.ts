@@ -1,6 +1,13 @@
-import { ConnectionManager } from './connection';
-import { createHyperStore } from './store';
-import { HyperstackConfig, Subscription, WalletAdapter } from './types';
+import type { StoreApi, UseBoundStore } from 'zustand';
+import {
+  ConnectionManager,
+  FrameProcessor,
+  SubscriptionRegistry,
+  type Subscription,
+  type Frame,
+} from 'hyperstack-typescript';
+import { ZustandAdapter, type HyperStackStore } from './zustand-adapter';
+import type { HyperstackConfig, WalletAdapter } from './types';
 
 export interface SubscriptionHandle {
   view: string;
@@ -10,36 +17,58 @@ export interface SubscriptionHandle {
 }
 
 export interface HyperstackRuntime {
-  store: ReturnType<typeof createHyperStore>;
+  zustandStore: UseBoundStore<StoreApi<HyperStackStore>>;
+  adapter: ZustandAdapter;
   connection: ConnectionManager;
+  subscriptionRegistry: SubscriptionRegistry;
   wallet?: WalletAdapter;
   subscribe(view: string, key?: string, filters?: Record<string, string>): SubscriptionHandle;
   unsubscribe(handle: SubscriptionHandle): void;
 }
 
 export function createRuntime(config: HyperstackConfig): HyperstackRuntime {
-  const store = createHyperStore({
-    websocketUrl: config.websocketUrl
+  const adapter = new ZustandAdapter();
+  const processor = new FrameProcessor(adapter, {
+    maxEntriesPerView: config.maxEntriesPerView,
   });
-  const connection = store.getState().connectionManager;
+
+  const connection = new ConnectionManager({
+    websocketUrl: config.websocketUrl,
+    reconnectIntervals: config.reconnectIntervals,
+    maxReconnectAttempts: config.maxReconnectAttempts,
+  });
+
+  const subscriptionRegistry = new SubscriptionRegistry(connection);
+
+  connection.onFrame((frame: Frame) => {
+    processor.handleFrame(frame);
+  });
+
+  connection.onStateChange((state, error) => {
+    adapter.setConnectionState(state, error);
+  });
 
   return {
-    store,
+    zustandStore: adapter.store,
+    adapter,
     connection,
+    subscriptionRegistry,
     wallet: config.wallet,
+
     subscribe(view: string, key?: string, filters?: Record<string, string>): SubscriptionHandle {
       const subscription: Subscription = { view, key, filters };
-      store.getState()._incRef(subscription);
+      const unsubscribe = subscriptionRegistry.subscribe(subscription);
 
       return {
         view,
         key,
         filters,
-        unsubscribe: () => store.getState()._decRef(subscription)
+        unsubscribe,
       };
     },
+
     unsubscribe(handle: SubscriptionHandle) {
       handle.unsubscribe();
-    }
+    },
   };
 }

@@ -1,5 +1,5 @@
 import type { Update, RichUpdate, Subscription, UnsubscribeFn } from './types';
-import type { EntityStore } from './store';
+import type { StorageAdapter } from './storage/adapter';
 import type { SubscriptionRegistry } from './subscription';
 
 const MAX_QUEUE_SIZE = 1000;
@@ -15,7 +15,7 @@ type RichUpdateQueueItem<T> = {
 };
 
 export function createUpdateStream<T>(
-  store: EntityStore,
+  storage: StorageAdapter,
   subscriptionRegistry: SubscriptionRegistry,
   subscription: Subscription,
   keyFilter?: string
@@ -24,7 +24,7 @@ export function createUpdateStream<T>(
     [Symbol.asyncIterator](): AsyncIterator<Update<T>> {
       const queue: UpdateQueueItem<T>[] = [];
       let waitingResolve: ((value: IteratorResult<Update<T>>) => void) | null = null;
-      let unsubscribeStore: UnsubscribeFn | null = null;
+      let unsubscribeStorage: UnsubscribeFn | null = null;
       let unsubscribeRegistry: UnsubscribeFn | null = null;
       let done = false;
 
@@ -50,13 +50,13 @@ export function createUpdateStream<T>(
       };
 
       const start = () => {
-        unsubscribeStore = store.onUpdate(handler);
+        unsubscribeStorage = storage.onUpdate(handler);
         unsubscribeRegistry = subscriptionRegistry.subscribe(subscription);
       };
 
       const cleanup = () => {
         done = true;
-        unsubscribeStore?.();
+        unsubscribeStorage?.();
         unsubscribeRegistry?.();
       };
 
@@ -93,7 +93,7 @@ export function createUpdateStream<T>(
 }
 
 export function createRichUpdateStream<T>(
-  store: EntityStore,
+  storage: StorageAdapter,
   subscriptionRegistry: SubscriptionRegistry,
   subscription: Subscription,
   keyFilter?: string
@@ -102,7 +102,7 @@ export function createRichUpdateStream<T>(
     [Symbol.asyncIterator](): AsyncIterator<RichUpdate<T>> {
       const queue: RichUpdateQueueItem<T>[] = [];
       let waitingResolve: ((value: IteratorResult<RichUpdate<T>>) => void) | null = null;
-      let unsubscribeStore: UnsubscribeFn | null = null;
+      let unsubscribeStorage: UnsubscribeFn | null = null;
       let unsubscribeRegistry: UnsubscribeFn | null = null;
       let done = false;
 
@@ -128,13 +128,13 @@ export function createRichUpdateStream<T>(
       };
 
       const start = () => {
-        unsubscribeStore = store.onRichUpdate(handler);
+        unsubscribeStorage = storage.onRichUpdate(handler);
         unsubscribeRegistry = subscriptionRegistry.subscribe(subscription);
       };
 
       const cleanup = () => {
         done = true;
-        unsubscribeStore?.();
+        unsubscribeStorage?.();
         unsubscribeRegistry?.();
       };
 

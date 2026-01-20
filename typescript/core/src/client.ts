@@ -8,24 +8,35 @@ import type {
 } from './types';
 import { HyperStackError } from './types';
 import { ConnectionManager } from './connection';
-import { EntityStore } from './store';
+import { FrameProcessor } from './frame-processor';
+import { MemoryAdapter } from './storage/memory-adapter';
+import type { StorageAdapter } from './storage/adapter';
 import { SubscriptionRegistry } from './subscription';
 import { createTypedViews } from './views';
-import type { EntityFrame } from './frame';
+import type { Frame } from './frame';
+
+export interface HyperStackOptionsWithStorage<TStack extends StackDefinition> extends HyperStackOptions<TStack> {
+  storage?: StorageAdapter;
+  maxEntriesPerView?: number | null;
+}
 
 export class HyperStack<TStack extends StackDefinition> {
   private readonly connection: ConnectionManager;
-  private readonly store: EntityStore;
+  private readonly storage: StorageAdapter;
+  private readonly processor: FrameProcessor;
   private readonly subscriptionRegistry: SubscriptionRegistry;
   private readonly _views: TypedViews<TStack['views']>;
   private readonly stack: TStack;
 
   private constructor(
     url: string,
-    options: HyperStackOptions<TStack>
+    options: HyperStackOptionsWithStorage<TStack>
   ) {
     this.stack = options.stack;
-    this.store = new EntityStore();
+    this.storage = options.storage ?? new MemoryAdapter();
+    this.processor = new FrameProcessor(this.storage, {
+      maxEntriesPerView: options.maxEntriesPerView,
+    });
     this.connection = new ConnectionManager({
       websocketUrl: url,
       reconnectIntervals: options.reconnectIntervals,
@@ -33,16 +44,16 @@ export class HyperStack<TStack extends StackDefinition> {
     });
     this.subscriptionRegistry = new SubscriptionRegistry(this.connection);
 
-    this.connection.onFrame((frame: EntityFrame) => {
-      this.store.handleFrame(frame);
+    this.connection.onFrame((frame: Frame) => {
+      this.processor.handleFrame(frame);
     });
 
-    this._views = createTypedViews(this.stack, this.store, this.subscriptionRegistry);
+    this._views = createTypedViews(this.stack, this.storage, this.subscriptionRegistry);
   }
 
   static async connect<T extends StackDefinition>(
     url: string,
-    options: HyperStackOptions<T>
+    options: HyperStackOptionsWithStorage<T>
   ): Promise<HyperStack<T>> {
     if (!url) {
       throw new HyperStackError('URL is required', 'INVALID_CONFIG');
@@ -72,11 +83,15 @@ export class HyperStack<TStack extends StackDefinition> {
     return this.stack.name;
   }
 
+  get store(): StorageAdapter {
+    return this.storage;
+  }
+
   onConnectionStateChange(callback: ConnectionStateCallback): UnsubscribeFn {
     return this.connection.onStateChange(callback);
   }
 
-  onFrame(callback: (frame: EntityFrame) => void): UnsubscribeFn {
+  onFrame(callback: (frame: Frame) => void): UnsubscribeFn {
     return this.connection.onFrame(callback);
   }
 
@@ -94,11 +109,11 @@ export class HyperStack<TStack extends StackDefinition> {
   }
 
   clearStore(): void {
-    this.store.clear();
+    this.storage.clear();
   }
 
-  getStore(): EntityStore {
-    return this.store;
+  getStore(): StorageAdapter {
+    return this.storage;
   }
 
   getConnection(): ConnectionManager {

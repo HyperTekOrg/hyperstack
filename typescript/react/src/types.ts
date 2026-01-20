@@ -1,81 +1,15 @@
-export interface EntityFrame<T = unknown> {
-  mode: 'state' | 'append' | 'list';
-  entity: string;
-  op: 'create' | 'upsert' | 'patch' | 'delete' | 'snapshot';
-  key: string;
-  data: T;
-  append?: string[];
-}
+export type {
+  ConnectionState,
+  Subscription,
+  Frame,
+  EntityFrame,
+  SnapshotFrame,
+  SnapshotEntity,
+  Update,
+  RichUpdate,
+} from 'hyperstack-typescript';
 
-export interface SnapshotEntity<T = unknown> {
-  key: string;
-  data: T;
-}
-
-export interface SnapshotFrame<T = unknown> {
-  mode: 'state' | 'append' | 'list';
-  entity: string;
-  op: 'snapshot';
-  data: SnapshotEntity<T>[];
-}
-
-export type Frame<T = unknown> = EntityFrame<T> | SnapshotFrame<T>;
-
-export function isSnapshotFrame<T>(frame: Frame<T>): frame is SnapshotFrame<T> {
-  return frame.op === 'snapshot';
-}
-
-export interface Subscription {
-  view: string;
-  key?: string;
-  partition?: string;
-  filters?: Record<string, string>;
-}
-
-export type ConnectionState =
-  | 'disconnected'
-  | 'connecting'
-  | 'connected'
-  | 'error'
-  | 'reconnecting';
-
-export interface HyperState<T = unknown> {
-  connectionState: ConnectionState;
-  lastError?: string;
-  entities: Map<string, Map<string, T>>;
-  recentFrames: EntityFrame<T>[];
-}
-
-export const DEFAULT_MAX_ENTRIES_PER_VIEW = 10_000;
-
-export interface HyperSDKConfig {
-  websocketUrl?: string;
-  reconnectIntervals?: number[];
-  maxReconnectAttempts?: number;
-  initialSubscriptions?: Subscription[];
-  autoSubscribeDefault?: boolean;
-  maxEntriesPerView?: number | null;
-}
-
-export const DEFAULT_CONFIG: HyperSDKConfig = {
-  websocketUrl: 'ws://localhost:8080',
-  reconnectIntervals: [1000, 2000, 4000, 8000, 16000],
-  maxReconnectAttempts: 5,
-  initialSubscriptions: [],
-  autoSubscribeDefault: true,
-  maxEntriesPerView: DEFAULT_MAX_ENTRIES_PER_VIEW,
-};
-
-export class HyperStreamError extends Error {
-  constructor(
-    message: string,
-    public code: string,
-    public details?: unknown
-  ) {
-    super(message);
-    this.name = 'HyperStreamError';
-  }
-}
+export { DEFAULT_MAX_ENTRIES_PER_VIEW } from 'hyperstack-typescript';
 
 export type ViewMode = 'state' | 'list';
 
@@ -115,6 +49,9 @@ export interface HyperstackConfig {
   apiKey?: string;
   autoConnect?: boolean;
   wallet?: WalletAdapter;
+  reconnectIntervals?: number[];
+  maxReconnectAttempts?: number;
+  maxEntriesPerView?: number | null;
 }
 
 export interface WalletAdapter {
