@@ -64,6 +64,14 @@ pub struct StackConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+
+    /// Override TypeScript output to a specific file path (e.g., "./src/pumpfun/index.ts")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub typescript_output_file: Option<String>,
+
+    /// Override Rust output to a specific crate directory (e.g., "./src/pumpfun")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rust_output_crate: Option<String>,
 }
 
 impl HyperstackConfig {
@@ -134,10 +142,17 @@ impl HyperstackConfig {
     pub fn get_typescript_output_path(
         &self,
         stack_name: &str,
+        stack_config: Option<&StackConfig>,
         override_path: Option<String>,
     ) -> PathBuf {
         if let Some(path) = override_path {
             return PathBuf::from(path);
+        }
+
+        if let Some(stack) = stack_config {
+            if let Some(ref file_path) = stack.typescript_output_file {
+                return PathBuf::from(file_path);
+            }
         }
 
         PathBuf::from(self.get_typescript_output_dir()).join(format!("{}-stack.ts", stack_name))
@@ -145,14 +160,21 @@ impl HyperstackConfig {
 
     pub fn get_rust_output_path(
         &self,
-        _stack_name: &str,
+        stack_name: &str,
+        stack_config: Option<&StackConfig>,
         override_path: Option<String>,
     ) -> PathBuf {
         if let Some(path) = override_path {
             return PathBuf::from(path);
         }
 
-        PathBuf::from(self.get_rust_output_dir())
+        if let Some(stack) = stack_config {
+            if let Some(ref crate_path) = stack.rust_output_crate {
+                return PathBuf::from(crate_path);
+            }
+        }
+
+        PathBuf::from(self.get_rust_output_dir()).join(format!("{}-stack", stack_name))
     }
 }
 

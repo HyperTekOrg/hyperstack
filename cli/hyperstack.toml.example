@@ -27,6 +27,8 @@ output_dir = "./generated"              # Default for both languages
 # name = "my-game"              # Custom name (optional - defaults to kebab-case of entity)
 # ast = "SettlementGame"        # Entity name from AST OR path to .ast.json file
 # description = "My game stack"  # Optional description
+# typescript_output_file = "./src/generated/my-game/index.ts"  # Override output file path
+# rust_output_crate = "./crates/my-game-stack"                 # Override output crate directory
 
 # Commands:
 #   hs init                           # Initialize project (auto-detects ASTs)

@@ -181,4 +181,5 @@ export const PUMPFUNTOKEN_STACK = {
 /** Type alias for the stack */
 export type PumpfunTokenStack = typeof PUMPFUNTOKEN_STACK;
 
+/** Default export for convenience */
 export default PUMPFUNTOKEN_STACK;

@@ -45,6 +45,8 @@ pub fn init(config_path: &str) -> Result<()> {
             name: Some(ast.stack_name.clone()),
             ast: ast.entity_name.clone(),
             description: None,
+            typescript_output_file: None,
+            rust_output_crate: None,
         })
         .collect();
 

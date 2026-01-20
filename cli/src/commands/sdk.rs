@@ -36,8 +36,8 @@ pub fn list(config_path: &str) -> Result<()> {
                 println!("    Description: {}", desc);
             }
 
-            let ts_output = cfg.get_typescript_output_path(name, None);
-            let rust_output = cfg.get_rust_output_path(name, None);
+            let ts_output = cfg.get_typescript_output_path(name, Some(stack), None);
+            let rust_output = cfg.get_rust_output_path(name, Some(stack), None);
             println!("    TypeScript: {}", ts_output.display());
             println!("    Rust: {}", rust_output.display());
             println!();
@@ -94,9 +94,8 @@ pub fn create_typescript(
             })?;
 
             let name = stack_config.name.as_deref().unwrap_or(&stack_config.ast);
-            let output = output_override
-                .map(|p| p.into())
-                .unwrap_or_else(|| cfg.get_typescript_output_path(name, None));
+            let output =
+                cfg.get_typescript_output_path(name, Some(stack_config), output_override.clone());
 
             let pkg = package_name_override
                 .or_else(|| cfg.sdk.as_ref().and_then(|s| s.typescript_package.clone()))
@@ -214,7 +213,7 @@ pub fn create_rust(
 
     let config = HyperstackConfig::load_optional(config_path)?;
 
-    let (ast, output_dir, crate_name) = find_stack_for_rust(
+    let (ast, crate_dir, crate_name) = find_stack_for_rust(
         stack_name,
         config.as_ref(),
         output_override,
@@ -231,7 +230,6 @@ pub fn create_rust(
         println!("  Program ID: {}", pid);
     }
 
-    let crate_dir = output_dir.join(&crate_name);
     println!("  Output: {}", crate_dir.display());
 
     println!("\n{} Generating Rust SDK...", "→".blue().bold());
@@ -275,42 +273,47 @@ fn find_stack_for_rust(
     output_override: Option<String>,
     crate_name_override: Option<String>,
 ) -> Result<(DiscoveredAst, std::path::PathBuf, String)> {
-    let ast = if let Some(cfg) = config {
+    let (ast, stack_config) = if let Some(cfg) = config {
         if let Some(stack_config) = cfg.find_stack(stack_name) {
-            find_ast_file(&stack_config.ast, None)?.ok_or_else(|| {
+            let ast = find_ast_file(&stack_config.ast, None)?.ok_or_else(|| {
                 anyhow::anyhow!(
                     "AST file not found for '{}'. Build your stack crate first.",
                     stack_config.ast
                 )
-            })?
+            })?;
+            (ast, Some(stack_config))
         } else {
-            find_ast_file(stack_name, None)?.ok_or_else(|| {
+            let ast = find_ast_file(stack_name, None)?.ok_or_else(|| {
                 anyhow::anyhow!(
                     "Stack '{}' not found.\n\
                      Make sure you've built your stack crate to generate .hyperstack/*.ast.json files.",
                     stack_name
                 )
-            })?
+            })?;
+            (ast, None)
         }
     } else {
-        find_ast_file(stack_name, None)?.ok_or_else(|| {
+        let ast = find_ast_file(stack_name, None)?.ok_or_else(|| {
             anyhow::anyhow!(
                 "Stack '{}' not found.\n\
                  Make sure you've built your stack crate to generate .hyperstack/*.ast.json files.",
                 stack_name
             )
-        })?
+        })?;
+        (ast, None)
     };
-
-    let output_dir = output_override
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| {
-            config
-                .map(|c| std::path::PathBuf::from(c.get_rust_output_dir()))
-                .unwrap_or_else(|| std::path::PathBuf::from("./generated"))
-        });
 
     let crate_name = crate_name_override.unwrap_or_else(|| format!("{}-stack", ast.stack_name));
 
-    Ok((ast, output_dir, crate_name))
+    let crate_dir = if let Some(cfg) = config {
+        cfg.get_rust_output_path(&ast.stack_name, stack_config, output_override)
+    } else {
+        output_override
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                std::path::PathBuf::from(format!("./generated/{}-stack", ast.stack_name))
+            })
+    };
+
+    Ok((ast, crate_dir, crate_name))
 }
