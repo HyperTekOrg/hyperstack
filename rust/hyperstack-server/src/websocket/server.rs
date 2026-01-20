@@ -1,11 +1,11 @@
 use crate::bus::BusManager;
 use crate::cache::EntityCache;
+use crate::compression::maybe_compress;
 use crate::view::ViewIndex;
 use crate::websocket::client_manager::ClientManager;
 use crate::websocket::frame::{Mode, SnapshotEntity, SnapshotFrame};
 use crate::websocket::subscription::{ClientMessage, Subscription};
 use anyhow::Result;
-use bytes::Bytes;
 use futures_util::StreamExt;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -505,9 +505,10 @@ async fn attach_client_to_bus(
                     op: "snapshot",
                     data: snapshot_entities,
                 };
-                if let Ok(payload) = serde_json::to_vec(&snapshot_frame) {
+                if let Ok(json_payload) = serde_json::to_vec(&snapshot_frame) {
+                    let payload = maybe_compress(&json_payload);
                     if client_manager
-                        .send_to_client_async(client_id, Arc::new(Bytes::from(payload)))
+                        .send_to_client_async(client_id, Arc::new(payload))
                         .await
                         .is_err()
                     {
@@ -637,9 +638,10 @@ async fn attach_client_to_bus(
                     op: "snapshot",
                     data: snapshot_entities,
                 };
-                if let Ok(payload) = serde_json::to_vec(&snapshot_frame) {
+                if let Ok(json_payload) = serde_json::to_vec(&snapshot_frame) {
+                    let payload = maybe_compress(&json_payload);
                     if client_manager
-                        .send_to_client_async(client_id, Arc::new(Bytes::from(payload)))
+                        .send_to_client_async(client_id, Arc::new(payload))
                         .await
                         .is_err()
                     {

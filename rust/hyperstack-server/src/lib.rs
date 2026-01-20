@@ -32,6 +32,7 @@
 
 pub mod bus;
 pub mod cache;
+pub mod compression;
 pub mod config;
 pub mod health;
 pub mod http_health;

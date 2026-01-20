@@ -1,3 +1,6 @@
+import base64
+import gzip
+import json
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
@@ -24,6 +27,14 @@ class ConnectionState(str, Enum):
     RECONNECTING = "reconnecting"
 
 
+def decompress_frame(data: Dict[str, Any]) -> Dict[str, Any]:
+    if data.get("compressed") == "gzip" and "data" in data:
+        compressed_bytes = base64.b64decode(data["data"])
+        decompressed = gzip.decompress(compressed_bytes)
+        return json.loads(decompressed.decode("utf-8"))
+    return data
+
+
 @dataclass
 class Frame:
     mode: str
@@ -35,11 +46,12 @@ class Frame:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Frame":
+        data = decompress_frame(data)
         return cls(
             mode=data["mode"],
             entity=data.get("export") or data.get("entity", ""),
             op=data["op"],
-            key=data["key"],
+            key=data.get("key", ""),
             data=data.get("data", {}),
             append=data.get("append", []),
         )

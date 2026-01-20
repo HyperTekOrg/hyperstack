@@ -7,6 +7,11 @@ members = [
     "cli",
     "rust/hyperstack-server",
     "rust/hyperstack-sdk",
+    "stacks/sdk/rust",
+]
+exclude = [
+    "stacks/pumpfun",
+    "examples/rust-client",
 ]
 
 [workspace.package]

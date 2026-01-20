@@ -1,9 +1,9 @@
-import type { EntityFrame } from './frame';
+import type { Frame } from './frame';
 import { parseFrame, parseFrameFromBlob } from './frame';
 import type { ConnectionState, Subscription, HyperStackConfig, ConnectionStateCallback } from './types';
 import { DEFAULT_CONFIG, HyperStackError } from './types';
 
-export type FrameHandler = <T>(frame: EntityFrame<T>) => void;
+export type FrameHandler = <T>(frame: Frame<T>) => void;
 
 export class ConnectionManager {
   private ws: WebSocket | null = null;
@@ -78,7 +78,9 @@ export class ConnectionManager {
 
         this.ws.onmessage = async (event) => {
           try {
-            let frame: EntityFrame;
+            let frame: Frame;
+
+            console.log('[hyperstack] onmessage received, data type:', typeof event.data, event.data instanceof Blob ? 'Blob' : event.data instanceof ArrayBuffer ? 'ArrayBuffer' : 'string');
 
             if (event.data instanceof ArrayBuffer) {
               frame = parseFrame(event.data);
@@ -93,8 +95,10 @@ export class ConnectionManager {
               );
             }
 
+            console.log('[hyperstack] Parsed frame:', { op: frame.op, entity: frame.entity });
             this.notifyFrameHandlers(frame);
           } catch (error) {
+            console.error('[hyperstack] Error parsing frame:', error);
             this.updateState('error', 'Failed to parse frame from server');
           }
         };
@@ -204,7 +208,7 @@ export class ConnectionManager {
     }
   }
 
-  private notifyFrameHandlers(frame: EntityFrame): void {
+  private notifyFrameHandlers(frame: Frame): void {
     for (const handler of this.frameHandlers) {
       handler(frame);
     }

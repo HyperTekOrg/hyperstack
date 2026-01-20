@@ -1240,7 +1240,9 @@ name = "hyperstack-sdk"
 version = "0.2.5"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "chrono",
+ "flate2",
  "futures-util",
  "pin-project-lite",
  "serde",
@@ -1257,8 +1259,10 @@ name = "hyperstack-server"
 version = "0.2.5"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "bytes",
  "dashmap",
+ "flate2",
  "futures-util",
  "hex",
  "http-body-util",
@@ -1284,6 +1288,15 @@ dependencies = [
  "yellowstone-vixen-core",
  "yellowstone-vixen-proto",
  "yellowstone-vixen-yellowstone-grpc-source",
+]
+
+[[package]]
+name = "hyperstack-stacks"
+version = "0.2.5"
+dependencies = [
+ "hyperstack-sdk",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

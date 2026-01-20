@@ -1,4 +1,43 @@
+import { inflate } from 'pako';
 import { ConnectionState, Frame, Subscription, HyperSDKConfig, DEFAULT_CONFIG } from './types';
+
+interface CompressedFrame {
+  compressed: 'gzip';
+  data: string;
+}
+
+function isCompressedFrame(obj: unknown): obj is CompressedFrame {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    (obj as CompressedFrame).compressed === 'gzip' &&
+    typeof (obj as CompressedFrame).data === 'string'
+  );
+}
+
+function decompressGzip(base64Data: string): string {
+  const binaryString = atob(base64Data);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  const decompressed = inflate(bytes);
+  return new TextDecoder().decode(decompressed);
+}
+
+function parseFrame(jsonString: string): Frame {
+  const parsed = JSON.parse(jsonString);
+
+  if (isCompressedFrame(parsed)) {
+    console.log('[hyperstack] Received compressed frame, decompressing...');
+    const decompressedJson = decompressGzip(parsed.data);
+    const frame = JSON.parse(decompressedJson) as Frame;
+    console.log('[hyperstack] Decompressed frame:', { op: frame.op, entity: frame.entity, dataLength: Array.isArray(frame.data) ? frame.data.length : 'n/a' });
+    return frame;
+  }
+
+  return parsed as Frame;
+}
 
 // Handler types for the ConnectionManager callbacks
 export type FrameHandler = <T>(frame: Frame<T>) => void;               // called when Frame arrives from WebSocket
@@ -87,7 +126,7 @@ export class ConnectionManager {
             const arrayBuffer = await event.data.arrayBuffer();
             frame = this.parseBinaryFrame(arrayBuffer);
           } else if (typeof event.data === 'string') {
-            frame = JSON.parse(event.data) as Frame;
+            frame = parseFrame(event.data);
           } else {
             throw new Error(`Unsupported message type: ${typeof event.data}`);
           }
@@ -185,7 +224,7 @@ export class ConnectionManager {
   private parseBinaryFrame(data: ArrayBuffer): Frame {
     const decoder = new TextDecoder('utf-8');
     const jsonString = decoder.decode(data);
-    return JSON.parse(jsonString) as Frame;
+    return parseFrame(jsonString);
   }
 
   // Internal state change handler - notifies store and triggers UI re-renders

@@ -130,6 +130,7 @@ export class EntityStore {
   }
 
   handleFrame<T>(frame: Frame<T>): void {
+    console.log('[hyperstack] handleFrame called:', { op: frame.op, entity: frame.entity, isSnapshot: isSnapshotFrame(frame) });
     if (isSnapshotFrame(frame)) {
       this.handleSnapshotFrame(frame);
       return;
@@ -139,6 +140,7 @@ export class EntityStore {
 
   private handleSnapshotFrame<T>(frame: SnapshotFrame<T>): void {
     const viewPath = frame.entity;
+    console.log('[hyperstack] handleSnapshotFrame:', { viewPath, entityCount: frame.data.length });
     let viewData = this.views.get(viewPath);
 
     if (!viewData) {
@@ -157,6 +159,7 @@ export class EntityStore {
       this.notifyRichUpdate(viewPath, entity.key, previousValue, entity.data, 'upsert');
     }
     this.enforceMaxEntries(viewData);
+    console.log('[hyperstack] handleSnapshotFrame complete, viewData size:', viewData.size);
   }
 
   private handleEntityFrame<T>(frame: EntityFrame<T>): void {

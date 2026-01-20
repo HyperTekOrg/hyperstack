@@ -42,12 +42,15 @@
     "zustand": "^4.0.0"
   },
   "dependencies": {
-    "hyperstack-typescript": "0.2.5",
+    "hyperstack-typescript": "file:../core",
+    "pako": "^2.1.0",
     "zustand": "^4.0.0"
   },
   "devDependencies": {
+    "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-typescript": "^11.0.0",
     "@types/jest": "^29.0.0",
+    "@types/pako": "^2.0.3",
     "@types/react": "^19.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",

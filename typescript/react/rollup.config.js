@@ -1,4 +1,5 @@
 import typescript from '@rollup/plugin-typescript';
+import resolve from '@rollup/plugin-node-resolve';
 import dts from 'rollup-plugin-dts';
 
 export default [
@@ -18,6 +19,7 @@ export default [
     ],
     external: ['react', 'zustand', 'zustand/middleware'],
     plugins: [
+      resolve(),
       typescript({
         tsconfig: './tsconfig.json',
         declaration: false,
