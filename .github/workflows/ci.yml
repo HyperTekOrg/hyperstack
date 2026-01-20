@@ -71,8 +71,6 @@ jobs:
   typescript-react:
     name: TypeScript React
     runs-on: ubuntu-latest
-    # Skip until hyperstack-typescript is published to npm
-    if: false
     defaults:
       run:
         working-directory: typescript/react
