@@ -34,6 +34,14 @@
     "typescript/core": {
       "release-type": "node",
       "component": "hyperstack-typescript"
+    },
+    "stacks/sdk/typescript": {
+      "release-type": "node",
+      "component": "hyperstack-stacks"
+    },
+    "stacks/sdk/rust": {
+      "release-type": "rust",
+      "component": "hyperstack-stacks"
     }
   },
   "plugins": [
@@ -57,7 +65,8 @@
         "hyperstack-cli",
         "hyperstack-server",
         "hyperstack-react",
-        "hyperstack-typescript"
+        "hyperstack-typescript",
+        "hyperstack-stacks"
       ]
     }
   ]

@@ -1,0 +1,19 @@
+[package]
+name = "hyperstack-stacks"
+version = "0.2.5"
+edition = "2021"
+description = "Protocol stacks for Hyperstack - ready-to-use Solana data streams"
+license = "MIT"
+repository = "https://github.com/HyperTekOrg/hyperstack"
+keywords = ["hyperstack", "solana", "blockchain", "streaming"]
+categories = ["api-bindings", "web-programming"]
+
+[features]
+default = ["pumpfun"]
+pumpfun = []
+full = ["pumpfun"]
+
+[dependencies]
+hyperstack-sdk = { version = "0.2", path = "../../../rust/hyperstack-sdk" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

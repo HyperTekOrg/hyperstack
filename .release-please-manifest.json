@@ -6,5 +6,7 @@
   "rust/hyperstack-sdk": "0.2.5",
   "rust/hyperstack-server": "0.2.5",
   "typescript/react": "0.2.5",
-  "typescript/core": "0.2.5"
+  "typescript/core": "0.2.5",
+  "stacks/sdk/typescript": "0.2.5",
+  "stacks/sdk/rust": "0.2.5"
 }

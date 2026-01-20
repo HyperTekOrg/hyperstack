@@ -1,0 +1,10 @@
+[project]
+name = "pumpfun"
+
+[sdk]
+typescript_output_dir = "../sdk/typescript/src/pumpfun"
+rust_output_dir = "../sdk/rust/src/pumpfun"
+
+[[stacks]]
+name = "pumpfun-token"
+ast = "PumpfunToken"
