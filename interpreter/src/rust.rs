@@ -66,7 +66,7 @@ pub fn write_rust_module(
     module_dir: &std::path::Path,
 ) -> Result<(), std::io::Error> {
     std::fs::create_dir_all(module_dir)?;
-    std::fs::write(module_dir.join("mod.rs"), &output.mod_rs())?;
+    std::fs::write(module_dir.join("mod.rs"), output.mod_rs())?;
     std::fs::write(module_dir.join("types.rs"), &output.types_rs)?;
     std::fs::write(module_dir.join("entity.rs"), &output.entity_rs)?;
     Ok(())
