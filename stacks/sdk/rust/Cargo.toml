@@ -1,10 +1,13 @@
 [package]
 name = "hyperstack-stacks"
 version = "0.2.5"
-edition = "2021"
-description = "Protocol stacks for Hyperstack - ready-to-use Solana data streams"
+edition.workspace = true
 license = "MIT"
-repository = "https://github.com/HyperTekOrg/hyperstack"
+repository.workspace = true
+authors.workspace = true
+description = "Protocol stacks for Hyperstack - ready-to-use Solana data streams"
+readme = "README.md"
+documentation = "https://docs.rs/hyperstack-stacks"
 keywords = ["hyperstack", "solana", "blockchain", "streaming"]
 categories = ["api-bindings", "web-programming"]
 
@@ -14,6 +17,6 @@ pumpfun = []
 full = ["pumpfun"]
 
 [dependencies]
-hyperstack-sdk = { version = "0.2", path = "../../../rust/hyperstack-sdk" }
+hyperstack-sdk = { version = "0.2.5", path = "../../../rust/hyperstack-sdk" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

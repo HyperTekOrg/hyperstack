@@ -18,7 +18,7 @@
       "require": "./dist/pumpfun/index.cjs"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsup",
     "prepublishOnly": "npm run build"
@@ -41,6 +41,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/HyperTekOrg/hyperstack.git",
-    "directory": "stacks/typescript"
+    "directory": "stacks/sdk/typescript"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

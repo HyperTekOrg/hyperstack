@@ -80,6 +80,12 @@ jobs:
         run: |
           cd cli
           cargo publish --allow-dirty || echo "Package may already be published"
+          sleep 30
+
+      - name: Publish hyperstack-stacks
+        run: |
+          cd stacks/sdk/rust
+          cargo publish --allow-dirty || echo "Package may already be published"
 
   publish-npm:
     name: Publish to npm
@@ -126,6 +132,25 @@ jobs:
       - name: Publish react
         run: npm publish --access public || echo "Package may already be published"
         working-directory: typescript/react
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Wait for npm registry to propagate
+      - name: Wait for npm propagation
+        run: sleep 30
+
+      # Publish hyperstack-stacks (after core is published since it depends on it)
+      - name: Install stacks dependencies
+        run: npm install
+        working-directory: stacks/sdk/typescript
+
+      - name: Build stacks
+        run: npm run build
+        working-directory: stacks/sdk/typescript
+
+      - name: Publish stacks
+        run: npm publish --access public || echo "Package may already be published"
+        working-directory: stacks/sdk/typescript
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

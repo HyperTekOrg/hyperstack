@@ -1,4 +1,4 @@
-use crate::types::PumpfunToken;
+use super::types::PumpfunToken;
 use hyperstack_sdk::Entity;
 
 pub struct PumpfunTokenEntity;
