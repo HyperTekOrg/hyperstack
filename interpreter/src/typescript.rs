@@ -447,7 +447,10 @@ export const {} = {{
 }} as const;
 
 /** Type alias for the stack */
-export type {}Stack = typeof {};"#,
+export type {}Stack = typeof {};
+
+/** Default export for convenience */
+export default {};"#,
             view_helpers,
             entity_pascal,
             export_name,
@@ -458,6 +461,7 @@ export type {}Stack = typeof {};"#,
             entity_pascal,
             self.entity_name,
             entity_pascal,
+            export_name,
             export_name
         )
     }
