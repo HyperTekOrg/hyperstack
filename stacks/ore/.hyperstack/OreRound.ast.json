@@ -3,7 +3,7 @@
   "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
   "idl": {
     "name": "ore",
-    "version": "3.7.5",
+    "version": "3.7.22",
     "accounts": [
       {
         "name": "Automation",
@@ -487,6 +487,7 @@
         "docs": [
           "Deploys SOL to selected squares for the current round.",
           "Automation PDA seeds: [\"automation\", authority].",
+          "Config PDA seeds: [\"config\"].",
           "Miner PDA seeds: [\"miner\", authority].",
           "Round PDA seeds: [\"round\", board.round_id]."
         ],
@@ -524,6 +525,14 @@
             "docs": []
           },
           {
+            "name": "config",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
             "name": "miner",
             "writable": true,
             "signer": false,
@@ -545,6 +554,14 @@
             "signer": false,
             "optional": false,
             "address": "11111111111111111111111111111111",
+            "docs": []
+          },
+          {
+            "name": "oreProgram",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
             "docs": []
           },
           {
@@ -1196,7 +1213,12 @@
             "docs": []
           }
         ],
-        "args": []
+        "args": [
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
       },
       {
         "name": "setAdmin",
@@ -1242,54 +1264,6 @@
         "args": [
           {
             "name": "admin",
-            "type": "publicKey"
-          }
-        ]
-      },
-      {
-        "name": "setFeeCollector",
-        "discriminator": [
-          16,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Updates the fee collector authority."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": false,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "config",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          }
-        ],
-        "args": [
-          {
-            "name": "feeCollector",
             "type": "publicKey"
           }
         ]
@@ -1386,54 +1360,6 @@
             "type": "u64"
           }
         ]
-      },
-      {
-        "name": "setBuffer",
-        "discriminator": [
-          18,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Updates the global buffer value."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": false,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "config",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          }
-        ],
-        "args": [
-          {
-            "name": "buffer",
-            "type": "u64"
-          }
-        ]
       }
     ],
     "types": [
@@ -1515,6 +1441,10 @@
             {
               "name": "end_slot",
               "type": "u64"
+            },
+            {
+              "name": "epoch_id",
+              "type": "u64"
             }
           ]
         }
@@ -1532,23 +1462,23 @@
               "type": "publicKey"
             },
             {
-              "name": "bury_authority",
+              "name": "buffer_a",
               "type": "publicKey"
             },
             {
-              "name": "fee_collector",
+              "name": "buffer_b",
               "type": "publicKey"
             },
             {
-              "name": "swap_program",
+              "name": "buffer_c",
               "type": "publicKey"
             },
             {
-              "name": "var_address",
+              "name": "buffer_d",
               "type": "publicKey"
             },
             {
-              "name": "buffer",
+              "name": "buffer_e",
               "type": "u64"
             }
           ]
@@ -1629,6 +1559,10 @@
             {
               "name": "lifetime_rewards_ore",
               "type": "u64"
+            },
+            {
+              "name": "lifetime_deployed",
+              "type": "u64"
             }
           ]
         }
@@ -1697,6 +1631,10 @@
               "type": "u64"
             },
             {
+              "name": "total_miners",
+              "type": "u64"
+            },
+            {
               "name": "total_vaulted",
               "type": "u64"
             },
@@ -1721,6 +1659,26 @@
             },
             {
               "name": "balance",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_a",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_b",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_c",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_d",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_e",
               "type": "u64"
             },
             {
@@ -1750,7 +1708,7 @@
               "type": "u64"
             },
             {
-              "name": "is_seeker",
+              "name": "buffer_f",
               "type": "u64"
             }
           ]
@@ -1766,6 +1724,10 @@
           "fields": [
             {
               "name": "balance",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_a",
               "type": "u64"
             },
             {
@@ -1785,15 +1747,19 @@
               }
             },
             {
+              "name": "buffer_b",
+              "type": "u64"
+            },
+            {
+              "name": "total_refined",
+              "type": "u64"
+            },
+            {
               "name": "total_staked",
               "type": "u64"
             },
             {
               "name": "total_unclaimed",
-              "type": "u64"
-            },
-            {
-              "name": "total_refined",
               "type": "u64"
             }
           ]
@@ -2464,6 +2430,13 @@
                 "is_array": false
               },
               {
+                "field_name": "total_miners",
+                "field_type": "u64",
+                "base_type": "Integer",
+                "is_optional": false,
+                "is_array": false
+              },
+              {
                 "field_name": "total_vaulted",
                 "field_type": "u64",
                 "base_type": "Integer",
@@ -2687,6 +2660,13 @@
           },
           {
             "field_name": "total_deployed",
+            "field_type": "u64",
+            "base_type": "Integer",
+            "is_optional": false,
+            "is_array": false
+          },
+          {
+            "field_name": "total_miners",
             "field_type": "u64",
             "base_type": "Integer",
             "is_optional": false,
@@ -3124,7 +3104,7 @@
       "result_type": "Option < bool >"
     }
   ],
-  "content_hash": "009d28a28237aa57372b5bf3dee74d0b8c26fd198b88f48820e82a457a6e53ea",
+  "content_hash": "4af16eabbe78878d07152faf8bc7ad871a9c642a21d55f94adabf4ed124409a5",
   "views": [
     {
       "id": "OreRound/latest",

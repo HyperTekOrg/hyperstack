@@ -1,5 +1,5 @@
 {
-  "version": "3.7.5",
+  "version": "3.7.22",
   "name": "ore",
   "instructions": [
     {
@@ -255,6 +255,7 @@
       "docs": [
         "Deploys SOL to selected squares for the current round.",
         "Automation PDA seeds: [\"automation\", authority].",
+        "Config PDA seeds: [\"config\"].",
         "Miner PDA seeds: [\"miner\", authority].",
         "Round PDA seeds: [\"round\", board.round_id]."
       ],
@@ -280,6 +281,11 @@
           "isSigner": false
         },
         {
+          "name": "config",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "miner",
           "isMut": true,
           "isSigner": false
@@ -294,6 +300,12 @@
           "isMut": false,
           "isSigner": false,
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "oreProgram",
+          "isMut": false,
+          "isSigner": false,
+          "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv"
         },
         {
           "name": "entropyVar",
@@ -745,7 +757,12 @@
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "setAdmin",
@@ -777,40 +794,6 @@
       "args": [
         {
           "name": "admin",
-          "type": "publicKey"
-        }
-      ]
-    },
-    {
-      "name": "setFeeCollector",
-      "discriminant": {
-        "type": "u8",
-        "value": 16
-      },
-      "docs": [
-        "Updates the fee collector authority."
-      ],
-      "accounts": [
-        {
-          "name": "signer",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "config",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false,
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "feeCollector",
           "type": "publicKey"
         }
       ]
@@ -879,40 +862,6 @@
         },
         {
           "name": "samples",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "setBuffer",
-      "discriminant": {
-        "type": "u8",
-        "value": 18
-      },
-      "docs": [
-        "Updates the global buffer value."
-      ],
-      "accounts": [
-        {
-          "name": "signer",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "config",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false,
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "buffer",
           "type": "u64"
         }
       ]
@@ -997,6 +946,10 @@
           {
             "name": "end_slot",
             "type": "u64"
+          },
+          {
+            "name": "epoch_id",
+            "type": "u64"
           }
         ]
       }
@@ -1024,23 +977,23 @@
             "type": "publicKey"
           },
           {
-            "name": "bury_authority",
+            "name": "buffer_a",
             "type": "publicKey"
           },
           {
-            "name": "fee_collector",
+            "name": "buffer_b",
             "type": "publicKey"
           },
           {
-            "name": "swap_program",
+            "name": "buffer_c",
             "type": "publicKey"
           },
           {
-            "name": "var_address",
+            "name": "buffer_d",
             "type": "publicKey"
           },
           {
-            "name": "buffer",
+            "name": "buffer_e",
             "type": "u64"
           }
         ]
@@ -1131,6 +1084,10 @@
           {
             "name": "lifetime_rewards_ore",
             "type": "u64"
+          },
+          {
+            "name": "lifetime_deployed",
+            "type": "u64"
           }
         ]
       }
@@ -1209,6 +1166,10 @@
             "type": "u64"
           },
           {
+            "name": "total_miners",
+            "type": "u64"
+          },
+          {
             "name": "total_vaulted",
             "type": "u64"
           },
@@ -1246,6 +1207,26 @@
             "type": "u64"
           },
           {
+            "name": "buffer_a",
+            "type": "u64"
+          },
+          {
+            "name": "buffer_b",
+            "type": "u64"
+          },
+          {
+            "name": "buffer_c",
+            "type": "u64"
+          },
+          {
+            "name": "buffer_d",
+            "type": "u64"
+          },
+          {
+            "name": "buffer_e",
+            "type": "u64"
+          },
+          {
             "name": "last_claim_at",
             "type": "i64"
           },
@@ -1272,7 +1253,7 @@
             "type": "u64"
           },
           {
-            "name": "is_seeker",
+            "name": "buffer_f",
             "type": "u64"
           }
         ]
@@ -1301,6 +1282,10 @@
             "type": "u64"
           },
           {
+            "name": "buffer_a",
+            "type": "u64"
+          },
+          {
             "name": "motherlode",
             "type": "u64"
           },
@@ -1317,15 +1302,19 @@
             }
           },
           {
+            "name": "buffer_b",
+            "type": "u64"
+          },
+          {
+            "name": "total_refined",
+            "type": "u64"
+          },
+          {
             "name": "total_staked",
             "type": "u64"
           },
           {
             "name": "total_unclaimed",
-            "type": "u64"
-          },
-          {
-            "name": "total_refined",
             "type": "u64"
           }
         ]
