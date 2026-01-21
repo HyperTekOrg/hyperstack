@@ -180,7 +180,6 @@ if (project.trailingSlash === "never")
         const onIdle =
           window.requestIdleCallback || ((cb) => setTimeout(cb, 1));
         onIdle(async () => {
-          // @ts-expect-error — Missing types for @pagefind/default-ui package.
           const { PagefindUI } = await import("@pagefind/default-ui");
           new PagefindUI({
             ...pagefindUserConfig,

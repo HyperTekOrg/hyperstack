@@ -1,0 +1,18 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    "types": ["@astrojs/starlight"],
+    "baseUrl": ".",
+    "paths": {
+      "virtual:starlight/*": [
+        "./node_modules/@astrojs/starlight/virtual.d.ts",
+        "./node_modules/@astrojs/starlight/virtual-internal.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*",
+    ".astro/types.d.ts",
+    "node_modules/@astrojs/starlight/*.d.ts"
+  ]
+}
