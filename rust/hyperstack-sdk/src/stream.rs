@@ -183,7 +183,7 @@ enum EntityStreamState<T> {
     },
     Subscribing {
         fut: Pin<Box<dyn Future<Output = ()> + Send>>,
-        store: SharedStore,
+        inner: BroadcastStream<StoreUpdate>,
     },
     Invalid,
     _Phantom(PhantomData<T>),
@@ -289,6 +289,10 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for EntityStre
                         unreachable!()
                     };
 
+                    // Subscribe to broadcast BEFORE sending subscription to server
+                    // This ensures we don't miss any frames that arrive during setup
+                    let inner = BroadcastStream::new(store.subscribe());
+
                     let conn = connection.clone();
                     let view = subscription_view.clone();
                     let key = subscription_key.clone();
@@ -296,19 +300,17 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for EntityStre
                         conn.ensure_subscription(&view, key.as_deref()).await;
                     });
 
-                    this.state = EntityStreamState::Subscribing { fut, store };
+                    this.state = EntityStreamState::Subscribing { fut, inner };
                     continue;
                 }
                 EntityStreamState::Subscribing { fut, .. } => match fut.as_mut().poll(cx) {
                     Poll::Ready(()) => {
-                        let EntityStreamState::Subscribing { store, .. } =
+                        let EntityStreamState::Subscribing { inner, .. } =
                             std::mem::replace(&mut this.state, EntityStreamState::Invalid)
                         else {
                             unreachable!()
                         };
-                        this.state = EntityStreamState::Active {
-                            inner: BroadcastStream::new(store.subscribe()),
-                        };
+                        this.state = EntityStreamState::Active { inner };
                         continue;
                     }
                     Poll::Pending => return Poll::Pending,
@@ -398,7 +400,7 @@ enum RichEntityStreamState<T> {
     },
     Subscribing {
         fut: Pin<Box<dyn Future<Output = ()> + Send>>,
-        store: SharedStore,
+        inner: BroadcastStream<StoreUpdate>,
     },
     Invalid,
     _Phantom(PhantomData<T>),
@@ -468,6 +470,10 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for RichEntity
                         unreachable!()
                     };
 
+                    // Subscribe to broadcast BEFORE sending subscription to server
+                    // This ensures we don't miss any frames that arrive during setup
+                    let inner = BroadcastStream::new(store.subscribe());
+
                     let conn = connection.clone();
                     let view = subscription_view.clone();
                     let key = subscription_key.clone();
@@ -475,19 +481,17 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for RichEntity
                         conn.ensure_subscription(&view, key.as_deref()).await;
                     });
 
-                    this.state = RichEntityStreamState::Subscribing { fut, store };
+                    this.state = RichEntityStreamState::Subscribing { fut, inner };
                     continue;
                 }
                 RichEntityStreamState::Subscribing { fut, .. } => match fut.as_mut().poll(cx) {
                     Poll::Ready(()) => {
-                        let RichEntityStreamState::Subscribing { store, .. } =
+                        let RichEntityStreamState::Subscribing { inner, .. } =
                             std::mem::replace(&mut this.state, RichEntityStreamState::Invalid)
                         else {
                             unreachable!()
                         };
-                        this.state = RichEntityStreamState::Active {
-                            inner: BroadcastStream::new(store.subscribe()),
-                        };
+                        this.state = RichEntityStreamState::Active { inner };
                         continue;
                     }
                     Poll::Pending => return Poll::Pending,

@@ -94,6 +94,53 @@ while let Some((name, pct)) = price_alerts.next().await {
 
 All operators are chainable and return streams that support the same operators.
 
+## Views API
+
+The Views API provides a unified interface for accessing state, list, and derived views. This is the recommended way to access views as it provides consistent ergonomics across all view types.
+
+```rust
+use hyperstack_sdk::prelude::*;
+use my_stack::{OreRound, OreRoundViews};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let hs = HyperStack::connect("wss://mainnet.hyperstack.xyz").await?;
+    
+    // Get a views accessor
+    let views = hs.views::<OreRoundViews>();
+    
+    // Access derived view (e.g., "latest" round)
+    let latest = views.latest().get().await;
+    println!("Latest round: {:?}", latest);
+    
+    // Access list view
+    let all_rounds = views.list().get().await;
+    println!("Found {} rounds", all_rounds.len());
+    
+    // Access state view by key
+    let specific = views.state().get("round_key").await;
+    
+    // Watch derived view for updates
+    let mut stream = views.latest().watch();
+    while let Some(update) = stream.next().await {
+        println!("Latest round updated: {:?}", update);
+    }
+    
+    Ok(())
+}
+```
+
+### View Types
+
+| View Type | Access Pattern | Returns |
+|-----------|---------------|---------|
+| State | `views.state().get(key)` | `Option<T>` |
+| List | `views.list().get()` | `Vec<T>` |
+| Derived Single | `views.{name}().get()` | `Option<T>` |
+| Derived Collection | `views.{name}().get()` | `Vec<T>` |
+
+All view types support `.watch()` for streaming updates.
+
 ## API Reference
 
 ### HyperStack Client

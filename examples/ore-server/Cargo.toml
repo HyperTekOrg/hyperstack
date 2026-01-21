@@ -8,6 +8,8 @@ publish = false
 name = "ore-server"
 path = "src/main.rs"
 
+[workspace]
+
 [dependencies]
 ore-stack = { path = "../../stacks/ore" }
 hyperstack-server = { path = "../../rust/hyperstack-server" }

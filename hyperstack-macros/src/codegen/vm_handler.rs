@@ -167,7 +167,6 @@ pub fn generate_vm_handler(
 
                 let static_keys_vec = &raw_update.accounts;
                 let event_type = value.event_type();
-
                 let event_value = value.to_value_with_accounts(static_keys_vec);
 
                 let bytecode = self.bytecode.clone();

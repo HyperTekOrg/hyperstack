@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 // Core AST Types
 // ============================================================================
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FieldPath {
     pub segments: Vec<String>,
     pub offsets: Option<Vec<usize>>,
@@ -377,6 +377,8 @@ pub struct SerializableStreamSpec {
     /// Used for deduplication and version tracking
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_hash: Option<String>,
+    #[serde(default)]
+    pub views: Vec<ViewDef>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -625,6 +627,131 @@ pub enum ComparisonOp {
 pub enum LogicalOp {
     And,
     Or,
+}
+
+// ============================================================================
+// View Pipeline Types - Composable View Definitions
+// ============================================================================
+
+/// Sort order for view transforms
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SortOrder {
+    #[default]
+    Asc,
+    Desc,
+}
+
+/// Comparison operators for predicates
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum CompareOp {
+    Eq,
+    Ne,
+    Gt,
+    Gte,
+    Lt,
+    Lte,
+}
+
+/// Value in a predicate comparison
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum PredicateValue {
+    /// Literal JSON value
+    Literal(serde_json::Value),
+    /// Dynamic runtime value (e.g., "now()" for current timestamp)
+    Dynamic(String),
+    /// Reference to another field
+    Field(FieldPath),
+}
+
+/// Predicate for filtering entities
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum Predicate {
+    /// Field comparison: field op value
+    Compare {
+        field: FieldPath,
+        op: CompareOp,
+        value: PredicateValue,
+    },
+    /// Logical AND of predicates
+    And(Vec<Predicate>),
+    /// Logical OR of predicates
+    Or(Vec<Predicate>),
+    /// Negation
+    Not(Box<Predicate>),
+    /// Field exists (is not null)
+    Exists { field: FieldPath },
+}
+
+/// Transform operation in a view pipeline
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ViewTransform {
+    /// Filter entities matching a predicate
+    Filter { predicate: Predicate },
+
+    /// Sort entities by a field
+    Sort {
+        key: FieldPath,
+        #[serde(default)]
+        order: SortOrder,
+    },
+
+    /// Take first N entities (after sort)
+    Take { count: usize },
+
+    /// Skip first N entities
+    Skip { count: usize },
+
+    /// Take only the first entity (after sort) - produces Single output
+    First,
+
+    /// Take only the last entity (after sort) - produces Single output
+    Last,
+
+    /// Get entity with maximum value for field - produces Single output
+    MaxBy { key: FieldPath },
+
+    /// Get entity with minimum value for field - produces Single output
+    MinBy { key: FieldPath },
+}
+
+/// Source for a view definition
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ViewSource {
+    /// Derive directly from entity mutations
+    Entity { name: String },
+    /// Derive from another view's output
+    View { id: String },
+}
+
+/// Output mode for a view
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub enum ViewOutput {
+    /// Multiple entities (list-like semantics)
+    #[default]
+    Collection,
+    /// Single entity (state-like semantics)
+    Single,
+    /// Keyed lookup by a specific field
+    Keyed { key_field: FieldPath },
+}
+
+/// Definition of a view in the pipeline
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ViewDef {
+    /// Unique view identifier (e.g., "OreRound/latest")
+    pub id: String,
+
+    /// Source this view derives from
+    pub source: ViewSource,
+
+    /// Pipeline of transforms to apply (in order)
+    #[serde(default)]
+    pub pipeline: Vec<ViewTransform>,
+
+    /// Output mode for this view
+    #[serde(default)]
+    pub output: ViewOutput,
 }
 
 // ============================================================================

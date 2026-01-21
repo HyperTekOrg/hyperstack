@@ -161,10 +161,10 @@ impl SharedStore {
     }
 
     pub async fn apply_frame(&self, frame: Frame) {
-        let entity_name = extract_entity_name(&frame.entity);
+        let view_path = &frame.entity;
         tracing::debug!(
-            "apply_frame: entity={}, key={}, op={}",
-            entity_name,
+            "apply_frame: view={}, key={}, op={}",
+            view_path,
             frame.key,
             frame.op,
         );
@@ -178,7 +178,7 @@ impl SharedStore {
 
         let mut views = self.views.write().await;
         let view_data = views
-            .entry(entity_name.to_string())
+            .entry(view_path.to_string())
             .or_insert_with(ViewData::new);
 
         let previous = view_data.entities.get(&frame.key).cloned();
@@ -209,7 +209,7 @@ impl SharedStore {
         };
 
         let _ = self.updates_tx.send(StoreUpdate {
-            view: entity_name.to_string(),
+            view: view_path.to_string(),
             key: frame.key,
             operation,
             data: current,
@@ -217,22 +217,22 @@ impl SharedStore {
             patch,
         });
 
-        self.mark_view_ready(entity_name).await;
+        self.mark_view_ready(view_path).await;
     }
 
     async fn apply_snapshot(&self, frame: &Frame) {
-        let entity_name = extract_entity_name(&frame.entity);
+        let view_path = &frame.entity;
         let snapshot_entities = parse_snapshot_entities(&frame.data);
 
         tracing::debug!(
-            "apply_snapshot: entity={}, count={}",
-            entity_name,
+            "apply_snapshot: view={}, count={}",
+            view_path,
             snapshot_entities.len()
         );
 
         let mut views = self.views.write().await;
         let view_data = views
-            .entry(entity_name.to_string())
+            .entry(view_path.to_string())
             .or_insert_with(ViewData::new);
 
         for entity in snapshot_entities {
@@ -240,7 +240,7 @@ impl SharedStore {
             view_data.insert(entity.key.clone(), entity.data.clone());
 
             let _ = self.updates_tx.send(StoreUpdate {
-                view: entity_name.to_string(),
+                view: view_path.to_string(),
                 key: entity.key,
                 operation: Operation::Upsert,
                 data: Some(entity.data),
@@ -251,7 +251,7 @@ impl SharedStore {
 
         self.enforce_max_entries(view_data);
         drop(views);
-        self.mark_view_ready(entity_name).await;
+        self.mark_view_ready(view_path).await;
     }
 
     pub async fn mark_view_ready(&self, view: &str) {
@@ -262,9 +262,7 @@ impl SharedStore {
     }
 
     pub async fn wait_for_view_ready(&self, view: &str, timeout: std::time::Duration) -> bool {
-        let entity_name = extract_entity_name(view);
-
-        if self.ready_views.read().await.contains(entity_name) {
+        if self.ready_views.read().await.contains(view) {
             return true;
         }
 
@@ -282,7 +280,7 @@ impl SharedStore {
                     if result.is_err() {
                         return false;
                     }
-                    if rx.borrow().contains(entity_name) {
+                    if rx.borrow().contains(view) {
                         return true;
                     }
                 }
@@ -327,10 +325,6 @@ impl SharedStore {
     pub fn subscribe(&self) -> broadcast::Receiver<StoreUpdate> {
         self.updates_tx.subscribe()
     }
-}
-
-fn extract_entity_name(view_path: &str) -> &str {
-    view_path.split('/').next().unwrap_or(view_path)
 }
 
 impl Default for SharedStore {

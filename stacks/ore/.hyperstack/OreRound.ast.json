@@ -3,7 +3,7 @@
   "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
   "idl": {
     "name": "ore",
-    "version": "3.7.5",
+    "version": "3.7.22",
     "accounts": [
       {
         "name": "Automation",
@@ -487,6 +487,7 @@
         "docs": [
           "Deploys SOL to selected squares for the current round.",
           "Automation PDA seeds: [\"automation\", authority].",
+          "Config PDA seeds: [\"config\"].",
           "Miner PDA seeds: [\"miner\", authority].",
           "Round PDA seeds: [\"round\", board.round_id]."
         ],
@@ -524,6 +525,14 @@
             "docs": []
           },
           {
+            "name": "config",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
             "name": "miner",
             "writable": true,
             "signer": false,
@@ -545,6 +554,14 @@
             "signer": false,
             "optional": false,
             "address": "11111111111111111111111111111111",
+            "docs": []
+          },
+          {
+            "name": "oreProgram",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
             "docs": []
           },
           {
@@ -1196,7 +1213,12 @@
             "docs": []
           }
         ],
-        "args": []
+        "args": [
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
       },
       {
         "name": "setAdmin",
@@ -1242,54 +1264,6 @@
         "args": [
           {
             "name": "admin",
-            "type": "publicKey"
-          }
-        ]
-      },
-      {
-        "name": "setFeeCollector",
-        "discriminator": [
-          16,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Updates the fee collector authority."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": false,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "config",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          }
-        ],
-        "args": [
-          {
-            "name": "feeCollector",
             "type": "publicKey"
           }
         ]
@@ -1386,54 +1360,6 @@
             "type": "u64"
           }
         ]
-      },
-      {
-        "name": "setBuffer",
-        "discriminator": [
-          18,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Updates the global buffer value."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": false,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "config",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          }
-        ],
-        "args": [
-          {
-            "name": "buffer",
-            "type": "u64"
-          }
-        ]
       }
     ],
     "types": [
@@ -1515,6 +1441,10 @@
             {
               "name": "end_slot",
               "type": "u64"
+            },
+            {
+              "name": "epoch_id",
+              "type": "u64"
             }
           ]
         }
@@ -1532,23 +1462,23 @@
               "type": "publicKey"
             },
             {
-              "name": "bury_authority",
+              "name": "buffer_a",
               "type": "publicKey"
             },
             {
-              "name": "fee_collector",
+              "name": "buffer_b",
               "type": "publicKey"
             },
             {
-              "name": "swap_program",
+              "name": "buffer_c",
               "type": "publicKey"
             },
             {
-              "name": "var_address",
+              "name": "buffer_d",
               "type": "publicKey"
             },
             {
-              "name": "buffer",
+              "name": "buffer_e",
               "type": "u64"
             }
           ]
@@ -1629,6 +1559,10 @@
             {
               "name": "lifetime_rewards_ore",
               "type": "u64"
+            },
+            {
+              "name": "lifetime_deployed",
+              "type": "u64"
             }
           ]
         }
@@ -1697,6 +1631,10 @@
               "type": "u64"
             },
             {
+              "name": "total_miners",
+              "type": "u64"
+            },
+            {
               "name": "total_vaulted",
               "type": "u64"
             },
@@ -1721,6 +1659,26 @@
             },
             {
               "name": "balance",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_a",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_b",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_c",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_d",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_e",
               "type": "u64"
             },
             {
@@ -1750,7 +1708,7 @@
               "type": "u64"
             },
             {
-              "name": "is_seeker",
+              "name": "buffer_f",
               "type": "u64"
             }
           ]
@@ -1766,6 +1724,10 @@
           "fields": [
             {
               "name": "balance",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_a",
               "type": "u64"
             },
             {
@@ -1785,15 +1747,19 @@
               }
             },
             {
+              "name": "buffer_b",
+              "type": "u64"
+            },
+            {
+              "name": "total_refined",
+              "type": "u64"
+            },
+            {
               "name": "total_staked",
               "type": "u64"
             },
             {
               "name": "total_unclaimed",
-              "type": "u64"
-            },
-            {
-              "name": "total_refined",
               "type": "u64"
             }
           ]
@@ -1850,7 +1816,7 @@
     ],
     "lookup_indexes": [
       {
-        "field_name": "id.round_address",
+        "field_name": "id.roundAddress",
         "temporal_field": null
       }
     ]
@@ -1876,7 +1842,7 @@
       },
       "mappings": [
         {
-          "target_path": "id.round_id",
+          "target_path": "id.roundId",
           "source": {
             "FromSource": {
               "path": {
@@ -1893,7 +1859,7 @@
           "population": "SetOnce"
         },
         {
-          "target_path": "id.round_address",
+          "target_path": "id.roundAddress",
           "source": {
             "FromSource": {
               "path": {
@@ -1910,7 +1876,7 @@
           "population": "SetOnce"
         },
         {
-          "target_path": "state.expires_at",
+          "target_path": "state.expiresAt",
           "source": {
             "FromSource": {
               "path": {
@@ -1944,7 +1910,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "state.total_deployed",
+          "target_path": "state.totalDeployed",
           "source": {
             "FromSource": {
               "path": {
@@ -1961,7 +1927,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "state.total_vaulted",
+          "target_path": "state.totalVaulted",
           "source": {
             "FromSource": {
               "path": {
@@ -1978,7 +1944,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "state.total_winnings",
+          "target_path": "state.totalWinnings",
           "source": {
             "FromSource": {
               "path": {
@@ -1995,7 +1961,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "results.top_miner",
+          "target_path": "results.topMiner",
           "source": {
             "FromSource": {
               "path": {
@@ -2012,7 +1978,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "results.top_miner_reward",
+          "target_path": "results.topMinerReward",
           "source": {
             "FromSource": {
               "path": {
@@ -2029,7 +1995,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "results.rent_payer",
+          "target_path": "results.rentPayer",
           "source": {
             "FromSource": {
               "path": {
@@ -2046,7 +2012,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "results.slot_hash",
+          "target_path": "results.slotHash",
           "source": {
             "FromSource": {
               "path": {
@@ -2063,7 +2029,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "round_snapshot",
+          "target_path": "roundSnapshot",
           "source": {
             "AsCapture": {
               "field_transforms": {
@@ -2100,7 +2066,7 @@
       },
       "mappings": [
         {
-          "target_path": "metrics.checkpoint_count",
+          "target_path": "metrics.checkpointCount",
           "source": {
             "FromSource": {
               "path": {
@@ -2141,7 +2107,7 @@
       },
       "mappings": [
         {
-          "target_path": "metrics.deploy_count",
+          "target_path": "metrics.deployCount",
           "source": {
             "FromSource": {
               "path": {
@@ -2158,7 +2124,7 @@
           "population": "Count"
         },
         {
-          "target_path": "metrics.total_deployed_sol",
+          "target_path": "metrics.totalDeployedSol",
           "source": {
             "FromSource": {
               "path": {
@@ -2464,6 +2430,13 @@
                 "is_array": false
               },
               {
+                "field_name": "total_miners",
+                "field_type": "u64",
+                "base_type": "Integer",
+                "is_optional": false,
+                "is_array": false
+              },
+              {
                 "field_name": "total_vaulted",
                 "field_type": "u64",
                 "base_type": "Integer",
@@ -2491,7 +2464,7 @@
     }
   ],
   "field_mappings": {
-    "id.round_address": {
+    "id.roundAddress": {
       "field_name": "round_address",
       "rust_type_name": "String",
       "base_type": "String",
@@ -2501,7 +2474,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "id.round_id": {
+    "id.roundId": {
       "field_name": "round_id",
       "rust_type_name": "u64",
       "base_type": "Integer",
@@ -2511,7 +2484,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "metrics.checkpoint_count": {
+    "metrics.checkpointCount": {
       "field_name": "checkpoint_count",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2521,7 +2494,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "metrics.deploy_count": {
+    "metrics.deployCount": {
       "field_name": "deploy_count",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2531,7 +2504,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "metrics.total_deployed_sol": {
+    "metrics.totalDeployedSol": {
       "field_name": "total_deployed_sol",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2541,7 +2514,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "results.did_hit_motherlode": {
+    "results.didHitMotherlode": {
       "field_name": "did_hit_motherlode",
       "rust_type_name": "Option < bool >",
       "base_type": "Boolean",
@@ -2551,7 +2524,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "results.rent_payer": {
+    "results.rentPayer": {
       "field_name": "rent_payer",
       "rust_type_name": "Option < String >",
       "base_type": "String",
@@ -2571,7 +2544,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "results.slot_hash": {
+    "results.slotHash": {
       "field_name": "slot_hash",
       "rust_type_name": "Option < String >",
       "base_type": "String",
@@ -2581,7 +2554,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "results.top_miner": {
+    "results.topMiner": {
       "field_name": "top_miner",
       "rust_type_name": "Option < String >",
       "base_type": "String",
@@ -2591,7 +2564,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "results.top_miner_reward": {
+    "results.topMinerReward": {
       "field_name": "top_miner_reward",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2601,7 +2574,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "results.winning_square": {
+    "results.winningSquare": {
       "field_name": "winning_square",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2611,7 +2584,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "round_snapshot": {
+    "roundSnapshot": {
       "field_name": "round_snapshot",
       "rust_type_name": "Option < generated_sdk :: accounts :: Round >",
       "base_type": "Object",
@@ -2693,6 +2666,13 @@
             "is_array": false
           },
           {
+            "field_name": "total_miners",
+            "field_type": "u64",
+            "base_type": "Integer",
+            "is_optional": false,
+            "is_array": false
+          },
+          {
             "field_name": "total_vaulted",
             "field_type": "u64",
             "base_type": "Integer",
@@ -2714,7 +2694,7 @@
         "enum_variants": []
       }
     },
-    "state.expires_at": {
+    "state.expiresAt": {
       "field_name": "expires_at",
       "rust_type_name": "Option < u64 >",
       "base_type": "Timestamp",
@@ -2734,7 +2714,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "state.total_deployed": {
+    "state.totalDeployed": {
       "field_name": "total_deployed",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2744,7 +2724,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "state.total_vaulted": {
+    "state.totalVaulted": {
       "field_name": "total_vaulted",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2754,7 +2734,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "state.total_winnings": {
+    "state.totalWinnings": {
       "field_name": "total_winnings",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2769,8 +2749,8 @@
   "instruction_hooks": [],
   "computed_fields": [
     "results.rng",
-    "results.winning_square",
-    "results.did_hit_motherlode"
+    "results.winningSquare",
+    "results.didHitMotherlode"
   ],
   "computed_field_specs": [
     {
@@ -3037,7 +3017,7 @@
       "result_type": "Option < u64 >"
     },
     {
-      "target_path": "results.winning_square",
+      "target_path": "results.winningSquare",
       "expression": {
         "MethodCall": {
           "expr": {
@@ -3073,7 +3053,7 @@
       "result_type": "Option < u64 >"
     },
     {
-      "target_path": "results.did_hit_motherlode",
+      "target_path": "results.didHitMotherlode",
       "expression": {
         "MethodCall": {
           "expr": {
@@ -3124,5 +3104,31 @@
       "result_type": "Option < bool >"
     }
   ],
-  "content_hash": "ccf6bbbc6b8694cd2aafa086de05534a2b595af9a52072bd3805eea7b6c9f91b"
+  "content_hash": "4af16eabbe78878d07152faf8bc7ad871a9c642a21d55f94adabf4ed124409a5",
+  "views": [
+    {
+      "id": "OreRound/latest",
+      "source": {
+        "Entity": {
+          "name": "OreRound"
+        }
+      },
+      "pipeline": [
+        {
+          "Sort": {
+            "key": {
+              "segments": [
+                "id",
+                "roundId"
+              ],
+              "offsets": null
+            },
+            "order": "desc"
+          }
+        },
+        "First"
+      ],
+      "output": "Single"
+    }
+  ]
 }

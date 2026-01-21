@@ -54,26 +54,50 @@ pub fn to_pascal_case(s: &str) -> String {
         .collect()
 }
 
-/// Convert a string to camelCase.
+/// Convert a string to camelCase (first letter lowercase).
 ///
-/// Splits on underscores and dots, capitalizing each word after the first.
+/// Splits on underscores, capitalizing each word after the first.
+/// Preserves dot separators for nested paths.
 ///
 /// # Examples
 ///
 /// ```ignore
-/// assert_eq!(to_camel_case("my_type_name"), "MyTypeName");
-/// assert_eq!(to_camel_case("section.field_name"), "SectionFieldName");
+/// assert_eq!(to_camel_case("my_type_name"), "myTypeName");
+/// assert_eq!(to_camel_case("round_id"), "roundId");
 /// ```
 pub fn to_camel_case(s: &str) -> String {
-    s.split(['_', '.'])
-        .map(|word| {
-            let mut c = word.chars();
-            match c.next() {
-                None => String::new(),
-                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-            }
-        })
-        .collect()
+    let mut result = String::new();
+    let mut capitalize_next = false;
+
+    for (i, c) in s.chars().enumerate() {
+        if c == '_' {
+            capitalize_next = true;
+        } else if capitalize_next {
+            result.push(c.to_ascii_uppercase());
+            capitalize_next = false;
+        } else if i == 0 {
+            result.push(c.to_ascii_lowercase());
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
+}
+
+/// Convert a dot-separated path to camelCase (each segment converted).
+///
+/// # Examples
+///
+/// ```ignore
+/// assert_eq!(to_camel_case_path("id.round_id"), "id.roundId");
+/// assert_eq!(to_camel_case_path("state.total_deployed"), "state.totalDeployed");
+/// ```
+pub fn to_camel_case_path(path: &str) -> String {
+    path.split('.')
+        .map(to_camel_case)
+        .collect::<Vec<_>>()
+        .join(".")
 }
 
 /// Convert a syn::Path to a string representation.
@@ -148,7 +172,21 @@ mod tests {
 
     #[test]
     fn test_to_camel_case() {
-        assert_eq!(to_camel_case("my_type_name"), "MyTypeName");
-        assert_eq!(to_camel_case("section.field_name"), "SectionFieldName");
+        assert_eq!(to_camel_case("my_type_name"), "myTypeName");
+        assert_eq!(to_camel_case("round_id"), "roundId");
+        assert_eq!(to_camel_case("total_deployed_sol"), "totalDeployedSol");
+    }
+
+    #[test]
+    fn test_to_camel_case_path() {
+        assert_eq!(to_camel_case_path("id.round_id"), "id.roundId");
+        assert_eq!(
+            to_camel_case_path("state.total_deployed"),
+            "state.totalDeployed"
+        );
+        assert_eq!(
+            to_camel_case_path("results.top_miner_reward"),
+            "results.topMinerReward"
+        );
     }
 }

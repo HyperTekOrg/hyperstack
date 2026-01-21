@@ -60,6 +60,7 @@ pub struct TypeScriptCompiler<S> {
     config: TypeScriptConfig,
     idl: Option<serde_json::Value>, // IDL for enum type generation
     handlers_json: Option<serde_json::Value>, // Raw handlers for event interface generation
+    views: Vec<ViewDef>,            // View definitions for derived views
 }
 
 impl<S> TypeScriptCompiler<S> {
@@ -70,6 +71,7 @@ impl<S> TypeScriptCompiler<S> {
             config: TypeScriptConfig::default(),
             idl: None,
             handlers_json: None,
+            views: Vec::new(),
         }
     }
 
@@ -85,6 +87,11 @@ impl<S> TypeScriptCompiler<S> {
 
     pub fn with_handlers_json(mut self, handlers: Option<serde_json::Value>) -> Self {
         self.handlers_json = handlers;
+        self
+    }
+
+    pub fn with_views(mut self, views: Vec<ViewDef>) -> Self {
+        self.views = views;
         self
     }
 
@@ -126,6 +133,11 @@ function stateView<T>(view: string): ViewDef<T, 'state'> {
 /** Helper to create typed list view definitions */
 function listView<T>(view: string): ViewDef<T, 'list'> {
   return { mode: 'list', view } as const;
+}
+
+/** Helper to create typed derived view definitions */
+function derivedView<T>(view: string, output: 'single' | 'collection'): ViewDef<T, 'state' | 'list'> {
+  return { mode: output === 'single' ? 'state' : 'list', view } as const;
 }"#
         .to_string()
     }
@@ -427,6 +439,7 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
         );
 
         let view_helpers = self.generate_view_helpers();
+        let derived_views = self.generate_derived_view_entries();
 
         format!(
             r#"{}
@@ -441,7 +454,7 @@ export const {} = {{
   views: {{
     {}: {{
       state: stateView<{}>('{}/state'),
-      list: listView<{}>('{}/list'),
+      list: listView<{}>('{}/list'),{}
     }},
   }},
 }} as const;
@@ -460,10 +473,49 @@ export default {};"#,
             self.entity_name,
             entity_pascal,
             self.entity_name,
+            derived_views,
             entity_pascal,
             export_name,
             export_name
         )
+    }
+
+    fn generate_derived_view_entries(&self) -> String {
+        let derived_views: Vec<&ViewDef> = self
+            .views
+            .iter()
+            .filter(|v| {
+                !v.id.ends_with("/state")
+                    && !v.id.ends_with("/list")
+                    && v.id.starts_with(&self.entity_name)
+            })
+            .collect();
+
+        if derived_views.is_empty() {
+            return String::new();
+        }
+
+        let entity_pascal = to_pascal_case(&self.entity_name);
+        let mut entries = Vec::new();
+
+        for view in derived_views {
+            let view_name = view.id.split('/').nth(1).unwrap_or("unknown");
+            let output_mode = match view.output {
+                ViewOutput::Single => "single",
+                ViewOutput::Collection => "collection",
+                ViewOutput::Keyed { .. } => "single",
+            };
+
+            entries.push(format!(
+                "\n      {}: derivedView<{}>('{}', '{}'),",
+                to_camel_case(view_name),
+                entity_pascal,
+                view.id,
+                output_mode
+            ));
+        }
+
+        entries.join("")
     }
 
     fn mapping_to_typescript_type(&self, mapping: &TypedFieldMapping<S>) -> String {
@@ -1160,22 +1212,20 @@ pub fn compile_serializable_spec(
     entity_name: String,
     config: Option<TypeScriptConfig>,
 ) -> Result<TypeScriptOutput, String> {
-    // Extract IDL and convert to serde_json::Value
     let idl = spec
         .idl
         .as_ref()
         .and_then(|idl_snapshot| serde_json::to_value(idl_snapshot).ok());
 
-    // Extract handlers as JSON
     let handlers = serde_json::to_value(&spec.handlers).ok();
+    let views = spec.views.clone();
 
-    // Convert SerializableStreamSpec to TypedStreamSpec
-    // We use () as the phantom type since it won't be used
     let typed_spec: TypedStreamSpec<()> = TypedStreamSpec::from_serializable(spec);
 
     let compiler = TypeScriptCompiler::new(typed_spec, entity_name)
         .with_idl(idl)
         .with_handlers_json(handlers)
+        .with_views(views)
         .with_config(config.unwrap_or_default());
 
     Ok(compiler.compile())
@@ -1204,5 +1254,76 @@ mod tests {
             "boolean"
         );
         assert_eq!(value_to_typescript_type(&serde_json::json!([])), "any[]");
+    }
+
+    #[test]
+    fn test_derived_view_codegen() {
+        let spec = SerializableStreamSpec {
+            state_name: "OreRound".to_string(),
+            program_id: None,
+            idl: None,
+            identity: IdentitySpec {
+                primary_keys: vec!["id".to_string()],
+                lookup_indexes: vec![],
+            },
+            handlers: vec![],
+            sections: vec![],
+            field_mappings: BTreeMap::new(),
+            resolver_hooks: vec![],
+            instruction_hooks: vec![],
+            computed_fields: vec![],
+            computed_field_specs: vec![],
+            content_hash: None,
+            views: vec![
+                ViewDef {
+                    id: "OreRound/latest".to_string(),
+                    source: ViewSource::Entity {
+                        name: "OreRound".to_string(),
+                    },
+                    pipeline: vec![ViewTransform::Last],
+                    output: ViewOutput::Single,
+                },
+                ViewDef {
+                    id: "OreRound/top10".to_string(),
+                    source: ViewSource::Entity {
+                        name: "OreRound".to_string(),
+                    },
+                    pipeline: vec![ViewTransform::Take { count: 10 }],
+                    output: ViewOutput::Collection,
+                },
+            ],
+        };
+
+        let output =
+            compile_serializable_spec(spec, "OreRound".to_string(), None).expect("should compile");
+
+        let stack_def = &output.stack_definition;
+
+        assert!(
+            stack_def.contains("derivedView<OreRound>('OreRound/latest', 'single')"),
+            "Expected 'latest' derived view with 'single' output, got:\n{}",
+            stack_def
+        );
+        assert!(
+            stack_def.contains("derivedView<OreRound>('OreRound/top10', 'collection')"),
+            "Expected 'top10' derived view with 'collection' output, got:\n{}",
+            stack_def
+        );
+        assert!(
+            stack_def.contains("latest:"),
+            "Expected 'latest' key, got:\n{}",
+            stack_def
+        );
+        assert!(
+            stack_def.contains("top10:"),
+            "Expected 'top10' key, got:\n{}",
+            stack_def
+        );
+        assert!(
+            stack_def
+                .contains("function derivedView<T>(view: string, output: 'single' | 'collection')"),
+            "Expected derivedView helper function, got:\n{}",
+            stack_def
+        );
     }
 }

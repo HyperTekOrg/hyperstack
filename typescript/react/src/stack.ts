@@ -5,6 +5,7 @@ import { createTxMutationHook } from './tx-hooks';
 import {
   StackDefinition,
   ViewDef,
+  ViewMode,
   TransactionDefinition,
   ViewHookOptions,
   ViewHookResult,
@@ -15,41 +16,33 @@ import {
 import { HyperstackRuntime } from './runtime';
 import type { HyperStackStore } from './zustand-adapter';
 
+type ViewHookForDef<TDef> = TDef extends ViewDef<infer T, 'state'>
+  ? {
+      use: (
+        key?: Record<string, string>,
+        options?: ViewHookOptions
+      ) => ViewHookResult<T>;
+    }
+  : TDef extends ViewDef<infer T, 'list'>
+  ? {
+      use: (
+        params?: ListParams,
+        options?: ViewHookOptions
+      ) => ViewHookResult<T[]>;
+    }
+  : TDef extends ViewDef<infer T, 'state' | 'list'>
+  ? {
+      use: (
+        keyOrParams?: Record<string, string> | ListParams,
+        options?: ViewHookOptions
+      ) => ViewHookResult<T | T[]>;
+    }
+  : never;
+
 type BuildViewInterface<TViews extends Record<string, ViewGroup>> = {
-  [K in keyof TViews]: TViews[K] extends { state: ViewDef<infer S, 'state'>; list: ViewDef<infer L, 'list'> }
-    ? {
-        state: {
-          use: (
-            key: Record<string, string>,
-            options?: ViewHookOptions
-          ) => ViewHookResult<S>;
-        };
-        list: {
-          use: (
-            params?: ListParams,
-            options?: ViewHookOptions
-          ) => ViewHookResult<L[]>;
-        };
-      }
-    : TViews[K] extends { state: ViewDef<infer S, 'state'> }
-    ? {
-        state: {
-          use: (
-            key: Record<string, string>,
-            options?: ViewHookOptions
-          ) => ViewHookResult<S>;
-        };
-      }
-    : TViews[K] extends { list: ViewDef<infer L, 'list'> }
-    ? {
-        list: {
-          use: (
-            params?: ListParams,
-            options?: ViewHookOptions
-          ) => ViewHookResult<L[]>;
-        };
-      }
-    : object;
+  [K in keyof TViews]: {
+    [SubK in keyof TViews[K] as TViews[K][SubK] extends ViewDef<unknown, ViewMode> ? SubK : never]: ViewHookForDef<TViews[K][SubK]>;
+  };
 };
 
 type StackClient<TStack extends StackDefinition> = {
@@ -82,12 +75,14 @@ export function useHyperstack<TStack extends StackDefinition>(
     if (typeof viewGroup === 'object' && viewGroup !== null) {
       const group = viewGroup as ViewGroup;
 
-      if (group.state) {
-        views[viewName]!.state = createStateViewHook(group.state, runtime);
-      }
+      for (const [subViewName, viewDef] of Object.entries(group)) {
+        if (!viewDef || typeof viewDef !== 'object' || !('mode' in viewDef)) continue;
 
-      if (group.list) {
-        views[viewName]!.list = createListViewHook(group.list, runtime);
+        if (viewDef.mode === 'state') {
+          views[viewName]![subViewName] = createStateViewHook(viewDef as ViewDef<unknown, 'state'>, runtime);
+        } else if (viewDef.mode === 'list') {
+          views[viewName]![subViewName] = createListViewHook(viewDef as ViewDef<unknown, 'list'>, runtime);
+        }
       }
     }
   }

@@ -17,7 +17,7 @@
 pub use crate::{
     Entity, EntityData, EntityStream, FilterMapStream, Filterable, FilteredStream, HyperStack,
     HyperStackBuilder, HyperStackConfig, HyperStackError, MapStream, RichEntityStream, RichUpdate,
-    Update,
+    StateView, Update, ViewBuilder, ViewHandle, ViewOutput, Views,
 };
 
 pub use futures_util::StreamExt;

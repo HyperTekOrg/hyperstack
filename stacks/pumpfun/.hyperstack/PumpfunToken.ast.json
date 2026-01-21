@@ -1899,7 +1899,7 @@
     ],
     "lookup_indexes": [
       {
-        "field_name": "id.bonding_curve",
+        "field_name": "id.bondingCurve",
         "temporal_field": null
       }
     ]
@@ -1925,7 +1925,7 @@
       },
       "mappings": [
         {
-          "target_path": "info.is_complete",
+          "target_path": "info.isComplete",
           "source": {
             "FromSource": {
               "path": {
@@ -1942,7 +1942,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "reserves.virtual_token_reserves",
+          "target_path": "reserves.virtualTokenReserves",
           "source": {
             "FromSource": {
               "path": {
@@ -1959,7 +1959,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "reserves.virtual_sol_reserves",
+          "target_path": "reserves.virtualSolReserves",
           "source": {
             "FromSource": {
               "path": {
@@ -1976,7 +1976,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "reserves.real_token_reserves",
+          "target_path": "reserves.realTokenReserves",
           "source": {
             "FromSource": {
               "path": {
@@ -1993,7 +1993,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "reserves.real_sol_reserves",
+          "target_path": "reserves.realSolReserves",
           "source": {
             "FromSource": {
               "path": {
@@ -2010,7 +2010,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "reserves.token_total_supply",
+          "target_path": "reserves.tokenTotalSupply",
           "source": {
             "FromSource": {
               "path": {
@@ -2027,7 +2027,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "bonding_curve_snapshot",
+          "target_path": "bondingCurveSnapshot",
           "source": {
             "AsCapture": {
               "field_transforms": {
@@ -2063,7 +2063,7 @@
       },
       "mappings": [
         {
-          "target_path": "trading.total_buy_volume",
+          "target_path": "trading.totalBuyVolume",
           "source": {
             "FromSource": {
               "path": {
@@ -2081,7 +2081,7 @@
           "population": "Sum"
         },
         {
-          "target_path": "trading.total_trades",
+          "target_path": "trading.totalTrades",
           "source": {
             "FromSource": {
               "path": {
@@ -2098,7 +2098,7 @@
           "population": "Count"
         },
         {
-          "target_path": "trading.buy_count",
+          "target_path": "trading.buyCount",
           "source": {
             "FromSource": {
               "path": {
@@ -2115,7 +2115,7 @@
           "population": "Count"
         },
         {
-          "target_path": "trading.unique_traders",
+          "target_path": "trading.uniqueTraders",
           "source": {
             "FromSource": {
               "path": {
@@ -2133,7 +2133,7 @@
           "population": "UniqueCount"
         },
         {
-          "target_path": "trading.largest_trade",
+          "target_path": "trading.largestTrade",
           "source": {
             "FromSource": {
               "path": {
@@ -2151,7 +2151,7 @@
           "population": "Max"
         },
         {
-          "target_path": "trading.smallest_trade",
+          "target_path": "trading.smallestTrade",
           "source": {
             "FromSource": {
               "path": {
@@ -2211,7 +2211,7 @@
           "population": "SetOnce"
         },
         {
-          "target_path": "id.bonding_curve",
+          "target_path": "id.bondingCurve",
           "source": {
             "FromSource": {
               "path": {
@@ -2307,7 +2307,7 @@
       },
       "mappings": [
         {
-          "target_path": "trading.total_sell_volume",
+          "target_path": "trading.totalSellVolume",
           "source": {
             "FromSource": {
               "path": {
@@ -2325,7 +2325,7 @@
           "population": "Sum"
         },
         {
-          "target_path": "trading.total_trades",
+          "target_path": "trading.totalTrades",
           "source": {
             "FromSource": {
               "path": {
@@ -2342,7 +2342,7 @@
           "population": "Count"
         },
         {
-          "target_path": "trading.sell_count",
+          "target_path": "trading.sellCount",
           "source": {
             "FromSource": {
               "path": {
@@ -2359,7 +2359,7 @@
           "population": "Count"
         },
         {
-          "target_path": "trading.unique_traders",
+          "target_path": "trading.uniqueTraders",
           "source": {
             "FromSource": {
               "path": {
@@ -2377,7 +2377,7 @@
           "population": "UniqueCount"
         },
         {
-          "target_path": "trading.largest_trade",
+          "target_path": "trading.largestTrade",
           "source": {
             "FromSource": {
               "path": {
@@ -2395,7 +2395,7 @@
           "population": "Max"
         },
         {
-          "target_path": "trading.smallest_trade",
+          "target_path": "trading.smallestTrade",
           "source": {
             "FromSource": {
               "path": {
@@ -3321,7 +3321,7 @@
     }
   ],
   "field_mappings": {
-    "bonding_curve_snapshot": {
+    "bondingCurveSnapshot": {
       "field_name": "bonding_curve_snapshot",
       "rust_type_name": "Option < generated_sdk :: accounts :: BondingCurve >",
       "base_type": "Object",
@@ -3768,7 +3768,7 @@
         "enum_variants": []
       }
     },
-    "id.bonding_curve": {
+    "id.bondingCurve": {
       "field_name": "bonding_curve",
       "rust_type_name": "String",
       "base_type": "String",
@@ -3788,7 +3788,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "info.is_complete": {
+    "info.isComplete": {
       "field_name": "is_complete",
       "rust_type_name": "Option < bool >",
       "base_type": "Boolean",
@@ -3828,7 +3828,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "reserves.current_price_sol": {
+    "reserves.currentPriceSol": {
       "field_name": "current_price_sol",
       "rust_type_name": "Option < f64 >",
       "base_type": "Float",
@@ -3838,7 +3838,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "reserves.market_cap_sol": {
+    "reserves.marketCapSol": {
       "field_name": "market_cap_sol",
       "rust_type_name": "Option < f64 >",
       "base_type": "Float",
@@ -3848,7 +3848,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "reserves.real_sol_reserves": {
+    "reserves.realSolReserves": {
       "field_name": "real_sol_reserves",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -3858,7 +3858,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "reserves.real_token_reserves": {
+    "reserves.realTokenReserves": {
       "field_name": "real_token_reserves",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -3868,7 +3868,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "reserves.token_total_supply": {
+    "reserves.tokenTotalSupply": {
       "field_name": "token_total_supply",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -3878,7 +3878,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "reserves.virtual_sol_reserves": {
+    "reserves.virtualSolReserves": {
       "field_name": "virtual_sol_reserves",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -3888,7 +3888,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "reserves.virtual_token_reserves": {
+    "reserves.virtualTokenReserves": {
       "field_name": "virtual_token_reserves",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -3898,7 +3898,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "trading.average_trade_size": {
+    "trading.averageTradeSize": {
       "field_name": "average_trade_size",
       "rust_type_name": "Option < f64 >",
       "base_type": "Float",
@@ -3908,7 +3908,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "trading.buy_count": {
+    "trading.buyCount": {
       "field_name": "buy_count",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -3918,7 +3918,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "trading.largest_trade": {
+    "trading.largestTrade": {
       "field_name": "largest_trade",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -3928,7 +3928,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "trading.last_trade_price": {
+    "trading.lastTradePrice": {
       "field_name": "last_trade_price",
       "rust_type_name": "Option < f64 >",
       "base_type": "Float",
@@ -3938,7 +3938,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "trading.last_trade_timestamp": {
+    "trading.lastTradeTimestamp": {
       "field_name": "last_trade_timestamp",
       "rust_type_name": "Option < i64 >",
       "base_type": "Timestamp",
@@ -3948,7 +3948,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "trading.last_whale_address": {
+    "trading.lastWhaleAddress": {
       "field_name": "last_whale_address",
       "rust_type_name": "Option < String >",
       "base_type": "String",
@@ -3958,7 +3958,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "trading.sell_count": {
+    "trading.sellCount": {
       "field_name": "sell_count",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -3968,7 +3968,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "trading.smallest_trade": {
+    "trading.smallestTrade": {
       "field_name": "smallest_trade",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -3978,7 +3978,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "trading.total_buy_volume": {
+    "trading.totalBuyVolume": {
       "field_name": "total_buy_volume",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -3988,7 +3988,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "trading.total_sell_volume": {
+    "trading.totalSellVolume": {
       "field_name": "total_sell_volume",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -3998,7 +3998,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "trading.total_trades": {
+    "trading.totalTrades": {
       "field_name": "total_trades",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -4008,7 +4008,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "trading.total_volume": {
+    "trading.totalVolume": {
       "field_name": "total_volume",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -4018,7 +4018,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "trading.unique_traders": {
+    "trading.uniqueTraders": {
       "field_name": "unique_traders",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -4028,7 +4028,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "trading.whale_trade_count": {
+    "trading.whaleTradeCount": {
       "field_name": "whale_trade_count",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -4106,7 +4106,7 @@
         },
         {
           "SetField": {
-            "target_field": "trading.last_trade_timestamp",
+            "target_field": "trading.lastTradeTimestamp",
             "source": {
               "FromContext": {
                 "field": "timestamp"
@@ -4117,7 +4117,7 @@
         },
         {
           "SetField": {
-            "target_field": "trading.last_whale_address",
+            "target_field": "trading.lastWhaleAddress",
             "source": {
               "FromSource": {
                 "path": {
@@ -4151,7 +4151,7 @@
         },
         {
           "IncrementField": {
-            "target_field": "trading.whale_trade_count",
+            "target_field": "trading.whaleTradeCount",
             "increment_by": 1,
             "condition": {
               "expression": "data.amount > 1_000_000_000_000",
@@ -4229,7 +4229,7 @@
         },
         {
           "SetField": {
-            "target_field": "trading.last_trade_timestamp",
+            "target_field": "trading.lastTradeTimestamp",
             "source": {
               "FromContext": {
                 "field": "timestamp"
@@ -4240,7 +4240,7 @@
         },
         {
           "SetField": {
-            "target_field": "trading.last_whale_address",
+            "target_field": "trading.lastWhaleAddress",
             "source": {
               "FromSource": {
                 "path": {
@@ -4274,7 +4274,7 @@
         },
         {
           "IncrementField": {
-            "target_field": "trading.whale_trade_count",
+            "target_field": "trading.whaleTradeCount",
             "increment_by": 1,
             "condition": {
               "expression": "data.amount > 1_000_000_000_000",
@@ -4305,13 +4305,13 @@
     }
   ],
   "computed_fields": [
-    "trading.last_trade_price",
-    "trading.total_volume",
-    "trading.average_trade_size"
+    "trading.lastTradePrice",
+    "trading.totalVolume",
+    "trading.averageTradeSize"
   ],
   "computed_field_specs": [
     {
-      "target_path": "trading.last_trade_price",
+      "target_path": "trading.lastTradePrice",
       "expression": {
         "Binary": {
           "op": "Div",
@@ -4370,7 +4370,7 @@
       "result_type": "Option < f64 >"
     },
     {
-      "target_path": "trading.total_volume",
+      "target_path": "trading.totalVolume",
       "expression": {
         "Binary": {
           "op": "Add",
@@ -4399,7 +4399,7 @@
       "result_type": "Option < u64 >"
     },
     {
-      "target_path": "trading.average_trade_size",
+      "target_path": "trading.averageTradeSize",
       "expression": {
         "Binary": {
           "op": "Div",
@@ -4450,5 +4450,6 @@
       "result_type": "Option < f64 >"
     }
   ],
-  "content_hash": "668e6bea1631e7d80a1a8aa9d1428dc8f0d6a593546915b105a3c745c1696214"
+  "content_hash": "a3fdc20af998c060b540517f52c0ce0b6cf72ec26abc0490f859adb473280330",
+  "views": []
 }

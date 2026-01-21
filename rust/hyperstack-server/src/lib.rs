@@ -36,11 +36,13 @@ pub mod compression;
 pub mod config;
 pub mod health;
 pub mod http_health;
+pub mod materialized_view;
 #[cfg(feature = "otel")]
 pub mod metrics;
 pub mod mutation_batch;
 pub mod projector;
 pub mod runtime;
+pub mod sorted_cache;
 pub mod telemetry;
 pub mod view;
 pub mod websocket;
@@ -53,6 +55,7 @@ pub use config::{
 };
 pub use health::{HealthMonitor, SlotTracker, StreamStatus};
 pub use http_health::HttpHealthServer;
+pub use materialized_view::{MaterializedView, MaterializedViewRegistry, ViewEffect};
 #[cfg(feature = "otel")]
 pub use metrics::Metrics;
 pub use mutation_batch::MutationBatch;
@@ -65,6 +68,7 @@ pub use view::{Delivery, Filters, Projection, ViewIndex, ViewSpec};
 pub use websocket::{ClientInfo, ClientManager, Frame, Mode, Subscription, WebSocketServer};
 
 use anyhow::Result;
+use hyperstack_interpreter::ast::ViewDef;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -85,6 +89,7 @@ pub struct Spec {
     pub bytecode: hyperstack_interpreter::compiler::MultiEntityBytecode,
     pub program_id: String,
     pub parser_setup: Option<ParserSetupFn>,
+    pub views: Vec<ViewDef>,
 }
 
 impl Spec {
@@ -96,12 +101,17 @@ impl Spec {
             bytecode,
             program_id: program_id.into(),
             parser_setup: None,
+            views: Vec::new(),
         }
     }
 
-    /// Add a parser setup function that will configure Vixen parsers
     pub fn with_parser_setup(mut self, setup_fn: ParserSetupFn) -> Self {
         self.parser_setup = Some(setup_fn);
+        self
+    }
+
+    pub fn with_views(mut self, views: Vec<ViewDef>) -> Self {
+        self.views = views;
         self
     }
 }
@@ -120,6 +130,7 @@ impl Server {
 pub struct ServerBuilder {
     spec: Option<Spec>,
     views: Option<ViewIndex>,
+    materialized_views: Option<MaterializedViewRegistry>,
     config: ServerConfig,
     #[cfg(feature = "otel")]
     metrics: Option<Arc<Metrics>>,
@@ -130,6 +141,7 @@ impl ServerBuilder {
         Self {
             spec: None,
             views: None,
+            materialized_views: None,
             config: ServerConfig::new(),
             #[cfg(feature = "otel")]
             metrics: None,
@@ -229,105 +241,114 @@ impl ServerBuilder {
         self
     }
 
-    /// Start the server (consumes the builder)
     pub async fn start(self) -> Result<()> {
-        // Use provided views or create default views from spec
-        let view_index = self.views.unwrap_or_else(|| {
-            let mut index = ViewIndex::new();
+        let (view_index, materialized_registry) =
+            Self::build_view_index_and_registry(self.views, self.materialized_views, &self.spec);
 
-            if let Some(ref spec) = self.spec {
-                for entity_name in spec.bytecode.entities.keys() {
-                    index.add_spec(ViewSpec {
-                        id: format!("{}/list", entity_name),
-                        export: entity_name.clone(),
-                        mode: Mode::List,
-                        projection: Projection::all(),
-                        filters: Filters::all(),
-                        delivery: Delivery::default(),
-                    });
-
-                    index.add_spec(ViewSpec {
-                        id: format!("{}/state", entity_name),
-                        export: entity_name.clone(),
-                        mode: Mode::State,
-                        projection: Projection::all(),
-                        filters: Filters::all(),
-                        delivery: Delivery::default(),
-                    });
-
-                    index.add_spec(ViewSpec {
-                        id: format!("{}/append", entity_name),
-                        export: entity_name.clone(),
-                        mode: Mode::Append,
-                        projection: Projection::all(),
-                        filters: Filters::all(),
-                        delivery: Delivery::default(),
-                    });
-                }
-            }
-
-            index
-        });
-
-        // Create runtime
         #[cfg(feature = "otel")]
         let mut runtime = Runtime::new(self.config, view_index, self.metrics);
         #[cfg(not(feature = "otel"))]
         let mut runtime = Runtime::new(self.config, view_index);
 
-        // Add spec if provided
+        if let Some(registry) = materialized_registry {
+            runtime = runtime.with_materialized_views(registry);
+        }
+
         if let Some(spec) = self.spec {
             runtime = runtime.with_spec(spec);
         }
 
-        // Run the server
         runtime.run().await
     }
 
-    /// Build the runtime without starting it
-    pub fn build(self) -> Result<Runtime> {
-        // Use provided views or create default views from spec
-        let view_index = self.views.unwrap_or_else(|| {
-            let mut index = ViewIndex::new();
+    fn build_view_index_and_registry(
+        views: Option<ViewIndex>,
+        materialized_views: Option<MaterializedViewRegistry>,
+        spec: &Option<Spec>,
+    ) -> (ViewIndex, Option<MaterializedViewRegistry>) {
+        let mut index = views.unwrap_or_default();
+        let mut registry = materialized_views;
 
-            if let Some(ref spec) = self.spec {
-                for entity_name in spec.bytecode.entities.keys() {
-                    index.add_spec(ViewSpec {
-                        id: format!("{}/list", entity_name),
-                        export: entity_name.clone(),
-                        mode: Mode::List,
-                        projection: Projection::all(),
-                        filters: Filters::all(),
-                        delivery: Delivery::default(),
-                    });
+        if let Some(ref spec) = spec {
+            for entity_name in spec.bytecode.entities.keys() {
+                index.add_spec(ViewSpec {
+                    id: format!("{}/list", entity_name),
+                    export: entity_name.clone(),
+                    mode: Mode::List,
+                    projection: Projection::all(),
+                    filters: Filters::all(),
+                    delivery: Delivery::default(),
+                    pipeline: None,
+                    source_view: None,
+                });
 
-                    index.add_spec(ViewSpec {
-                        id: format!("{}/state", entity_name),
-                        export: entity_name.clone(),
-                        mode: Mode::State,
-                        projection: Projection::all(),
-                        filters: Filters::all(),
-                        delivery: Delivery::default(),
-                    });
+                index.add_spec(ViewSpec {
+                    id: format!("{}/state", entity_name),
+                    export: entity_name.clone(),
+                    mode: Mode::State,
+                    projection: Projection::all(),
+                    filters: Filters::all(),
+                    delivery: Delivery::default(),
+                    pipeline: None,
+                    source_view: None,
+                });
 
-                    index.add_spec(ViewSpec {
-                        id: format!("{}/append", entity_name),
-                        export: entity_name.clone(),
-                        mode: Mode::Append,
-                        projection: Projection::all(),
-                        filters: Filters::all(),
-                        delivery: Delivery::default(),
-                    });
-                }
+                index.add_spec(ViewSpec {
+                    id: format!("{}/append", entity_name),
+                    export: entity_name.clone(),
+                    mode: Mode::Append,
+                    projection: Projection::all(),
+                    filters: Filters::all(),
+                    delivery: Delivery::default(),
+                    pipeline: None,
+                    source_view: None,
+                });
             }
 
-            index
-        });
+            if !spec.views.is_empty() {
+                let reg = registry.get_or_insert_with(MaterializedViewRegistry::new);
+
+                for view_def in &spec.views {
+                    let export = match &view_def.source {
+                        hyperstack_interpreter::ast::ViewSource::Entity { name } => name.clone(),
+                        hyperstack_interpreter::ast::ViewSource::View { id } => {
+                            id.split('/').next().unwrap_or(id).to_string()
+                        }
+                    };
+
+                    let view_spec = ViewSpec::from_view_def(view_def, &export);
+                    let pipeline = view_spec.pipeline.clone().unwrap_or_default();
+                    let source_id = view_spec.source_view.clone().unwrap_or_default();
+                    tracing::debug!(
+                        view_id = %view_def.id,
+                        source = %source_id,
+                        "Registering derived view"
+                    );
+
+                    index.add_spec(view_spec);
+
+                    let materialized =
+                        MaterializedView::new(view_def.id.clone(), source_id, pipeline);
+                    reg.register(materialized);
+                }
+            }
+        }
+
+        (index, registry)
+    }
+
+    pub fn build(self) -> Result<Runtime> {
+        let (view_index, materialized_registry) =
+            Self::build_view_index_and_registry(self.views, self.materialized_views, &self.spec);
 
         #[cfg(feature = "otel")]
         let mut runtime = Runtime::new(self.config, view_index, self.metrics);
         #[cfg(not(feature = "otel"))]
         let mut runtime = Runtime::new(self.config, view_index);
+
+        if let Some(registry) = materialized_registry {
+            runtime = runtime.with_materialized_views(registry);
+        }
 
         if let Some(spec) = self.spec {
             runtime = runtime.with_spec(spec);

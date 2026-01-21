@@ -253,7 +253,9 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
 
     let to_value_with_accounts_arms = idl.instructions.iter().map(|ix| {
         let variant_name = format_ident!("{}", to_pascal_case(&ix.name));
+        let ix_name = &ix.name;
         let account_names: Vec<_> = ix.accounts.iter().map(|acc| &acc.name).collect();
+        let expected_count = account_names.len();
 
         quote! {
             #ix_enum_name::#variant_name(data) => {
@@ -263,6 +265,19 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
 
                 if let Some(obj) = value.as_object_mut() {
                     let account_names = vec![#(#account_names),*];
+                    let expected_count = #expected_count;
+                    let actual_count = accounts.len();
+                    
+                    // Warn if account count doesn't match IDL expectation
+                    if actual_count != expected_count {
+                        hyperstack::runtime::tracing::warn!(
+                            instruction = #ix_name,
+                            expected = expected_count,
+                            actual = actual_count,
+                            "Account count mismatch - IDL may be out of sync with program. Update your IDL to match the current program version."
+                        );
+                    }
+                    
                     let mut accounts_obj = hyperstack::runtime::serde_json::Map::new();
                     for (i, name) in account_names.iter().enumerate() {
                         if i < accounts.len() {

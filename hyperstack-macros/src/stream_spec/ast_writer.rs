@@ -21,7 +21,7 @@ use crate::ast::{
 use crate::parse;
 use crate::parse::conditions as condition_parser;
 use crate::parse::idl as idl_parser;
-use crate::utils::path_to_string;
+use crate::utils::{path_to_string, to_camel_case_path};
 
 use super::computed::{parse_computed_expression, qualify_field_refs};
 use super::handlers::{find_field_in_instruction, get_join_on_field};
@@ -51,6 +51,7 @@ use super::handlers::{find_field_in_instruction, get_join_on_field};
 /// * `computed_fields` - Computed field definitions
 /// * `section_specs` - Entity section specifications
 /// * `idl` - Optional IDL specification for field resolution
+/// * `views` - View definitions for derived views
 #[allow(clippy::too_many_arguments)]
 pub fn build_ast(
     entity_name: &str,
@@ -65,6 +66,7 @@ pub fn build_ast(
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     section_specs: &[EntitySection],
     idl: Option<&idl_parser::IdlSpec>,
+    views: Vec<crate::ast::ViewDef>,
 ) -> SerializableStreamSpec {
     // Build handlers from sources and events
     let handlers = build_handlers(
@@ -84,10 +86,9 @@ pub fn build_ast(
         sources_by_type,
     );
 
-    // Extract computed field paths
     let computed_field_paths: Vec<String> = computed_fields
         .iter()
-        .map(|(path, _, _)| path.clone())
+        .map(|(path, _, _)| to_camel_case_path(path))
         .collect();
 
     // Extract program_id and convert IDL to snapshot for embedding
@@ -116,7 +117,7 @@ pub fn build_ast(
             };
 
             ComputedFieldSpec {
-                target_path: target_path.clone(),
+                target_path: to_camel_case_path(target_path),
                 expression: qualified_expression,
                 result_type,
             }
@@ -129,9 +130,9 @@ pub fn build_ast(
         for field_info in &section.fields {
             // Handle root-level fields (no section prefix)
             let field_path = if section.name == "root" {
-                field_info.field_name.clone()
+                to_camel_case_path(&field_info.field_name)
             } else {
-                format!("{}.{}", section.name, field_info.field_name)
+                to_camel_case_path(&format!("{}.{}", section.name, field_info.field_name))
             };
             field_mappings.insert(field_path, field_info.clone());
         }
@@ -146,7 +147,7 @@ pub fn build_ast(
             lookup_indexes: lookup_indexes
                 .iter()
                 .map(|(field_name, temporal_field)| LookupIndexSpec {
-                    field_name: field_name.clone(),
+                    field_name: to_camel_case_path(field_name),
                     temporal_field: temporal_field.clone(),
                 })
                 .collect(),
@@ -159,6 +160,7 @@ pub fn build_ast(
         computed_fields: computed_field_paths,
         computed_field_specs,
         content_hash: None,
+        views,
     };
     // Compute and set the content hash
     spec.content_hash = Some(spec.compute_content_hash());
@@ -187,19 +189,17 @@ pub fn write_ast_at_compile_time(
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     section_specs: &[EntitySection],
     idl: Option<&idl_parser::IdlSpec>,
+    views: Vec<crate::ast::ViewDef>,
 ) {
-    // Only write if CARGO_MANIFEST_DIR is set (i.e., we're in a build)
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
         let ast_dir = std::path::Path::new(&manifest_dir).join(".hyperstack");
 
-        // Create directory
         if std::fs::create_dir_all(&ast_dir).is_err() {
-            return; // Silently fail if we can't create the directory
+            return;
         }
 
         let ast_file = ast_dir.join(format!("{}.ast.json", entity_name));
 
-        // Build the AST using shared function
         let ast = build_ast(
             entity_name,
             primary_keys,
@@ -213,9 +213,9 @@ pub fn write_ast_at_compile_time(
             computed_fields,
             section_specs,
             idl,
+            views,
         );
 
-        // Serialize and write
         if let Ok(json) = serde_json::to_string_pretty(&ast) {
             let _ = std::fs::write(&ast_file, json);
             eprintln!("Generated AST: {}", ast_file.display());
@@ -224,11 +224,6 @@ pub fn write_ast_at_compile_time(
 }
 
 /// Build AST and write to disk, returning the AST for code generation.
-///
-/// This is the main entry point for stream_spec processing. It:
-/// 1. Builds the `SerializableStreamSpec` from parsed attributes
-/// 2. Writes the AST to disk for cloud compilation
-/// 3. Returns the AST for inline code generation
 #[allow(clippy::too_many_arguments)]
 pub fn build_and_write_ast(
     entity_name: &str,
@@ -243,8 +238,8 @@ pub fn build_and_write_ast(
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     section_specs: &[EntitySection],
     idl: Option<&idl_parser::IdlSpec>,
+    views: Vec<crate::ast::ViewDef>,
 ) -> SerializableStreamSpec {
-    // Build the AST
     let ast = build_ast(
         entity_name,
         primary_keys,
@@ -258,9 +253,9 @@ pub fn build_and_write_ast(
         computed_fields,
         section_specs,
         idl,
+        views,
     );
 
-    // Write to disk
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
         let ast_dir = std::path::Path::new(&manifest_dir).join(".hyperstack");
 
@@ -442,7 +437,7 @@ fn build_source_handler(
         let population = parse_population_strategy(&mapping.strategy);
 
         serializable_mappings.push(SerializableFieldMapping {
-            target_path: mapping.target_field_name.clone(),
+            target_path: to_camel_case_path(&mapping.target_field_name),
             source,
             transform: None,
             population,
@@ -686,7 +681,7 @@ fn build_event_handler(
         let population = parse_population_strategy(&event_attr.strategy);
 
         serializable_mappings.push(SerializableFieldMapping {
-            target_path: target_field.clone(),
+            target_path: to_camel_case_path(target_field),
             source,
             transform: None,
             population,
@@ -914,7 +909,7 @@ fn build_instruction_hooks_ast(
             });
 
             let action = HookAction::SetField {
-                target_field: derive_attr.target_field_name.clone(),
+                target_field: to_camel_case_path(&derive_attr.target_field_name),
                 source,
                 condition,
             };
@@ -965,7 +960,7 @@ fn build_instruction_hooks_ast(
 
                     if mapping.strategy == "Count" {
                         let action = HookAction::IncrementField {
-                            target_field: field_path.clone(),
+                            target_field: to_camel_case_path(field_path),
                             increment_by: 1,
                             condition: Some(condition),
                         };

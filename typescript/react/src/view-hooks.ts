@@ -7,11 +7,11 @@ export function createStateViewHook<T>(
   runtime: HyperstackRuntime
 ) {
   return {
-    use: (key: Record<string, string>, options?: ViewHookOptions): ViewHookResult<T> => {
+    use: (key?: Record<string, string>, options?: ViewHookOptions): ViewHookResult<T> => {
       const [isLoading, setIsLoading] = useState(!options?.initialData);
       const [error, setError] = useState<Error | undefined>();
 
-      const keyString = Object.values(key)[0];
+      const keyString = key ? Object.values(key)[0] : undefined;
       const enabled = options?.enabled !== false;
 
       useEffect(() => {
@@ -61,8 +61,15 @@ export function createStateViewHook<T>(
           return unsubscribe;
         },
         () => {
-          const rawData = runtime.zustandStore.getState().entities.get(viewDef.view)?.get(keyString);
-          return rawData as T | undefined;
+          const viewMap = runtime.zustandStore.getState().entities.get(viewDef.view);
+          if (!viewMap) return undefined;
+          
+          if (keyString) {
+            return viewMap.get(keyString) as T | undefined;
+          }
+          
+          const firstEntry = viewMap.values().next();
+          return firstEntry.done ? undefined : (firstEntry.value as T);
         }
       );
 
