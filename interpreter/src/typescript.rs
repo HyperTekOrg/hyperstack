@@ -149,7 +149,7 @@ function derivedView<T>(view: string, output: 'single' | 'collection'): ViewDef<
 
         // Collect all interface sections from all handlers
         for handler in &self.spec.handlers {
-            let interface_sections = self.extract_interface_sections(handler);
+            let interface_sections = self.extract_interface_sections_from_handler(handler);
 
             for (section_name, mut fields) in interface_sections {
                 all_sections
@@ -158,6 +158,10 @@ function derivedView<T>(view: string, output: 'single' | 'collection'): ViewDef<
                     .append(&mut fields);
             }
         }
+
+        // Add unmapped fields from spec.sections ONCE (not per handler)
+        // These are fields without #[map] or #[event] attributes
+        self.add_unmapped_fields(&mut all_sections);
 
         // Deduplicate fields within each section and generate interfaces
         // Skip root section - its fields will be flattened into main entity interface
@@ -202,7 +206,7 @@ function derivedView<T>(view: string, output: 'single' | 'collection'): ViewDef<
         unique_fields
     }
 
-    fn extract_interface_sections(
+    fn extract_interface_sections_from_handler(
         &self,
         handler: &TypedHandlerSpec<S>,
     ) -> BTreeMap<String, Vec<TypeScriptField>> {
@@ -212,7 +216,6 @@ function derivedView<T>(view: string, output: 'single' | 'collection'): ViewDef<
             let parts: Vec<&str> = mapping.target_path.split('.').collect();
 
             if parts.len() > 1 {
-                // Nested field (e.g., "status.current")
                 let section_name = parts[0];
                 let field_name = parts[1];
 
@@ -228,7 +231,6 @@ function derivedView<T>(view: string, output: 'single' | 'collection'): ViewDef<
                     .or_default()
                     .push(ts_field);
             } else {
-                // Top-level field
                 let ts_field = TypeScriptField {
                     name: mapping.target_path.clone(),
                     ts_type: self.mapping_to_typescript_type(mapping),
@@ -242,10 +244,6 @@ function derivedView<T>(view: string, output: 'single' | 'collection'): ViewDef<
                     .push(ts_field);
             }
         }
-
-        // Add any unmapped fields that exist in the original spec
-        // These are fields without #[map] or #[event] attributes
-        self.add_unmapped_fields(&mut sections);
 
         sections
     }
