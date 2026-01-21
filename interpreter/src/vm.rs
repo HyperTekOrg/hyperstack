@@ -1497,6 +1497,12 @@ impl VmContext {
                     let actual_state_id = override_state_id;
                     let lookup_val = self.registers[*lookup_value].clone();
 
+                    tracing::debug!(
+                        index_name = %index_name,
+                        lookup_val = %lookup_val,
+                        "LookupIndex executing"
+                    );
+
                     let result = {
                         let state = self
                             .states
@@ -1516,6 +1522,11 @@ impl VmContext {
                             Value::Null
                         }
                     };
+
+                    tracing::debug!(
+                        result = %result,
+                        "LookupIndex index result"
+                    );
 
                     let final_result = if result.is_null() {
                         if let Some(pda_str) = lookup_val.as_str() {
