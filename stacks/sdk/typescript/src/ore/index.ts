@@ -74,11 +74,6 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
   return { mode: 'list', view } as const;
 }
 
-/** Helper to create typed derived view definitions */
-function derivedView<T>(view: string, output: 'single' | 'collection'): ViewDef<T, 'state' | 'list'> {
-  return { mode: output === 'single' ? 'state' : 'list', view } as const;
-}
-
 // ============================================================================
 // Stack Definition
 // ============================================================================
@@ -90,7 +85,6 @@ export const OREROUND_STACK = {
     oreRound: {
       state: stateView<OreRound>('OreRound/state'),
       list: listView<OreRound>('OreRound/list'),
-      latest: derivedView<OreRound>('OreRound/latest', 'single'),
     },
   },
 } as const;
