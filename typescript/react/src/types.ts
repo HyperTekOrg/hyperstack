@@ -1,3 +1,5 @@
+import type { PublicKey, Transaction, Connection } from '@solana/web3.js';
+
 export type {
   ConnectionState,
   Subscription,
@@ -52,11 +54,22 @@ export interface HyperstackConfig {
   reconnectIntervals?: number[];
   maxReconnectAttempts?: number;
   maxEntriesPerView?: number | null;
+  rpcUrl?: string;
+  connection?: Connection;
+  commitment?: 'processed' | 'confirmed' | 'finalized';
+}
+
+export interface TransactionOptions {
+  skipPreflight?: boolean;
+  maxRetries?: number;
+  preflightCommitment?: 'processed' | 'confirmed' | 'finalized';
 }
 
 export interface WalletAdapter {
-  publicKey: string;
-  signAndSend: (transaction: unknown) => Promise<string>;
+  publicKey: PublicKey | null;
+  signTransaction<T extends Transaction>(tx: T): Promise<T>;
+  signAllTransactions<T extends Transaction>(txs: T[]): Promise<T[]>;
+  connected: boolean;
 }
 
 export interface ViewHookOptions {
