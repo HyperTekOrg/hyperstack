@@ -147,7 +147,7 @@ pub fn build_ast(
             lookup_indexes: lookup_indexes
                 .iter()
                 .map(|(field_name, temporal_field)| LookupIndexSpec {
-                    field_name: field_name.clone(),
+                    field_name: to_camel_case_path(field_name),
                     temporal_field: temporal_field.clone(),
                 })
                 .collect(),

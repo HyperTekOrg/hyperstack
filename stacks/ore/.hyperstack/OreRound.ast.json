@@ -1850,7 +1850,7 @@
     ],
     "lookup_indexes": [
       {
-        "field_name": "id.round_address",
+        "field_name": "id.roundAddress",
         "temporal_field": null
       }
     ]
@@ -3124,7 +3124,7 @@
       "result_type": "Option < bool >"
     }
   ],
-  "content_hash": "a8181877be19efb319c2bdaaeeeb1778adf8e0fa11789616acd7075de6b0b9ac",
+  "content_hash": "009d28a28237aa57372b5bf3dee74d0b8c26fd198b88f48820e82a457a6e53ea",
   "views": [
     {
       "id": "OreRound/latest",
