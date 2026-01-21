@@ -50,7 +50,6 @@ export interface HyperstackConfig {
   network?: 'devnet' | 'mainnet' | 'localnet' | NetworkConfig;
   apiKey?: string;
   autoConnect?: boolean;
-  wallet?: WalletAdapter;
   reconnectIntervals?: number[];
   maxReconnectAttempts?: number;
   maxEntriesPerView?: number | null;

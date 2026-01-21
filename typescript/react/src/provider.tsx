@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, ReactNode
 import type { ConnectionState } from 'hyperstack-typescript';
 import type { HyperstackConfig, NetworkConfig } from './types';
 import { createRuntime, HyperstackRuntime } from './runtime';
+import { useHyperstackWallet } from './wallet-adapter';
 
 interface HyperstackContextValue {
   runtime: HyperstackRuntime;
@@ -52,6 +53,8 @@ export function HyperstackProvider({
 }: HyperstackConfig & {
   children: ReactNode;
 }) {
+  const wallet = useHyperstackWallet();
+  
   const networkConfig = useMemo(() => {
     try {
       return resolveNetworkConfig(config.network, config.websocketUrl);
@@ -68,7 +71,8 @@ export function HyperstackProvider({
       runtimeRef.current = createRuntime({
         ...config,
         websocketUrl: networkConfig.websocketUrl,
-        network: networkConfig
+        network: networkConfig,
+        wallet
       });
     } catch (error) {
       console.error('[Hyperstack] Failed to create runtime:', error);
@@ -77,6 +81,10 @@ export function HyperstackProvider({
   }
 
   const runtime = runtimeRef.current;
+  
+  useEffect(() => {
+    runtime.wallet = wallet;
+  }, [wallet, runtime]);
 
   const isMountedRef = useRef(true);
 

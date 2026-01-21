@@ -17,7 +17,14 @@ export default [
         sourcemap: true,
       },
     ],
-    external: ['react', 'zustand', 'zustand/middleware'],
+    external: [
+      'react',
+      'zustand',
+      'zustand/middleware',
+      '@solana/web3.js',
+      '@solana/wallet-adapter-react',
+      '@solana/wallet-adapter-base',
+    ],
     plugins: [
       resolve(),
       typescript({

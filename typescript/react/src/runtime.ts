@@ -26,7 +26,7 @@ export interface HyperstackRuntime {
   unsubscribe(handle: SubscriptionHandle): void;
 }
 
-export function createRuntime(config: HyperstackConfig): HyperstackRuntime {
+export function createRuntime(config: HyperstackConfig & { wallet?: WalletAdapter }): HyperstackRuntime {
   const adapter = new ZustandAdapter();
   const processor = new FrameProcessor(adapter, {
     maxEntriesPerView: config.maxEntriesPerView,

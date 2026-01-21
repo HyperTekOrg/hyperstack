@@ -3,6 +3,7 @@ export { useHyperstack } from './stack';
 export { createRuntime } from './runtime';
 export { ZustandAdapter } from './zustand-adapter';
 export type { HyperStackStore } from './zustand-adapter';
+export { useHyperstackWallet } from './wallet-adapter';
 
 export {
   ConnectionManager,
