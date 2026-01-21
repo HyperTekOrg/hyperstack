@@ -42,6 +42,7 @@ pub mod metrics;
 pub mod mutation_batch;
 pub mod projector;
 pub mod runtime;
+pub mod sorted_cache;
 pub mod telemetry;
 pub mod view;
 pub mod websocket;
