@@ -118,11 +118,11 @@ serde_json = "1"
 mod entity;
 
 pub use types::*;
-pub use entity::{entity_name}Entity;
+pub use entity::{{{}Entity, {}Views}};
 
-pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState}};
+pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState, Views}};
 "#,
-            entity_name = self.entity_name
+            self.entity_name, self.entity_name
         )
     }
 
@@ -325,10 +325,10 @@ impl<T: Default> Default for EventWrapper<T> {
             "crate::types"
         };
 
-        let derived_views = self.generate_derived_view_constants();
+        let views_struct = self.generate_views_struct();
 
         format!(
-            r#"use hyperstack_sdk::Entity;
+            r#"use hyperstack_sdk::{{Entity, StateView, ViewBuilder, ViewHandle, Views}};
 use {types_import}::{entity_name};
 
 pub struct {entity_name}Entity;
@@ -346,14 +346,16 @@ impl Entity for {entity_name}Entity {{
         "{entity_name}/list"
     }}
 }}
-{derived_views}"#,
+{views_struct}"#,
             types_import = types_import,
             entity_name = entity_name,
-            derived_views = derived_views
+            views_struct = views_struct
         )
     }
 
-    fn generate_derived_view_constants(&self) -> String {
+    fn generate_views_struct(&self) -> String {
+        let entity_name = &self.entity_name;
+
         let derived: Vec<_> = self
             .spec
             .views
@@ -361,38 +363,75 @@ impl Entity for {entity_name}Entity {{
             .filter(|v| {
                 !v.id.ends_with("/state")
                     && !v.id.ends_with("/list")
-                    && v.id.starts_with(&self.entity_name)
+                    && v.id.starts_with(entity_name)
             })
             .collect();
 
-        if derived.is_empty() {
-            return String::new();
-        }
-
-        let mut output = String::from("\n/// Derived view identifiers\n");
-        output.push_str(&format!("impl {}Entity {{\n", self.entity_name));
-
-        for view in derived {
+        let mut derived_methods = String::new();
+        for view in &derived {
             let view_name = view.id.split('/').nth(1).unwrap_or("unknown");
-            let const_name = to_snake_case(view_name).to_uppercase();
-            let output_mode = match view.output {
-                ViewOutput::Single => "single",
-                ViewOutput::Collection => "collection",
-                ViewOutput::Keyed { .. } => "keyed",
-            };
+            let method_name = to_snake_case(view_name);
+            let is_single = matches!(view.output, ViewOutput::Single);
 
-            output.push_str(&format!(
-                "    /// Derived view: {} (output: {})\n",
-                view.id, output_mode
-            ));
-            output.push_str(&format!(
-                "    pub const {}_VIEW: &'static str = \"{}\";\n",
-                const_name, view.id
-            ));
+            if is_single {
+                derived_methods.push_str(&format!(
+                    r#"
+    pub fn {method_name}(&self) -> ViewHandle<{entity_name}, true> {{
+        self.builder.single("{view_id}", "{entity_name}")
+    }}
+"#,
+                    method_name = method_name,
+                    entity_name = entity_name,
+                    view_id = view.id
+                ));
+            } else {
+                derived_methods.push_str(&format!(
+                    r#"
+    pub fn {method_name}(&self) -> ViewHandle<{entity_name}, false> {{
+        self.builder.collection("{view_id}", "{entity_name}")
+    }}
+"#,
+                    method_name = method_name,
+                    entity_name = entity_name,
+                    view_id = view.id
+                ));
+            }
         }
 
-        output.push_str("}\n");
-        output
+        format!(
+            r#"
+
+pub struct {entity_name}Views {{
+    builder: ViewBuilder,
+}}
+
+impl Views for {entity_name}Views {{
+    type Entity = {entity_name}Entity;
+
+    fn from_builder(builder: ViewBuilder) -> Self {{
+        Self {{ builder }}
+    }}
+}}
+
+impl {entity_name}Views {{
+    pub fn state(&self) -> StateView<{entity_name}> {{
+        StateView::new(
+            self.builder.connection().clone(),
+            self.builder.store().clone(),
+            "{entity_name}/state".to_string(),
+            "{entity_name}".to_string(),
+            self.builder.initial_data_timeout(),
+        )
+    }}
+
+    pub fn list(&self) -> ViewHandle<{entity_name}, false> {{
+        self.builder.collection("{entity_name}/list", "{entity_name}")
+    }}
+{derived_methods}}}
+"#,
+            entity_name = entity_name,
+            derived_methods = derived_methods
+        )
     }
 
     /// Generate Rust type for a field.

@@ -1,24 +1,50 @@
-use hyperstack_sdk::Entity;
 use super::types::OreRound;
+use hyperstack_sdk::{Entity, StateView, ViewBuilder, ViewHandle, Views};
 
 pub struct OreRoundEntity;
 
 impl Entity for OreRoundEntity {
     type Data = OreRound;
-    
+
     const NAME: &'static str = "OreRound";
-    
+
     fn state_view() -> &'static str {
         "OreRound/state"
     }
-    
+
     fn list_view() -> &'static str {
         "OreRound/list"
     }
 }
 
-/// Derived view identifiers
-impl OreRoundEntity {
-    /// Derived view: OreRound/latest (output: single)
-    pub const LATEST_VIEW: &'static str = "OreRound/latest";
+pub struct OreRoundViews {
+    builder: ViewBuilder,
+}
+
+impl Views for OreRoundViews {
+    type Entity = OreRoundEntity;
+
+    fn from_builder(builder: ViewBuilder) -> Self {
+        Self { builder }
+    }
+}
+
+impl OreRoundViews {
+    pub fn state(&self) -> StateView<OreRound> {
+        StateView::new(
+            self.builder.connection().clone(),
+            self.builder.store().clone(),
+            "OreRound/state".to_string(),
+            "OreRound".to_string(),
+            self.builder.initial_data_timeout(),
+        )
+    }
+
+    pub fn list(&self) -> ViewHandle<OreRound, false> {
+        self.builder.collection("OreRound/list", "OreRound")
+    }
+
+    pub fn latest(&self) -> ViewHandle<OreRound, true> {
+        self.builder.single("OreRound/latest", "OreRound")
+    }
 }

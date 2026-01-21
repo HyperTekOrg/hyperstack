@@ -1,7 +1,7 @@
-mod types;
 mod entity;
+mod types;
 
+pub use entity::{OreRoundEntity, OreRoundViews};
 pub use types::*;
-pub use entity::OreRoundEntity;
 
-pub use hyperstack_sdk::{HyperStack, Entity, Update, ConnectionState};
+pub use hyperstack_sdk::{ConnectionState, Entity, HyperStack, Update, Views};

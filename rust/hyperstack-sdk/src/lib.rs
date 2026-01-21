@@ -35,6 +35,7 @@ pub mod prelude;
 mod store;
 mod stream;
 mod subscription;
+pub mod view;
 
 pub use client::{HyperStack, HyperStackBuilder};
 pub use config::HyperStackConfig;
@@ -48,5 +49,6 @@ pub use stream::{
     RichUpdate, Update,
 };
 pub use subscription::Subscription;
+pub use view::{StateView, ViewBuilder, ViewHandle, ViewOutput, Views};
 
 pub use serde_json::Value;

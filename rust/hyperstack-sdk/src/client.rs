@@ -5,6 +5,7 @@ use crate::error::HyperStackError;
 use crate::frame::Frame;
 use crate::store::{SharedStore, StoreConfig};
 use crate::stream::{EntityStream, KeyFilter, RichEntityStream};
+use crate::view::{ViewBuilder, Views};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -125,6 +126,35 @@ impl HyperStack {
 
     pub fn store(&self) -> &SharedStore {
         &self.store
+    }
+
+    /// Create a view builder for constructing typed view accessors.
+    ///
+    /// This is used by generated code to create view accessor structs.
+    pub fn view_builder(&self) -> ViewBuilder {
+        ViewBuilder::new(
+            self.connection.clone(),
+            self.store.clone(),
+            self.config.initial_data_timeout,
+        )
+    }
+
+    /// Get a views accessor for the specified entity type.
+    ///
+    /// This provides a fluent API for accessing all views (state, list, derived)
+    /// for an entity.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use my_stack::OreRoundViews;
+    ///
+    /// let views = hs.views::<OreRoundViews>();
+    /// let latest = views.latest().get().await;
+    /// let all_rounds = views.list().get().await;
+    /// ```
+    pub fn views<V: Views>(&self) -> V {
+        V::from_builder(self.view_builder())
     }
 }
 
