@@ -13,6 +13,8 @@ exclude = [
     "stacks/pumpfun",
     "stacks/ore",
     "examples/rust-client",
+    "examples/pumpfun-server",
+    "examples/ore-server",
 ]
 
 [workspace.package]
