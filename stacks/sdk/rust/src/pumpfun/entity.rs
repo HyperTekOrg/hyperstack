@@ -1,22 +1,21 @@
-use hyperstack_sdk::{Entity, StateView, ViewBuilder, ViewHandle, Views};
 use super::types::PumpfunToken;
+use hyperstack_sdk::{Entity, StateView, ViewBuilder, ViewHandle, Views};
 
 pub struct PumpfunTokenEntity;
 
 impl Entity for PumpfunTokenEntity {
     type Data = PumpfunToken;
-    
+
     const NAME: &'static str = "PumpfunToken";
-    
+
     fn state_view() -> &'static str {
         "PumpfunToken/state"
     }
-    
+
     fn list_view() -> &'static str {
         "PumpfunToken/list"
     }
 }
-
 
 pub struct PumpfunTokenViews {
     builder: ViewBuilder,
