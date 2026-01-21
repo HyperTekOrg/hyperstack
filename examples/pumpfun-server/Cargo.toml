@@ -8,6 +8,8 @@ publish = false
 name = "pumpfun-server"
 path = "src/main.rs"
 
+[workspace]
+
 [dependencies]
 pumpfun-stack = { path = "../../stacks/pumpfun" }
 hyperstack-server = { path = "../../rust/hyperstack-server" }
