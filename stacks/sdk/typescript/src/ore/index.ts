@@ -48,6 +48,7 @@ export interface Round {
   topMiner?: string;
   topMinerReward?: number;
   totalDeployed?: number;
+  totalMiners?: number;
   totalVaulted?: number;
   totalWinnings?: number;
 }
