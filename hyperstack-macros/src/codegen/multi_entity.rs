@@ -50,6 +50,19 @@ pub fn generate_multi_entity_builder(
         quote! {}
     };
 
+    let mut view_extractions = Vec::new();
+    for entity_name in entity_names.iter() {
+        view_extractions.push(quote! {
+            {
+                let ast_json = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/.hyperstack/", #entity_name, ".ast.json"));
+                let spec: hyperstack::runtime::hyperstack_interpreter::ast::SerializableStreamSpec =
+                    hyperstack::runtime::serde_json::from_str(ast_json)
+                        .expect(&format!("Failed to parse AST file for {}", #entity_name));
+                all_views.extend(spec.views);
+            }
+        });
+    }
+
     quote! {
         #proto_decoders
 
@@ -63,6 +76,12 @@ pub fn generate_multi_entity_builder(
             #proto_router_assignment
 
             bytecode
+        }
+
+        pub fn get_view_definitions() -> Vec<hyperstack::runtime::hyperstack_interpreter::ast::ViewDef> {
+            let mut all_views = Vec::new();
+            #(#view_extractions)*
+            all_views
         }
     }
 }

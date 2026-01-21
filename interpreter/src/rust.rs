@@ -325,6 +325,8 @@ impl<T: Default> Default for EventWrapper<T> {
             "crate::types"
         };
 
+        let derived_views = self.generate_derived_view_constants();
+
         format!(
             r#"use hyperstack_sdk::Entity;
 use {types_import}::{entity_name};
@@ -344,10 +346,53 @@ impl Entity for {entity_name}Entity {{
         "{entity_name}/list"
     }}
 }}
-"#,
+{derived_views}"#,
             types_import = types_import,
-            entity_name = entity_name
+            entity_name = entity_name,
+            derived_views = derived_views
         )
+    }
+
+    fn generate_derived_view_constants(&self) -> String {
+        let derived: Vec<_> = self
+            .spec
+            .views
+            .iter()
+            .filter(|v| {
+                !v.id.ends_with("/state")
+                    && !v.id.ends_with("/list")
+                    && v.id.starts_with(&self.entity_name)
+            })
+            .collect();
+
+        if derived.is_empty() {
+            return String::new();
+        }
+
+        let mut output = String::from("\n/// Derived view identifiers\n");
+        output.push_str(&format!("impl {}Entity {{\n", self.entity_name));
+
+        for view in derived {
+            let view_name = view.id.split('/').nth(1).unwrap_or("unknown");
+            let const_name = to_snake_case(view_name).to_uppercase();
+            let output_mode = match view.output {
+                ViewOutput::Single => "single",
+                ViewOutput::Collection => "collection",
+                ViewOutput::Keyed { .. } => "keyed",
+            };
+
+            output.push_str(&format!(
+                "    /// Derived view: {} (output: {})\n",
+                view.id, output_mode
+            ));
+            output.push_str(&format!(
+                "    pub const {}_VIEW: &'static str = \"{}\";\n",
+                const_name, view.id
+            ));
+        }
+
+        output.push_str("}\n");
+        output
     }
 
     /// Generate Rust type for a field.

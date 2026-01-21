@@ -41,6 +41,8 @@ export interface StackDefinition {
 export interface ViewGroup {
   state?: ViewDef<unknown, 'state'>;
   list?: ViewDef<unknown, 'list'>;
+  /** Allow arbitrary derived views with any name */
+  [key: string]: ViewDef<unknown, ViewMode> | undefined;
 }
 
 export interface HyperstackConfig {

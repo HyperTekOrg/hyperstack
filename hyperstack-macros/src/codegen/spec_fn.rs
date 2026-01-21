@@ -18,9 +18,11 @@ pub fn generate_spec_function(
         pub fn spec() -> hyperstack::runtime::hyperstack_server::Spec {
             let bytecode = create_multi_entity_bytecode();
             let program_id = parsers::PROGRAM_ID_STR.to_string();
+            let views = get_view_definitions();
 
             hyperstack::runtime::hyperstack_server::Spec::new(bytecode, program_id)
                 .with_parser_setup(create_parser_setup())
+                .with_views(views)
         }
 
         fn create_parser_setup() -> hyperstack::runtime::hyperstack_server::ParserSetupFn {
