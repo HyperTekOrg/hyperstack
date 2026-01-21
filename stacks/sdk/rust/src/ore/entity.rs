@@ -16,3 +16,9 @@ impl Entity for OreRoundEntity {
         "OreRound/list"
     }
 }
+
+/// Derived view identifiers
+impl OreRoundEntity {
+    /// Derived view: OreRound/latest (output: single)
+    pub const LATEST_VIEW: &'static str = "OreRound/latest";
+}

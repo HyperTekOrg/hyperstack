@@ -1525,9 +1525,14 @@ pub fn parse_view_attributes(attrs: &[Attribute]) -> Vec<crate::ast::ViewDef> {
         }
 
         if let (Some(view_name), Some(sort_field)) = (name, sort_by) {
+            // Convert each segment to camelCase to match the serialized JSON field names
+            let segments: Vec<String> = sort_field
+                .split('.')
+                .map(|s| crate::utils::to_camel_case(s))
+                .collect();
             let mut pipeline = vec![ViewTransform::Sort {
                 key: FieldPath {
-                    segments: sort_field.split('.').map(String::from).collect(),
+                    segments,
                     offsets: None,
                 },
                 order,

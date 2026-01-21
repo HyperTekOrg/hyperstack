@@ -556,6 +556,7 @@ pub fn process_entity_struct_with_idl(
 
     let output = quote! {
         #[derive(Debug, Clone, hyperstack::runtime::serde::Serialize, hyperstack::runtime::serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
         pub struct #state_name {
             #(#state_fields),*
         }
