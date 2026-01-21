@@ -1,0 +1,20 @@
+---
+/**
+ * Custom Head Component with PostHog Analytics
+ *
+ * Extends Starlight's default Head component to inject PostHog analytics.
+ * PostHog is loaded early in the head to capture all page interactions.
+ *
+ * @see https://starlight.astro.build/guides/overriding-components/
+ */
+import PostHog from "../PostHog.astro";
+
+const { head } = Astro.locals.starlightRoute;
+---
+
+{
+  head.map(({ tag: Tag, attrs, content }) => (
+    <Tag {...attrs} set:html={content} />
+  ))
+}
+<PostHog />

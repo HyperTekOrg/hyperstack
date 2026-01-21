@@ -13,10 +13,12 @@ export default defineConfig({
         },
       ],
       customCss: ["./src/styles/custom.css"],
-      // Component overrides for custom design
+      // Component overrides for custom design and analytics
       components: {
         Sidebar: "./src/components/overrides/Sidebar.astro",
         EditLink: "./src/components/overrides/EditLink.astro",
+        Head: "./src/components/overrides/Head.astro",
+        Search: "./src/components/overrides/Search.astro",
       },
       // Autogenerate sidebar from directory structure
       // Contributors only need to add frontmatter to control ordering
