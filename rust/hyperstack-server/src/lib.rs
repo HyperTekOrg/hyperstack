@@ -319,6 +319,11 @@ impl ServerBuilder {
                     let view_spec = ViewSpec::from_view_def(view_def, &export);
                     let pipeline = view_spec.pipeline.clone().unwrap_or_default();
                     let source_id = view_spec.source_view.clone().unwrap_or_default();
+                    tracing::debug!(
+                        view_id = %view_def.id,
+                        source = %source_id,
+                        "Registering derived view"
+                    );
 
                     index.add_spec(view_spec);
 

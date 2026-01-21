@@ -163,6 +163,10 @@ impl Projector {
                 .upsert_with_append(&spec.id, &key, frame.data.clone(), &frame.append)
                 .await;
 
+            if spec.mode == Mode::List {
+                self.update_derived_view_caches(&spec.id, &key).await;
+            }
+
             let message = Arc::new(BusMessage {
                 key: key.clone(),
                 entity: spec.id.clone(),
@@ -205,6 +209,31 @@ impl Projector {
                 })
             })
             .unwrap_or_else(|| key.to_string())
+    }
+
+    async fn update_derived_view_caches(&self, source_view_id: &str, entity_key: &str) {
+        let derived_views = self.view_index.get_derived_views_for_source(source_view_id);
+        if derived_views.is_empty() {
+            return;
+        }
+
+        let entity_data = match self.entity_cache.get(source_view_id, entity_key).await {
+            Some(data) => data,
+            None => return,
+        };
+
+        let sorted_caches = self.view_index.sorted_caches();
+        let mut caches = sorted_caches.write().await;
+
+        for derived_spec in derived_views {
+            if let Some(cache) = caches.get_mut(&derived_spec.id) {
+                cache.upsert(entity_key.to_string(), entity_data.clone());
+                debug!(
+                    "Updated sorted cache for derived view {} with key {}",
+                    derived_spec.id, entity_key
+                );
+            }
+        }
     }
 
     #[instrument(

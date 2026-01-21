@@ -110,6 +110,15 @@ pub enum SortOrder {
     Desc,
 }
 
+impl From<crate::materialized_view::SortOrder> for SortOrder {
+    fn from(order: crate::materialized_view::SortOrder) -> Self {
+        match order {
+            crate::materialized_view::SortOrder::Asc => SortOrder::Asc,
+            crate::materialized_view::SortOrder::Desc => SortOrder::Desc,
+        }
+    }
+}
+
 /// Delta representing a change to a client's windowed view
 #[derive(Debug, Clone, PartialEq)]
 pub enum ViewDelta {
