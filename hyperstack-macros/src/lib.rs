@@ -48,6 +48,7 @@ mod parse;
 mod proto_codegen;
 mod stream_spec;
 mod utils;
+mod views_macro;
 
 use proc_macro::TokenStream;
 use std::collections::HashMap;
@@ -116,4 +117,55 @@ pub fn hyperstack(attr: TokenStream, item: TokenStream) -> TokenStream {
 )]
 pub fn stream_derive(_input: TokenStream) -> TokenStream {
     TokenStream::new()
+}
+
+/// Declarative macro for defining derived views.
+///
+/// This macro allows defining views using a functional/fluent syntax:
+///
+/// ```rust,ignore
+/// views! {
+///     // Latest round: sort by round_id descending, take first
+///     OreRound/latest = OreRound/list
+///         | sort(fields::id::round_id(), Desc)
+///         | first;
+///
+///     // Top 10 rounds by round_id
+///     OreRound/top10 = OreRound/list
+///         | sort(fields::id::round_id(), Desc)
+///         | take(10);
+///
+///     // Derived from another view
+///     OreRound/top5 = OreRound/top10
+///         | take(5);
+/// }
+/// ```
+///
+/// ## Supported Transforms
+///
+/// | Transform | Description | Output Mode |
+/// |-----------|-------------|-------------|
+/// | `sort(field, Asc\|Desc)` | Sort by field | Collection |
+/// | `filter(predicate)` | Filter by predicate | Collection |
+/// | `take(n)` | Take first N items | Collection |
+/// | `skip(n)` | Skip first N items | Collection |
+/// | `first` | Take first item only | Single |
+/// | `last` | Take last item only | Single |
+/// | `max_by(field)` | Get item with max value | Single |
+/// | `min_by(field)` | Get item with min value | Single |
+///
+/// ## View Naming
+///
+/// Views follow the `Entity/view_name` naming convention:
+/// - `OreRound/list` - base list view (implicit)
+/// - `OreRound/state` - base state view (implicit)
+/// - `OreRound/latest` - derived view
+///
+/// ## Source Types
+///
+/// - `Entity/list` or `Entity/state` - derives from entity
+/// - `Entity/custom` - derives from another view
+#[proc_macro]
+pub fn views(input: TokenStream) -> TokenStream {
+    views_macro::expand_views(input.into()).into()
 }

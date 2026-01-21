@@ -1,6 +1,7 @@
 use crate::view::ViewSpec;
 use std::collections::HashMap;
 
+#[derive(Clone)]
 pub struct ViewIndex {
     by_export: HashMap<String, Vec<ViewSpec>>,
     by_id: HashMap<String, ViewSpec>,

@@ -26,6 +26,7 @@ function formatTimestamp(ts: number | undefined): string {
 export function OreDashboard() {
   const stack = useHyperstack(OREROUND_STACK);
   const { data: rounds } = stack.views.oreRound.list.use();
+  const { data: latestRound } = stack.views.oreRound.latest.use();
 
   const connectionState = useConnectionState();
 
@@ -218,6 +219,35 @@ export function OreDashboard() {
 
       <div className="w-full max-w-screen-xl mx-auto pb-16 pt-4 flex-1">
         <div className="flex flex-col items-stretch gap-6 h-full">
+          {latestRound && (
+            <div className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 rounded-3xl overflow-hidden shadow-xl">
+              <div className="p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-3 h-3 rounded-full bg-white animate-pulse" />
+                  <span className="text-white font-bold text-sm uppercase tracking-wide">Latest Round (Derived View)</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="bg-white/20 backdrop-blur rounded-xl p-4">
+                    <div className="text-white/70 text-xs uppercase">Round</div>
+                    <div className="text-white text-2xl font-bold">#{latestRound.id?.roundId ?? '-'}</div>
+                  </div>
+                  <div className="bg-white/20 backdrop-blur rounded-xl p-4">
+                    <div className="text-white/70 text-xs uppercase">Jackpot</div>
+                    <div className="text-white text-2xl font-bold">{formatSol(latestRound.state?.motherlode || undefined)} SOL</div>
+                  </div>
+                  <div className="bg-white/20 backdrop-blur rounded-xl p-4">
+                    <div className="text-white/70 text-xs uppercase">Deploys</div>
+                    <div className="text-white text-2xl font-bold">{formatNumber(latestRound.metrics?.deployCount || undefined)}</div>
+                  </div>
+                  <div className="bg-white/20 backdrop-blur rounded-xl p-4">
+                    <div className="text-white/70 text-xs uppercase">Ends</div>
+                    <div className="text-white text-sm font-medium">{formatTimestamp(latestRound.state?.expiresAt || undefined)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="w-full bg-amber-600/80 backdrop-blur rounded-3xl overflow-hidden flex flex-col shadow-xl">
             <div className="p-6 flex-1 flex flex-col">
               <div className="px-3 py-2 bg-white rounded-md inline-block mb-4 w-fit shadow-sm">

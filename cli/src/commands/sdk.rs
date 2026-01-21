@@ -84,6 +84,12 @@ pub fn create_typescript(
 
     let config = HyperstackConfig::load_optional(config_path)?;
 
+    // Get the config file's directory for resolving relative paths
+    let config_dir = Path::new(config_path)
+        .parent()
+        .unwrap_or(Path::new("."))
+        .to_path_buf();
+
     let (ast, output_path, package_name) = if let Some(ref cfg) = config {
         if let Some(stack_config) = cfg.find_stack(stack_name) {
             let ast = find_ast_file(&stack_config.ast, None)?.ok_or_else(|| {
@@ -94,8 +100,15 @@ pub fn create_typescript(
             })?;
 
             let name = stack_config.name.as_deref().unwrap_or(&stack_config.ast);
-            let output =
+            let raw_output =
                 cfg.get_typescript_output_path(name, Some(stack_config), output_override.clone());
+
+            // Resolve relative paths relative to the config file's directory
+            let output = if raw_output.is_relative() {
+                config_dir.join(&raw_output)
+            } else {
+                raw_output
+            };
 
             let pkg = package_name_override
                 .or_else(|| cfg.sdk.as_ref().and_then(|s| s.typescript_package.clone()))
@@ -174,8 +187,26 @@ fn generate_sdk_from_ast(
     let ast_json = fs::read_to_string(&ast.path)
         .with_context(|| format!("Failed to read AST file: {}", ast.path.display()))?;
 
-    let spec: hyperstack_interpreter::ast::SerializableStreamSpec = serde_json::from_str(&ast_json)
-        .with_context(|| format!("Failed to deserialize AST from {}", ast.path.display()))?;
+    let spec: hyperstack_interpreter::ast::SerializableStreamSpec =
+        match serde_json::from_str(&ast_json) {
+            Ok(s) => s,
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "Failed to deserialize AST from {}: {}",
+                    ast.path.display(),
+                    e
+                ));
+            }
+        };
+
+    println!(
+        "{} Deserialized {} views from AST",
+        "→".blue().bold(),
+        spec.views.len()
+    );
+    for view in &spec.views {
+        println!("   View: {}", view.id);
+    }
 
     println!("{} Compiling TypeScript from AST...", "→".blue().bold());
 
@@ -214,6 +245,11 @@ pub fn create_rust(
 
     let config = HyperstackConfig::load_optional(config_path)?;
 
+    let config_dir = Path::new(config_path)
+        .parent()
+        .unwrap_or(Path::new("."))
+        .to_path_buf();
+
     let stack_config = config.as_ref().and_then(|c| c.find_stack(stack_name));
 
     let as_module = module_flag
@@ -225,12 +261,18 @@ pub fn create_rust(
                 .unwrap_or(false)
         });
 
-    let (ast, output_dir, crate_name) = find_stack_for_rust(
+    let (ast, raw_output_dir, crate_name) = find_stack_for_rust(
         stack_name,
         config.as_ref(),
         output_override,
         crate_name_override,
     )?;
+
+    let output_dir = if raw_output_dir.is_relative() {
+        config_dir.join(&raw_output_dir)
+    } else {
+        raw_output_dir
+    };
 
     println!(
         "{} Found stack: {}",

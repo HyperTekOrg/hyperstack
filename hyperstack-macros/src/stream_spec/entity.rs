@@ -548,6 +548,9 @@ pub fn process_entity_struct_with_idl(
     let resolver_fns = generate_resolver_functions(&resolver_hooks, idl);
     let pda_registration_fns = generate_pda_registration_functions(&pda_registrations);
 
+    // Generate field accessors for type-safe view definitions
+    let field_accessors = codegen::generate_field_accessors(&section_specs);
+
     let module_name = format_ident!("{}", to_snake_case(&entity_name));
 
     let output = quote! {
@@ -563,6 +566,8 @@ pub fn process_entity_struct_with_idl(
 
             #(#accessor_defs)*
         }
+
+        #field_accessors
 
         pub fn #spec_fn_name() -> hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec<#state_name> {
             // Load AST file at compile time (includes instruction_hooks!)

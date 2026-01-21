@@ -159,6 +159,7 @@ pub fn build_ast(
         computed_fields: computed_field_paths,
         computed_field_specs,
         content_hash: None,
+        views: Vec::new(),
     };
     // Compute and set the content hash
     spec.content_hash = Some(spec.compute_content_hash());

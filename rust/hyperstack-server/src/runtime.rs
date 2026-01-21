@@ -3,6 +3,7 @@ use crate::cache::EntityCache;
 use crate::config::ServerConfig;
 use crate::health::HealthMonitor;
 use crate::http_health::HttpHealthServer;
+use crate::materialized_view::MaterializedViewRegistry;
 use crate::mutation_batch::MutationBatch;
 use crate::projector::Projector;
 use crate::view::ViewIndex;
@@ -46,11 +47,11 @@ async fn shutdown_signal() {
     }
 }
 
-/// Runtime orchestrator that manages all server components
 pub struct Runtime {
     config: ServerConfig,
     view_index: Arc<ViewIndex>,
     spec: Option<Spec>,
+    materialized_views: Option<MaterializedViewRegistry>,
     #[cfg(feature = "otel")]
     metrics: Option<Arc<Metrics>>,
 }
@@ -62,6 +63,7 @@ impl Runtime {
             config,
             view_index: Arc::new(view_index),
             spec: None,
+            materialized_views: None,
             metrics,
         }
     }
@@ -72,11 +74,17 @@ impl Runtime {
             config,
             view_index: Arc::new(view_index),
             spec: None,
+            materialized_views: None,
         }
     }
 
     pub fn with_spec(mut self, spec: Spec) -> Self {
         self.spec = Some(spec);
+        self
+    }
+
+    pub fn with_materialized_views(mut self, registry: MaterializedViewRegistry) -> Self {
+        self.materialized_views = Some(registry);
         self
     }
 

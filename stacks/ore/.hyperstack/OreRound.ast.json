@@ -3124,5 +3124,28 @@
       "result_type": "Option < bool >"
     }
   ],
+  "views": [
+    {
+      "id": "OreRound/latest",
+      "source": {
+        "Entity": {
+          "name": "OreRound"
+        }
+      },
+      "pipeline": [
+        {
+          "Sort": {
+            "key": {
+              "segments": ["id", "round_id"],
+              "offsets": null
+            },
+            "order": "desc"
+          }
+        },
+        "First"
+      ],
+      "output": "Single"
+    }
+  ],
   "content_hash": "ccf6bbbc6b8694cd2aafa086de05534a2b595af9a52072bd3805eea7b6c9f91b"
 }
