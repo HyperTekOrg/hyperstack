@@ -1477,3 +1477,78 @@ pub fn parse_register_pda_attribute(attr: &Attribute) -> syn::Result<Option<Regi
         lookup_name,
     }))
 }
+
+/// Parse #[view(name = "latest", sort_by = "id.round_id", order = "desc")] attributes
+pub fn parse_view_attributes(attrs: &[Attribute]) -> Vec<crate::ast::ViewDef> {
+    use crate::ast::{FieldPath, SortOrder, ViewDef, ViewOutput, ViewSource, ViewTransform};
+
+    let mut views = Vec::new();
+
+    for attr in attrs {
+        if !attr.path().is_ident("view") {
+            continue;
+        }
+
+        let mut name: Option<String> = None;
+        let mut sort_by: Option<String> = None;
+        let mut order = SortOrder::Desc;
+        let mut take: Option<usize> = None;
+        let mut output = ViewOutput::Single;
+
+        if let syn::Meta::List(meta_list) = &attr.meta {
+            let _ = meta_list.parse_nested_meta(|meta| {
+                if meta.path.is_ident("name") {
+                    let value: syn::LitStr = meta.value()?.parse()?;
+                    name = Some(value.value());
+                } else if meta.path.is_ident("sort_by") {
+                    let value: syn::LitStr = meta.value()?.parse()?;
+                    sort_by = Some(value.value());
+                } else if meta.path.is_ident("order") {
+                    let value: syn::LitStr = meta.value()?.parse()?;
+                    order = match value.value().to_lowercase().as_str() {
+                        "asc" => SortOrder::Asc,
+                        _ => SortOrder::Desc,
+                    };
+                } else if meta.path.is_ident("take") {
+                    let value: syn::LitInt = meta.value()?.parse()?;
+                    take = Some(value.base10_parse::<usize>()?);
+                    output = ViewOutput::Collection;
+                } else if meta.path.is_ident("output") {
+                    let value: syn::LitStr = meta.value()?.parse()?;
+                    output = match value.value().to_lowercase().as_str() {
+                        "collection" => ViewOutput::Collection,
+                        _ => ViewOutput::Single,
+                    };
+                }
+                Ok(())
+            });
+        }
+
+        if let (Some(view_name), Some(sort_field)) = (name, sort_by) {
+            let mut pipeline = vec![ViewTransform::Sort {
+                key: FieldPath {
+                    segments: sort_field.split('.').map(String::from).collect(),
+                    offsets: None,
+                },
+                order,
+            }];
+
+            if let Some(n) = take {
+                pipeline.push(ViewTransform::Take { count: n });
+            } else {
+                pipeline.push(ViewTransform::First);
+            }
+
+            views.push(ViewDef {
+                id: view_name,
+                source: ViewSource::Entity {
+                    name: String::new(),
+                },
+                pipeline,
+                output,
+            });
+        }
+    }
+
+    views
+}

@@ -86,7 +86,7 @@ pub mod prelude {
     };
 
     #[cfg(feature = "macros")]
-    pub use hyperstack_macros::{hyperstack, Stream};
+    pub use hyperstack_macros::{hyperstack, views, Stream};
 
     // Re-export server components
     #[cfg(feature = "server")]

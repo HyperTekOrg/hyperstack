@@ -1,11 +1,13 @@
-use hyperstack::macros::hyperstack;
+use hyperstack::prelude::*;
 
 #[hyperstack(idl = "idl/ore.json")]
 pub mod ore_stream {
     use hyperstack::macros::Stream;
+
     use serde::{Deserialize, Serialize};
 
     #[entity(name = "OreRound")]
+    #[view(name = "latest", sort_by = "id.round_id", order = "desc")]
     pub struct OreRound {
         pub id: RoundId,
         pub state: RoundState,

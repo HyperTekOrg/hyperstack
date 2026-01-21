@@ -3124,6 +3124,7 @@
       "result_type": "Option < bool >"
     }
   ],
+  "content_hash": "32d875a76781a670691a35c470e762f8b6c2b4f46f439e6b76bb0fe42c291f62",
   "views": [
     {
       "id": "OreRound/latest",
@@ -3136,7 +3137,10 @@
         {
           "Sort": {
             "key": {
-              "segments": ["id", "round_id"],
+              "segments": [
+                "id",
+                "round_id"
+              ],
               "offsets": null
             },
             "order": "desc"
@@ -3146,6 +3150,5 @@
       ],
       "output": "Single"
     }
-  ],
-  "content_hash": "ccf6bbbc6b8694cd2aafa086de05534a2b595af9a52072bd3805eea7b6c9f91b"
+  ]
 }

@@ -459,15 +459,15 @@ pub fn process_entity_struct_with_idl(
         }
     }
 
-    // events_by_instruction already contains all events including those with lookup_by
-    // No need to merge - just use events_by_instruction directly
-
-    // =========================================================================
-    // UNIFIED HANDLER GENERATION
-    // =========================================================================
-    // Build the AST and write to disk for cloud compilation.
-    // Then use the same AST to generate handler code via shared codegen.
-    // This ensures identical output between #[hyperstack] and #[ast_spec].
+    let mut views = parse::parse_view_attributes(&input.attrs);
+    for view in &mut views {
+        if let crate::ast::ViewSource::Entity { name } = &mut view.source {
+            *name = entity_name.clone();
+        }
+        if !view.id.contains('/') {
+            view.id = format!("{}/{}", entity_name, view.id);
+        }
+    }
 
     let ast = build_and_write_ast(
         &entity_name,
@@ -482,6 +482,7 @@ pub fn process_entity_struct_with_idl(
         &computed_fields,
         &section_specs,
         idl,
+        views,
     );
 
     // Generate handler functions using the shared codegen

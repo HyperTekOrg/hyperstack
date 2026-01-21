@@ -51,6 +51,7 @@ use super::handlers::{find_field_in_instruction, get_join_on_field};
 /// * `computed_fields` - Computed field definitions
 /// * `section_specs` - Entity section specifications
 /// * `idl` - Optional IDL specification for field resolution
+/// * `views` - View definitions for derived views
 #[allow(clippy::too_many_arguments)]
 pub fn build_ast(
     entity_name: &str,
@@ -65,6 +66,7 @@ pub fn build_ast(
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     section_specs: &[EntitySection],
     idl: Option<&idl_parser::IdlSpec>,
+    views: Vec<crate::ast::ViewDef>,
 ) -> SerializableStreamSpec {
     // Build handlers from sources and events
     let handlers = build_handlers(
@@ -159,7 +161,7 @@ pub fn build_ast(
         computed_fields: computed_field_paths,
         computed_field_specs,
         content_hash: None,
-        views: Vec::new(),
+        views,
     };
     // Compute and set the content hash
     spec.content_hash = Some(spec.compute_content_hash());
@@ -188,19 +190,17 @@ pub fn write_ast_at_compile_time(
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     section_specs: &[EntitySection],
     idl: Option<&idl_parser::IdlSpec>,
+    views: Vec<crate::ast::ViewDef>,
 ) {
-    // Only write if CARGO_MANIFEST_DIR is set (i.e., we're in a build)
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
         let ast_dir = std::path::Path::new(&manifest_dir).join(".hyperstack");
 
-        // Create directory
         if std::fs::create_dir_all(&ast_dir).is_err() {
-            return; // Silently fail if we can't create the directory
+            return;
         }
 
         let ast_file = ast_dir.join(format!("{}.ast.json", entity_name));
 
-        // Build the AST using shared function
         let ast = build_ast(
             entity_name,
             primary_keys,
@@ -214,9 +214,9 @@ pub fn write_ast_at_compile_time(
             computed_fields,
             section_specs,
             idl,
+            views,
         );
 
-        // Serialize and write
         if let Ok(json) = serde_json::to_string_pretty(&ast) {
             let _ = std::fs::write(&ast_file, json);
             eprintln!("Generated AST: {}", ast_file.display());
@@ -225,11 +225,6 @@ pub fn write_ast_at_compile_time(
 }
 
 /// Build AST and write to disk, returning the AST for code generation.
-///
-/// This is the main entry point for stream_spec processing. It:
-/// 1. Builds the `SerializableStreamSpec` from parsed attributes
-/// 2. Writes the AST to disk for cloud compilation
-/// 3. Returns the AST for inline code generation
 #[allow(clippy::too_many_arguments)]
 pub fn build_and_write_ast(
     entity_name: &str,
@@ -244,8 +239,8 @@ pub fn build_and_write_ast(
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     section_specs: &[EntitySection],
     idl: Option<&idl_parser::IdlSpec>,
+    views: Vec<crate::ast::ViewDef>,
 ) -> SerializableStreamSpec {
-    // Build the AST
     let ast = build_ast(
         entity_name,
         primary_keys,
@@ -259,9 +254,9 @@ pub fn build_and_write_ast(
         computed_fields,
         section_specs,
         idl,
+        views,
     );
 
-    // Write to disk
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
         let ast_dir = std::path::Path::new(&manifest_dir).join(".hyperstack");
 
