@@ -56,7 +56,6 @@ pub struct ViewHandle<T, const SINGLE: bool> {
     connection: ConnectionManager,
     store: SharedStore,
     view_path: String,
-    entity_name: String,
     initial_data_timeout: Duration,
     _marker: PhantomData<T>,
 }
@@ -74,7 +73,7 @@ where
             .ensure_subscription(&self.view_path, None)
             .await;
         self.store
-            .wait_for_view_ready(&self.entity_name, self.initial_data_timeout)
+            .wait_for_view_ready(&self.view_path, self.initial_data_timeout)
             .await;
 
         // For single views, get the first (and only) item
@@ -88,7 +87,7 @@ where
             .ensure_subscription(&self.view_path, Some(key))
             .await;
         self.store
-            .wait_for_view_ready(&self.entity_name, self.initial_data_timeout)
+            .wait_for_view_ready(&self.view_path, self.initial_data_timeout)
             .await;
         self.store.get::<T>(&self.view_path, key).await
     }
@@ -128,7 +127,7 @@ where
             .ensure_subscription(&self.view_path, None)
             .await;
         self.store
-            .wait_for_view_ready(&self.entity_name, self.initial_data_timeout)
+            .wait_for_view_ready(&self.view_path, self.initial_data_timeout)
             .await;
         self.store.list::<T>(&self.view_path).await
     }
@@ -209,7 +208,7 @@ impl ViewBuilder {
     }
 
     /// Create a single-item view handle.
-    pub fn single<T>(&self, view_path: &str, entity_name: &str) -> ViewHandle<T, true>
+    pub fn single<T>(&self, view_path: &str) -> ViewHandle<T, true>
     where
         T: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
     {
@@ -217,14 +216,13 @@ impl ViewBuilder {
             connection: self.connection.clone(),
             store: self.store.clone(),
             view_path: view_path.to_string(),
-            entity_name: entity_name.to_string(),
             initial_data_timeout: self.initial_data_timeout,
             _marker: PhantomData,
         }
     }
 
     /// Create a collection view handle.
-    pub fn collection<T>(&self, view_path: &str, entity_name: &str) -> ViewHandle<T, false>
+    pub fn collection<T>(&self, view_path: &str) -> ViewHandle<T, false>
     where
         T: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
     {
@@ -232,7 +230,6 @@ impl ViewBuilder {
             connection: self.connection.clone(),
             store: self.store.clone(),
             view_path: view_path.to_string(),
-            entity_name: entity_name.to_string(),
             initial_data_timeout: self.initial_data_timeout,
             _marker: PhantomData,
         }
@@ -276,7 +273,6 @@ pub struct StateView<T> {
     connection: ConnectionManager,
     store: SharedStore,
     view_path: String,
-    entity_name: String,
     initial_data_timeout: Duration,
     _marker: PhantomData<T>,
 }
@@ -290,14 +286,12 @@ where
         connection: ConnectionManager,
         store: SharedStore,
         view_path: String,
-        entity_name: String,
         initial_data_timeout: Duration,
     ) -> Self {
         Self {
             connection,
             store,
             view_path,
-            entity_name,
             initial_data_timeout,
             _marker: PhantomData,
         }
@@ -309,9 +303,9 @@ where
             .ensure_subscription(&self.view_path, Some(key))
             .await;
         self.store
-            .wait_for_view_ready(&self.entity_name, self.initial_data_timeout)
+            .wait_for_view_ready(&self.view_path, self.initial_data_timeout)
             .await;
-        self.store.get::<T>(&self.entity_name, key).await
+        self.store.get::<T>(&self.view_path, key).await
     }
 
     /// Watch for updates to a specific key.
@@ -319,7 +313,7 @@ where
         EntityStream::new_lazy(
             self.connection.clone(),
             self.store.clone(),
-            self.entity_name.clone(),
+            self.view_path.clone(),
             self.view_path.clone(),
             KeyFilter::Single(key.to_string()),
             Some(key.to_string()),
@@ -331,7 +325,7 @@ where
         RichEntityStream::new_lazy(
             self.connection.clone(),
             self.store.clone(),
-            self.entity_name.clone(),
+            self.view_path.clone(),
             self.view_path.clone(),
             KeyFilter::Single(key.to_string()),
             Some(key.to_string()),

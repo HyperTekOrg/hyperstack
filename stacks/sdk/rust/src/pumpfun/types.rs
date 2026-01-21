@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct PumpfunTokenId {
     #[serde(default)]
     pub mint: Option<String>,
-    #[serde(default)]
+    #[serde(rename = "bondingCurve", default)]
     pub bonding_curve: Option<String>,
 }
 
@@ -16,57 +16,57 @@ pub struct PumpfunTokenInfo {
     pub symbol: Option<Option<String>>,
     #[serde(default)]
     pub uri: Option<Option<String>>,
-    #[serde(default)]
+    #[serde(rename = "isComplete", default)]
     pub is_complete: Option<Option<bool>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PumpfunTokenReserves {
-    #[serde(default)]
+    #[serde(rename = "virtualTokenReserves", default)]
     pub virtual_token_reserves: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "virtualSolReserves", default)]
     pub virtual_sol_reserves: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "realTokenReserves", default)]
     pub real_token_reserves: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "realSolReserves", default)]
     pub real_sol_reserves: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "tokenTotalSupply", default)]
     pub token_total_supply: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "currentPriceSol", default)]
     pub current_price_sol: Option<Option<f64>>,
-    #[serde(default)]
+    #[serde(rename = "marketCapSol", default)]
     pub market_cap_sol: Option<Option<f64>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PumpfunTokenTrading {
-    #[serde(default)]
+    #[serde(rename = "totalBuyVolume", default)]
     pub total_buy_volume: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "totalSellVolume", default)]
     pub total_sell_volume: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "totalTrades", default)]
     pub total_trades: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "buyCount", default)]
     pub buy_count: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "sellCount", default)]
     pub sell_count: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "uniqueTraders", default)]
     pub unique_traders: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "largestTrade", default)]
     pub largest_trade: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "smallestTrade", default)]
     pub smallest_trade: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "lastTradeTimestamp", default)]
     pub last_trade_timestamp: Option<Option<i64>>,
-    #[serde(default)]
+    #[serde(rename = "lastTradePrice", default)]
     pub last_trade_price: Option<Option<f64>>,
-    #[serde(default)]
+    #[serde(rename = "whaleTradeCount", default)]
     pub whale_trade_count: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "lastWhaleAddress", default)]
     pub last_whale_address: Option<Option<String>>,
-    #[serde(default)]
+    #[serde(rename = "totalVolume", default)]
     pub total_volume: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "averageTradeSize", default)]
     pub average_trade_size: Option<Option<f64>>,
 }
 
@@ -92,7 +92,7 @@ pub struct PumpfunToken {
     pub trading: PumpfunTokenTrading,
     #[serde(default)]
     pub events: PumpfunTokenEvents,
-    #[serde(default)]
+    #[serde(rename = "bondingCurveSnapshot", default)]
     pub bonding_curve_snapshot: Option<Option<serde_json::Value>>,
 }
 

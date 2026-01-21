@@ -2,51 +2,51 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OreRoundId {
-    #[serde(default)]
+    #[serde(rename = "roundId", default)]
     pub round_id: Option<u64>,
-    #[serde(default)]
+    #[serde(rename = "roundAddress", default)]
     pub round_address: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OreRoundState {
-    #[serde(default)]
+    #[serde(rename = "expiresAt", default)]
     pub expires_at: Option<Option<i64>>,
     #[serde(default)]
     pub motherlode: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "totalDeployed", default)]
     pub total_deployed: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "totalVaulted", default)]
     pub total_vaulted: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "totalWinnings", default)]
     pub total_winnings: Option<Option<u64>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OreRoundResults {
-    #[serde(default)]
+    #[serde(rename = "topMiner", default)]
     pub top_miner: Option<Option<String>>,
-    #[serde(default)]
+    #[serde(rename = "topMinerReward", default)]
     pub top_miner_reward: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "rentPayer", default)]
     pub rent_payer: Option<Option<String>>,
-    #[serde(default)]
+    #[serde(rename = "slotHash", default)]
     pub slot_hash: Option<Option<String>>,
     #[serde(default)]
     pub rng: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "winningSquare", default)]
     pub winning_square: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "didHitMotherlode", default)]
     pub did_hit_motherlode: Option<Option<bool>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OreRoundMetrics {
-    #[serde(default)]
+    #[serde(rename = "deployCount", default)]
     pub deploy_count: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "totalDeployedSol", default)]
     pub total_deployed_sol: Option<Option<u64>>,
-    #[serde(default)]
+    #[serde(rename = "checkpointCount", default)]
     pub checkpoint_count: Option<Option<u64>>,
 }
 
@@ -60,7 +60,7 @@ pub struct OreRound {
     pub results: OreRoundResults,
     #[serde(default)]
     pub metrics: OreRoundMetrics,
-    #[serde(default)]
+    #[serde(rename = "roundSnapshot", default)]
     pub round_snapshot: Option<Option<serde_json::Value>>,
 }
 

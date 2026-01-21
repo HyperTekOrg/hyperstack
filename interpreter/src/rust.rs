@@ -154,27 +154,17 @@ pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState, Views}};
             let field_name = to_snake_case(&field.field_name);
             let rust_type = self.field_type_to_rust(field);
 
-            let serde_attr = if field_name != to_snake_case(&field.field_name)
-                || field_name != field.field_name
-            {
-                let original = &field.field_name;
-                if to_snake_case(original) != *original {
-                    format!(
-                        "    #[serde(rename = \"{}\", default)]\n",
-                        to_camel_case(original)
-                    )
-                } else {
-                    "    #[serde(default)]\n".to_string()
-                }
+            // Server sends camelCase, so always add rename attribute if snake_case differs
+            let camel_case_name = to_camel_case(&field.field_name);
+            let serde_attr = if field_name != camel_case_name {
+                format!("    #[serde(rename = \"{}\", default)]\n", camel_case_name)
             } else {
                 "    #[serde(default)]\n".to_string()
             };
 
             fields.push(format!(
                 "{}    pub {}: {},",
-                serde_attr,
-                to_snake_case(&field.field_name),
-                rust_type
+                serde_attr, field_name, rust_type
             ));
         }
 
@@ -197,11 +187,9 @@ pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState, Views}};
             if !Self::is_root_section(&section.name) {
                 let field_name = to_snake_case(&section.name);
                 let type_name = format!("{}{}", self.entity_name, to_pascal_case(&section.name));
-                let serde_attr = if field_name != section.name {
-                    format!(
-                        "    #[serde(rename = \"{}\", default)]\n",
-                        to_camel_case(&section.name)
-                    )
+                let camel_case_name = to_camel_case(&section.name);
+                let serde_attr = if field_name != camel_case_name {
+                    format!("    #[serde(rename = \"{}\", default)]\n", camel_case_name)
                 } else {
                     "    #[serde(default)]\n".to_string()
                 };
@@ -217,9 +205,15 @@ pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState, Views}};
                 for field in &section.fields {
                     let field_name = to_snake_case(&field.field_name);
                     let rust_type = self.field_type_to_rust(field);
+                    let camel_case_name = to_camel_case(&field.field_name);
+                    let serde_attr = if field_name != camel_case_name {
+                        format!("    #[serde(rename = \"{}\", default)]\n", camel_case_name)
+                    } else {
+                        "    #[serde(default)]\n".to_string()
+                    };
                     fields.push(format!(
-                        "    #[serde(default)]\n    pub {}: {},",
-                        field_name, rust_type
+                        "{}    pub {}: {},",
+                        serde_attr, field_name, rust_type
                     ));
                 }
             }
@@ -377,7 +371,7 @@ impl Entity for {entity_name}Entity {{
                 derived_methods.push_str(&format!(
                     r#"
     pub fn {method_name}(&self) -> ViewHandle<{entity_name}, true> {{
-        self.builder.single("{view_id}", "{entity_name}")
+        self.builder.single("{view_id}")
     }}
 "#,
                     method_name = method_name,
@@ -388,7 +382,7 @@ impl Entity for {entity_name}Entity {{
                 derived_methods.push_str(&format!(
                     r#"
     pub fn {method_name}(&self) -> ViewHandle<{entity_name}, false> {{
-        self.builder.collection("{view_id}", "{entity_name}")
+        self.builder.collection("{view_id}")
     }}
 "#,
                     method_name = method_name,
@@ -419,13 +413,12 @@ impl {entity_name}Views {{
             self.builder.connection().clone(),
             self.builder.store().clone(),
             "{entity_name}/state".to_string(),
-            "{entity_name}".to_string(),
             self.builder.initial_data_timeout(),
         )
     }}
 
     pub fn list(&self) -> ViewHandle<{entity_name}, false> {{
-        self.builder.collection("{entity_name}/list", "{entity_name}")
+        self.builder.collection("{entity_name}/list")
     }}
 {derived_methods}}}
 "#,

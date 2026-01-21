@@ -1,21 +1,22 @@
-use super::types::OreRound;
 use hyperstack_sdk::{Entity, StateView, ViewBuilder, ViewHandle, Views};
+use super::types::OreRound;
 
 pub struct OreRoundEntity;
 
 impl Entity for OreRoundEntity {
     type Data = OreRound;
-
+    
     const NAME: &'static str = "OreRound";
-
+    
     fn state_view() -> &'static str {
         "OreRound/state"
     }
-
+    
     fn list_view() -> &'static str {
         "OreRound/list"
     }
 }
+
 
 pub struct OreRoundViews {
     builder: ViewBuilder,
@@ -35,16 +36,15 @@ impl OreRoundViews {
             self.builder.connection().clone(),
             self.builder.store().clone(),
             "OreRound/state".to_string(),
-            "OreRound".to_string(),
             self.builder.initial_data_timeout(),
         )
     }
 
     pub fn list(&self) -> ViewHandle<OreRound, false> {
-        self.builder.collection("OreRound/list", "OreRound")
+        self.builder.collection("OreRound/list")
     }
 
     pub fn latest(&self) -> ViewHandle<OreRound, true> {
-        self.builder.single("OreRound/latest", "OreRound")
+        self.builder.single("OreRound/latest")
     }
 }
