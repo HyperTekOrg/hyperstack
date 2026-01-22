@@ -102,6 +102,8 @@ export function createListViewHook<T>(
 
       const enabled = options?.enabled !== false;
       const key = params?.key;
+      const take = params?.take;
+      const skip = params?.skip;
 
       const filtersJson = params?.filters ? JSON.stringify(params.filters) : undefined;
       const filters = useMemo(() => params?.filters, [filtersJson]);
@@ -110,7 +112,7 @@ export function createListViewHook<T>(
         if (!enabled) return undefined;
 
         try {
-          const handle = runtime.subscribe(viewDef.view, key, filters);
+          const handle = runtime.subscribe(viewDef.view, key, filters, take, skip);
           setIsLoading(true);
 
           return () => {
@@ -125,13 +127,13 @@ export function createListViewHook<T>(
           setIsLoading(false);
           return undefined;
         }
-      }, [enabled, key, filtersJson]);
+      }, [enabled, key, filtersJson, take, skip]);
 
       const refresh = useCallback(() => {
         if (!enabled) return;
 
         try {
-          const handle = runtime.subscribe(viewDef.view, key, filters);
+          const handle = runtime.subscribe(viewDef.view, key, filters, take, skip);
           setIsLoading(true);
 
           setTimeout(() => {
@@ -145,7 +147,7 @@ export function createListViewHook<T>(
           setError(err instanceof Error ? err : new Error('Refresh failed'));
           setIsLoading(false);
         }
-      }, [enabled, key, filtersJson]);
+      }, [enabled, key, filtersJson, take, skip]);
 
       const data = useSyncExternalStore(
         (callback) => {

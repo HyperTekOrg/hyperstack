@@ -49,6 +49,6 @@ pub use stream::{
     RichUpdate, Update,
 };
 pub use subscription::Subscription;
-pub use view::{StateView, ViewBuilder, ViewHandle, ViewOutput, Views};
+pub use view::{StateView, ViewBuilder, ViewHandle, Views};
 
 pub use serde_json::Value;

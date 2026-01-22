@@ -125,19 +125,14 @@ export interface ViewDef<T, TMode extends 'state' | 'list'> {
   readonly _entity?: T;
 }
 
-/** Helper to create typed state view definitions */
+/** Helper to create typed state view definitions (keyed lookups) */
 function stateView<T>(view: string): ViewDef<T, 'state'> {
   return { mode: 'state', view } as const;
 }
 
-/** Helper to create typed list view definitions */
+/** Helper to create typed list view definitions (collections) */
 function listView<T>(view: string): ViewDef<T, 'list'> {
   return { mode: 'list', view } as const;
-}
-
-/** Helper to create typed derived view definitions */
-function derivedView<T>(view: string, output: 'single' | 'collection'): ViewDef<T, 'state' | 'list'> {
-  return { mode: output === 'single' ? 'state' : 'list', view } as const;
 }"#
         .to_string()
     }
@@ -498,18 +493,12 @@ export default {};"#,
 
         for view in derived_views {
             let view_name = view.id.split('/').nth(1).unwrap_or("unknown");
-            let output_mode = match view.output {
-                ViewOutput::Single => "single",
-                ViewOutput::Collection => "collection",
-                ViewOutput::Keyed { .. } => "single",
-            };
 
             entries.push(format!(
-                "\n      {}: derivedView<{}>('{}', '{}'),",
+                "\n      {}: listView<{}>('{}'),",
                 to_camel_case(view_name),
                 entity_pascal,
-                view.id,
-                output_mode
+                view.id
             ));
         }
 
@@ -1298,13 +1287,13 @@ mod tests {
         let stack_def = &output.stack_definition;
 
         assert!(
-            stack_def.contains("derivedView<OreRound>('OreRound/latest', 'single')"),
-            "Expected 'latest' derived view with 'single' output, got:\n{}",
+            stack_def.contains("listView<OreRound>('OreRound/latest')"),
+            "Expected 'latest' derived view using listView, got:\n{}",
             stack_def
         );
         assert!(
-            stack_def.contains("derivedView<OreRound>('OreRound/top10', 'collection')"),
-            "Expected 'top10' derived view with 'collection' output, got:\n{}",
+            stack_def.contains("listView<OreRound>('OreRound/top10')"),
+            "Expected 'top10' derived view using listView, got:\n{}",
             stack_def
         );
         assert!(
@@ -1318,9 +1307,8 @@ mod tests {
             stack_def
         );
         assert!(
-            stack_def
-                .contains("function derivedView<T>(view: string, output: 'single' | 'collection')"),
-            "Expected derivedView helper function, got:\n{}",
+            stack_def.contains("function listView<T>(view: string): ViewDef<T, 'list'>"),
+            "Expected listView helper function, got:\n{}",
             stack_def
         );
     }

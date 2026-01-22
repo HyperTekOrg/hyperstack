@@ -1,7 +1,7 @@
-//! View abstractions for unified access to state, list, and derived views.
+//! View abstractions for unified access to views.
 //!
-//! Views provide a consistent API for accessing HyperStack data regardless of
-//! whether it's a state view, list view, or derived view.
+//! All views return collections (Vec<T>). Use `.first()` on the result
+//! if you need a single item.
 //!
 //! # Example
 //!
@@ -14,8 +14,8 @@
 //! // Access views through the generated views struct
 //! let views = OreRoundViews::new(&hs);
 //!
-//! // Get latest round (derived single view)
-//! let latest = views.latest().get().await;
+//! // Get latest round - use .first() for single item
+//! let latest = views.latest().get().await.first().cloned();
 //!
 //! // List all rounds
 //! let rounds = views.list().get().await;
@@ -39,20 +39,11 @@ use serde::Serialize;
 use std::marker::PhantomData;
 use std::time::Duration;
 
-/// Output mode for a view - determines if it returns single or multiple items.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ViewOutput {
-    /// View returns a single item (state view or derived single)
-    Single,
-    /// View returns multiple items (list view or derived collection)
-    Collection,
-}
-
-/// A handle to a specific view that provides get/watch operations.
+/// A handle to a view that provides get/watch operations.
 ///
-/// This is the main interface for interacting with views. It's generic over
-/// the data type and whether it returns single or multiple items.
-pub struct ViewHandle<T, const SINGLE: bool> {
+/// All views return collections (Vec<T>). Use `.first()` on the result
+/// if you need a single item from views with a `take` limit.
+pub struct ViewHandle<T> {
     connection: ConnectionManager,
     store: SharedStore,
     view_path: String,
@@ -60,68 +51,15 @@ pub struct ViewHandle<T, const SINGLE: bool> {
     _marker: PhantomData<T>,
 }
 
-impl<T> ViewHandle<T, true>
+impl<T> ViewHandle<T>
 where
     T: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
 {
-    /// Get the current value from this single-item view.
+    /// Get all items from this view.
     ///
-    /// For state views, this requires a key. For derived single views,
-    /// the key is optional (defaults to fetching the single result).
-    pub async fn get(&self) -> Option<T> {
-        self.connection
-            .ensure_subscription(&self.view_path, None)
-            .await;
-        self.store
-            .wait_for_view_ready(&self.view_path, self.initial_data_timeout)
-            .await;
-
-        // For single views, get the first (and only) item
-        let items = self.store.list::<T>(&self.view_path).await;
-        items.into_iter().next()
-    }
-
-    /// Get the current value by key from this single-item view.
-    pub async fn get_by_key(&self, key: &str) -> Option<T> {
-        self.connection
-            .ensure_subscription(&self.view_path, Some(key))
-            .await;
-        self.store
-            .wait_for_view_ready(&self.view_path, self.initial_data_timeout)
-            .await;
-        self.store.get::<T>(&self.view_path, key).await
-    }
-
-    /// Watch for updates to this single-item view.
-    pub fn watch(&self) -> EntityStream<T> {
-        EntityStream::new_lazy(
-            self.connection.clone(),
-            self.store.clone(),
-            self.view_path.clone(),
-            self.view_path.clone(),
-            KeyFilter::None,
-            None,
-        )
-    }
-
-    /// Watch for updates with before/after diffs.
-    pub fn watch_rich(&self) -> RichEntityStream<T> {
-        RichEntityStream::new_lazy(
-            self.connection.clone(),
-            self.store.clone(),
-            self.view_path.clone(),
-            self.view_path.clone(),
-            KeyFilter::None,
-            None,
-        )
-    }
-}
-
-impl<T> ViewHandle<T, false>
-where
-    T: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
-{
-    /// Get all items from this collection view.
+    /// For views with a `take` limit defined in the stack, this returns
+    /// up to that many items. Use `.first()` on the result if you need
+    /// a single item.
     pub async fn get(&self) -> Vec<T> {
         self.connection
             .ensure_subscription(&self.view_path, None)
@@ -132,7 +70,7 @@ where
         self.store.list::<T>(&self.view_path).await
     }
 
-    /// Watch for updates to this collection view.
+    /// Watch for updates to this view.
     pub fn watch(&self) -> EntityStream<T> {
         EntityStream::new_lazy(
             self.connection.clone(),
@@ -179,7 +117,6 @@ pub struct ViewBuilder {
 }
 
 impl ViewBuilder {
-    /// Create a new view builder.
     pub fn new(
         connection: ConnectionManager,
         store: SharedStore,
@@ -192,37 +129,20 @@ impl ViewBuilder {
         }
     }
 
-    /// Get the connection manager.
     pub fn connection(&self) -> &ConnectionManager {
         &self.connection
     }
 
-    /// Get the shared store.
     pub fn store(&self) -> &SharedStore {
         &self.store
     }
 
-    /// Get the initial data timeout.
     pub fn initial_data_timeout(&self) -> Duration {
         self.initial_data_timeout
     }
 
-    /// Create a single-item view handle.
-    pub fn single<T>(&self, view_path: &str) -> ViewHandle<T, true>
-    where
-        T: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
-    {
-        ViewHandle {
-            connection: self.connection.clone(),
-            store: self.store.clone(),
-            view_path: view_path.to_string(),
-            initial_data_timeout: self.initial_data_timeout,
-            _marker: PhantomData,
-        }
-    }
-
-    /// Create a collection view handle.
-    pub fn collection<T>(&self, view_path: &str) -> ViewHandle<T, false>
+    /// Create a view handle.
+    pub fn view<T>(&self, view_path: &str) -> ViewHandle<T>
     where
         T: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
     {
@@ -240,31 +160,9 @@ impl ViewBuilder {
 ///
 /// This trait is implemented by generated code (e.g., `OreRoundViews`) to provide
 /// type-safe access to all views for an entity.
-///
-/// # Example Generated Code
-///
-/// ```ignore
-/// pub struct OreRoundViews {
-///     builder: ViewBuilder,
-/// }
-///
-/// impl OreRoundViews {
-///     pub fn new(hs: &HyperStack) -> Self {
-///         Self {
-///             builder: hs.view_builder(),
-///         }
-///     }
-///
-///     pub fn state(&self) -> StateView<OreRound> { ... }
-///     pub fn list(&self) -> ViewHandle<OreRound, false> { ... }
-///     pub fn latest(&self) -> ViewHandle<OreRound, true> { ... }
-/// }
-/// ```
 pub trait Views: Sized {
-    /// The entity type these views are for.
     type Entity: Entity;
 
-    /// Create a new views accessor from a HyperStack client.
     fn from_builder(builder: ViewBuilder) -> Self;
 }
 
@@ -281,7 +179,6 @@ impl<T> StateView<T>
 where
     T: Serialize + DeserializeOwned + Clone + Send + Sync + 'static,
 {
-    /// Create a new state view.
     pub fn new(
         connection: ConnectionManager,
         store: SharedStore,

@@ -1493,7 +1493,7 @@ pub fn parse_view_attributes(attrs: &[Attribute]) -> Vec<crate::ast::ViewDef> {
         let mut sort_by: Option<String> = None;
         let mut order = SortOrder::Desc;
         let mut take: Option<usize> = None;
-        let mut output = ViewOutput::Single;
+        let output = ViewOutput::Collection;
 
         if let syn::Meta::List(meta_list) = &attr.meta {
             let _ = meta_list.parse_nested_meta(|meta| {
@@ -1512,13 +1512,6 @@ pub fn parse_view_attributes(attrs: &[Attribute]) -> Vec<crate::ast::ViewDef> {
                 } else if meta.path.is_ident("take") {
                     let value: syn::LitInt = meta.value()?.parse()?;
                     take = Some(value.base10_parse::<usize>()?);
-                    output = ViewOutput::Collection;
-                } else if meta.path.is_ident("output") {
-                    let value: syn::LitStr = meta.value()?.parse()?;
-                    output = match value.value().to_lowercase().as_str() {
-                        "collection" => ViewOutput::Collection,
-                        _ => ViewOutput::Single,
-                    };
                 }
                 Ok(())
             });
@@ -1538,10 +1531,11 @@ pub fn parse_view_attributes(attrs: &[Attribute]) -> Vec<crate::ast::ViewDef> {
                 order,
             }];
 
+            // Only add Take transform if explicitly specified in the view definition.
+            // Views return all matching entities by default - users can limit results
+            // at query time using take() on the SDK side.
             if let Some(n) = take {
                 pipeline.push(ViewTransform::Take { count: n });
-            } else {
-                pipeline.push(ViewTransform::First);
             }
 
             views.push(ViewDef {

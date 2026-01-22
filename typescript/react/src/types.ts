@@ -79,6 +79,8 @@ export interface ListParams {
   where?: Record<string, unknown>;
   limit?: number;
   filters?: Record<string, string>;
+  take?: number;
+  skip?: number;
 }
 
 export interface UseMutationReturn {

@@ -664,11 +664,7 @@ async fn attach_derived_view_subscription_otel(
         .unwrap_or(100);
     let take = subscription.take.unwrap_or(pipeline_limit);
     let skip = subscription.skip.unwrap_or(0);
-    let is_single = view_spec
-        .pipeline
-        .as_ref()
-        .map(|p| p.is_single)
-        .unwrap_or(false);
+    let is_single = take == 1;
 
     let source_view_id = match &view_spec.source_view {
         Some(s) => s.clone(),
@@ -782,12 +778,6 @@ async fn attach_derived_view_subscription_otel(
                                             data: data.clone(),
                                             append: vec![],
                                         };
-                                        info!(
-                                            "[DERIVED-SINGLE-OTEL] Sending frame for view={} key={} data_preview={}",
-                                            view_id_clone,
-                                            new_key,
-                                            &data.to_string()[..std::cmp::min(200, data.to_string().len())]
-                                        );
                                         if let Ok(json) = serde_json::to_vec(&frame) {
                                             let payload = Arc::new(Bytes::from(json));
                                             if client_mgr.send_to_client(client_id, payload).is_err() {
@@ -797,8 +787,6 @@ async fn attach_derived_view_subscription_otel(
                                                 m.record_ws_message_sent();
                                             }
                                         }
-                                    } else {
-                                        info!("[DERIVED-SINGLE-OTEL] No data in window for view={}", view_id_clone);
                                     }
                                 } else {
                                     for key in current_window_keys.difference(&new_keys) {
@@ -1009,11 +997,7 @@ async fn attach_derived_view_subscription(
         .unwrap_or(100);
     let take = subscription.take.unwrap_or(pipeline_limit);
     let skip = subscription.skip.unwrap_or(0);
-    let is_single = view_spec
-        .pipeline
-        .as_ref()
-        .map(|p| p.is_single)
-        .unwrap_or(false);
+    let is_single = take == 1;
 
     let source_view_id = match &view_spec.source_view {
         Some(s) => s.clone(),
@@ -1083,15 +1067,11 @@ async fn attach_derived_view_subscription(
                     result = rx.recv() => {
                         match result {
                             Ok(_envelope) => {
-                                info!("[DERIVED-SINGLE] Received bus update for view={}", view_id_clone);
                                 let new_window: Vec<(String, serde_json::Value)> = {
                                     let mut caches = sorted_caches_clone.write().await;
                                     if let Some(cache) = caches.get_mut(&view_id_clone) {
-                                        let window = cache.get_window(skip, take);
-                                        info!("[DERIVED-SINGLE] Cache returned {} items for view={}", window.len(), view_id_clone);
-                                        window
+                                        cache.get_window(skip, take)
                                     } else {
-                                        info!("[DERIVED-SINGLE] No cache for view={}", view_id_clone);
                                         continue;
                                     }
                                 };
@@ -1126,20 +1106,12 @@ async fn attach_derived_view_subscription(
                                             data: data.clone(),
                                             append: vec![],
                                         };
-                                        info!(
-                                            "[DERIVED-SINGLE] Sending frame for view={} key={} data_preview={}",
-                                            view_id_clone,
-                                            new_key,
-                                            &data.to_string()[..std::cmp::min(200, data.to_string().len())]
-                                        );
                                         if let Ok(json) = serde_json::to_vec(&frame) {
                                             let payload = Arc::new(Bytes::from(json));
                                             if client_mgr.send_to_client(client_id, payload).is_err() {
                                                 return;
                                             }
                                         }
-                                    } else {
-                                        info!("[DERIVED-SINGLE] No data in window for view={}", view_id_clone);
                                     }
                                 } else {
                                     for key in current_window_keys.difference(&new_keys) {

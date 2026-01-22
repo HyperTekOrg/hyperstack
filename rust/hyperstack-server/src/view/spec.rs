@@ -120,7 +120,6 @@ impl ViewSpec {
             filter: None,
             sort: None,
             limit: None,
-            is_single: false,
         };
 
         for transform in transforms {
@@ -168,7 +167,6 @@ impl ViewSpec {
                     pipeline.limit = Some(*count);
                 }
                 VT::First | VT::Last | VT::MaxBy { .. } | VT::MinBy { .. } => {
-                    pipeline.is_single = true;
                     pipeline.limit = Some(1);
                 }
                 VT::Skip { .. } => {}

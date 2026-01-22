@@ -61,10 +61,8 @@ pub struct ViewPipeline {
     pub filter: Option<FilterConfig>,
     /// Sort configuration
     pub sort: Option<SortConfig>,
-    /// Limit (take N)
+    /// Limit (take N) - if Some(1), treated as single-result view for Replace effects
     pub limit: Option<usize>,
-    /// Whether this produces a single result
-    pub is_single: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -176,14 +174,10 @@ impl MaterializedView {
 
         match (was_in_view, matches_now) {
             (false, true) => {
-                // Entity newly matches - might need to add or replace
-                if self.pipeline.is_single {
-                    // Need to check if it beats the current single result
+                if self.pipeline.limit == Some(1) {
                     let current_keys = self.current_keys.read().await;
                     if let Some(current_key) = current_keys.iter().next() {
                         if current_key != key {
-                            // Would need full re-evaluation to determine if it replaces
-                            // For now, signal that view needs refresh
                             return ViewEffect::Replace {
                                 old_key: current_key.clone(),
                                 new_key: key.to_string(),
@@ -309,7 +303,6 @@ mod tests {
             }),
             sort: None,
             limit: None,
-            is_single: false,
         };
 
         let view =
@@ -336,7 +329,6 @@ mod tests {
                 order: SortOrder::Desc,
             }),
             limit: Some(2),
-            is_single: false,
         };
 
         let view =

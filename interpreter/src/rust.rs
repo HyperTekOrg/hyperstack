@@ -365,31 +365,17 @@ impl Entity for {entity_name}Entity {{
         for view in &derived {
             let view_name = view.id.split('/').nth(1).unwrap_or("unknown");
             let method_name = to_snake_case(view_name);
-            let is_single = matches!(view.output, ViewOutput::Single);
 
-            if is_single {
-                derived_methods.push_str(&format!(
-                    r#"
-    pub fn {method_name}(&self) -> ViewHandle<{entity_name}, true> {{
-        self.builder.single("{view_id}")
+            derived_methods.push_str(&format!(
+                r#"
+    pub fn {method_name}(&self) -> ViewHandle<{entity_name}> {{
+        self.builder.view("{view_id}")
     }}
 "#,
-                    method_name = method_name,
-                    entity_name = entity_name,
-                    view_id = view.id
-                ));
-            } else {
-                derived_methods.push_str(&format!(
-                    r#"
-    pub fn {method_name}(&self) -> ViewHandle<{entity_name}, false> {{
-        self.builder.collection("{view_id}")
-    }}
-"#,
-                    method_name = method_name,
-                    entity_name = entity_name,
-                    view_id = view.id
-                ));
-            }
+                method_name = method_name,
+                entity_name = entity_name,
+                view_id = view.id
+            ));
         }
 
         format!(
@@ -417,8 +403,8 @@ impl {entity_name}Views {{
         )
     }}
 
-    pub fn list(&self) -> ViewHandle<{entity_name}, false> {{
-        self.builder.collection("{entity_name}/list")
+    pub fn list(&self) -> ViewHandle<{entity_name}> {{
+        self.builder.view("{entity_name}/list")
     }}
 {derived_methods}}}
 "#,

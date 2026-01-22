@@ -13,6 +13,8 @@ export interface SubscriptionHandle {
   view: string;
   key?: string;
   filters?: Record<string, string>;
+  take?: number;
+  skip?: number;
   unsubscribe: () => void;
 }
 
@@ -22,7 +24,7 @@ export interface HyperstackRuntime {
   connection: ConnectionManager;
   subscriptionRegistry: SubscriptionRegistry;
   wallet?: WalletAdapter;
-  subscribe(view: string, key?: string, filters?: Record<string, string>): SubscriptionHandle;
+  subscribe(view: string, key?: string, filters?: Record<string, string>, take?: number, skip?: number): SubscriptionHandle;
   unsubscribe(handle: SubscriptionHandle): void;
 }
 
@@ -55,14 +57,16 @@ export function createRuntime(config: HyperstackConfig): HyperstackRuntime {
     subscriptionRegistry,
     wallet: config.wallet,
 
-    subscribe(view: string, key?: string, filters?: Record<string, string>): SubscriptionHandle {
-      const subscription: Subscription = { view, key, filters };
+    subscribe(view: string, key?: string, filters?: Record<string, string>, take?: number, skip?: number): SubscriptionHandle {
+      const subscription: Subscription = { view, key, filters, take, skip };
       const unsubscribe = subscriptionRegistry.subscribe(subscription);
 
       return {
         view,
         key,
         filters,
+        take,
+        skip,
         unsubscribe,
       };
     },
