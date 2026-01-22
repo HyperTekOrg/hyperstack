@@ -6,6 +6,7 @@ import {
   type Subscription,
   type Frame,
 } from 'hyperstack-typescript';
+import { Connection as SolanaConnection } from '@solana/web3.js';
 import { ZustandAdapter, type HyperStackStore } from './zustand-adapter';
 import type { HyperstackConfig, WalletAdapter } from './types';
 
@@ -22,6 +23,7 @@ export interface HyperstackRuntime {
   connection: ConnectionManager;
   subscriptionRegistry: SubscriptionRegistry;
   wallet?: WalletAdapter;
+  solanaConnection?: SolanaConnection;
   subscribe(view: string, key?: string, filters?: Record<string, string>): SubscriptionHandle;
   unsubscribe(handle: SubscriptionHandle): void;
 }
@@ -48,12 +50,23 @@ export function createRuntime(config: HyperstackConfig & { wallet?: WalletAdapte
     adapter.setConnectionState(state, error);
   });
 
+  let solanaConnection: SolanaConnection | undefined;
+  if (config.connection) {
+    solanaConnection = config.connection;
+  } else if (config.rpcUrl) {
+    solanaConnection = new SolanaConnection(
+      config.rpcUrl,
+      config.commitment || 'confirmed'
+    );
+  }
+
   return {
     zustandStore: adapter.store,
     adapter,
     connection,
     subscriptionRegistry,
     wallet: config.wallet,
+    solanaConnection,
 
     subscribe(view: string, key?: string, filters?: Record<string, string>): SubscriptionHandle {
       const subscription: Subscription = { view, key, filters };
