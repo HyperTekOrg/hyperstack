@@ -39,11 +39,11 @@ impl OreRoundViews {
         )
     }
 
-    pub fn list(&self) -> ViewHandle<OreRound, false> {
-        self.builder.collection("OreRound/list")
+    pub fn list(&self) -> ViewHandle<OreRound> {
+        self.builder.view("OreRound/list")
     }
 
-    pub fn latest(&self) -> ViewHandle<OreRound, true> {
-        self.builder.single("OreRound/latest")
+    pub fn latest(&self) -> ViewHandle<OreRound> {
+        self.builder.view("OreRound/latest")
     }
 }

@@ -3104,7 +3104,7 @@
       "result_type": "Option < bool >"
     }
   ],
-  "content_hash": "4af16eabbe78878d07152faf8bc7ad871a9c642a21d55f94adabf4ed124409a5",
+  "content_hash": "4deecb2c8fc7b89782d22e94f34a5f7d170d4c0e8befaef2e0614981de398225",
   "views": [
     {
       "id": "OreRound/latest",
@@ -3125,10 +3125,9 @@
             },
             "order": "desc"
           }
-        },
-        "First"
+        }
       ],
-      "output": "Single"
+      "output": "Collection"
     }
   ]
 }

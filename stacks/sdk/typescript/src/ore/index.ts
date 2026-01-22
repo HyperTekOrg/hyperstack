@@ -65,19 +65,14 @@ export interface ViewDef<T, TMode extends 'state' | 'list'> {
   readonly _entity?: T;
 }
 
-/** Helper to create typed state view definitions */
+/** Helper to create typed state view definitions (keyed lookups) */
 function stateView<T>(view: string): ViewDef<T, 'state'> {
   return { mode: 'state', view } as const;
 }
 
-/** Helper to create typed list view definitions */
+/** Helper to create typed list view definitions (collections) */
 function listView<T>(view: string): ViewDef<T, 'list'> {
   return { mode: 'list', view } as const;
-}
-
-/** Helper to create typed derived view definitions */
-function derivedView<T>(view: string, output: 'single' | 'collection'): ViewDef<T, 'state' | 'list'> {
-  return { mode: output === 'single' ? 'state' : 'list', view } as const;
 }
 
 // ============================================================================
@@ -91,7 +86,7 @@ export const OREROUND_STACK = {
     oreRound: {
       state: stateView<OreRound>('OreRound/state'),
       list: listView<OreRound>('OreRound/list'),
-      latest: derivedView<OreRound>('OreRound/latest', 'single'),
+      latest: listView<OreRound>('OreRound/latest'),
     },
   },
 } as const;

@@ -39,7 +39,7 @@ impl PumpfunTokenViews {
         )
     }
 
-    pub fn list(&self) -> ViewHandle<PumpfunToken, false> {
-        self.builder.collection("PumpfunToken/list")
+    pub fn list(&self) -> ViewHandle<PumpfunToken> {
+        self.builder.view("PumpfunToken/list")
     }
 }
