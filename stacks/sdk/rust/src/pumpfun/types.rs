@@ -44,6 +44,8 @@ pub struct PumpfunTokenTrading {
     pub total_buy_volume: Option<Option<u64>>,
     #[serde(rename = "totalSellVolume", default)]
     pub total_sell_volume: Option<Option<u64>>,
+    #[serde(rename = "totalBuyExactSolVolume", default)]
+    pub total_buy_exact_sol_volume: Option<Option<u64>>,
     #[serde(rename = "totalTrades", default)]
     pub total_trades: Option<Option<u64>>,
     #[serde(rename = "buyCount", default)]
@@ -74,8 +76,12 @@ pub struct PumpfunTokenTrading {
 pub struct PumpfunTokenEvents {
     #[serde(default)]
     pub create: Option<Option<serde_json::Value>>,
+    #[serde(rename = "createV2", default)]
+    pub create_v2: Option<Option<serde_json::Value>>,
     #[serde(default)]
     pub buys: Option<Vec<serde_json::Value>>,
+    #[serde(rename = "buysExactSol", default)]
+    pub buys_exact_sol: Option<Vec<serde_json::Value>>,
     #[serde(default)]
     pub sells: Option<Vec<serde_json::Value>>,
 }
@@ -162,10 +168,20 @@ pub struct Buy {
     pub event_authority: Option<String>,
     #[serde(rename = "program", default)]
     pub program: Option<String>,
+    #[serde(rename = "globalVolumeAccumulator", default)]
+    pub global_volume_accumulator: Option<String>,
+    #[serde(rename = "userVolumeAccumulator", default)]
+    pub user_volume_accumulator: Option<String>,
+    #[serde(rename = "feeConfig", default)]
+    pub fee_config: Option<String>,
+    #[serde(rename = "feeProgram", default)]
+    pub fee_program: Option<String>,
     #[serde(rename = "amount", default)]
     pub amount: Option<u64>,
     #[serde(rename = "maxSolCost", default)]
     pub max_sol_cost: Option<u64>,
+    #[serde(rename = "trackVolume", default)]
+    pub track_volume: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -194,6 +210,10 @@ pub struct Sell {
     pub event_authority: Option<String>,
     #[serde(rename = "program", default)]
     pub program: Option<String>,
+    #[serde(rename = "feeConfig", default)]
+    pub fee_config: Option<String>,
+    #[serde(rename = "feeProgram", default)]
+    pub fee_program: Option<String>,
     #[serde(rename = "amount", default)]
     pub amount: Option<u64>,
     #[serde(rename = "minSolOutput", default)]
@@ -216,6 +236,8 @@ pub struct BondingCurve {
     pub complete: Option<bool>,
     #[serde(rename = "creator", default)]
     pub creator: Option<String>,
+    #[serde(rename = "isMayhemMode", default)]
+    pub is_mayhem_mode: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

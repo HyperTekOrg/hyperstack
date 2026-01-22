@@ -1,12 +1,16 @@
+
+
 export interface PumpfunTokenEvents {
-  buys?: EventWrapper<Buy>[];
+  buys?: EventWrapper<Buy>[] | null;
+  buysExactSol?: any[] | null;
   create?: Create | null;
-  sells?: EventWrapper<Sell>[];
+  createV2?: Record<string, any> | null;
+  sells?: EventWrapper<Sell>[] | null;
 }
 
 export interface PumpfunTokenId {
-  bondingCurve?: string;
-  mint?: string;
+  bondingCurve?: string | null;
+  mint?: string | null;
 }
 
 export interface PumpfunTokenInfo {
@@ -35,6 +39,7 @@ export interface PumpfunTokenTrading {
   lastWhaleAddress?: string | null;
   sellCount?: number | null;
   smallestTrade?: number | null;
+  totalBuyExactSolVolume?: number | null;
   totalBuyVolume?: number | null;
   totalSellVolume?: number | null;
   totalTrades?: number | null;
@@ -86,8 +91,13 @@ export interface Buy {
   creatorVault?: string;
   eventAuthority?: string;
   program?: string;
+  globalVolumeAccumulator?: string;
+  userVolumeAccumulator?: string;
+  feeConfig?: string;
+  feeProgram?: string;
   amount?: number;
   maxSolCost?: number;
+  trackVolume?: Record<string, any>;
 }
 
 export interface Sell {
@@ -103,6 +113,8 @@ export interface Sell {
   tokenProgram?: string;
   eventAuthority?: string;
   program?: string;
+  feeConfig?: string;
+  feeProgram?: string;
   amount?: number;
   minSolOutput?: number;
 }
@@ -115,6 +127,7 @@ export interface BondingCurve {
   tokenTotalSupply?: number;
   complete?: boolean;
   creator?: string;
+  isMayhemMode?: boolean;
 }
 
 export interface BuysEvent {
@@ -122,9 +135,18 @@ export interface BuysEvent {
   maxSolCost: number;
 }
 
-export interface CreateEvent { }
+export interface BuysExactSolEvent {
+  spendableSolIn: number;
+  minTokensOut: number;
+}
 
-export interface SellsEvent { }
+export interface CreateEvent {}
+
+export interface CreateV2Event {}
+
+export interface SellsEvent {}
+
+export type ConfigStatus = "Paused" | "Active";
 
 /**
  * Wrapper for event data that includes context metadata.
@@ -153,12 +175,12 @@ export interface ViewDef<T, TMode extends 'state' | 'list'> {
   readonly _entity?: T;
 }
 
-/** Helper to create typed state view definitions */
+/** Helper to create typed state view definitions (keyed lookups) */
 function stateView<T>(view: string): ViewDef<T, 'state'> {
   return { mode: 'state', view } as const;
 }
 
-/** Helper to create typed list view definitions */
+/** Helper to create typed list view definitions (collections) */
 function listView<T>(view: string): ViewDef<T, 'list'> {
   return { mode: 'list', view } as const;
 }
