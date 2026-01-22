@@ -143,6 +143,23 @@ function TokenDetail({ mint }: { mint: string }) {
 
 ## View Options
 
+### Single Item Query
+
+```tsx
+// Get only one item with type-safe return (T | undefined instead of T[])
+const { data: latestToken } = stack.views.tokens.list.use({ take: 1 });
+// data: Token | undefined
+
+// Or use the dedicated useOne method
+const { data: latestToken } = stack.views.tokens.list.useOne();
+// data: Token | undefined
+
+// useOne with filters
+const { data: topToken } = stack.views.tokens.list.useOne({
+  where: { volume: { gte: 10000 } },
+});
+```
+
 ### Filtering
 
 ```tsx
@@ -317,6 +334,17 @@ const state = useConnectionState();
 | `isLoading` | `boolean`               | True until first data received   |
 | `error`     | `Error \| undefined`    | Connection or subscription error |
 | `refresh`   | `() => void`            | Manually trigger a refresh       |
+
+### List View `.useOne()` 
+
+A convenience method for fetching a single item from a list view with proper typing.
+
+```typescript
+const { data } = stack.views.tokens.list.useOne();
+// data: Token | undefined (not Token[])
+```
+
+Equivalent to `.use({ take: 1 })` but with a cleaner API and explicit intent.
 
 ---
 
