@@ -1,7 +1,10 @@
-use crate::frame::{parse_snapshot_entities, Frame, Operation};
+use crate::frame::{
+    parse_snapshot_entities, Frame, Operation, SortConfig, SortOrder, SubscribedFrame,
+};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::cmp::Ordering;
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tokio::sync::{broadcast, watch, RwLock};
 
@@ -26,13 +29,105 @@ impl Default for StoreConfig {
     }
 }
 
-/// Tracks access order for LRU eviction within a view.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SortKey {
+    sort_value: SortValue,
+    entity_key: String,
+}
+
+impl PartialOrd for SortKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for SortKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.sort_value.cmp(&other.sort_value) {
+            Ordering::Equal => self.entity_key.cmp(&other.entity_key),
+            other => other,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum SortValue {
+    Null,
+    Bool(bool),
+    Integer(i64),
+    String(String),
+}
+
+impl Ord for SortValue {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (SortValue::Null, SortValue::Null) => Ordering::Equal,
+            (SortValue::Null, _) => Ordering::Less,
+            (_, SortValue::Null) => Ordering::Greater,
+            (SortValue::Bool(a), SortValue::Bool(b)) => a.cmp(b),
+            (SortValue::Integer(a), SortValue::Integer(b)) => a.cmp(b),
+            (SortValue::String(a), SortValue::String(b)) => a.cmp(b),
+            (SortValue::Integer(_), SortValue::String(_)) => Ordering::Less,
+            (SortValue::String(_), SortValue::Integer(_)) => Ordering::Greater,
+            (SortValue::Bool(_), _) => Ordering::Less,
+            (_, SortValue::Bool(_)) => Ordering::Greater,
+        }
+    }
+}
+
+impl PartialOrd for SortValue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+fn extract_sort_value(entity: &Value, field_path: &[String]) -> SortValue {
+    let mut current = entity;
+    for segment in field_path {
+        match current.get(segment) {
+            Some(v) => current = v,
+            None => return SortValue::Null,
+        }
+    }
+
+    match current {
+        Value::Null => SortValue::Null,
+        Value::Bool(b) => SortValue::Bool(*b),
+        Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                SortValue::Integer(i)
+            } else if let Some(f) = n.as_f64() {
+                SortValue::Integer(f as i64)
+            } else {
+                SortValue::Null
+            }
+        }
+        Value::String(s) => SortValue::String(s.clone()),
+        _ => SortValue::Null,
+    }
+}
+
+fn extract_sort_value_for_order(
+    entity: &Value,
+    field_path: &[String],
+    order: SortOrder,
+) -> SortValue {
+    let value = extract_sort_value(entity, field_path);
+    match order {
+        SortOrder::Asc => value,
+        SortOrder::Desc => match value {
+            SortValue::Integer(i) => SortValue::Integer(-i),
+            SortValue::Bool(b) => SortValue::Bool(!b),
+            other => other,
+        },
+    }
+}
+
 struct ViewData {
-    /// The actual entity data keyed by entity key.
     entities: HashMap<String, serde_json::Value>,
-    /// Access order queue - front is oldest, back is most recent.
-    /// Used for LRU eviction when max_entries is exceeded.
     access_order: VecDeque<String>,
+    sort_config: Option<SortConfig>,
+    sorted_keys: BTreeMap<SortKey, ()>,
 }
 
 fn deep_merge_with_append(
@@ -84,6 +179,7 @@ pub struct StoreUpdate {
 
 pub struct SharedStore {
     views: Arc<RwLock<HashMap<String, ViewData>>>,
+    view_configs: Arc<RwLock<HashMap<String, SortConfig>>>,
     updates_tx: broadcast::Sender<StoreUpdate>,
     ready_views: Arc<RwLock<HashSet<String>>>,
     ready_tx: watch::Sender<HashSet<String>>,
@@ -96,29 +192,110 @@ impl ViewData {
         Self {
             entities: HashMap::new(),
             access_order: VecDeque::new(),
+            sort_config: None,
+            sorted_keys: BTreeMap::new(),
         }
     }
 
+    fn with_sort_config(sort_config: SortConfig) -> Self {
+        Self {
+            entities: HashMap::new(),
+            access_order: VecDeque::new(),
+            sort_config: Some(sort_config),
+            sorted_keys: BTreeMap::new(),
+        }
+    }
+
+    fn set_sort_config(&mut self, config: SortConfig) {
+        if self.sort_config.is_some() {
+            return;
+        }
+        self.sort_config = Some(config);
+        self.rebuild_sorted_keys();
+    }
+
+    fn rebuild_sorted_keys(&mut self) {
+        self.sorted_keys.clear();
+        if let Some(ref config) = self.sort_config {
+            for (key, value) in &self.entities {
+                let sort_value = extract_sort_value_for_order(value, &config.field, config.order);
+                let sort_key = SortKey {
+                    sort_value,
+                    entity_key: key.clone(),
+                };
+                self.sorted_keys.insert(sort_key, ());
+            }
+        }
+        self.access_order.clear();
+    }
+
     fn touch(&mut self, key: &str) {
+        if self.sort_config.is_some() {
+            return;
+        }
         self.access_order.retain(|k| k != key);
         self.access_order.push_back(key.to_string());
     }
 
     fn insert(&mut self, key: String, value: serde_json::Value) {
-        if !self.entities.contains_key(&key) {
-            self.access_order.push_back(key.clone());
+        if let Some(ref config) = self.sort_config {
+            if let Some(old_value) = self.entities.get(&key) {
+                let old_sort_value =
+                    extract_sort_value_for_order(old_value, &config.field, config.order);
+                let old_sort_key = SortKey {
+                    sort_value: old_sort_value,
+                    entity_key: key.clone(),
+                };
+                self.sorted_keys.remove(&old_sort_key);
+            }
+
+            let sort_value = extract_sort_value_for_order(&value, &config.field, config.order);
+            let sort_key = SortKey {
+                sort_value,
+                entity_key: key.clone(),
+            };
+            self.sorted_keys.insert(sort_key, ());
         } else {
-            self.touch(&key);
+            if !self.entities.contains_key(&key) {
+                self.access_order.push_back(key.clone());
+            } else {
+                self.touch(&key);
+            }
         }
         self.entities.insert(key, value);
     }
 
     fn remove(&mut self, key: &str) -> Option<serde_json::Value> {
-        self.access_order.retain(|k| k != key);
+        if let Some(ref config) = self.sort_config {
+            if let Some(value) = self.entities.get(key) {
+                let sort_value = extract_sort_value_for_order(value, &config.field, config.order);
+                let sort_key = SortKey {
+                    sort_value,
+                    entity_key: key.to_string(),
+                };
+                self.sorted_keys.remove(&sort_key);
+            }
+        } else {
+            self.access_order.retain(|k| k != key);
+        }
         self.entities.remove(key)
     }
 
     fn evict_oldest(&mut self) -> Option<String> {
+        if self.sort_config.is_some() {
+            if let Some((sort_key, _)) = self
+                .sorted_keys
+                .iter()
+                .next_back()
+                .map(|(k, v)| (k.clone(), *v))
+            {
+                self.sorted_keys.remove(&sort_key);
+                self.entities.remove(&sort_key.entity_key);
+                return Some(sort_key.entity_key);
+            }
+            return None;
+        }
+
         if let Some(oldest_key) = self.access_order.pop_front() {
             self.entities.remove(&oldest_key);
             Some(oldest_key)
@@ -129,6 +306,28 @@ impl ViewData {
 
     fn len(&self) -> usize {
         self.entities.len()
+    }
+
+    fn ordered_keys(&self) -> Vec<String> {
+        if self.sort_config.is_some() {
+            self.sorted_keys
+                .keys()
+                .map(|sk| sk.entity_key.clone())
+                .collect()
+        } else {
+            self.entities.keys().cloned().collect()
+        }
+    }
+
+    fn ordered_values(&self) -> Vec<serde_json::Value> {
+        if self.sort_config.is_some() {
+            self.sorted_keys
+                .keys()
+                .filter_map(|sk| self.entities.get(&sk.entity_key).cloned())
+                .collect()
+        } else {
+            self.entities.values().cloned().collect()
+        }
     }
 }
 
@@ -142,6 +341,7 @@ impl SharedStore {
         let (ready_tx, ready_rx) = watch::channel(HashSet::new());
         Self {
             views: Arc::new(RwLock::new(HashMap::new())),
+            view_configs: Arc::new(RwLock::new(HashMap::new())),
             updates_tx,
             ready_views: Arc::new(RwLock::new(HashSet::new())),
             ready_tx,
@@ -176,10 +376,16 @@ impl SharedStore {
             return;
         }
 
+        let sort_config = self.view_configs.read().await.get(view_path).cloned();
+
         let mut views = self.views.write().await;
-        let view_data = views
-            .entry(view_path.to_string())
-            .or_insert_with(ViewData::new);
+        let view_data = views.entry(view_path.to_string()).or_insert_with(|| {
+            if let Some(config) = sort_config {
+                ViewData::with_sort_config(config)
+            } else {
+                ViewData::new()
+            }
+        });
 
         let previous = view_data.entities.get(&frame.key).cloned();
 
@@ -205,7 +411,7 @@ impl SharedStore {
                 view_data.remove(&frame.key);
                 (None, None)
             }
-            Operation::Snapshot => unreachable!(),
+            Operation::Snapshot | Operation::Subscribed => unreachable!(),
         };
 
         let _ = self.updates_tx.send(StoreUpdate {
@@ -230,10 +436,16 @@ impl SharedStore {
             snapshot_entities.len()
         );
 
+        let sort_config = self.view_configs.read().await.get(view_path).cloned();
+
         let mut views = self.views.write().await;
-        let view_data = views
-            .entry(view_path.to_string())
-            .or_insert_with(ViewData::new);
+        let view_data = views.entry(view_path.to_string()).or_insert_with(|| {
+            if let Some(config) = sort_config {
+                ViewData::with_sort_config(config)
+            } else {
+                ViewData::new()
+            }
+        });
 
         for entity in snapshot_entities {
             let previous = view_data.entities.get(&entity.key).cloned();
@@ -306,9 +518,9 @@ impl SharedStore {
             .get(view)
             .map(|view_data| {
                 view_data
-                    .entities
-                    .values()
-                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                    .ordered_values()
+                    .into_iter()
+                    .filter_map(|v| serde_json::from_value(v).ok())
                     .collect()
             })
             .unwrap_or_default()
@@ -325,6 +537,44 @@ impl SharedStore {
     pub fn subscribe(&self) -> broadcast::Receiver<StoreUpdate> {
         self.updates_tx.subscribe()
     }
+
+    pub async fn apply_subscribed_frame(&self, frame: SubscribedFrame) {
+        let view_path = &frame.view;
+        tracing::debug!(
+            "apply_subscribed_frame: view={}, mode={:?}, sort={:?}",
+            view_path,
+            frame.mode,
+            frame.sort,
+        );
+
+        if let Some(sort_config) = frame.sort {
+            self.view_configs
+                .write()
+                .await
+                .insert(view_path.to_string(), sort_config.clone());
+
+            let mut views = self.views.write().await;
+            if let Some(view_data) = views.get_mut(view_path) {
+                view_data.set_sort_config(sort_config);
+            }
+        }
+    }
+
+    pub async fn get_view_sort_config(&self, view: &str) -> Option<SortConfig> {
+        self.view_configs.read().await.get(view).cloned()
+    }
+
+    pub async fn set_view_sort_config(&self, view: &str, config: SortConfig) {
+        self.view_configs
+            .write()
+            .await
+            .insert(view.to_string(), config.clone());
+
+        let mut views = self.views.write().await;
+        if let Some(view_data) = views.get_mut(view) {
+            view_data.set_sort_config(config);
+        }
+    }
 }
 
 impl Default for SharedStore {
@@ -337,6 +587,7 @@ impl Clone for SharedStore {
     fn clone(&self) -> Self {
         Self {
             views: self.views.clone(),
+            view_configs: self.view_configs.clone(),
             updates_tx: self.updates_tx.clone(),
             ready_views: self.ready_views.clone(),
             ready_tx: self.ready_tx.clone(),

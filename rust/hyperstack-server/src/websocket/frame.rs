@@ -12,6 +12,48 @@ pub enum Mode {
     List,
 }
 
+/// Sort order for sorted views
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SortOrder {
+    Asc,
+    Desc,
+}
+
+/// Sort configuration for a view
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SortConfig {
+    /// Field path to sort by (e.g., ["id", "roundId"])
+    pub field: Vec<String>,
+    /// Sort order
+    pub order: SortOrder,
+}
+
+/// Subscription acknowledgment frame sent when a client subscribes
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubscribedFrame {
+    /// Operation type - always "subscribed"
+    pub op: &'static str,
+    /// The view that was subscribed to
+    pub view: String,
+    /// Streaming mode for this view
+    pub mode: Mode,
+    /// Sort configuration if this is a sorted view
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort: Option<SortConfig>,
+}
+
+impl SubscribedFrame {
+    pub fn new(view: String, mode: Mode, sort: Option<SortConfig>) -> Self {
+        Self {
+            op: "subscribed",
+            view,
+            mode,
+            sort,
+        }
+    }
+}
+
 /// Data frame sent over WebSocket
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Frame {

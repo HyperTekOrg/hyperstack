@@ -3,7 +3,9 @@ use crate::cache::{EntityCache, SnapshotBatchConfig};
 use crate::compression::maybe_compress;
 use crate::view::{ViewIndex, ViewSpec};
 use crate::websocket::client_manager::ClientManager;
-use crate::websocket::frame::{Frame, Mode, SnapshotEntity, SnapshotFrame};
+use crate::websocket::frame::{
+    Frame, Mode, SnapshotEntity, SnapshotFrame, SortConfig, SortOrder, SubscribedFrame,
+};
 use crate::websocket::subscription::{ClientMessage, Subscription};
 use anyhow::Result;
 use bytes::Bytes;
@@ -502,6 +504,34 @@ async fn send_snapshot_batches(
     Ok(())
 }
 
+fn extract_sort_config(view_spec: &ViewSpec) -> Option<SortConfig> {
+    view_spec.pipeline.as_ref().and_then(|p| {
+        p.sort.as_ref().map(|sort| SortConfig {
+            field: sort.field_path.clone(),
+            order: match sort.order {
+                crate::materialized_view::SortOrder::Asc => SortOrder::Asc,
+                crate::materialized_view::SortOrder::Desc => SortOrder::Desc,
+            },
+        })
+    })
+}
+
+fn send_subscribed_frame(
+    client_id: Uuid,
+    view_id: &str,
+    view_spec: &ViewSpec,
+    client_manager: &ClientManager,
+) -> Result<()> {
+    let sort_config = extract_sort_config(view_spec);
+    let subscribed_frame = SubscribedFrame::new(view_id.to_string(), view_spec.mode, sort_config);
+
+    let json_payload = serde_json::to_vec(&subscribed_frame)?;
+    let payload = Arc::new(Bytes::from(json_payload));
+    client_manager
+        .send_to_client(client_id, payload)
+        .map_err(|e| anyhow::anyhow!("Failed to send subscribed frame: {:?}", e))
+}
+
 #[cfg(feature = "otel")]
 async fn attach_client_to_bus(
     ctx: &SubscriptionContext<'_>,
@@ -517,6 +547,11 @@ async fn attach_client_to_bus(
             return;
         }
     };
+
+    if let Err(e) = send_subscribed_frame(ctx.client_id, view_id, &view_spec, ctx.client_manager) {
+        warn!("Failed to send subscribed frame: {}", e);
+        return;
+    }
 
     let is_derived_with_sort = view_spec.is_derived()
         && view_spec
@@ -864,6 +899,11 @@ async fn attach_client_to_bus(
             return;
         }
     };
+
+    if let Err(e) = send_subscribed_frame(ctx.client_id, view_id, &view_spec, ctx.client_manager) {
+        warn!("Failed to send subscribed frame: {}", e);
+        return;
+    }
 
     let is_derived_with_sort = view_spec.is_derived()
         && view_spec

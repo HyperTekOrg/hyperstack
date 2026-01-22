@@ -155,7 +155,8 @@ export function createListViewHook<T>(
           return unsubscribe;
         },
         () => {
-          const baseMap = runtime.zustandStore.getState().entities.get(viewDef.view) as Map<string, unknown> | undefined;
+          const state = runtime.zustandStore.getState();
+          const baseMap = state.entities.get(viewDef.view) as Map<string, unknown> | undefined;
 
           if (!baseMap) {
             if (cachedDataRef.current !== undefined) {
@@ -169,7 +170,14 @@ export function createListViewHook<T>(
             return cachedDataRef.current;
           }
 
-          let items = Array.from(baseMap.values()) as T[];
+          const sortedKeys = state.sortedKeys.get(viewDef.view);
+          let items: T[];
+          
+          if (sortedKeys && sortedKeys.length > 0) {
+            items = sortedKeys.map(k => baseMap.get(k)).filter(v => v !== undefined) as T[];
+          } else {
+            items = Array.from(baseMap.values()) as T[];
+          }
 
           if (params?.where) {
             items = items.filter((item) => {

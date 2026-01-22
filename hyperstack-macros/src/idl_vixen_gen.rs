@@ -252,6 +252,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 async fn handle(&self, value: &parsers::#state_enum_name, raw_update: &hyperstack::runtime::yellowstone_vixen_core::AccountUpdate)
                     -> hyperstack::runtime::yellowstone_vixen::HandlerResult<()>
                 {
+                    hyperstack::runtime::tracing::debug!(?raw_update, "Received AccountUpdate from Geyser via Vixen");
                     let slot = raw_update.slot;
                     let account = raw_update.account.as_ref().unwrap();
                     let write_version = account.write_version;
@@ -350,6 +351,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 async fn handle(&self, value: &parsers::#instruction_enum_name, raw_update: &hyperstack::runtime::yellowstone_vixen_core::instruction::InstructionUpdate)
                     -> hyperstack::runtime::yellowstone_vixen::HandlerResult<()>
                 {
+                    hyperstack::runtime::tracing::debug!(?raw_update, "Received InstructionUpdate from Geyser via Vixen");
                     let slot = raw_update.shared.slot;
                     let txn_index = raw_update.shared.txn_index;
                     let signature = hyperstack::runtime::bs58::encode(&raw_update.shared.signature).into_string();
@@ -411,82 +413,8 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                                     hook_fn(&mut ctx);
                                 }
 
-                                let dirty_fields: std::collections::HashSet<String> = ctx.dirty_tracker().dirty_paths();
                                 let pending_updates = ctx.take_pending_updates();
                                 drop(ctx);
-
-                                if !dirty_fields.is_empty() {
-                                    if let Ok(ref mutations) = result {
-                                        if let Some(first_mutation) = mutations.first() {
-                                            let _ = vm.update_state_from_register(0, first_mutation.key.clone(), 2);
-                                        }
-                                    }
-
-                                    if let Ok(patch) = vm.extract_partial_state(2, &dirty_fields) {
-                                        if let Some(mint) = event_value.get("accounts").and_then(|a| a.get("mint")).and_then(|m| m.as_str()) {
-                                            if let Ok(ref mut mutations) = result {
-                                                let mint_value = hyperstack::runtime::serde_json::Value::String(mint.to_string());
-                                                let found = mutations.iter_mut()
-                                                    .find(|m| m.key == mint_value)
-                                                    .map(|m| {
-                                                        if let hyperstack::runtime::serde_json::Value::Object(ref mut existing_patch_obj) = m.patch {
-                                                            if let hyperstack::runtime::serde_json::Value::Object(new_patch_obj) = patch.clone() {
-                                                                for (section_key, new_section_value) in new_patch_obj {
-                                                                    if let Some(existing_section) = existing_patch_obj.get_mut(&section_key) {
-                                                                        if let (Some(existing_obj), Some(new_obj)) =
-                                                                            (existing_section.as_object_mut(), new_section_value.as_object()) {
-                                                                            for (field_key, field_value) in new_obj {
-                                                                                existing_obj.insert(field_key.clone(), field_value.clone());
-                                                                            }
-                                                                        } else {
-                                                                            *existing_section = new_section_value.clone();
-                                                                        }
-                                                                    } else {
-                                                                        existing_patch_obj.insert(section_key.clone(), new_section_value.clone());
-                                                                    }
-                                                                }
-
-                                                                let mut full_state_for_eval = vm.registers_mut()[2].clone();
-                                                                let _ = evaluate_computed_fields(&mut full_state_for_eval);
-                                                                for path in computed_field_paths() {
-                                                                    let parts: Vec<&str> = path.split('.').collect();
-                                                                    if parts.len() >= 2 {
-                                                                        let section = parts[0];
-                                                                        let field = parts[1];
-                                                                        if let Some(value) = full_state_for_eval
-                                                                            .get(section)
-                                                                            .and_then(|s| s.get(field))
-                                                                        {
-                                                                            if !existing_patch_obj.contains_key(section) {
-                                                                                existing_patch_obj.insert(
-                                                                                    section.to_string(),
-                                                                                    hyperstack::runtime::serde_json::json!({})
-                                                                                );
-                                                                            }
-                                                                            if let Some(patch_section) = existing_patch_obj.get_mut(section) {
-                                                                                if let Some(obj) = patch_section.as_object_mut() {
-                                                                                    obj.insert(field.to_string(), value.clone());
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    });
-
-                                                if found.is_none() {
-                                                    mutations.push(hyperstack::runtime::hyperstack_interpreter::Mutation {
-                                                        export: "Token".to_string(),
-                                                        key: mint_value,
-                                                        patch: patch.clone(),
-                                                        append: Vec::new(),
-                                                    });
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
 
                                 if !pending_updates.is_empty() {
                                     for update in pending_updates.into_iter() {

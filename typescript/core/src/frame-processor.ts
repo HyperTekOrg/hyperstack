@@ -1,5 +1,5 @@
-import type { Frame, SnapshotFrame, EntityFrame } from './frame';
-import { isSnapshotFrame } from './frame';
+import type { Frame, SnapshotFrame, EntityFrame, SubscribedFrame } from './frame';
+import { isSnapshotFrame, isSubscribedFrame } from './frame';
 import type { StorageAdapter } from './storage/adapter';
 import type { RichUpdate } from './types';
 import { DEFAULT_MAX_ENTRIES_PER_VIEW } from './types';
@@ -62,10 +62,18 @@ export class FrameProcessor {
   }
 
   handleFrame<T>(frame: Frame<T>): void {
-    if (isSnapshotFrame(frame)) {
+    if (isSubscribedFrame(frame)) {
+      this.handleSubscribedFrame(frame);
+    } else if (isSnapshotFrame(frame)) {
       this.handleSnapshotFrame(frame);
     } else {
       this.handleEntityFrame(frame);
+    }
+  }
+
+  private handleSubscribedFrame(frame: SubscribedFrame): void {
+    if (this.storage.setViewConfig && frame.sort) {
+      this.storage.setViewConfig(frame.view, { sort: frame.sort });
     }
   }
 

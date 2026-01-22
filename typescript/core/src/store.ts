@@ -1,5 +1,5 @@
-import type { EntityFrame, SnapshotFrame, Frame } from './frame';
-import { isSnapshotFrame } from './frame';
+import type { EntityFrame, SnapshotFrame, Frame, SortConfig, SubscribedFrame } from './frame';
+import { isSnapshotFrame, isSubscribedFrame } from './frame';
 import type { Update, RichUpdate, SubscribeCallback, UnsubscribeFn } from './types';
 import { DEFAULT_MAX_ENTRIES_PER_VIEW } from './types';
 
@@ -7,27 +7,120 @@ export interface EntityStoreConfig {
   maxEntriesPerView?: number | null;
 }
 
+export interface ViewConfig {
+  sort?: SortConfig;
+}
+
+function getNestedValue(obj: unknown, path: string[]): unknown {
+  let current: unknown = obj;
+  for (const segment of path) {
+    if (current === null || current === undefined) return undefined;
+    if (typeof current !== 'object') return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
+function compareSortValues(a: unknown, b: unknown): number {
+  if (a === b) return 0;
+  if (a === undefined || a === null) return -1;
+  if (b === undefined || b === null) return 1;
+
+  if (typeof a === 'number' && typeof b === 'number') {
+    return a - b;
+  }
+  if (typeof a === 'string' && typeof b === 'string') {
+    return a.localeCompare(b);
+  }
+  if (typeof a === 'boolean' && typeof b === 'boolean') {
+    return (a ? 1 : 0) - (b ? 1 : 0);
+  }
+
+  return String(a).localeCompare(String(b));
+}
+
 class ViewData<T = unknown> {
   private entities: Map<string, T> = new Map();
   private accessOrder: string[] = [];
+  private sortConfig: SortConfig | undefined;
+  private sortedKeys: string[] = [];
+
+  constructor(sortConfig?: SortConfig) {
+    this.sortConfig = sortConfig;
+  }
 
   get(key: string): T | undefined {
     return this.entities.get(key);
   }
 
   set(key: string, value: T): void {
-    if (!this.entities.has(key)) {
-      this.accessOrder.push(key);
-    } else {
-      this.touch(key);
-    }
+    const isNew = !this.entities.has(key);
     this.entities.set(key, value);
+
+    if (this.sortConfig) {
+      this.updateSortedPosition(key, value, isNew);
+    } else {
+      if (isNew) {
+        this.accessOrder.push(key);
+      } else {
+        this.touch(key);
+      }
+    }
+  }
+
+  private updateSortedPosition(key: string, value: T, isNew: boolean): void {
+    if (!isNew) {
+      const existingIdx = this.sortedKeys.indexOf(key);
+      if (existingIdx !== -1) {
+        this.sortedKeys.splice(existingIdx, 1);
+      }
+    }
+
+    const sortValue = getNestedValue(value, this.sortConfig!.field);
+    const isDesc = this.sortConfig!.order === 'desc';
+
+    let insertIdx = this.binarySearchInsertPosition(sortValue, key, isDesc);
+    this.sortedKeys.splice(insertIdx, 0, key);
+  }
+
+  private binarySearchInsertPosition(sortValue: unknown, key: string, isDesc: boolean): number {
+    let low = 0;
+    let high = this.sortedKeys.length;
+
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2);
+      const midKey = this.sortedKeys[mid];
+      const midEntity = this.entities.get(midKey);
+      const midValue = getNestedValue(midEntity, this.sortConfig!.field);
+
+      let cmp = compareSortValues(sortValue, midValue);
+      if (isDesc) cmp = -cmp;
+
+      if (cmp === 0) {
+        cmp = key.localeCompare(midKey);
+      }
+
+      if (cmp < 0) {
+        high = mid;
+      } else {
+        low = mid + 1;
+      }
+    }
+
+    return low;
   }
 
   delete(key: string): boolean {
-    const idx = this.accessOrder.indexOf(key);
-    if (idx !== -1) {
-      this.accessOrder.splice(idx, 1);
+    if (this.sortConfig) {
+      const idx = this.sortedKeys.indexOf(key);
+      if (idx !== -1) {
+        this.sortedKeys.splice(idx, 1);
+      }
+    } else {
+      const idx = this.accessOrder.indexOf(key);
+      if (idx !== -1) {
+        this.accessOrder.splice(idx, 1);
+      }
     }
     return this.entities.delete(key);
   }
@@ -36,12 +129,18 @@ class ViewData<T = unknown> {
     return this.entities.has(key);
   }
 
-  values(): IterableIterator<T> {
-    return this.entities.values();
+  values(): T[] {
+    if (this.sortConfig) {
+      return this.sortedKeys.map(k => this.entities.get(k)!);
+    }
+    return Array.from(this.entities.values());
   }
 
-  keys(): IterableIterator<string> {
-    return this.entities.keys();
+  keys(): string[] {
+    if (this.sortConfig) {
+      return [...this.sortedKeys];
+    }
+    return Array.from(this.entities.keys());
   }
 
   get size(): number {
@@ -49,6 +148,7 @@ class ViewData<T = unknown> {
   }
 
   touch(key: string): void {
+    if (this.sortConfig) return;
     const idx = this.accessOrder.indexOf(key);
     if (idx !== -1) {
       this.accessOrder.splice(idx, 1);
@@ -57,11 +157,49 @@ class ViewData<T = unknown> {
   }
 
   evictOldest(): string | undefined {
+    if (this.sortConfig) {
+      const oldest = this.sortedKeys.pop();
+      if (oldest !== undefined) {
+        this.entities.delete(oldest);
+      }
+      return oldest;
+    }
     const oldest = this.accessOrder.shift();
     if (oldest !== undefined) {
       this.entities.delete(oldest);
     }
     return oldest;
+  }
+
+  setSortConfig(config: SortConfig): void {
+    if (this.sortConfig) return;
+    this.sortConfig = config;
+    this.rebuildSortedKeys();
+  }
+
+  private rebuildSortedKeys(): void {
+    if (!this.sortConfig) return;
+
+    const entries = Array.from(this.entities.entries());
+    const isDesc = this.sortConfig.order === 'desc';
+
+    entries.sort((a, b) => {
+      const aValue = getNestedValue(a[1], this.sortConfig!.field);
+      const bValue = getNestedValue(b[1], this.sortConfig!.field);
+      let cmp = compareSortValues(aValue, bValue);
+      if (isDesc) cmp = -cmp;
+      if (cmp === 0) {
+        cmp = a[0].localeCompare(b[0]);
+      }
+      return cmp;
+    });
+
+    this.sortedKeys = entries.map(([k]) => k);
+    this.accessOrder = [];
+  }
+
+  getSortConfig(): SortConfig | undefined {
+    return this.sortConfig;
   }
 }
 
@@ -112,6 +250,7 @@ type RichUpdateCallback = (viewPath: string, key: string, update: RichUpdate<unk
 
 export class EntityStore {
   private views: Map<string, ViewData<unknown>> = new Map();
+  private viewConfigs: Map<string, ViewConfig> = new Map();
   private updateCallbacks: Set<EntityUpdateCallback> = new Set();
   private richUpdateCallbacks: Set<RichUpdateCallback> = new Set();
   private maxEntriesPerView: number | null;
@@ -130,19 +269,40 @@ export class EntityStore {
   }
 
   handleFrame<T>(frame: Frame<T>): void {
+    if (isSubscribedFrame(frame)) {
+      this.handleSubscribedFrame(frame);
+      return;
+    }
     if (isSnapshotFrame(frame)) {
       this.handleSnapshotFrame(frame);
       return;
     }
-    this.handleEntityFrame(frame);
+    this.handleEntityFrame(frame as EntityFrame<T>);
+  }
+
+  private handleSubscribedFrame(frame: SubscribedFrame): void {
+    const viewPath = frame.view;
+    const config: ViewConfig = {};
+
+    if (frame.sort) {
+      config.sort = frame.sort;
+    }
+
+    this.viewConfigs.set(viewPath, config);
+
+    const existingView = this.views.get(viewPath);
+    if (existingView && frame.sort) {
+      existingView.setSortConfig(frame.sort);
+    }
   }
 
   private handleSnapshotFrame<T>(frame: SnapshotFrame<T>): void {
     const viewPath = frame.entity;
     let viewData = this.views.get(viewPath);
+    const viewConfig = this.viewConfigs.get(viewPath);
 
     if (!viewData) {
-      viewData = new ViewData();
+      viewData = new ViewData(viewConfig?.sort);
       this.views.set(viewPath, viewData);
     }
 
@@ -162,9 +322,10 @@ export class EntityStore {
   private handleEntityFrame<T>(frame: EntityFrame<T>): void {
     const viewPath = frame.entity;
     let viewData = this.views.get(viewPath);
+    const viewConfig = this.viewConfigs.get(viewPath);
 
     if (!viewData) {
-      viewData = new ViewData();
+      viewData = new ViewData(viewConfig?.sort);
       this.views.set(viewPath, viewData);
     }
 
@@ -216,7 +377,7 @@ export class EntityStore {
   getAll<T>(viewPath: string): T[] {
     const viewData = this.views.get(viewPath);
     if (!viewData) return [];
-    return Array.from(viewData.values()) as T[];
+    return viewData.values() as T[];
   }
 
   get<T>(viewPath: string, key: string): T | null {
@@ -229,7 +390,7 @@ export class EntityStore {
   getAllSync<T>(viewPath: string): T[] | undefined {
     const viewData = this.views.get(viewPath);
     if (!viewData) return undefined;
-    return Array.from(viewData.values()) as T[];
+    return viewData.values() as T[];
   }
 
   getSync<T>(viewPath: string, key: string): T | null | undefined {
@@ -242,7 +403,7 @@ export class EntityStore {
   keys(viewPath: string): string[] {
     const viewData = this.views.get(viewPath);
     if (!viewData) return [];
-    return Array.from(viewData.keys());
+    return viewData.keys();
   }
 
   size(viewPath: string): number {
@@ -256,6 +417,19 @@ export class EntityStore {
 
   clearView(viewPath: string): void {
     this.views.delete(viewPath);
+    this.viewConfigs.delete(viewPath);
+  }
+
+  getViewConfig(viewPath: string): ViewConfig | undefined {
+    return this.viewConfigs.get(viewPath);
+  }
+
+  setViewConfig(viewPath: string, config: ViewConfig): void {
+    this.viewConfigs.set(viewPath, config);
+    const existingView = this.views.get(viewPath);
+    if (existingView && config.sort) {
+      existingView.setSortConfig(config.sort);
+    }
   }
 
   onUpdate(callback: EntityUpdateCallback): UnsubscribeFn {

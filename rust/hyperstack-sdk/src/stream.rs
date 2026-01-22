@@ -359,6 +359,9 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for EntityStre
                                     }
                                 }
                             }
+                            Operation::Subscribed => {
+                                continue;
+                            }
                         }
                     }
                     Poll::Ready(Some(Err(_lagged))) => {
@@ -554,6 +557,9 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for RichEntity
                                         }
                                     }
                                 }
+                            }
+                            Operation::Subscribed => {
+                                continue;
                             }
                         }
                     }
