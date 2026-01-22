@@ -247,8 +247,12 @@ impl IdlSpec {
         instruction_name: &str,
         field_name: &str,
     ) -> Option<&'static str> {
+        // Normalize instruction name to snake_case for comparison
+        // IDL uses snake_case (e.g., "create_v2") but code uses PascalCase (e.g., "CreateV2")
+        let normalized_name = to_snake_case(instruction_name);
+
         for instruction in &self.instructions {
-            if instruction.name.eq_ignore_ascii_case(instruction_name) {
+            if instruction.name == normalized_name {
                 // Check if it's an account
                 for account in &instruction.accounts {
                     if account.name == field_name {
@@ -271,8 +275,9 @@ impl IdlSpec {
 
     /// Get the discriminator bytes for an instruction by name
     pub fn get_instruction_discriminator(&self, instruction_name: &str) -> Option<Vec<u8>> {
+        let normalized_name = to_snake_case(instruction_name);
         for instruction in &self.instructions {
-            if instruction.name.eq_ignore_ascii_case(instruction_name) {
+            if instruction.name == normalized_name {
                 let disc = instruction.get_discriminator();
                 if !disc.is_empty() {
                     return Some(disc);

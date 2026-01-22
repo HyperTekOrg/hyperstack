@@ -4666,7 +4666,7 @@
             "FromSource": {
               "path": {
                 "segments": [
-                  "data",
+                  "accounts",
                   "user"
                 ],
                 "offsets": null
@@ -4808,7 +4808,7 @@
         "Embedded": {
           "primary_field": {
             "segments": [
-              "data",
+              "accounts",
               "mint"
             ],
             "offsets": null
@@ -4822,7 +4822,7 @@
             "FromSource": {
               "path": {
                 "segments": [
-                  "data",
+                  "accounts",
                   "mint"
                 ],
                 "offsets": null
@@ -4840,7 +4840,7 @@
             "FromSource": {
               "path": {
                 "segments": [
-                  "data",
+                  "accounts",
                   "bonding_curve"
                 ],
                 "offsets": null
@@ -7421,6 +7421,6 @@
       "result_type": "Option < f64 >"
     }
   ],
-  "content_hash": "678f3213a0fabcaa8e169427d58f046427f9a5369003a0d1cbb0a34552157758",
+  "content_hash": "20bf3b79722212f4e5b628e403a5234179dde8cd04ceef85886c0e4dcd1f2ffb",
   "views": []
 }
