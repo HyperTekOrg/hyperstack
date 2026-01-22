@@ -1,22 +1,21 @@
-use hyperstack_sdk::{Entity, StateView, ViewBuilder, ViewHandle, Views};
 use super::types::OreRound;
+use hyperstack_sdk::{Entity, StateView, ViewBuilder, ViewHandle, Views};
 
 pub struct OreRoundEntity;
 
 impl Entity for OreRoundEntity {
     type Data = OreRound;
-    
+
     const NAME: &'static str = "OreRound";
-    
+
     fn state_view() -> &'static str {
         "OreRound/state"
     }
-    
+
     fn list_view() -> &'static str {
         "OreRound/list"
     }
 }
-
 
 pub struct OreRoundViews {
     builder: ViewBuilder,
