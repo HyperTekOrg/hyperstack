@@ -43,27 +43,27 @@ export function PumpFunDashboard() {
         <div className="mb-6">
           <h5 className="text-sm font-medium text-gray-700 mb-3">Reserves</h5>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {reserves?.virtual_sol_reserves !== undefined && (
+            {reserves?.virtualSolReserves !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Virtual SOL Reserves</div>
                 <div className="text-lg font-medium text-gray-900">
-                  {formatSol(reserves.virtual_sol_reserves)} SOL
+                  {formatSol(reserves.virtualSolReserves)} SOL
                 </div>
               </div>
             )}
-            {reserves?.real_sol_reserves !== undefined && (
+            {reserves?.realSolReserves !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Real SOL Reserves</div>
                 <div className="text-lg font-medium text-green-600">
-                  {formatSol(reserves.real_sol_reserves)} SOL
+                  {formatSol(reserves.realSolReserves)} SOL
                 </div>
               </div>
             )}
-            {reserves?.token_total_supply !== undefined && (
+            {reserves?.tokenTotalSupply !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Total Supply</div>
                 <div className="text-lg font-medium text-blue-600">
-                  {formatNumber(reserves.token_total_supply)}
+                  {formatNumber(reserves.tokenTotalSupply)}
                 </div>
               </div>
             )}
@@ -74,51 +74,51 @@ export function PumpFunDashboard() {
         <div className="mb-6">
           <h5 className="text-sm font-medium text-gray-700 mb-3">Trading Statistics</h5>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {trading?.total_volume !== undefined && (
+            {trading?.totalVolume !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Total Volume</div>
                 <div className="text-lg font-medium text-gray-900">
-                  {formatNumber(trading.total_volume)}
+                  {formatNumber(trading.totalVolume)}
                 </div>
               </div>
             )}
-            {trading?.total_trades !== undefined && (
+            {trading?.totalTrades !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Total Trades</div>
                 <div className="text-lg font-medium text-purple-600">
-                  {formatNumber(trading.total_trades)}
+                  {formatNumber(trading.totalTrades)}
                 </div>
               </div>
             )}
-            {trading?.unique_traders !== undefined && (
+            {trading?.uniqueTraders !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Unique Traders</div>
                 <div className="text-lg font-medium text-blue-600">
-                  {formatNumber(trading.unique_traders)}
+                  {formatNumber(trading.uniqueTraders)}
                 </div>
               </div>
             )}
-            {trading?.buy_count !== undefined && (
+            {trading?.buyCount !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Buy Count</div>
                 <div className="text-lg font-medium text-green-600">
-                  {formatNumber(trading.buy_count)}
+                  {formatNumber(trading.buyCount)}
                 </div>
               </div>
             )}
-            {trading?.sell_count !== undefined && (
+            {trading?.sellCount !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Sell Count</div>
                 <div className="text-lg font-medium text-red-600">
-                  {formatNumber(trading.sell_count)}
+                  {formatNumber(trading.sellCount)}
                 </div>
               </div>
             )}
-            {trading?.last_trade_price !== undefined && (
+            {trading?.lastTradePrice !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Last Trade Price</div>
                 <div className="text-lg font-medium text-gray-900">
-                  {trading.last_trade_price.toFixed(10)} SOL
+                  {trading.lastTradePrice.toFixed(10)} SOL
                 </div>
               </div>
             )}
@@ -192,9 +192,9 @@ export function PumpFunDashboard() {
                     {tokensList
                       .slice((tokensPage - 1) * ITEMS_PER_PAGE, tokensPage * ITEMS_PER_PAGE)
                       .map((token: any, index: number) => {
-                        const tokenKey = token.bonding_curve_snapshot?.account_address || `token-${index}`;
+                        const tokenKey = token.bondingCurveSnapshot?.creator || token.id?.bondingCurve || `token-${index}`;
                         const isExpanded = expandedTokens.has(tokenKey);
-                        const isComplete = token.info?.is_complete || token.bonding_curve_snapshot?.data?.complete;
+                        const isComplete = token.info?.isComplete || token.bondingCurveSnapshot?.complete;
 
                         return (
                           <div
@@ -222,16 +222,16 @@ export function PumpFunDashboard() {
                                   </div>
                                   <div className="text-sm text-gray-600 mt-1">
                                     Bonding Curve: {shortenAddress(tokenKey)}
-                                    {token.trading?.last_trade_price !== undefined && (
-                                      <> | Price: {token.trading.last_trade_price.toFixed(10)} SOL</>
+                                    {token.trading?.lastTradePrice !== undefined && (
+                                      <> | Price: {token.trading.lastTradePrice.toFixed(10)} SOL</>
                                     )}
                                   </div>
                                   <div className="text-xs text-gray-500 mt-1">
-                                    {token.trading?.total_trades !== undefined && (
-                                      <>{token.trading.total_trades} trades</>
+                                    {token.trading?.totalTrades !== undefined && (
+                                      <>{token.trading.totalTrades} trades</>
                                     )}
-                                    {token.trading?.unique_traders !== undefined && (
-                                      <> • {token.trading.unique_traders} traders</>
+                                    {token.trading?.uniqueTraders !== undefined && (
+                                      <> • {token.trading.uniqueTraders} traders</>
                                     )}
                                   </div>
                                 </div>
