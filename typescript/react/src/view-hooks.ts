@@ -99,6 +99,7 @@ export function createListViewHook<T>(
       const [error, setError] = useState<Error | undefined>();
       const cachedDataRef = useRef<T[] | undefined>(undefined);
       const lastMapRef = useRef<Map<string, unknown> | undefined>(undefined);
+      const lastSortedKeysRef = useRef<string[] | undefined>(undefined);
 
       const enabled = options?.enabled !== false;
       const key = params?.key;
@@ -158,19 +159,21 @@ export function createListViewHook<T>(
           const state = runtime.zustandStore.getState();
           const baseMap = state.entities.get(viewDef.view) as Map<string, unknown> | undefined;
 
+          const sortedKeys = state.sortedKeys.get(viewDef.view);
+
           if (!baseMap) {
             if (cachedDataRef.current !== undefined) {
               cachedDataRef.current = undefined;
               lastMapRef.current = undefined;
+              lastSortedKeysRef.current = undefined;
             }
             return undefined;
           }
 
-          if (lastMapRef.current === baseMap && cachedDataRef.current !== undefined) {
+          if (lastMapRef.current === baseMap && lastSortedKeysRef.current === sortedKeys && cachedDataRef.current !== undefined) {
             return cachedDataRef.current;
           }
 
-          const sortedKeys = state.sortedKeys.get(viewDef.view);
           let items: T[];
           
           if (sortedKeys && sortedKeys.length > 0) {
@@ -201,7 +204,8 @@ export function createListViewHook<T>(
             items = items.slice(0, params.limit);
           }
 
-          lastMapRef.current = runtime.zustandStore.getState().entities.get(viewDef.view) as Map<string, unknown> | undefined;
+          lastMapRef.current = baseMap;
+          lastSortedKeysRef.current = sortedKeys;
           cachedDataRef.current = items;
           return items;
         }
