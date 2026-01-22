@@ -845,23 +845,21 @@ async fn attach_derived_view_subscription_otel(
                                     }
 
                                     for (key, data) in &new_window {
-                                        if !current_window_keys.contains(key) {
-                                            let add_frame = Frame {
-                                                mode: frame_mode,
-                                                export: view_id_clone.clone(),
-                                                op: "patch",
-                                                key: key.clone(),
-                                                data: data.clone(),
-                                                append: vec![],
-                                            };
-                                            if let Ok(json) = serde_json::to_vec(&add_frame) {
-                                                let payload = Arc::new(Bytes::from(json));
-                                                if client_mgr.send_to_client(client_id, payload).is_err() {
-                                                    return;
-                                                }
-                                                if let Some(ref m) = metrics_clone {
-                                                    m.record_ws_message_sent();
-                                                }
+                                        let frame = Frame {
+                                            mode: frame_mode,
+                                            export: view_id_clone.clone(),
+                                            op: "upsert",
+                                            key: key.clone(),
+                                            data: data.clone(),
+                                            append: vec![],
+                                        };
+                                        if let Ok(json) = serde_json::to_vec(&frame) {
+                                            let payload = Arc::new(Bytes::from(json));
+                                            if client_mgr.send_to_client(client_id, payload).is_err() {
+                                                return;
+                                            }
+                                            if let Some(ref m) = metrics_clone {
+                                                m.record_ws_message_sent();
                                             }
                                         }
                                     }
@@ -1172,20 +1170,18 @@ async fn attach_derived_view_subscription(
                                     }
 
                                     for (key, data) in &new_window {
-                                        if !current_window_keys.contains(key) {
-                                            let add_frame = Frame {
-                                                mode: frame_mode,
-                                                export: view_id_clone.clone(),
-                                                op: "patch",
-                                                key: key.clone(),
-                                                data: data.clone(),
-                                                append: vec![],
-                                            };
-                                            if let Ok(json) = serde_json::to_vec(&add_frame) {
-                                                let payload = Arc::new(Bytes::from(json));
-                                                if client_mgr.send_to_client(client_id, payload).is_err() {
-                                                    return;
-                                                }
+                                        let frame = Frame {
+                                            mode: frame_mode,
+                                            export: view_id_clone.clone(),
+                                            op: "upsert",
+                                            key: key.clone(),
+                                            data: data.clone(),
+                                            append: vec![],
+                                        };
+                                        if let Ok(json) = serde_json::to_vec(&frame) {
+                                            let payload = Arc::new(Bytes::from(json));
+                                            if client_mgr.send_to_client(client_id, payload).is_err() {
+                                                return;
                                             }
                                         }
                                     }
