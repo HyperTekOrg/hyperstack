@@ -74,14 +74,23 @@ export interface ViewHookResult<T> {
   refresh: () => void;
 }
 
-export interface ListParams {
+export interface ListParamsBase {
   key?: string;
   where?: Record<string, unknown>;
   limit?: number;
   filters?: Record<string, string>;
-  take?: number;
   skip?: number;
 }
+
+export interface ListParamsSingle extends ListParamsBase {
+  take: 1;
+}
+
+export interface ListParamsMultiple extends ListParamsBase {
+  take?: number;
+}
+
+export type ListParams = ListParamsSingle | ListParamsMultiple;
 
 export interface UseMutationReturn {
   submit: (instructionOrTx: unknown | unknown[]) => Promise<string>;
@@ -96,5 +105,7 @@ export interface StateViewHook<T> {
 }
 
 export interface ListViewHook<T> {
-  use: (params?: ListParams, options?: ViewHookOptions) => ViewHookResult<T[]>;
+  use(params: ListParamsSingle, options?: ViewHookOptions): ViewHookResult<T | undefined>;
+  use(params?: ListParamsMultiple, options?: ViewHookOptions): ViewHookResult<T[]>;
+  useOne: (params?: Omit<ListParamsBase, 'take'>, options?: ViewHookOptions) => ViewHookResult<T | undefined>;
 }

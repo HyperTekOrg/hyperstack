@@ -9,7 +9,9 @@ import {
   TransactionDefinition,
   ViewHookOptions,
   ViewHookResult,
-  ListParams,
+  ListParamsSingle,
+  ListParamsMultiple,
+  ListParamsBase,
   UseMutationReturn,
   ViewGroup
 } from './types';
@@ -25,17 +27,25 @@ type ViewHookForDef<TDef> = TDef extends ViewDef<infer T, 'state'>
     }
   : TDef extends ViewDef<infer T, 'list'>
   ? {
-      use: (
-        params?: ListParams,
+      use: {
+        (params: ListParamsSingle, options?: ViewHookOptions): ViewHookResult<T | undefined>;
+        (params?: ListParamsMultiple, options?: ViewHookOptions): ViewHookResult<T[]>;
+      };
+      useOne: (
+        params?: Omit<ListParamsBase, 'take'>,
         options?: ViewHookOptions
-      ) => ViewHookResult<T[]>;
+      ) => ViewHookResult<T | undefined>;
     }
   : TDef extends ViewDef<infer T, 'state' | 'list'>
   ? {
-      use: (
-        keyOrParams?: Record<string, string> | ListParams,
+      use: {
+        (params: ListParamsSingle, options?: ViewHookOptions): ViewHookResult<T | undefined>;
+        (params?: ListParamsMultiple | Record<string, string>, options?: ViewHookOptions): ViewHookResult<T | T[]>;
+      };
+      useOne: (
+        params?: Omit<ListParamsBase, 'take'>,
         options?: ViewHookOptions
-      ) => ViewHookResult<T | T[]>;
+      ) => ViewHookResult<T | undefined>;
     }
   : never;
 
