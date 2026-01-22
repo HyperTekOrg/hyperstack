@@ -188,12 +188,7 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 hyperstack::runtime::tracing::info!("   Entity: {}", entity_name);
                 for (event_type, handler_opcodes) in &entity_bytecode.handlers {
                     hyperstack::runtime::tracing::info!("      {} -> {} opcodes", event_type, handler_opcodes.len());
-                    if event_type == "BuyIxState" {
-                        hyperstack::runtime::tracing::info!("         Opcode types:");
-                        for (idx, opcode) in handler_opcodes.iter().enumerate() {
-                            hyperstack::runtime::tracing::info!("            [{}] {:?}", idx, opcode);
-                        }
-                    }
+
                 }
             }
 
