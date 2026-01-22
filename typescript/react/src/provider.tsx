@@ -3,6 +3,7 @@ import type { ConnectionState } from 'hyperstack-typescript';
 import type { HyperstackConfig, NetworkConfig } from './types';
 import { createRuntime, HyperstackRuntime } from './runtime';
 import { useHyperstackWallet } from './wallet-adapter';
+import { WalletProvider, useWallet } from '@solana/wallet-adapter-react';
 
 interface HyperstackContextValue {
   runtime: HyperstackRuntime;
@@ -47,7 +48,7 @@ function resolveNetworkConfig(network: 'devnet' | 'mainnet' | 'localnet' | Netwo
   throw new Error('Must provide either network or websocketUrl');
 }
 
-export function HyperstackProvider({
+function InternalHyperstackProvider({
   children,
   ...config
 }: HyperstackConfig & {
@@ -123,6 +124,39 @@ export function HyperstackProvider({
     <HyperstackContext.Provider value={value}>
       {children}
     </HyperstackContext.Provider>
+  );
+}
+
+export function HyperstackProvider({
+  children,
+  wallets,
+  ...config
+}: HyperstackConfig & {
+  children: ReactNode;
+}) {
+  let hasWalletContext = false;
+  
+  try {
+    useWallet();
+    hasWalletContext = true;
+  } catch {
+    hasWalletContext = false;
+  }
+  
+  if (!hasWalletContext && wallets && wallets.length > 0) {
+    return (
+      <WalletProvider wallets={wallets} autoConnect>
+        <InternalHyperstackProvider {...config}>
+          {children}
+        </InternalHyperstackProvider>
+      </WalletProvider>
+    );
+  }
+  
+  return (
+    <InternalHyperstackProvider {...config}>
+      {children}
+    </InternalHyperstackProvider>
   );
 }
 

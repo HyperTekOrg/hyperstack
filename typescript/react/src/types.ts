@@ -1,4 +1,5 @@
 import type { PublicKey, Transaction, Connection } from '@solana/web3.js';
+import type { Adapter } from '@solana/wallet-adapter-base';
 
 export type {
   ConnectionState,
@@ -56,6 +57,7 @@ export interface HyperstackConfig {
   rpcUrl?: string;
   connection?: Connection;
   commitment?: 'processed' | 'confirmed' | 'finalized';
+  wallets?: Adapter[];
 }
 
 export interface TransactionOptions {
