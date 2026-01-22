@@ -183,6 +183,10 @@ pub enum IdlTypeDefKind {
         kind: String,
         fields: Vec<IdlField>,
     },
+    TupleStruct {
+        kind: String,
+        fields: Vec<IdlType>,
+    },
     Enum {
         kind: String,
         variants: Vec<IdlEnumVariant>,
@@ -206,7 +210,8 @@ pub struct IdlEvent {
 pub struct IdlError {
     pub code: u32,
     pub name: String,
-    pub msg: String,
+    #[serde(default)]
+    pub msg: Option<String>,
 }
 
 pub fn parse_idl_file<P: AsRef<Path>>(path: P) -> Result<IdlSpec, String> {

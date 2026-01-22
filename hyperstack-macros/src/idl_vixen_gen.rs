@@ -252,7 +252,6 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 async fn handle(&self, value: &parsers::#state_enum_name, raw_update: &hyperstack::runtime::yellowstone_vixen_core::AccountUpdate)
                     -> hyperstack::runtime::yellowstone_vixen::HandlerResult<()>
                 {
-                    hyperstack::runtime::tracing::debug!(?value, "Received AccountUpdate from Geyser via Vixen");
                     let slot = raw_update.slot;
                     let account = raw_update.account.as_ref().unwrap();
                     let write_version = account.write_version;
@@ -351,11 +350,10 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                 async fn handle(&self, value: &parsers::#instruction_enum_name, raw_update: &hyperstack::runtime::yellowstone_vixen_core::instruction::InstructionUpdate)
                     -> hyperstack::runtime::yellowstone_vixen::HandlerResult<()>
                 {
-                    hyperstack::runtime::tracing::debug!(?value, "Received InstructionUpdate from Geyser via Vixen");
+                    let event_type = value.event_type();
                     let slot = raw_update.shared.slot;
                     let txn_index = raw_update.shared.txn_index;
                     let signature = hyperstack::runtime::bs58::encode(&raw_update.shared.signature).into_string();
-                    let event_type = value.event_type();
 
                     if let Some(ref health) = self.health_monitor {
                         health.record_event().await;

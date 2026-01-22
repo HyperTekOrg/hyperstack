@@ -185,6 +185,10 @@ pub enum IdlTypeDefKindSnapshot {
         kind: String,
         fields: Vec<IdlFieldSnapshot>,
     },
+    TupleStruct {
+        kind: String,
+        fields: Vec<IdlTypeSnapshot>,
+    },
     Enum {
         kind: String,
         variants: Vec<IdlEnumVariantSnapshot>,
@@ -208,7 +212,8 @@ pub struct IdlEventSnapshot {
 pub struct IdlErrorSnapshot {
     pub code: u32,
     pub name: String,
-    pub msg: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub msg: Option<String>,
 }
 
 // ============================================================================

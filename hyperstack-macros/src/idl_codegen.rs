@@ -56,7 +56,7 @@ fn generate_account_type(account: &IdlAccount, types: &[IdlTypeDef]) -> TokenStr
                     quote! { pub #field_name: #field_type }
                 })
                 .collect::<Vec<_>>(),
-            _ => vec![],
+            IdlTypeDefKind::TupleStruct { .. } | IdlTypeDefKind::Enum { .. } => vec![],
         }
     } else {
         // Fallback: Look up the type definition in the types array (Anchor format)
@@ -70,7 +70,7 @@ fn generate_account_type(account: &IdlAccount, types: &[IdlTypeDef]) -> TokenStr
                         quote! { pub #field_name: #field_type }
                     })
                     .collect::<Vec<_>>(),
-                _ => vec![],
+                IdlTypeDefKind::TupleStruct { .. } | IdlTypeDefKind::Enum { .. } => vec![],
             }
         } else {
             vec![]
@@ -130,7 +130,7 @@ fn generate_instruction_type(instruction: &IdlInstruction) -> TokenStream {
     // For instructions with no args, also derive Default so we can construct them without deserialization
     let has_args = !instruction.args.is_empty();
     let derives = if has_args {
-        quote! { #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)] }
+        quote! { #[derive(Debug, Clone, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)] }
     } else {
         quote! { #[derive(Debug, Clone, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)] }
     };
@@ -146,8 +146,17 @@ fn generate_instruction_type(instruction: &IdlInstruction) -> TokenStream {
 
             pub fn try_from_bytes(data: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
                 let mut reader = data;
-                borsh::BorshDeserialize::deserialize_reader(&mut reader)
-                    .map_err(|e| e.into())
+                match borsh::BorshDeserialize::deserialize_reader(&mut reader) {
+                    Ok(v) => Ok(v),
+                    Err(_) if !data.is_empty() => {
+                        let mut padded = data.to_vec();
+                        padded.resize(256, 0);
+                        let mut reader = padded.as_slice();
+                        borsh::BorshDeserialize::deserialize_reader(&mut reader)
+                            .map_err(|e| e.into())
+                    }
+                    Err(e) => Err(e.into()),
+                }
             }
         }
     }
@@ -173,20 +182,32 @@ fn generate_custom_type(type_def: &IdlTypeDef) -> TokenStream {
             });
 
             quote! {
-                #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+                #[derive(Debug, Clone, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
                 pub struct #name {
                     #(#struct_fields),*
                 }
             }
         }
+        IdlTypeDefKind::TupleStruct { kind: _, fields } => {
+            let tuple_fields = fields.iter().map(|t| type_to_token_stream(t));
+
+            quote! {
+                #[derive(Debug, Clone, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+                pub struct #name(#(pub #tuple_fields),*);
+            }
+        }
         IdlTypeDefKind::Enum { kind: _, variants } => {
-            let enum_variants = variants.iter().map(|variant| {
+            let enum_variants = variants.iter().enumerate().map(|(i, variant)| {
                 let variant_name = format_ident!("{}", variant.name);
-                quote! { #variant_name }
+                if i == 0 {
+                    quote! { #[default] #variant_name }
+                } else {
+                    quote! { #variant_name }
+                }
             });
 
             quote! {
-                #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+                #[derive(Debug, Clone, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
                 pub enum #name {
                     #(#enum_variants),*
                 }
