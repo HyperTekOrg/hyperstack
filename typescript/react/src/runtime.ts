@@ -7,7 +7,7 @@ import {
   type Frame,
 } from 'hyperstack-typescript';
 import { ZustandAdapter, type HyperStackStore } from './zustand-adapter';
-import type { HyperstackConfig, WalletAdapter } from './types';
+import { DEFAULT_FLUSH_INTERVAL_MS, type HyperstackConfig, type WalletAdapter } from './types';
 
 export interface SubscriptionHandle {
   view: string;
@@ -32,6 +32,7 @@ export function createRuntime(config: HyperstackConfig): HyperstackRuntime {
   const adapter = new ZustandAdapter();
   const processor = new FrameProcessor(adapter, {
     maxEntriesPerView: config.maxEntriesPerView,
+    flushIntervalMs: config.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS,
   });
 
   const connection = new ConnectionManager({

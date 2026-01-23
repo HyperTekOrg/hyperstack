@@ -45,6 +45,8 @@ export interface ViewGroup {
   [key: string]: ViewDef<unknown, ViewMode> | undefined;
 }
 
+export const DEFAULT_FLUSH_INTERVAL_MS = 16;
+
 export interface HyperstackConfig {
   websocketUrl?: string;
   network?: 'devnet' | 'mainnet' | 'localnet' | NetworkConfig;
@@ -54,6 +56,13 @@ export interface HyperstackConfig {
   reconnectIntervals?: number[];
   maxReconnectAttempts?: number;
   maxEntriesPerView?: number | null;
+  /**
+   * Interval in milliseconds to buffer WebSocket updates before flushing to Zustand.
+   * Reduces React re-renders during high-frequency updates.
+   * Default: 16ms (one frame at 60fps)
+   * Set to 0 for immediate updates (no buffering).
+   */
+  flushIntervalMs?: number;
 }
 
 export interface WalletAdapter {
