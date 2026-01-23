@@ -1,12 +1,13 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightLlmsTxt from "starlight-llms-txt";
+import starlightPageActions from "starlight-page-actions";
 
 export default defineConfig({
   site: "https://docs.usehyperstack.com",
   integrations: [
     starlight({
-      plugins: [starlightLlmsTxt()],
+      plugins: [starlightLlmsTxt(), starlightPageActions()],
       title: "Hyperstack",
       social: [
         {
