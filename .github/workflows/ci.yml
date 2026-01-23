@@ -147,8 +147,8 @@ jobs:
 
       - name: Build stack crates (regenerate ASTs)
         run: |
-          cargo build -p pumpfun-stack
-          cargo build -p ore-stack
+          cargo build --manifest-path stacks/pumpfun/Cargo.toml
+          cargo build --manifest-path stacks/ore/Cargo.toml
 
       - name: Install hyperstack-cli
         run: cargo install --path cli
@@ -171,7 +171,8 @@ jobs:
             echo ""
             echo "To fix this, run the following locally and commit the changes:"
             echo ""
-            echo "  cargo build -p pumpfun-stack -p ore-stack"
+            echo "  cargo build --manifest-path stacks/pumpfun/Cargo.toml"
+            echo "  cargo build --manifest-path stacks/ore/Cargo.toml"
             echo "  hs sdk create typescript pumpfun-token --config stacks/pumpfun/hyperstack.toml"
             echo "  hs sdk create typescript ore-round --config stacks/ore/hyperstack.toml"
             echo ""
