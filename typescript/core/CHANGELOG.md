@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.3.2...hyperstack-typescript-v0.3.3) (2026-01-23)
+
+
+### Features
+
+* **react:** add configurable frame buffering to reduce render churn ([c4bdb13](https://github.com/HyperTekOrg/hyperstack/commit/c4bdb13bf8efa085b8105c1fbbdc1e19127e6590))
+* **sdk:** add sorted view support with server-side subscribed frame ([1a7d83f](https://github.com/HyperTekOrg/hyperstack/commit/1a7d83fe4000c26d282f2df9ce95f9d79414014d))
+
 ## [0.3.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.3.1...hyperstack-typescript-v0.3.2) (2026-01-20)
 
 

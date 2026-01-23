@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.3.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.3.2...hyperstack-stacks-v0.3.3) (2026-01-23)
+
+
+### Features
+
+* Add generated sdk for ore ([9480849](https://github.com/HyperTekOrg/hyperstack/commit/94808491a3e09667a2742f8e1e7f78dc04a24ec3))
+* add unified Views API to Rust SDK ([97afb97](https://github.com/HyperTekOrg/hyperstack/commit/97afb97f1f9d21030ba400fef5a7727d674a93e0))
+* **pumpfun:** add CreateV2 and BuyExactSolIn instruction support ([a8c06c0](https://github.com/HyperTekOrg/hyperstack/commit/a8c06c07f01c4fc8050db67268e0196f18fe5c66))
+* **rust-sdk:** add serde field renames and implement OreRoundViews ([6f6cb91](https://github.com/HyperTekOrg/hyperstack/commit/6f6cb91fe46588f33d3f1802efe7b0fb45efba19))
+* **stacks:** wire ore SDK into hyperstack-stacks package ([506b781](https://github.com/HyperTekOrg/hyperstack/commit/506b781930786e6e8caf9c045f70b1a7ed7af7e8))
+
+
+### Bug Fixes
+
+* convert field names to camelCase for JSON serialization ([3dc05a4](https://github.com/HyperTekOrg/hyperstack/commit/3dc05a4eddebca9636827562f9793fdf1c16c1c9))
+* Rust sdk ([6d8105e](https://github.com/HyperTekOrg/hyperstack/commit/6d8105eff96c6557c7aa417399fed98797183f48))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-sdk bumped from 0.3.2 to 0.3.3
+
 ## [0.3.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.3.1...hyperstack-stacks-v0.3.2) (2026-01-20)
 
 

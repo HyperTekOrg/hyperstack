@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.3.2...hyperstack-v0.3.3) (2026-01-23)
+
+
+### Features
+
+* **macros:** add #[view] attribute for declarative view definitions on entities ([3f0bdc5](https://github.com/HyperTekOrg/hyperstack/commit/3f0bdc51d7945c32082ffa8997362328c7b26022))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.2 to 0.3.3
+    * hyperstack-macros bumped from 0.3.2 to 0.3.3
+    * hyperstack-server bumped from 0.3.2 to 0.3.3
+    * hyperstack-sdk bumped from 0.3.2 to 0.3.3
+
 ## [0.3.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.3.1...hyperstack-v0.3.2) (2026-01-20)
 
 

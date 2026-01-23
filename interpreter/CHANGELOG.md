@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.3.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.3.2...hyperstack-interpreter-v0.3.3) (2026-01-23)
+
+
+### Features
+
+* add derived view support to React SDK and macros ([5f6414f](https://github.com/HyperTekOrg/hyperstack/commit/5f6414f879f2891be2d8ee5c16173cf83ddf2ea9))
+* add unified Views API to Rust SDK ([97afb97](https://github.com/HyperTekOrg/hyperstack/commit/97afb97f1f9d21030ba400fef5a7727d674a93e0))
+* add view pipeline for derived views like `latest`, `top10` ([f2f72fa](https://github.com/HyperTekOrg/hyperstack/commit/f2f72fa8894d2a38a13e8ee05791b7e4124977ea))
+* **macros:** support tuple structs, 8-byte discriminators, and optional error messages in IDL ([090b5d6](https://github.com/HyperTekOrg/hyperstack/commit/090b5d62999e7bbae2dfb577a0d028b6675def01))
+
+
+### Bug Fixes
+
+* **interpreter:** prevent duplicate unmapped fields in TypeScript generation ([a7b2870](https://github.com/HyperTekOrg/hyperstack/commit/a7b28709c67994b09eef973e0a14e9be965e3367))
+* **interpreter:** queue instruction events when PDA lookup fails ([c5779b4](https://github.com/HyperTekOrg/hyperstack/commit/c5779b48a6ed31670fdbf2884e2748488adadc0c))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-macros bumped from 0.3.2 to 0.3.3
+
 ## [0.3.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.3.1...hyperstack-interpreter-v0.3.2) (2026-01-20)
 
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-sdk-v0.3.2...hyperstack-sdk-v0.3.3) (2026-01-23)
+
+
+### Features
+
+* add unified Views API to Rust SDK ([97afb97](https://github.com/HyperTekOrg/hyperstack/commit/97afb97f1f9d21030ba400fef5a7727d674a93e0))
+* **sdk:** add sorted view support with server-side subscribed frame ([1a7d83f](https://github.com/HyperTekOrg/hyperstack/commit/1a7d83fe4000c26d282f2df9ce95f9d79414014d))
+* **sdk:** add take/skip subscription filtering to Rust SDK ([8b55dad](https://github.com/HyperTekOrg/hyperstack/commit/8b55dad1615db82346eb60aec6990e2dd4ed1359))
+
+
+### Bug Fixes
+
+* **sdk:** respect sort order for string fields in Rust SDK ([75f49b0](https://github.com/HyperTekOrg/hyperstack/commit/75f49b041f26bb1771bc688f9215fe740fac77b0))
+* **sdk:** subscribe to broadcast before server subscription ([0ecb0f1](https://github.com/HyperTekOrg/hyperstack/commit/0ecb0f139032bf241225a0a3c6a8f63a6a0833e1))
+
 ## [0.3.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-sdk-v0.3.1...hyperstack-sdk-v0.3.2) (2026-01-20)
 
 
