@@ -249,6 +249,7 @@ impl<T: DeserializeOwned + Clone + Send + 'static> EntityStream<T> {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_lazy_with_opts(
         connection: ConnectionManager,
         store: SharedStore,
@@ -483,6 +484,7 @@ impl<T: DeserializeOwned + Clone + Send + 'static> RichEntityStream<T> {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_lazy_with_opts(
         connection: ConnectionManager,
         store: SharedStore,

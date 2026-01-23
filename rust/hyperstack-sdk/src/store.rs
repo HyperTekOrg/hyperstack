@@ -240,12 +240,10 @@ impl ViewData {
                 entity_key: key.clone(),
             };
             self.sorted_keys.insert(sort_key, ());
+        } else if !self.entities.contains_key(&key) {
+            self.access_order.push_back(key.clone());
         } else {
-            if !self.entities.contains_key(&key) {
-                self.access_order.push_back(key.clone());
-            } else {
-                self.touch(&key);
-            }
+            self.touch(&key);
         }
         self.entities.insert(key, value);
     }
@@ -293,6 +291,7 @@ impl ViewData {
         self.entities.len()
     }
 
+    #[allow(dead_code)]
     fn ordered_keys(&self) -> Vec<String> {
         if let Some(ref config) = self.sort_config {
             let keys: Vec<String> = self

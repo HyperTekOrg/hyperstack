@@ -298,11 +298,10 @@ impl SortedViewCache {
             }
         }
 
-        let value = match self.order {
+        match self.order {
             SortOrder::Asc => value_to_sort_value(current),
             SortOrder::Desc => value_to_sort_value_desc(current),
-        };
-        value
+        }
     }
 
     fn find_position(&self, entity_key: &str) -> usize {

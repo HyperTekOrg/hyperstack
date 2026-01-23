@@ -127,13 +127,7 @@ fn generate_instruction_type(instruction: &IdlInstruction) -> TokenStream {
         quote! { pub #arg_name: #arg_type }
     });
 
-    // For instructions with no args, also derive Default so we can construct them without deserialization
-    let has_args = !instruction.args.is_empty();
-    let derives = if has_args {
-        quote! { #[derive(Debug, Clone, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)] }
-    } else {
-        quote! { #[derive(Debug, Clone, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)] }
-    };
+    let derives = quote! { #[derive(Debug, Clone, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)] };
 
     quote! {
         #derives
@@ -189,7 +183,7 @@ fn generate_custom_type(type_def: &IdlTypeDef) -> TokenStream {
             }
         }
         IdlTypeDefKind::TupleStruct { kind: _, fields } => {
-            let tuple_fields = fields.iter().map(|t| type_to_token_stream(t));
+            let tuple_fields = fields.iter().map(type_to_token_stream);
 
             quote! {
                 #[derive(Debug, Clone, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]

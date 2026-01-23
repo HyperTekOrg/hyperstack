@@ -131,6 +131,7 @@ pub fn parse_snapshot_entities(data: &serde_json::Value) -> Vec<SnapshotEntity> 
     }
 }
 
+#[allow(dead_code)]
 pub fn parse_subscribed_frame(bytes: &[u8]) -> Result<SubscribedFrame, serde_json::Error> {
     if is_gzip(bytes) {
         if let Ok(decompressed) = decompress_gzip(bytes) {
@@ -142,6 +143,7 @@ pub fn parse_subscribed_frame(bytes: &[u8]) -> Result<SubscribedFrame, serde_jso
     serde_json::from_str(&text)
 }
 
+#[allow(dead_code)]
 pub fn try_parse_subscribed_frame(bytes: &[u8]) -> Option<SubscribedFrame> {
     let frame: serde_json::Value = if is_gzip(bytes) {
         decompress_gzip(bytes)
