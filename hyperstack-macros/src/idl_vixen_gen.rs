@@ -329,8 +329,10 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                         Ok(mutations) => {
                             self.slot_tracker.record(slot);
                             if !mutations.is_empty() {
-                                let batch = hyperstack::runtime::hyperstack_server::MutationBatch::new(
-                                    hyperstack::runtime::smallvec::SmallVec::from_vec(mutations)
+                                let slot_context = hyperstack::runtime::hyperstack_server::SlotContext::new(slot, write_version);
+                                let batch = hyperstack::runtime::hyperstack_server::MutationBatch::with_slot_context(
+                                    hyperstack::runtime::smallvec::SmallVec::from_vec(mutations),
+                                    slot_context,
                                 );
                                 let _ = self.mutations_tx.send(batch).await;
                             }
@@ -456,8 +458,10 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
                         Ok(mutations) => {
                             self.slot_tracker.record(slot);
                             if !mutations.is_empty() {
-                                let batch = hyperstack::runtime::hyperstack_server::MutationBatch::new(
-                                    hyperstack::runtime::smallvec::SmallVec::from_vec(mutations)
+                                let slot_context = hyperstack::runtime::hyperstack_server::SlotContext::new(slot, txn_index);
+                                let batch = hyperstack::runtime::hyperstack_server::MutationBatch::with_slot_context(
+                                    hyperstack::runtime::smallvec::SmallVec::from_vec(mutations),
+                                    slot_context,
                                 );
                                 let _ = self.mutations_tx.send(batch).await;
                             }

@@ -58,7 +58,7 @@ pub use http_health::HttpHealthServer;
 pub use materialized_view::{MaterializedView, MaterializedViewRegistry, ViewEffect};
 #[cfg(feature = "otel")]
 pub use metrics::Metrics;
-pub use mutation_batch::MutationBatch;
+pub use mutation_batch::{MutationBatch, SlotContext};
 pub use projector::Projector;
 pub use runtime::Runtime;
 pub use telemetry::{init as init_telemetry, TelemetryConfig};

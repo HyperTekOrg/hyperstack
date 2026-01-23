@@ -1,10 +1,11 @@
 use crate::bus::{BusManager, BusMessage};
 use crate::cache::EntityCache;
-use crate::mutation_batch::MutationBatch;
+use crate::mutation_batch::{MutationBatch, SlotContext};
 use crate::view::{ViewIndex, ViewSpec};
 use crate::websocket::frame::{Frame, Mode};
 use bytes::Bytes;
 use hyperstack_interpreter::CanonicalLog;
+use serde_json::Value;
 use smallvec::SmallVec;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -67,6 +68,7 @@ impl Projector {
             log.set("phase", "projector");
 
             let batch_size = batch.len();
+            let slot_context = batch.slot_context;
             let mut frames_published = 0u32;
             let mut errors = 0u32;
 
@@ -74,7 +76,10 @@ impl Projector {
                 #[cfg(feature = "otel")]
                 let export = mutation.export.clone();
 
-                match self.process_mutation(mutation, &mut json_buffer).await {
+                match self
+                    .process_mutation(mutation, slot_context, &mut json_buffer)
+                    .await
+                {
                     Ok(count) => frames_published += count,
                     Err(e) => {
                         error!("Failed to process mutation: {}", e);
@@ -105,12 +110,13 @@ impl Projector {
 
     #[instrument(
         name = "projector.mutation",
-        skip(self, mutation, json_buffer),
+        skip(self, mutation, slot_context, json_buffer),
         fields(export = %mutation.export)
     )]
     async fn process_mutation(
         &self,
         mutation: hyperstack_interpreter::Mutation,
+        slot_context: Option<SlotContext>,
         json_buffer: &mut Vec<u8>,
     ) -> anyhow::Result<u32> {
         let specs = self.view_index.by_export(&mutation.export);
@@ -123,6 +129,13 @@ impl Projector {
         let hyperstack_interpreter::Mutation {
             mut patch, append, ..
         } = mutation;
+
+        // Inject _seq for recency sorting if slot context is available
+        if let Some(ctx) = slot_context {
+            if let Value::Object(ref mut map) = patch {
+                map.insert("_seq".to_string(), Value::String(ctx.to_seq_string()));
+            }
+        }
 
         let matching_specs: SmallVec<[&ViewSpec; 4]> = specs
             .iter()

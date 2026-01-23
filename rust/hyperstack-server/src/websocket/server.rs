@@ -505,15 +505,24 @@ async fn send_snapshot_batches(
 }
 
 fn extract_sort_config(view_spec: &ViewSpec) -> Option<SortConfig> {
-    view_spec.pipeline.as_ref().and_then(|p| {
-        p.sort.as_ref().map(|sort| SortConfig {
+    if let Some(sort) = view_spec.pipeline.as_ref().and_then(|p| p.sort.as_ref()) {
+        return Some(SortConfig {
             field: sort.field_path.clone(),
             order: match sort.order {
                 crate::materialized_view::SortOrder::Asc => SortOrder::Asc,
                 crate::materialized_view::SortOrder::Desc => SortOrder::Desc,
             },
-        })
-    })
+        });
+    }
+
+    if view_spec.mode == Mode::List {
+        return Some(SortConfig {
+            field: vec!["_seq".to_string()],
+            order: SortOrder::Desc,
+        });
+    }
+
+    None
 }
 
 fn send_subscribed_frame(
