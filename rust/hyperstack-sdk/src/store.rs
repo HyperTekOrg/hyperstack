@@ -107,21 +107,7 @@ fn extract_sort_value(entity: &Value, field_path: &[String]) -> SortValue {
     }
 }
 
-fn extract_sort_value_for_order(
-    entity: &Value,
-    field_path: &[String],
-    order: SortOrder,
-) -> SortValue {
-    let value = extract_sort_value(entity, field_path);
-    match order {
-        SortOrder::Asc => value,
-        SortOrder::Desc => match value {
-            SortValue::Integer(i) => SortValue::Integer(-i),
-            SortValue::Bool(b) => SortValue::Bool(!b),
-            other => other,
-        },
-    }
-}
+
 
 struct ViewData {
     entities: HashMap<String, serde_json::Value>,
@@ -218,7 +204,7 @@ impl ViewData {
         self.sorted_keys.clear();
         if let Some(ref config) = self.sort_config {
             for (key, value) in &self.entities {
-                let sort_value = extract_sort_value_for_order(value, &config.field, config.order);
+                let sort_value = extract_sort_value(value, &config.field);
                 let sort_key = SortKey {
                     sort_value,
                     entity_key: key.clone(),
@@ -240,8 +226,7 @@ impl ViewData {
     fn insert(&mut self, key: String, value: serde_json::Value) {
         if let Some(ref config) = self.sort_config {
             if let Some(old_value) = self.entities.get(&key) {
-                let old_sort_value =
-                    extract_sort_value_for_order(old_value, &config.field, config.order);
+                let old_sort_value = extract_sort_value(old_value, &config.field);
                 let old_sort_key = SortKey {
                     sort_value: old_sort_value,
                     entity_key: key.clone(),
@@ -249,7 +234,7 @@ impl ViewData {
                 self.sorted_keys.remove(&old_sort_key);
             }
 
-            let sort_value = extract_sort_value_for_order(&value, &config.field, config.order);
+            let sort_value = extract_sort_value(&value, &config.field);
             let sort_key = SortKey {
                 sort_value,
                 entity_key: key.clone(),
@@ -268,7 +253,7 @@ impl ViewData {
     fn remove(&mut self, key: &str) -> Option<serde_json::Value> {
         if let Some(ref config) = self.sort_config {
             if let Some(value) = self.entities.get(key) {
-                let sort_value = extract_sort_value_for_order(value, &config.field, config.order);
+                let sort_value = extract_sort_value(value, &config.field);
                 let sort_key = SortKey {
                     sort_value,
                     entity_key: key.to_string(),
@@ -309,22 +294,32 @@ impl ViewData {
     }
 
     fn ordered_keys(&self) -> Vec<String> {
-        if self.sort_config.is_some() {
-            self.sorted_keys
+        if let Some(ref config) = self.sort_config {
+            let keys: Vec<String> = self
+                .sorted_keys
                 .keys()
                 .map(|sk| sk.entity_key.clone())
-                .collect()
+                .collect();
+            match config.order {
+                SortOrder::Asc => keys,
+                SortOrder::Desc => keys.into_iter().rev().collect(),
+            }
         } else {
             self.entities.keys().cloned().collect()
         }
     }
 
     fn ordered_values(&self) -> Vec<serde_json::Value> {
-        if self.sort_config.is_some() {
-            self.sorted_keys
+        if let Some(ref config) = self.sort_config {
+            let values: Vec<serde_json::Value> = self
+                .sorted_keys
                 .keys()
                 .filter_map(|sk| self.entities.get(&sk.entity_key).cloned())
-                .collect()
+                .collect();
+            match config.order {
+                SortOrder::Asc => values,
+                SortOrder::Desc => values.into_iter().rev().collect(),
+            }
         } else {
             self.entities.values().cloned().collect()
         }
