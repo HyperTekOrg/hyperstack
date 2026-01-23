@@ -20,11 +20,12 @@ from hyperstack.auth import (
     should_retry_error,
     DEFAULT_QUERY_PARAMETER,
 )
+from hyperstack.types import ConnectionState
 
 logger = logging.getLogger(__name__)
 
 
-class WebSocketManager:
+class ConnectionManager:
     def __init__(
         self,
         url: str,
@@ -68,6 +69,7 @@ class WebSocketManager:
         self.ping_task: Optional[asyncio.Task] = None
         self.refresh_task: Optional[asyncio.Task] = None
         self.message_handler: Optional[Callable] = None
+        self._state: ConnectionState = ConnectionState.DISCONNECTED
 
         # Track if we're reconnecting for token refresh
         self._force_token_refresh = False
@@ -228,6 +230,7 @@ class WebSocketManager:
             logger.info("Already connected")
             return
 
+        self._state = ConnectionState.CONNECTING
         attempt = 0
         while attempt < len(self.reconnect_intervals):
             try:
@@ -248,6 +251,7 @@ class WebSocketManager:
                 self.is_running = True
                 self.reconnect_attempts = 0
                 self._immediate_reconnect = False
+                self._state = ConnectionState.CONNECTED
                 logger.info("Connected")
 
                 self.receive_task = asyncio.create_task(self.receive_messages())
@@ -264,7 +268,9 @@ class WebSocketManager:
                 raise
             except Exception as e:
                 attempt += 1
+                self._state = ConnectionState.RECONNECTING
                 if attempt >= len(self.reconnect_intervals):
+                    self._state = ConnectionState.ERROR
                     raise ConnectionError(
                         f"Connection failed after {attempt} attempts: {e}"
                     )
@@ -278,6 +284,7 @@ class WebSocketManager:
     async def disconnect(self) -> None:
         """Close WebSocket connection and cleanup resources."""
         self.is_running = False
+        self._state = ConnectionState.DISCONNECTED
         self._stop_ping()
         self._stop_token_refresh()
 
@@ -400,7 +407,7 @@ class WebSocketManager:
                         self.auth.clear_token()
                         self._force_token_refresh = True
                         self._immediate_reconnect = True
-
+            self._state = ConnectionState.ERROR
             if self.on_error:
                 await self.on_error(e)
 
@@ -411,6 +418,7 @@ class WebSocketManager:
 
         except Exception as e:
             logger.error(f"Receive error: {e}")
+            self._state = ConnectionState.ERROR
             if self.on_error:
                 await self.on_error(e)
 
@@ -420,6 +428,7 @@ class WebSocketManager:
 
         if self.reconnect_attempts > len(self.reconnect_intervals):
             logger.error("Max reconnect attempts reached")
+            self._state = ConnectionState.ERROR
             return
 
         delay = (
@@ -433,5 +442,8 @@ class WebSocketManager:
             await asyncio.sleep(delay)
         else:
             logger.info(f"Reconnecting immediately (attempt {self.reconnect_attempts})")
-
+        self._state = ConnectionState.RECONNECTING
         await self.connect()
+
+    def state(self) -> ConnectionState:
+        return self._state
