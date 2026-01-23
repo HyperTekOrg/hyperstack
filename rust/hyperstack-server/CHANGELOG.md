@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.3.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.3.2...hyperstack-server-v0.3.3) (2026-01-23)
+
+
+### Features
+
+* add view pipeline for derived views like `latest`, `top10` ([f2f72fa](https://github.com/HyperTekOrg/hyperstack/commit/f2f72fa8894d2a38a13e8ee05791b7e4124977ea))
+* **sdk:** add sorted view support with server-side subscribed frame ([1a7d83f](https://github.com/HyperTekOrg/hyperstack/commit/1a7d83fe4000c26d282f2df9ce95f9d79414014d))
+* **server:** add slot-based sequence ordering for list views ([892c3d5](https://github.com/HyperTekOrg/hyperstack/commit/892c3d526c71df4c4d848142908ce511e302e082))
+* **server:** add SortedViewCache for incremental sorted view maintenance ([6660b90](https://github.com/HyperTekOrg/hyperstack/commit/6660b9072250bcbbdda64db21a547391fa7456f6))
+
+
+### Bug Fixes
+
+* send delete/upsert for derived single view updates ([0577afd](https://github.com/HyperTekOrg/hyperstack/commit/0577afde6640a04be2d8429ba89f149f7a583ae5))
+* **server:** stream live updates for all items in windowed subscriptions ([ddd4aae](https://github.com/HyperTekOrg/hyperstack/commit/ddd4aaea3f304ae04207f8539e747aa66f331c0a))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.2 to 0.3.3
+
 ## [0.3.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.3.1...hyperstack-server-v0.3.2) (2026-01-20)
 
 

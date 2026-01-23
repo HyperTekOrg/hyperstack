@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.2...hyperstack-cli-v0.3.3) (2026-01-23)
+
+
+### Features
+
+* add view pipeline for derived views like `latest`, `top10` ([f2f72fa](https://github.com/HyperTekOrg/hyperstack/commit/f2f72fa8894d2a38a13e8ee05791b7e4124977ea))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.2 to 0.3.3
+
 ## [0.3.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.1...hyperstack-cli-v0.3.2) (2026-01-20)
 
 
