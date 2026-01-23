@@ -32,12 +32,55 @@ export function PumpFunDashboard() {
   const tokensList = tokens ?? [];
 
   const TokenDetails = ({ token }: { token: any }) => {
+    const info = token.info;
     const reserves = token.reserves;
     const trading = token.trading;
 
     return (
       <div className="p-6 bg-gray-50">
         <h4 className="text-lg font-medium text-gray-800 mb-6">Token Details</h4>
+
+        {/* Token Info */}
+        {(info?.name || info?.symbol || info?.uri || info?.isComplete !== undefined) && (
+          <div className="mb-6">
+            <h5 className="text-sm font-medium text-gray-700 mb-3">Token Info</h5>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {info?.name && (
+                <div className="bg-white p-4 rounded-lg border">
+                  <div className="text-sm text-gray-600">Name</div>
+                  <div className="text-lg font-medium text-gray-900">{info.name}</div>
+                </div>
+              )}
+              {info?.symbol && (
+                <div className="bg-white p-4 rounded-lg border">
+                  <div className="text-sm text-gray-600">Symbol</div>
+                  <div className="text-lg font-medium text-blue-600">${info.symbol}</div>
+                </div>
+              )}
+              {info?.uri && (
+                <div className="bg-white p-4 rounded-lg border">
+                  <div className="text-sm text-gray-600">Metadata URI</div>
+                  <a
+                    href={info.uri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-blue-600 hover:underline break-all"
+                  >
+                    {info.uri.length > 50 ? `${info.uri.slice(0, 50)}...` : info.uri}
+                  </a>
+                </div>
+              )}
+              {info?.isComplete !== undefined && (
+                <div className="bg-white p-4 rounded-lg border">
+                  <div className="text-sm text-gray-600">Status</div>
+                  <div className={`text-lg font-medium ${info.isComplete ? 'text-green-600' : 'text-yellow-600'}`}>
+                    {info.isComplete ? 'Complete' : 'In Progress'}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Reserves Info */}
         <div className="mb-6">
@@ -217,10 +260,18 @@ export function PumpFunDashboard() {
                             >
                               <div className="flex justify-between items-start gap-4">
                                 <div>
-                                  <div className="text-lg text-gray-800 font-medium">
-                                    Token #{index + 1}
+                                  <div className="text-lg text-gray-800 font-medium flex items-center gap-2">
+                                    {token.info?.name || `Token #${index + 1}`}
+                                    {token.info?.symbol && (
+                                      <span className="text-sm font-normal text-gray-500">
+                                        ${token.info.symbol}
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="text-sm text-gray-600 mt-1">
+                                    {token.id?.mint && (
+                                      <>Mint: {shortenAddress(token.id.mint)} | </>
+                                    )}
                                     Bonding Curve: {shortenAddress(tokenKey)}
                                     {token.trading?.lastTradePrice !== undefined && (
                                       <> | Price: {token.trading.lastTradePrice.toFixed(10)} SOL</>
@@ -232,6 +283,9 @@ export function PumpFunDashboard() {
                                     )}
                                     {token.trading?.uniqueTraders !== undefined && (
                                       <> • {token.trading.uniqueTraders} traders</>
+                                    )}
+                                    {token.info?.uri && (
+                                      <> • <a href={token.info.uri} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>Metadata</a></>
                                     )}
                                   </div>
                                 </div>
