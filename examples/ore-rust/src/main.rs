@@ -9,7 +9,7 @@ async fn main() -> anyhow::Result<()> {
     let views = hs.views::<OreRoundViews>();
 
     let list_view = views.list();
-    // let latest_view = views.latest();
+    let latest_view = views.latest();
 
     println!("=== Watching List and Latest views ===");
 
@@ -36,25 +36,25 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    // let mut latest_stream = latest_view.watch().take(2);
-    // while let Some(update) = latest_stream.next().await {
-    //     match update {
-    //         Update::Upsert { key, data } | Update::Patch { key, data } => {
-    //             println!("\n[LATEST] === Latest Round Update ===");
-    //             println!("[LATEST] Key: {}", key);
-    //             println!("[LATEST] Round ID: {:?}", data.id.round_id);
-    //             println!("[LATEST] Address: {:?}", data.id.round_address);
-    //             println!("[LATEST] Motherlode: {:?}", data.state.motherlode);
-    //             println!("[LATEST] Total Deployed: {:?}", data.state.total_deployed);
-    //             println!("[LATEST] Expires At: {:?}", data.state.expires_at);
-    //             println!("[LATEST] Metrics: {:?}", data.metrics);
-    //             println!();
-    //         }
-    //         Update::Delete { key } => {
-    //             println!("[LATEST] Round deleted: {}\n", key);
-    //         }
-    //     }
-    // }
+    let mut latest_stream = latest_view.watch().take(1);
+    while let Some(update) = latest_stream.next().await {
+        match update {
+            Update::Upsert { key, data } | Update::Patch { key, data } => {
+                println!("\n[LATEST] === Latest Round Update ===");
+                println!("[LATEST] Key: {}", key);
+                println!("[LATEST] Round ID: {:?}", data.id.round_id);
+                println!("[LATEST] Address: {:?}", data.id.round_address);
+                println!("[LATEST] Motherlode: {:?}", data.state.motherlode);
+                println!("[LATEST] Total Deployed: {:?}", data.state.total_deployed);
+                println!("[LATEST] Expires At: {:?}", data.state.expires_at);
+                println!("[LATEST] Metrics: {:?}", data.metrics);
+                println!();
+            }
+            Update::Delete { key } => {
+                println!("[LATEST] Round deleted: {}\n", key);
+            }
+        }
+    }
 
     list_handle.await?;
     Ok(())
