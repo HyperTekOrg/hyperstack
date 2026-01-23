@@ -63,11 +63,24 @@ impl ConnectionManager {
     }
 
     pub async fn ensure_subscription(&self, view: &str, key: Option<&str>) {
+        self.ensure_subscription_with_opts(view, key, None, None)
+            .await
+    }
+
+    pub async fn ensure_subscription_with_opts(
+        &self,
+        view: &str,
+        key: Option<&str>,
+        take: Option<u32>,
+        skip: Option<u32>,
+    ) {
         let sub = Subscription {
             view: view.to_string(),
             key: key.map(|s| s.to_string()),
             partition: None,
             filters: None,
+            take,
+            skip,
         };
 
         if !self.inner.subscriptions.read().await.contains(&sub) {
@@ -181,6 +194,8 @@ fn spawn_connection_loop(
                                             key: unsub.key.clone(),
                                             partition: None,
                                             filters: None,
+                                            take: None,
+                                            skip: None,
                                         };
                                         subscriptions.write().await.remove(&sub);
                                         let client_msg = ClientMessage::Unsubscribe(unsub);

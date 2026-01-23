@@ -33,10 +33,13 @@
 use crate::connection::ConnectionManager;
 use crate::entity::Entity;
 use crate::store::SharedStore;
-use crate::stream::{EntityStream, KeyFilter, RichEntityStream};
+use crate::stream::{EntityStream, KeyFilter, RichEntityStream, Update};
+use futures_util::Stream;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::marker::PhantomData;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::Duration;
 
 /// A handle to a view that provides get/watch operations.
@@ -70,40 +73,118 @@ where
         self.store.list::<T>(&self.view_path).await
     }
 
-    /// Watch for updates to this view.
-    pub fn watch(&self) -> EntityStream<T> {
-        EntityStream::new_lazy(
+    /// Watch for updates to this view. Chain `.take(n)` to limit results.
+    pub fn watch(&self) -> WatchBuilder<T>
+    where
+        T: Unpin,
+    {
+        WatchBuilder::new(
             self.connection.clone(),
             self.store.clone(),
             self.view_path.clone(),
-            self.view_path.clone(),
             KeyFilter::None,
-            None,
         )
     }
 
     /// Watch for updates filtered to specific keys.
-    pub fn watch_keys(&self, keys: &[&str]) -> EntityStream<T> {
-        EntityStream::new_lazy(
+    pub fn watch_keys(&self, keys: &[&str]) -> WatchBuilder<T>
+    where
+        T: Unpin,
+    {
+        WatchBuilder::new(
             self.connection.clone(),
             self.store.clone(),
-            self.view_path.clone(),
             self.view_path.clone(),
             KeyFilter::Multiple(keys.iter().map(|s| s.to_string()).collect()),
-            None,
         )
     }
+}
 
-    /// Watch for updates with before/after diffs.
-    pub fn watch_rich(&self) -> RichEntityStream<T> {
-        RichEntityStream::new_lazy(
-            self.connection.clone(),
-            self.store.clone(),
+/// Builder for configuring watch subscriptions. Implements `Stream` directly.
+pub struct WatchBuilder<T>
+where
+    T: Serialize + DeserializeOwned + Clone + Send + Sync + Unpin + 'static,
+{
+    connection: ConnectionManager,
+    store: SharedStore,
+    view_path: String,
+    key_filter: KeyFilter,
+    take: Option<u32>,
+    skip: Option<u32>,
+    stream: Option<EntityStream<T>>,
+}
+
+impl<T> WatchBuilder<T>
+where
+    T: Serialize + DeserializeOwned + Clone + Send + Sync + Unpin + 'static,
+{
+    fn new(
+        connection: ConnectionManager,
+        store: SharedStore,
+        view_path: String,
+        key_filter: KeyFilter,
+    ) -> Self {
+        Self {
+            connection,
+            store,
+            view_path,
+            key_filter,
+            take: None,
+            skip: None,
+            stream: None,
+        }
+    }
+
+    /// Limit subscription to the top N items.
+    pub fn take(mut self, n: u32) -> Self {
+        self.take = Some(n);
+        self
+    }
+
+    /// Skip the first N items.
+    pub fn skip(mut self, n: u32) -> Self {
+        self.skip = Some(n);
+        self
+    }
+
+    /// Get a rich stream with before/after diffs instead.
+    pub fn rich(self) -> RichEntityStream<T> {
+        RichEntityStream::new_lazy_with_opts(
+            self.connection,
+            self.store,
             self.view_path.clone(),
-            self.view_path.clone(),
-            KeyFilter::None,
+            self.view_path,
+            self.key_filter,
             None,
+            self.take,
+            self.skip,
         )
+    }
+}
+
+impl<T> Stream for WatchBuilder<T>
+where
+    T: Serialize + DeserializeOwned + Clone + Send + Sync + Unpin + 'static,
+{
+    type Item = Update<T>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+
+        if this.stream.is_none() {
+            this.stream = Some(EntityStream::new_lazy_with_opts(
+                this.connection.clone(),
+                this.store.clone(),
+                this.view_path.clone(),
+                this.view_path.clone(),
+                this.key_filter.clone(),
+                None,
+                this.take,
+                this.skip,
+            ));
+        }
+
+        Pin::new(this.stream.as_mut().unwrap()).poll_next(cx)
     }
 }
 
