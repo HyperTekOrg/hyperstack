@@ -15,7 +15,7 @@ use crate::parse::idl::IdlSpec;
 use super::{
     generate_bytecode_from_spec, generate_computed_evaluator, generate_handlers_from_specs,
     generate_parsers_from_idl, generate_resolver_registries, generate_sdk_from_idl,
-    generate_spec_function, generate_vm_handler,
+    generate_spec_function, generate_vm_handler, RuntimeGenConfig,
 };
 
 /// Configuration for code generation.
@@ -136,7 +136,13 @@ pub fn generate_all_from_spec(
     };
 
     let spec_fn = if config.spec_fn {
-        generate_spec_function(&state_enum_name, &instruction_enum_name, program_name)
+        let runtime_config = RuntimeGenConfig::for_generate_all();
+        generate_spec_function(
+            &state_enum_name,
+            &instruction_enum_name,
+            program_name,
+            &runtime_config,
+        )
     } else {
         quote! {}
     };
@@ -232,7 +238,13 @@ pub fn generate_components_from_spec(
             quote! {}
         },
         spec_fn: if config.spec_fn {
-            generate_spec_function(&state_enum_name, &instruction_enum_name, program_name)
+            let runtime_config = RuntimeGenConfig::for_generate_all();
+            generate_spec_function(
+                &state_enum_name,
+                &instruction_enum_name,
+                program_name,
+                &runtime_config,
+            )
         } else {
             quote! {}
         },
