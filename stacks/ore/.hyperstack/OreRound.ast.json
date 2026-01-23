@@ -1816,7 +1816,7 @@
     ],
     "lookup_indexes": [
       {
-        "field_name": "id.roundAddress",
+        "field_name": "id.round_address",
         "temporal_field": null
       }
     ]
@@ -1842,7 +1842,7 @@
       },
       "mappings": [
         {
-          "target_path": "id.roundId",
+          "target_path": "id.round_id",
           "source": {
             "FromSource": {
               "path": {
@@ -1859,7 +1859,7 @@
           "population": "SetOnce"
         },
         {
-          "target_path": "id.roundAddress",
+          "target_path": "id.round_address",
           "source": {
             "FromSource": {
               "path": {
@@ -1876,7 +1876,7 @@
           "population": "SetOnce"
         },
         {
-          "target_path": "state.expiresAt",
+          "target_path": "state.expires_at",
           "source": {
             "FromSource": {
               "path": {
@@ -1910,7 +1910,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "state.totalDeployed",
+          "target_path": "state.total_deployed",
           "source": {
             "FromSource": {
               "path": {
@@ -1927,7 +1927,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "state.totalVaulted",
+          "target_path": "state.total_vaulted",
           "source": {
             "FromSource": {
               "path": {
@@ -1944,7 +1944,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "state.totalWinnings",
+          "target_path": "state.total_winnings",
           "source": {
             "FromSource": {
               "path": {
@@ -1961,7 +1961,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "results.topMiner",
+          "target_path": "results.top_miner",
           "source": {
             "FromSource": {
               "path": {
@@ -1978,7 +1978,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "results.topMinerReward",
+          "target_path": "results.top_miner_reward",
           "source": {
             "FromSource": {
               "path": {
@@ -1995,7 +1995,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "results.rentPayer",
+          "target_path": "results.rent_payer",
           "source": {
             "FromSource": {
               "path": {
@@ -2012,7 +2012,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "results.slotHash",
+          "target_path": "results.slot_hash",
           "source": {
             "FromSource": {
               "path": {
@@ -2029,7 +2029,7 @@
           "population": "LastWrite"
         },
         {
-          "target_path": "roundSnapshot",
+          "target_path": "round_snapshot",
           "source": {
             "AsCapture": {
               "field_transforms": {
@@ -2066,7 +2066,7 @@
       },
       "mappings": [
         {
-          "target_path": "metrics.checkpointCount",
+          "target_path": "metrics.checkpoint_count",
           "source": {
             "FromSource": {
               "path": {
@@ -2107,7 +2107,7 @@
       },
       "mappings": [
         {
-          "target_path": "metrics.deployCount",
+          "target_path": "metrics.deploy_count",
           "source": {
             "FromSource": {
               "path": {
@@ -2124,7 +2124,7 @@
           "population": "Count"
         },
         {
-          "target_path": "metrics.totalDeployedSol",
+          "target_path": "metrics.total_deployed_sol",
           "source": {
             "FromSource": {
               "path": {
@@ -2464,7 +2464,7 @@
     }
   ],
   "field_mappings": {
-    "id.roundAddress": {
+    "id.round_address": {
       "field_name": "round_address",
       "rust_type_name": "String",
       "base_type": "String",
@@ -2474,7 +2474,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "id.roundId": {
+    "id.round_id": {
       "field_name": "round_id",
       "rust_type_name": "u64",
       "base_type": "Integer",
@@ -2484,7 +2484,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "metrics.checkpointCount": {
+    "metrics.checkpoint_count": {
       "field_name": "checkpoint_count",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2494,7 +2494,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "metrics.deployCount": {
+    "metrics.deploy_count": {
       "field_name": "deploy_count",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2504,7 +2504,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "metrics.totalDeployedSol": {
+    "metrics.total_deployed_sol": {
       "field_name": "total_deployed_sol",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2514,7 +2514,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "results.didHitMotherlode": {
+    "results.did_hit_motherlode": {
       "field_name": "did_hit_motherlode",
       "rust_type_name": "Option < bool >",
       "base_type": "Boolean",
@@ -2524,7 +2524,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "results.rentPayer": {
+    "results.rent_payer": {
       "field_name": "rent_payer",
       "rust_type_name": "Option < String >",
       "base_type": "String",
@@ -2544,7 +2544,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "results.slotHash": {
+    "results.slot_hash": {
       "field_name": "slot_hash",
       "rust_type_name": "Option < String >",
       "base_type": "String",
@@ -2554,7 +2554,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "results.topMiner": {
+    "results.top_miner": {
       "field_name": "top_miner",
       "rust_type_name": "Option < String >",
       "base_type": "String",
@@ -2564,7 +2564,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "results.topMinerReward": {
+    "results.top_miner_reward": {
       "field_name": "top_miner_reward",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2574,7 +2574,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "results.winningSquare": {
+    "results.winning_square": {
       "field_name": "winning_square",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2584,7 +2584,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "roundSnapshot": {
+    "round_snapshot": {
       "field_name": "round_snapshot",
       "rust_type_name": "Option < generated_sdk :: accounts :: Round >",
       "base_type": "Object",
@@ -2694,7 +2694,7 @@
         "enum_variants": []
       }
     },
-    "state.expiresAt": {
+    "state.expires_at": {
       "field_name": "expires_at",
       "rust_type_name": "Option < u64 >",
       "base_type": "Timestamp",
@@ -2714,7 +2714,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "state.totalDeployed": {
+    "state.total_deployed": {
       "field_name": "total_deployed",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2724,7 +2724,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "state.totalVaulted": {
+    "state.total_vaulted": {
       "field_name": "total_vaulted",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2734,7 +2734,7 @@
       "source_path": null,
       "resolved_type": null
     },
-    "state.totalWinnings": {
+    "state.total_winnings": {
       "field_name": "total_winnings",
       "rust_type_name": "Option < u64 >",
       "base_type": "Integer",
@@ -2749,8 +2749,8 @@
   "instruction_hooks": [],
   "computed_fields": [
     "results.rng",
-    "results.winningSquare",
-    "results.didHitMotherlode"
+    "results.winning_square",
+    "results.did_hit_motherlode"
   ],
   "computed_field_specs": [
     {
@@ -3017,7 +3017,7 @@
       "result_type": "Option < u64 >"
     },
     {
-      "target_path": "results.winningSquare",
+      "target_path": "results.winning_square",
       "expression": {
         "MethodCall": {
           "expr": {
@@ -3053,7 +3053,7 @@
       "result_type": "Option < u64 >"
     },
     {
-      "target_path": "results.didHitMotherlode",
+      "target_path": "results.did_hit_motherlode",
       "expression": {
         "MethodCall": {
           "expr": {
@@ -3104,7 +3104,7 @@
       "result_type": "Option < bool >"
     }
   ],
-  "content_hash": "4deecb2c8fc7b89782d22e94f34a5f7d170d4c0e8befaef2e0614981de398225",
+  "content_hash": "e573ab31bf7eb508675f384491750ad67798cd8fa9c1cc09693627d6317f0104",
   "views": [
     {
       "id": "OreRound/latest",
@@ -3119,7 +3119,7 @@
             "key": {
               "segments": [
                 "id",
-                "roundId"
+                "round_id"
               ],
               "offsets": null
             },

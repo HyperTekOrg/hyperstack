@@ -1,32 +1,32 @@
 
 
 export interface OreRoundId {
-  roundAddress?: string | null;
-  roundId?: number | null;
+  round_address?: string | null;
+  round_id?: number | null;
 }
 
 export interface OreRoundMetrics {
-  checkpointCount?: number | null;
-  deployCount?: number | null;
-  totalDeployedSol?: number | null;
+  checkpoint_count?: number | null;
+  deploy_count?: number | null;
+  total_deployed_sol?: number | null;
 }
 
 export interface OreRoundResults {
-  didHitMotherlode?: boolean | null;
-  rentPayer?: string | null;
+  did_hit_motherlode?: boolean | null;
+  rent_payer?: string | null;
   rng?: number | null;
-  slotHash?: string | null;
-  topMiner?: string | null;
-  topMinerReward?: number | null;
-  winningSquare?: number | null;
+  slot_hash?: string | null;
+  top_miner?: string | null;
+  top_miner_reward?: number | null;
+  winning_square?: number | null;
 }
 
 export interface OreRoundState {
-  expiresAt?: number | null;
+  expires_at?: number | null;
   motherlode?: number | null;
-  totalDeployed?: number | null;
-  totalVaulted?: number | null;
-  totalWinnings?: number | null;
+  total_deployed?: number | null;
+  total_vaulted?: number | null;
+  total_winnings?: number | null;
 }
 
 export interface OreRound {
@@ -34,23 +34,23 @@ export interface OreRound {
   metrics?: OreRoundMetrics;
   results?: OreRoundResults;
   state?: OreRoundState;
-  roundSnapshot?: Round | null;
+  round_snapshot?: Round | null;
 }
 
 export interface Round {
   id?: number;
   deployed?: number[];
-  slotHash?: number[];
+  slot_hash?: number[];
   count?: number[];
-  expiresAt?: number;
+  expires_at?: number;
   motherlode?: number;
-  rentPayer?: string;
-  topMiner?: string;
-  topMinerReward?: number;
-  totalDeployed?: number;
-  totalMiners?: number;
-  totalVaulted?: number;
-  totalWinnings?: number;
+  rent_payer?: string;
+  top_miner?: string;
+  top_miner_reward?: number;
+  total_deployed?: number;
+  total_miners?: number;
+  total_vaulted?: number;
+  total_winnings?: number;
 }
 
 // ============================================================================
@@ -83,7 +83,7 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
 export const OREROUND_STACK = {
   name: 'ore-round',
   views: {
-    oreRound: {
+    OreRound: {
       state: stateView<OreRound>('OreRound/state'),
       list: listView<OreRound>('OreRound/list'),
       latest: listView<OreRound>('OreRound/latest'),

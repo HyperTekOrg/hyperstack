@@ -8,7 +8,6 @@ use quote::{format_ident, quote};
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::{BinaryOp, ComputedExpr, ComputedFieldSpec, UnaryOp};
-use crate::utils::to_camel_case;
 
 /// Extract field dependencies from a computed expression.
 /// Returns a set of field names (without section prefix) that this expression depends on.
@@ -244,7 +243,7 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
         ComputedExpr::FieldRef { path } => {
             let parts: Vec<&str> = path.split('.').collect();
             if parts.len() >= 2 {
-                let section = to_camel_case(parts[0]);
+                let section = parts[0];
                 let mut chain = quote! { state.get(#section) };
 
                 for field in &parts[1..] {

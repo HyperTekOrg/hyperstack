@@ -154,17 +154,9 @@ pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState, Views}};
             let field_name = to_snake_case(&field.field_name);
             let rust_type = self.field_type_to_rust(field);
 
-            // Server sends camelCase, so always add rename attribute if snake_case differs
-            let camel_case_name = to_camel_case(&field.field_name);
-            let serde_attr = if field_name != camel_case_name {
-                format!("    #[serde(rename = \"{}\", default)]\n", camel_case_name)
-            } else {
-                "    #[serde(default)]\n".to_string()
-            };
-
             fields.push(format!(
-                "{}    pub {}: {},",
-                serde_attr, field_name, rust_type
+                "    #[serde(default)]\n    pub {}: {},",
+                field_name, rust_type
             ));
         }
 
@@ -187,15 +179,9 @@ pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState, Views}};
             if !Self::is_root_section(&section.name) {
                 let field_name = to_snake_case(&section.name);
                 let type_name = format!("{}{}", self.entity_name, to_pascal_case(&section.name));
-                let camel_case_name = to_camel_case(&section.name);
-                let serde_attr = if field_name != camel_case_name {
-                    format!("    #[serde(rename = \"{}\", default)]\n", camel_case_name)
-                } else {
-                    "    #[serde(default)]\n".to_string()
-                };
                 fields.push(format!(
-                    "{}    pub {}: {},",
-                    serde_attr, field_name, type_name
+                    "    #[serde(default)]\n    pub {}: {},",
+                    field_name, type_name
                 ));
             }
         }
@@ -205,15 +191,9 @@ pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState, Views}};
                 for field in &section.fields {
                     let field_name = to_snake_case(&field.field_name);
                     let rust_type = self.field_type_to_rust(field);
-                    let camel_case_name = to_camel_case(&field.field_name);
-                    let serde_attr = if field_name != camel_case_name {
-                        format!("    #[serde(rename = \"{}\", default)]\n", camel_case_name)
-                    } else {
-                        "    #[serde(default)]\n".to_string()
-                    };
                     fields.push(format!(
-                        "{}    pub {}: {},",
-                        serde_attr, field_name, rust_type
+                        "    #[serde(default)]\n    pub {}: {},",
+                        field_name, rust_type
                     ));
                 }
             }
@@ -262,13 +242,8 @@ pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState, Views}};
                 .iter()
                 .map(|f| {
                     let rust_type = self.resolved_field_to_rust(f);
-                    let serde_attr = format!(
-                        "    #[serde(rename = \"{}\", default)]\n",
-                        to_camel_case(&f.field_name)
-                    );
                     format!(
-                        "{}    pub {}: {},",
-                        serde_attr,
+                        "    #[serde(default)]\n    pub {}: {},",
                         to_snake_case(&f.field_name),
                         rust_type
                     )
@@ -513,13 +488,4 @@ fn to_snake_case(s: &str) -> String {
         }
     }
     result
-}
-
-fn to_camel_case(s: &str) -> String {
-    let pascal = to_pascal_case(s);
-    let mut chars = pascal.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(first) => first.to_lowercase().collect::<String>() + chars.as_str(),
-    }
 }

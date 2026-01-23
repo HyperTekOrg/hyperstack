@@ -21,7 +21,7 @@ use crate::ast::{
 use crate::parse;
 use crate::parse::conditions as condition_parser;
 use crate::parse::idl as idl_parser;
-use crate::utils::{path_to_string, to_camel_case_path};
+use crate::utils::path_to_string;
 
 use super::computed::{parse_computed_expression, qualify_field_refs};
 use super::handlers::{find_field_in_instruction, get_join_on_field};
@@ -86,9 +86,10 @@ pub fn build_ast(
         sources_by_type,
     );
 
+    // Keep field paths in snake_case to match IDL - SDK generators handle case conversion
     let computed_field_paths: Vec<String> = computed_fields
         .iter()
-        .map(|(path, _, _)| to_camel_case_path(path))
+        .map(|(path, _, _)| path.clone())
         .collect();
 
     // Extract program_id and convert IDL to snapshot for embedding
@@ -117,7 +118,7 @@ pub fn build_ast(
             };
 
             ComputedFieldSpec {
-                target_path: to_camel_case_path(target_path),
+                target_path: target_path.clone(),
                 expression: qualified_expression,
                 result_type,
             }
@@ -130,9 +131,9 @@ pub fn build_ast(
         for field_info in &section.fields {
             // Handle root-level fields (no section prefix)
             let field_path = if section.name == "root" {
-                to_camel_case_path(&field_info.field_name)
+                field_info.field_name.clone()
             } else {
-                to_camel_case_path(&format!("{}.{}", section.name, field_info.field_name))
+                format!("{}.{}", section.name, field_info.field_name)
             };
             field_mappings.insert(field_path, field_info.clone());
         }
@@ -147,7 +148,7 @@ pub fn build_ast(
             lookup_indexes: lookup_indexes
                 .iter()
                 .map(|(field_name, temporal_field)| LookupIndexSpec {
-                    field_name: to_camel_case_path(field_name),
+                    field_name: field_name.clone(),
                     temporal_field: temporal_field.clone(),
                 })
                 .collect(),
@@ -437,7 +438,7 @@ fn build_source_handler(
         let population = parse_population_strategy(&mapping.strategy);
 
         serializable_mappings.push(SerializableFieldMapping {
-            target_path: to_camel_case_path(&mapping.target_field_name),
+            target_path: mapping.target_field_name.clone(),
             source,
             transform: None,
             population,
@@ -681,7 +682,7 @@ fn build_event_handler(
         let population = parse_population_strategy(&event_attr.strategy);
 
         serializable_mappings.push(SerializableFieldMapping {
-            target_path: to_camel_case_path(target_field),
+            target_path: target_field.clone(),
             source,
             transform: None,
             population,
@@ -909,7 +910,7 @@ fn build_instruction_hooks_ast(
             });
 
             let action = HookAction::SetField {
-                target_field: to_camel_case_path(&derive_attr.target_field_name),
+                target_field: derive_attr.target_field_name.clone(),
                 source,
                 condition,
             };
@@ -960,7 +961,7 @@ fn build_instruction_hooks_ast(
 
                     if mapping.strategy == "Count" {
                         let action = HookAction::IncrementField {
-                            target_field: to_camel_case_path(field_path),
+                            target_field: field_path.clone(),
                             increment_by: 1,
                             condition: Some(condition),
                         };

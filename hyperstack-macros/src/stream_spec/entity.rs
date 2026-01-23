@@ -22,7 +22,7 @@ use crate::ast::{EntitySection, FieldTypeInfo};
 use crate::codegen;
 use crate::parse;
 use crate::parse::idl as idl_parser;
-use crate::utils::{path_to_string, to_camel_case, to_snake_case};
+use crate::utils::{path_to_string, to_pascal_case, to_snake_case};
 
 use super::ast_writer::build_and_write_ast;
 use super::computed::{
@@ -619,7 +619,7 @@ pub fn process_map_attribute(
         pub #field_name: #field_type
     });
 
-    let accessor_name = to_camel_case(&field_name.to_string());
+    let accessor_name = to_pascal_case(&field_name.to_string());
     let accessor_ident = format_ident!("{}", accessor_name);
 
     if accessor_names.insert(accessor_name.clone()) {
