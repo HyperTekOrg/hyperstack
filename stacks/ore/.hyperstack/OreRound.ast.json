@@ -198,6 +198,10 @@
           {
             "name": "strategy",
             "type": "u8"
+          },
+          {
+            "name": "reload",
+            "type": "u64"
           }
         ]
       },
@@ -796,6 +800,14 @@
             "docs": []
           },
           {
+            "name": "payer",
+            "writable": true,
+            "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
             "name": "mint",
             "writable": false,
             "signer": false,
@@ -863,6 +875,10 @@
         "args": [
           {
             "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "compound_fee",
             "type": "u64"
           }
         ]
@@ -1063,9 +1079,27 @@
         ]
       },
       {
-        "name": "bury",
+        "name": "buyback",
         "discriminator": [
           13,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "docs": [
+          "Buys back ORE from the market."
+        ],
+        "accounts": [],
+        "args": []
+      },
+      {
+        "name": "bury",
+        "discriminator": [
+          24,
           0,
           0,
           0,
@@ -1153,7 +1187,12 @@
             "docs": []
           }
         ],
-        "args": []
+        "args": [
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
       },
       {
         "name": "wrap",
@@ -1271,7 +1310,7 @@
       {
         "name": "newVar",
         "discriminator": [
-          17,
+          19,
           0,
           0,
           0,
@@ -1360,6 +1399,60 @@
             "type": "u64"
           }
         ]
+      },
+      {
+        "name": "reloadSol",
+        "discriminator": [
+          21,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "docs": [
+          "Reloads SOL into the automation account."
+        ],
+        "accounts": [],
+        "args": []
+      },
+      {
+        "name": "compoundYield",
+        "discriminator": [
+          22,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "docs": [
+          "Compounds staking yield."
+        ],
+        "accounts": [],
+        "args": []
+      },
+      {
+        "name": "liq",
+        "discriminator": [
+          25,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "docs": [
+          "Liquidation instruction."
+        ],
+        "accounts": [],
+        "args": []
       }
     ],
     "types": [
@@ -1417,6 +1510,10 @@
             },
             {
               "name": "mask",
+              "type": "u64"
+            },
+            {
+              "name": "reload",
               "type": "u64"
             }
           ]
@@ -1678,7 +1775,7 @@
               "type": "u64"
             },
             {
-              "name": "buffer_e",
+              "name": "compound_fee_reserve",
               "type": "u64"
             },
             {
@@ -1785,6 +1882,34 @@
         "name": "BuryEvent",
         "discriminator": [
           1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "docs": []
+      },
+      {
+        "name": "DeployEvent",
+        "discriminator": [
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "docs": []
+      },
+      {
+        "name": "LiqEvent",
+        "discriminator": [
+          3,
           0,
           0,
           0,
@@ -3104,7 +3229,7 @@
       "result_type": "Option < bool >"
     }
   ],
-  "content_hash": "e573ab31bf7eb508675f384491750ad67798cd8fa9c1cc09693627d6317f0104",
+  "content_hash": "8a0895d4f90e59d84c546a3c6ee60cd80f22ca02efe318d7462df6f7542499af",
   "views": [
     {
       "id": "OreRound/latest",
