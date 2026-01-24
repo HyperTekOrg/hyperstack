@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.3.3...hyperstack-macros-v0.3.4) (2026-01-24)
+
+
+### Bug Fixes
+
+* **macros:** add explicit type annotation to account_names vector ([76a124e](https://github.com/HyperTekOrg/hyperstack/commit/76a124ef623c6aabd4d88ae688701403105a80dd))
+
 ## [0.3.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.3.2...hyperstack-macros-v0.3.3) (2026-01-23)
 
 
