@@ -3,7 +3,7 @@ import { OREROUND_STACK, OreRound } from 'hyperstack-stacks/ore';
 
 export function OreDashboard() {
   const stack = useHyperstack(OREROUND_STACK);
-  const { data: latestRounds } = stack.views.oreRound.latest.use({ take: 5 });
+  const { data: latestRounds } = stack.views.OreRound.latest.use({ take: 5 });
   const connectionState = useConnectionState();
   const isConnected = connectionState === 'connected';
 
@@ -41,7 +41,7 @@ export function OreDashboard() {
         {latestRounds && latestRounds.length > 0 ? (
           <div className="flex flex-col gap-4">
             {latestRounds.map((round, index) => (
-              <RoundCard key={round.id?.roundId ?? index} round={round} isLatest={index === 0} />
+              <RoundCard key={round.id?.round_id ?? index} round={round} isLatest={index === 0} />
             ))}
           </div>
         ) : (
@@ -72,7 +72,7 @@ function RoundCard({ round, isLatest }: { round: OreRound; isLatest: boolean }) 
               </span>
             </div>
             <div className="text-white text-3xl font-bold mt-2">
-              Round #{round.id?.roundId ?? '-'}
+              Round #{round.id?.round_id ?? '-'}
             </div>
           </div>
         </div>

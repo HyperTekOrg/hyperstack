@@ -19,7 +19,7 @@ function shortenAddress(address: string | undefined): string {
 
 export function PumpFunDashboard() {
   const stack = useHyperstack(PUMPFUNTOKEN_STACK);
-  const { data: tokens } = stack.views.pumpfunToken.list.use();
+  const { data: tokens } = stack.views.PumpfunToken.list.use();
 
   const connectionState = useConnectionState();
 
@@ -41,7 +41,7 @@ export function PumpFunDashboard() {
         <h4 className="text-lg font-medium text-gray-800 mb-6">Token Details</h4>
 
         {/* Token Info */}
-        {(info?.name || info?.symbol || info?.uri || info?.isComplete !== undefined) && (
+        {(info?.name || info?.symbol || info?.uri || info?.is_complete !== undefined) && (
           <div className="mb-6">
             <h5 className="text-sm font-medium text-gray-700 mb-3">Token Info</h5>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -70,11 +70,11 @@ export function PumpFunDashboard() {
                   </a>
                 </div>
               )}
-              {info?.isComplete !== undefined && (
+              {info?.is_complete !== undefined && (
                 <div className="bg-white p-4 rounded-lg border">
                   <div className="text-sm text-gray-600">Status</div>
-                  <div className={`text-lg font-medium ${info.isComplete ? 'text-green-600' : 'text-yellow-600'}`}>
-                    {info.isComplete ? 'Complete' : 'In Progress'}
+                  <div className={`text-lg font-medium ${info.is_complete ? 'text-green-600' : 'text-yellow-600'}`}>
+                    {info.is_complete ? 'Complete' : 'In Progress'}
                   </div>
                 </div>
               )}
@@ -125,19 +125,19 @@ export function PumpFunDashboard() {
                 </div>
               </div>
             )}
-            {trading?.totalTrades !== undefined && (
+            {trading?.total_trades !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Total Trades</div>
                 <div className="text-lg font-medium text-purple-600">
-                  {formatNumber(trading.totalTrades)}
+                  {formatNumber(trading.total_trades)}
                 </div>
               </div>
             )}
-            {trading?.uniqueTraders !== undefined && (
+            {trading?.unique_traders !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Unique Traders</div>
                 <div className="text-lg font-medium text-blue-600">
-                  {formatNumber(trading.uniqueTraders)}
+                  {formatNumber(trading.unique_traders)}
                 </div>
               </div>
             )}
@@ -157,11 +157,11 @@ export function PumpFunDashboard() {
                 </div>
               </div>
             )}
-            {trading?.lastTradePrice !== undefined && (
+            {trading?.last_trade_price !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Last Trade Price</div>
                 <div className="text-lg font-medium text-gray-900">
-                  {trading.lastTradePrice.toFixed(10)} SOL
+                  {trading.last_trade_price.toFixed(10)} SOL
                 </div>
               </div>
             )}
@@ -235,9 +235,9 @@ export function PumpFunDashboard() {
                     {tokensList
                       .slice((tokensPage - 1) * ITEMS_PER_PAGE, tokensPage * ITEMS_PER_PAGE)
                       .map((token: any, index: number) => {
-                        const tokenKey = token.bondingCurveSnapshot?.creator || token.id?.bondingCurve || `token-${index}`;
+                        const tokenKey = token.bonding_curve_snapshot?.creator || token.id?.bonding_curve || `token-${index}`;
                         const isExpanded = expandedTokens.has(tokenKey);
-                        const isComplete = token.info?.isComplete || token.bondingCurveSnapshot?.complete;
+                        const isComplete = token.info?.is_complete || token.bonding_curve_snapshot?.complete;
 
                         return (
                           <div
@@ -273,16 +273,16 @@ export function PumpFunDashboard() {
                                       <>Mint: {shortenAddress(token.id.mint)} | </>
                                     )}
                                     Bonding Curve: {shortenAddress(tokenKey)}
-                                    {token.trading?.lastTradePrice !== undefined && (
-                                      <> | Price: {token.trading.lastTradePrice.toFixed(10)} SOL</>
+                                    {token.trading?.last_trade_price !== undefined && (
+                                      <> | Price: {token.trading.last_trade_price.toFixed(10)} SOL</>
                                     )}
                                   </div>
                                   <div className="text-xs text-gray-500 mt-1">
-                                    {token.trading?.totalTrades !== undefined && (
-                                      <>{token.trading.totalTrades} trades</>
+                                    {token.trading?.total_trades !== undefined && (
+                                      <>{token.trading.total_trades} trades</>
                                     )}
-                                    {token.trading?.uniqueTraders !== undefined && (
-                                      <> • {token.trading.uniqueTraders} traders</>
+                                    {token.trading?.unique_traders !== undefined && (
+                                      <> • {token.trading.unique_traders} traders</>
                                     )}
                                     {token.info?.uri && (
                                       <> • <a href={token.info.uri} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>Metadata</a></>
