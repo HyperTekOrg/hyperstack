@@ -74,6 +74,10 @@ enum Commands {
         /// Force re-download templates even if cached
         #[arg(long)]
         force_refresh: bool,
+
+        /// Skip installing dependencies
+        #[arg(long)]
+        skip_install: bool,
     },
 
     /// Initialize a new Hyperstack project (auto-detects AST files)
@@ -353,7 +357,8 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             template,
             offline,
             force_refresh,
-        } => commands::create::create(name, template, offline, force_refresh),
+            skip_install,
+        } => commands::create::create(name, template, offline, force_refresh, skip_install),
         Commands::Init => commands::config::init(&cli.config),
         Commands::Up {
             stack_name,

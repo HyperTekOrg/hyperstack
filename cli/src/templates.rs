@@ -279,8 +279,10 @@ fn copy_env_example(project_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Detect package manager from npm_config_user_agent environment variable.
+/// Detect package manager: first from npm_config_user_agent (when run via npx/pnpm dlx/etc),
+/// then by checking which package managers are installed on the system.
 pub fn detect_package_manager() -> &'static str {
+    // 1. Check if invoked via a package manager (npx, pnpm dlx, yarn dlx, bunx)
     if let Ok(user_agent) = std::env::var("npm_config_user_agent") {
         if user_agent.starts_with("yarn") {
             return "yarn";
@@ -288,9 +290,37 @@ pub fn detect_package_manager() -> &'static str {
             return "pnpm";
         } else if user_agent.starts_with("bun") {
             return "bun";
+        } else if user_agent.starts_with("npm") {
+            return "npm";
         }
     }
+
+    // 2. Check what's available on the system (prefer faster ones)
+    if is_command_available("bun") {
+        return "bun";
+    }
+    if is_command_available("pnpm") {
+        return "pnpm";
+    }
+    if is_command_available("yarn") {
+        return "yarn";
+    }
+    if is_command_available("npm") {
+        return "npm";
+    }
+
+    // 3. Default to npm (will fail with clear error if not installed)
     "npm"
+}
+
+fn is_command_available(cmd: &str) -> bool {
+    std::process::Command::new(cmd)
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 /// Get the install command for a package manager.

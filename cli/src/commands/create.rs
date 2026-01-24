@@ -3,6 +3,7 @@ use colored::Colorize;
 use dialoguer::{theme::ColorfulTheme, Input, Select};
 use std::fs;
 use std::path::Path;
+use std::process::{Command, Stdio};
 
 use crate::templates::{
     customize_project, detect_package_manager, dev_command, install_command, Template,
@@ -15,6 +16,7 @@ pub fn create(
     template: Option<String>,
     offline: bool,
     force_refresh: bool,
+    skip_install: bool,
 ) -> Result<()> {
     let theme = ColorfulTheme::default();
 
@@ -91,20 +93,84 @@ pub fn create(
     manager.copy_template(selected_template, project_dir)?;
     customize_project(project_dir, &project_name)?;
 
-    println!();
-    println!(
-        "{} Created {}",
-        ui::symbols::SUCCESS.green().bold(),
-        project_name.bold()
-    );
+    println!("  {} Project scaffolded", ui::symbols::SUCCESS.green());
 
     let pm = detect_package_manager();
+    let install_succeeded = if skip_install {
+        false
+    } else {
+        run_install(project_dir, pm)?
+    };
+
     println!();
-    println!("Next steps:");
-    println!("  {} {}", "cd".dimmed(), project_name);
-    println!("  {}", install_command(pm).dimmed());
-    println!("  {}", dev_command(pm).dimmed());
-    println!();
+    print_next_steps(&project_name, pm, install_succeeded);
 
     Ok(())
+}
+
+fn run_install(project_dir: &Path, pm: &str) -> Result<bool> {
+    ui::print_step("Installing dependencies...");
+
+    let (cmd, args) = match pm {
+        "yarn" => ("yarn", vec!["install"]),
+        "pnpm" => ("pnpm", vec!["install"]),
+        "bun" => ("bun", vec!["install"]),
+        _ => ("npm", vec!["install"]),
+    };
+
+    let status = Command::new(cmd)
+        .args(&args)
+        .current_dir(project_dir)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .with_context(|| format!("Failed to run {}", install_command(pm)))?;
+
+    if status.success() {
+        println!("  {} Dependencies installed", ui::symbols::SUCCESS.green());
+        Ok(true)
+    } else {
+        println!(
+            "  {} Install failed (exit code: {})",
+            ui::symbols::FAILURE.red(),
+            status.code().unwrap_or(-1)
+        );
+        println!(
+            "    You can retry manually with: {}",
+            install_command(pm).dimmed()
+        );
+        Ok(false)
+    }
+}
+
+fn print_next_steps(project_name: &str, pm: &str, install_succeeded: bool) {
+    println!(
+        "{} {}",
+        ui::symbols::SUCCESS.green().bold(),
+        "Ready!".bold()
+    );
+    println!();
+
+    if install_succeeded {
+        println!("Start the dev server:");
+        println!();
+        println!(
+            "  {} {} && {}",
+            "$".dimmed(),
+            format!("cd {}", project_name).cyan(),
+            dev_command(pm).cyan()
+        );
+    } else {
+        println!("Install dependencies and start:");
+        println!();
+        println!(
+            "  {} {} && {} && {}",
+            "$".dimmed(),
+            format!("cd {}", project_name).cyan(),
+            install_command(pm).cyan(),
+            dev_command(pm).cyan()
+        );
+    }
+
+    println!();
 }
