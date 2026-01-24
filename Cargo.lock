@@ -1233,12 +1233,14 @@ dependencies = [
  "flate2",
  "hyperstack-interpreter",
  "indicatif",
+ "regex",
  "reqwest",
  "rpassword",
  "serde",
  "serde_json",
  "tar",
  "toml",
+ "uuid",
 ]
 
 [[package]]

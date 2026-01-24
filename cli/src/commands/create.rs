@@ -5,6 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+use crate::telemetry;
 use crate::templates::{
     customize_project, detect_package_manager, dev_command, install_command, Template,
     TemplateManager,
@@ -18,6 +19,7 @@ pub fn create(
     force_refresh: bool,
     skip_install: bool,
 ) -> Result<()> {
+    let start = std::time::Instant::now();
     let theme = ColorfulTheme::default();
 
     let project_name = match name {
@@ -52,6 +54,8 @@ pub fn create(
             Template::ALL[selection]
         }
     };
+
+    telemetry::record_template_selected(selected_template.display_name());
 
     let project_dir = Path::new(&project_name);
 
@@ -104,6 +108,8 @@ pub fn create(
 
     println!();
     print_next_steps(&project_name, pm, install_succeeded);
+
+    telemetry::record_create_completed(selected_template.display_name(), start.elapsed());
 
     Ok(())
 }

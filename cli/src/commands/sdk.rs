@@ -4,6 +4,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::config::{discover_ast_files, find_ast_file, DiscoveredAst, HyperstackConfig};
+use crate::telemetry;
 
 pub fn list(config_path: &str) -> Result<()> {
     let config = HyperstackConfig::load_optional(config_path)?;
@@ -147,6 +148,8 @@ pub fn create_typescript(
         "✓".green().bold()
     );
     println!("  File: {}", output_path.display().to_string().bold());
+
+    telemetry::record_sdk_generated("typescript");
 
     Ok(())
 }
@@ -335,6 +338,8 @@ pub fn create_rust(
             output_dir.display()
         );
     }
+
+    telemetry::record_sdk_generated("rust");
 
     Ok(())
 }
