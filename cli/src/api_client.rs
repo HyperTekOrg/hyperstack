@@ -626,7 +626,6 @@ impl ApiClient {
     }
 
     /// Stop a deployment
-    #[allow(dead_code)]
     pub fn stop_deployment(&self, deployment_id: i32) -> Result<StopDeploymentResponse> {
         let api_key = self.require_api_key()?;
 
