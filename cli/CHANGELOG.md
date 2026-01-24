@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.4...hyperstack-cli-v0.3.5) (2026-01-24)
+
+
+### Features
+
+* **cli:** add privacy-respecting telemetry ([5aebab5](https://github.com/HyperTekOrg/hyperstack/commit/5aebab5897b9b05ef3f116a0b06fba1bfb0c79ff))
+* **cli:** auto-install dependencies in `hs create` ([da64ce2](https://github.com/HyperTekOrg/hyperstack/commit/da64ce2aa0219c91769cdb03b324aae41b1bf4c7))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.4 to 0.3.5
+
 ## [0.3.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.3...hyperstack-cli-v0.3.4) (2026-01-24)
 
 
