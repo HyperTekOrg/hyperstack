@@ -292,7 +292,7 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
                 });
 
                 if let Some(obj) = value.as_object_mut() {
-                    let account_names = vec![#(#account_names),*];
+                    let account_names: Vec<&str> = vec![#(#account_names),*];
                     let expected_count = #expected_count;
                     let actual_count = accounts.len();
                     
