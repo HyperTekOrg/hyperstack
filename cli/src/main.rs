@@ -28,6 +28,7 @@ use std::process;
 mod api_client;
 mod commands;
 mod config;
+mod templates;
 mod ui;
 
 #[derive(Parser)]
@@ -57,6 +58,24 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Create a new Hyperstack project from a template
+    Create {
+        /// Project name (creates directory)
+        name: Option<String>,
+
+        /// Template: react-pumpfun, react-ore
+        #[arg(short, long)]
+        template: Option<String>,
+
+        /// Use cached templates only (no network)
+        #[arg(long)]
+        offline: bool,
+
+        /// Force re-download templates even if cached
+        #[arg(long)]
+        force_refresh: bool,
+    },
+
     /// Initialize a new Hyperstack project (auto-detects AST files)
     Init,
 
@@ -329,6 +348,12 @@ fn run(cli: Cli) -> anyhow::Result<()> {
     };
 
     match command {
+        Commands::Create {
+            name,
+            template,
+            offline,
+            force_refresh,
+        } => commands::create::create(name, template, offline, force_refresh),
         Commands::Init => commands::config::init(&cli.config),
         Commands::Up {
             stack_name,

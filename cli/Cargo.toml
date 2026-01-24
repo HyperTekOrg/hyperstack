@@ -35,4 +35,7 @@ hyperstack-interpreter = { version = "0.3.3", path = "../interpreter" }
 reqwest = { version = "0.11", features = ["json", "blocking"] }
 dirs = "5.0"
 rpassword = "7.3"
+dialoguer = "0.11"
+flate2 = "1.0"
+tar = "0.4"
 
