@@ -16,6 +16,34 @@ pub enum Mode {
     List,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SortOrder {
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SortConfig {
+    pub field: Vec<String>,
+    pub order: SortOrder,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubscribedFrame {
+    pub op: String,
+    pub view: String,
+    pub mode: Mode,
+    #[serde(default)]
+    pub sort: Option<SortConfig>,
+}
+
+impl SubscribedFrame {
+    pub fn is_subscribed_frame(op: &str) -> bool {
+        op == "subscribed"
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operation {
     Upsert,
@@ -23,6 +51,7 @@ pub enum Operation {
     Delete,
     Create,
     Snapshot,
+    Subscribed,
 }
 
 impl std::str::FromStr for Operation {
@@ -35,6 +64,7 @@ impl std::str::FromStr for Operation {
             "delete" => Operation::Delete,
             "create" => Operation::Create,
             "snapshot" => Operation::Snapshot,
+            "subscribed" => Operation::Subscribed,
             _ => Operation::Upsert,
         })
     }
@@ -98,6 +128,35 @@ pub fn parse_snapshot_entities(data: &serde_json::Value) -> Vec<SnapshotEntity> 
             .filter_map(|v| serde_json::from_value(v.clone()).ok())
             .collect(),
         _ => Vec::new(),
+    }
+}
+
+#[allow(dead_code)]
+pub fn parse_subscribed_frame(bytes: &[u8]) -> Result<SubscribedFrame, serde_json::Error> {
+    if is_gzip(bytes) {
+        if let Ok(decompressed) = decompress_gzip(bytes) {
+            return serde_json::from_str(&decompressed);
+        }
+    }
+
+    let text = String::from_utf8_lossy(bytes);
+    serde_json::from_str(&text)
+}
+
+#[allow(dead_code)]
+pub fn try_parse_subscribed_frame(bytes: &[u8]) -> Option<SubscribedFrame> {
+    let frame: serde_json::Value = if is_gzip(bytes) {
+        decompress_gzip(bytes)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())?
+    } else {
+        serde_json::from_slice(bytes).ok()?
+    };
+
+    if frame.get("op")?.as_str()? == "subscribed" {
+        serde_json::from_value(frame).ok()
+    } else {
+        None
     }
 }
 

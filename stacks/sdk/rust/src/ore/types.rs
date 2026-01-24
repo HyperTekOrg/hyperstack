@@ -66,29 +66,31 @@ pub struct OreRound {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Round {
-    #[serde(rename = "id", default)]
+    #[serde(default)]
     pub id: Option<u64>,
-    #[serde(rename = "deployed", default)]
+    #[serde(default)]
     pub deployed: Option<Vec<u64>>,
-    #[serde(rename = "slotHash", default)]
+    #[serde(default)]
     pub slot_hash: Option<Vec<i64>>,
-    #[serde(rename = "count", default)]
+    #[serde(default)]
     pub count: Option<Vec<u64>>,
-    #[serde(rename = "expiresAt", default)]
+    #[serde(default)]
     pub expires_at: Option<u64>,
-    #[serde(rename = "motherlode", default)]
+    #[serde(default)]
     pub motherlode: Option<u64>,
-    #[serde(rename = "rentPayer", default)]
+    #[serde(default)]
     pub rent_payer: Option<String>,
-    #[serde(rename = "topMiner", default)]
+    #[serde(default)]
     pub top_miner: Option<String>,
-    #[serde(rename = "topMinerReward", default)]
+    #[serde(default)]
     pub top_miner_reward: Option<u64>,
-    #[serde(rename = "totalDeployed", default)]
+    #[serde(default)]
     pub total_deployed: Option<u64>,
-    #[serde(rename = "totalVaulted", default)]
+    #[serde(default)]
+    pub total_miners: Option<u64>,
+    #[serde(default)]
     pub total_vaulted: Option<u64>,
-    #[serde(rename = "totalWinnings", default)]
+    #[serde(default)]
     pub total_winnings: Option<u64>,
 }
 

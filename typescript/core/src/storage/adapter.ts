@@ -1,3 +1,4 @@
+import type { SortConfig } from '../frame';
 import type { Update, RichUpdate } from '../types';
 
 export type UpdateCallback<T = unknown> = (
@@ -14,6 +15,10 @@ export type RichUpdateCallback<T = unknown> = (
 
 export interface StorageAdapterConfig {
   maxEntriesPerView?: number | null;
+}
+
+export interface ViewSortConfig {
+  sort?: SortConfig;
 }
 
 /**
@@ -34,6 +39,9 @@ export interface StorageAdapter {
   clear(viewPath?: string): void;
 
   evictOldest?(viewPath: string): string | undefined;
+
+  setViewConfig?(viewPath: string, config: ViewSortConfig): void;
+  getViewConfig?(viewPath: string): ViewSortConfig | undefined;
 
   onUpdate(callback: UpdateCallback): () => void;
   onRichUpdate(callback: RichUpdateCallback): () => void;

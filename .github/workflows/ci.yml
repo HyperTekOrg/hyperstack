@@ -9,6 +9,8 @@ jobs:
   rust:
     name: Rust
     runs-on: ubuntu-latest
+    # Skip CI for release-please commits (already tested on the source commit)
+    if: github.actor != 'release-please[bot]'
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +48,7 @@ jobs:
   typescript-core:
     name: TypeScript Core
     runs-on: ubuntu-latest
+    if: github.actor != 'release-please[bot]'
     defaults:
       run:
         working-directory: typescript/core
@@ -71,6 +74,7 @@ jobs:
   typescript-react:
     name: TypeScript React
     runs-on: ubuntu-latest
+    if: github.actor != 'release-please[bot]'
     steps:
       - uses: actions/checkout@v4
 
@@ -98,6 +102,7 @@ jobs:
   typescript-stacks:
     name: TypeScript Stacks
     runs-on: ubuntu-latest
+    if: github.actor != 'release-please[bot]'
     defaults:
       run:
         working-directory: stacks/sdk/typescript
@@ -117,9 +122,79 @@ jobs:
       - name: Build
         run: npm run build
 
+  # Validates that generated SDKs are up-to-date with their source ASTs.
+  # This prevents publishing stale SDKs when stack definitions change.
+  validate-generated-sdks:
+    name: Validate Generated SDKs
+    runs-on: ubuntu-latest
+    if: github.actor != 'release-please[bot]'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-sdk-validate-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-sdk-validate-
+            ${{ runner.os }}-cargo-
+
+      - name: Build stack crates (regenerate ASTs)
+        run: |
+          cargo build --manifest-path stacks/pumpfun/Cargo.toml
+          cargo build --manifest-path stacks/ore/Cargo.toml
+
+      - name: Install hyperstack-cli
+        run: cargo install --path cli
+
+      - name: Regenerate TypeScript SDKs
+        run: |
+          hs sdk create typescript pumpfun-token --config stacks/pumpfun/hyperstack.toml
+          hs sdk create typescript ore-round --config stacks/ore/hyperstack.toml
+
+      - name: Check for uncommitted changes
+        run: |
+          if [ -n "$(git status --porcelain stacks/sdk/)" ]; then
+            echo "::error::Generated SDKs are out of date with their source ASTs!"
+            echo ""
+            echo "The TypeScript SDKs in stacks/sdk/typescript/src/ do not match the"
+            echo "current stack definitions. This can happen when:"
+            echo "  1. Stack spec files (stacks/*/src/*.rs) were modified"
+            echo "  2. The hyperstack-macros or interpreter crates were updated"
+            echo "  3. SDKs were not regenerated after changes"
+            echo ""
+            echo "To fix this, run the following locally and commit the changes:"
+            echo ""
+            echo "  cargo build --manifest-path stacks/pumpfun/Cargo.toml"
+            echo "  cargo build --manifest-path stacks/ore/Cargo.toml"
+            echo "  hs sdk create typescript pumpfun-token --config stacks/pumpfun/hyperstack.toml"
+            echo "  hs sdk create typescript ore-round --config stacks/ore/hyperstack.toml"
+            echo ""
+            echo "Files that differ:"
+            git status --porcelain stacks/sdk/
+            echo ""
+            echo "Diff:"
+            git diff stacks/sdk/
+            exit 1
+          fi
+          echo "✓ Generated SDKs are up-to-date"
+
   python:
     name: Python
     runs-on: ubuntu-latest
+    if: github.actor != 'release-please[bot]'
     defaults:
       run:
         working-directory: python/hyperstack-sdk
@@ -145,6 +220,7 @@ jobs:
   docs:
     name: Docs
     runs-on: ubuntu-latest
+    if: github.actor != 'release-please[bot]'
     defaults:
       run:
         working-directory: docs

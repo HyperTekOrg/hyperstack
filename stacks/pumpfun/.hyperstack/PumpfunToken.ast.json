@@ -20,6 +20,20 @@
         "docs": []
       },
       {
+        "name": "FeeConfig",
+        "discriminator": [
+          143,
+          52,
+          146,
+          187,
+          219,
+          123,
+          76,
+          155
+        ],
+        "docs": []
+      },
+      {
         "name": "Global",
         "discriminator": [
           167,
@@ -32,9 +46,319 @@
           127
         ],
         "docs": []
+      },
+      {
+        "name": "GlobalVolumeAccumulator",
+        "discriminator": [
+          202,
+          42,
+          246,
+          43,
+          142,
+          190,
+          30,
+          255
+        ],
+        "docs": []
+      },
+      {
+        "name": "SharingConfig",
+        "discriminator": [
+          216,
+          74,
+          9,
+          0,
+          56,
+          140,
+          93,
+          75
+        ],
+        "docs": []
+      },
+      {
+        "name": "UserVolumeAccumulator",
+        "discriminator": [
+          86,
+          255,
+          112,
+          14,
+          102,
+          53,
+          154,
+          250
+        ],
+        "docs": []
       }
     ],
     "instructions": [
+      {
+        "name": "admin_set_creator",
+        "discriminator": [
+          69,
+          25,
+          171,
+          142,
+          57,
+          239,
+          13,
+          4
+        ],
+        "docs": [
+          "Allows Global::admin_set_creator_authority to override the bonding curve creator"
+        ],
+        "accounts": [
+          {
+            "name": "admin_set_creator_authority",
+            "writable": false,
+            "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "global",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "mint",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "bonding_curve",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "event_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          }
+        ],
+        "args": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          }
+        ]
+      },
+      {
+        "name": "admin_set_idl_authority",
+        "discriminator": [
+          8,
+          217,
+          96,
+          231,
+          144,
+          104,
+          192,
+          5
+        ],
+        "docs": [],
+        "accounts": [
+          {
+            "name": "authority",
+            "writable": false,
+            "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "global",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "idl_account",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "system_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "11111111111111111111111111111111",
+            "docs": []
+          },
+          {
+            "name": "program_signer",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "event_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          }
+        ],
+        "args": [
+          {
+            "name": "idl_authority",
+            "type": "pubkey"
+          }
+        ]
+      },
+      {
+        "name": "admin_update_token_incentives",
+        "discriminator": [
+          209,
+          11,
+          115,
+          87,
+          213,
+          23,
+          124,
+          204
+        ],
+        "docs": [],
+        "accounts": [
+          {
+            "name": "authority",
+            "writable": true,
+            "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "global",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "global_volume_accumulator",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "mint",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "global_incentive_token_account",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "associated_token_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+            "docs": []
+          },
+          {
+            "name": "system_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "11111111111111111111111111111111",
+            "docs": []
+          },
+          {
+            "name": "token_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "event_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          }
+        ],
+        "args": [
+          {
+            "name": "start_time",
+            "type": "i64"
+          },
+          {
+            "name": "end_time",
+            "type": "i64"
+          },
+          {
+            "name": "seconds_in_a_day",
+            "type": "i64"
+          },
+          {
+            "name": "day_number",
+            "type": "u64"
+          },
+          {
+            "name": "pump_token_supply_per_day",
+            "type": "u64"
+          }
+        ]
+      },
       {
         "name": "buy",
         "discriminator": [
@@ -120,7 +444,7 @@
             "writable": false,
             "signer": false,
             "optional": false,
-            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+            "address": null,
             "docs": []
           },
           {
@@ -144,7 +468,39 @@
             "writable": false,
             "signer": false,
             "optional": false,
+            "address": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+            "docs": []
+          },
+          {
+            "name": "global_volume_accumulator",
+            "writable": false,
+            "signer": false,
+            "optional": false,
             "address": null,
+            "docs": []
+          },
+          {
+            "name": "user_volume_accumulator",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "fee_config",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "fee_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ",
             "docs": []
           }
         ],
@@ -156,8 +512,366 @@
           {
             "name": "max_sol_cost",
             "type": "u64"
+          },
+          {
+            "name": "track_volume",
+            "type": {
+              "defined": {
+                "name": "OptionBool"
+              }
+            }
           }
         ]
+      },
+      {
+        "name": "buy_exact_sol_in",
+        "discriminator": [
+          56,
+          252,
+          116,
+          8,
+          158,
+          223,
+          205,
+          95
+        ],
+        "docs": [
+          "Given a budget of spendable SOL, buy at least min_tokens_out tokens.",
+          "Fees are deducted from spendable_sol_in.",
+          "",
+          "# Quote formulas",
+          "Where:",
+          "- total_fee_bps = protocol_fee_bps + creator_fee_bps (creator_fee_bps is 0 if no creator)",
+          "- floor(a/b) = a / b (integer division)",
+          "- ceil(a/b) = (a + b - 1) / b",
+          "",
+          "SOL → tokens quote",
+          "To calculate tokens_out for a given spendable_sol_in:",
+          "1. net_sol = floor(spendable_sol_in * 10_000 / (10_000 + total_fee_bps))",
+          "2. fees = ceil(net_sol * protocol_fee_bps / 10_000) + ceil(net_sol * creator_fee_bps / 10_000) (creator_fee_bps is 0 if no creator)",
+          "3. if net_sol + fees > spendable_sol_in: net_sol = net_sol - (net_sol + fees - spendable_sol_in)",
+          "4. tokens_out = floor((net_sol - 1) * virtual_token_reserves / (virtual_sol_reserves + net_sol - 1))",
+          "",
+          "Reverse quote (tokens → SOL)",
+          "To calculate spendable_sol_in for a desired number of tokens:",
+          "1. net_sol = ceil(tokens * virtual_sol_reserves / (virtual_token_reserves - tokens)) + 1",
+          "2. spendable_sol_in = ceil(net_sol * (10_000 + total_fee_bps) / 10_000)",
+          "",
+          "Rent",
+          "Separately make sure the instruction's payer has enough SOL to cover rent for:",
+          "- creator_vault: rent.minimum_balance(0)",
+          "- user_volume_accumulator: rent.minimum_balance(UserVolumeAccumulator::LEN)"
+        ],
+        "accounts": [
+          {
+            "name": "global",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "fee_recipient",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "mint",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "bonding_curve",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "associated_bonding_curve",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "associated_user",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "user",
+            "writable": true,
+            "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "system_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "11111111111111111111111111111111",
+            "docs": []
+          },
+          {
+            "name": "token_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "creator_vault",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "event_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+            "docs": []
+          },
+          {
+            "name": "global_volume_accumulator",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "user_volume_accumulator",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "fee_config",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "fee_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ",
+            "docs": []
+          }
+        ],
+        "args": [
+          {
+            "name": "spendable_sol_in",
+            "type": "u64"
+          },
+          {
+            "name": "min_tokens_out",
+            "type": "u64"
+          },
+          {
+            "name": "track_volume",
+            "type": {
+              "defined": {
+                "name": "OptionBool"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "claim_token_incentives",
+        "discriminator": [
+          16,
+          4,
+          71,
+          28,
+          204,
+          1,
+          40,
+          27
+        ],
+        "docs": [],
+        "accounts": [
+          {
+            "name": "user",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "user_ata",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "global_volume_accumulator",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "global_incentive_token_account",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "user_volume_accumulator",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "mint",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "token_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "system_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "11111111111111111111111111111111",
+            "docs": []
+          },
+          {
+            "name": "associated_token_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+            "docs": []
+          },
+          {
+            "name": "event_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+            "docs": []
+          },
+          {
+            "name": "payer",
+            "writable": true,
+            "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          }
+        ],
+        "args": []
+      },
+      {
+        "name": "close_user_volume_accumulator",
+        "discriminator": [
+          249,
+          69,
+          164,
+          218,
+          150,
+          103,
+          84,
+          138
+        ],
+        "docs": [],
+        "accounts": [
+          {
+            "name": "user",
+            "writable": true,
+            "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "user_volume_accumulator",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "event_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          }
+        ],
+        "args": []
       },
       {
         "name": "collect_creator_fee",
@@ -178,7 +892,7 @@
           {
             "name": "creator",
             "writable": true,
-            "signer": true,
+            "signer": false,
             "optional": false,
             "address": null,
             "docs": []
@@ -367,6 +1081,251 @@
         ]
       },
       {
+        "name": "create_v2",
+        "discriminator": [
+          214,
+          144,
+          76,
+          236,
+          95,
+          139,
+          49,
+          180
+        ],
+        "docs": [
+          "Creates a new spl-22 coin and bonding curve."
+        ],
+        "accounts": [
+          {
+            "name": "mint",
+            "writable": true,
+            "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "mint_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "bonding_curve",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "associated_bonding_curve",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "global",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "user",
+            "writable": true,
+            "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "system_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "11111111111111111111111111111111",
+            "docs": []
+          },
+          {
+            "name": "token_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+            "docs": []
+          },
+          {
+            "name": "associated_token_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+            "docs": []
+          },
+          {
+            "name": "mayhem_program_id",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": "MAyhSmzXzV1pTf7LsNkrNwkWKTo4ougAJ1PPg47MD4e",
+            "docs": []
+          },
+          {
+            "name": "global_params",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "sol_vault",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "mayhem_state",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "mayhem_token_vault",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "event_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          }
+        ],
+        "args": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "name": "uri",
+            "type": "string"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_mayhem_mode",
+            "type": "bool"
+          }
+        ]
+      },
+      {
+        "name": "distribute_creator_fees",
+        "discriminator": [
+          165,
+          114,
+          103,
+          0,
+          121,
+          206,
+          247,
+          81
+        ],
+        "docs": [
+          "Distributes creator fees to shareholders based on their share percentages",
+          "The creator vault needs to have at least the minimum distributable amount to distribute fees",
+          "This can be checked with the get_minimum_distributable_fee instruction"
+        ],
+        "accounts": [
+          {
+            "name": "mint",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "bonding_curve",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "sharing_config",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "creator_vault",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "system_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "11111111111111111111111111111111",
+            "docs": []
+          },
+          {
+            "name": "event_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+            "docs": []
+          }
+        ],
+        "args": []
+      },
+      {
         "name": "extend_account",
         "discriminator": [
           234,
@@ -394,6 +1353,123 @@
             "name": "user",
             "writable": false,
             "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "system_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "11111111111111111111111111111111",
+            "docs": []
+          },
+          {
+            "name": "event_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          }
+        ],
+        "args": []
+      },
+      {
+        "name": "get_minimum_distributable_fee",
+        "discriminator": [
+          117,
+          225,
+          127,
+          202,
+          134,
+          95,
+          68,
+          35
+        ],
+        "docs": [
+          "Permissionless instruction to check the minimum required fees for distribution",
+          "Returns the minimum required balance from the creator_vault and whether distribution can proceed"
+        ],
+        "accounts": [
+          {
+            "name": "mint",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "bonding_curve",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "sharing_config",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "creator_vault",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          }
+        ],
+        "args": []
+      },
+      {
+        "name": "init_user_volume_accumulator",
+        "discriminator": [
+          94,
+          6,
+          202,
+          115,
+          255,
+          96,
+          232,
+          183
+        ],
+        "docs": [],
+        "accounts": [
+          {
+            "name": "payer",
+            "writable": true,
+            "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "user",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "user_volume_accumulator",
+            "writable": true,
+            "signer": false,
             "optional": false,
             "address": null,
             "docs": []
@@ -680,6 +1756,63 @@
         "args": []
       },
       {
+        "name": "migrate_bonding_curve_creator",
+        "discriminator": [
+          87,
+          124,
+          52,
+          191,
+          52,
+          38,
+          214,
+          232
+        ],
+        "docs": [],
+        "accounts": [
+          {
+            "name": "mint",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "bonding_curve",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "sharing_config",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "event_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          }
+        ],
+        "args": []
+      },
+      {
         "name": "sell",
         "discriminator": [
           51,
@@ -772,7 +1905,7 @@
             "writable": false,
             "signer": false,
             "optional": false,
-            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+            "address": null,
             "docs": []
           },
           {
@@ -788,7 +1921,23 @@
             "writable": false,
             "signer": false,
             "optional": false,
+            "address": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+            "docs": []
+          },
+          {
+            "name": "fee_config",
+            "writable": false,
+            "signer": false,
+            "optional": false,
             "address": null,
+            "docs": []
+          },
+          {
+            "name": "fee_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ",
             "docs": []
           }
         ],
@@ -882,6 +2031,87 @@
             "type": "pubkey"
           }
         ]
+      },
+      {
+        "name": "set_mayhem_virtual_params",
+        "discriminator": [
+          61,
+          169,
+          188,
+          191,
+          153,
+          149,
+          42,
+          97
+        ],
+        "docs": [],
+        "accounts": [
+          {
+            "name": "sol_vault_authority",
+            "writable": true,
+            "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "mayhem_token_vault",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "mint",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "global",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "bonding_curve",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "token_program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+            "docs": []
+          },
+          {
+            "name": "event_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          }
+        ],
+        "args": []
       },
       {
         "name": "set_metaplex_creator",
@@ -1031,6 +2261,229 @@
           {
             "name": "set_creator_authority",
             "type": "pubkey"
+          },
+          {
+            "name": "admin_set_creator_authority",
+            "type": "pubkey"
+          }
+        ]
+      },
+      {
+        "name": "set_reserved_fee_recipients",
+        "discriminator": [
+          111,
+          172,
+          162,
+          232,
+          114,
+          89,
+          213,
+          142
+        ],
+        "docs": [],
+        "accounts": [
+          {
+            "name": "global",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "authority",
+            "writable": false,
+            "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "event_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          }
+        ],
+        "args": [
+          {
+            "name": "whitelist_pda",
+            "type": "pubkey"
+          }
+        ]
+      },
+      {
+        "name": "sync_user_volume_accumulator",
+        "discriminator": [
+          86,
+          31,
+          192,
+          87,
+          163,
+          87,
+          79,
+          238
+        ],
+        "docs": [],
+        "accounts": [
+          {
+            "name": "user",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "global_volume_accumulator",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "user_volume_accumulator",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "event_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          }
+        ],
+        "args": []
+      },
+      {
+        "name": "toggle_create_v2",
+        "discriminator": [
+          28,
+          255,
+          230,
+          240,
+          172,
+          107,
+          203,
+          171
+        ],
+        "docs": [],
+        "accounts": [
+          {
+            "name": "global",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "authority",
+            "writable": true,
+            "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "event_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          }
+        ],
+        "args": [
+          {
+            "name": "enabled",
+            "type": "bool"
+          }
+        ]
+      },
+      {
+        "name": "toggle_mayhem_mode",
+        "discriminator": [
+          1,
+          9,
+          111,
+          208,
+          100,
+          31,
+          255,
+          163
+        ],
+        "docs": [],
+        "accounts": [
+          {
+            "name": "global",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "authority",
+            "writable": true,
+            "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "event_authority",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
+            "name": "program",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          }
+        ],
+        "args": [
+          {
+            "name": "enabled",
+            "type": "bool"
           }
         ]
       },
@@ -1094,6 +2547,89 @@
     ],
     "types": [
       {
+        "name": "AdminSetCreatorEvent",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "timestamp",
+              "type": "i64"
+            },
+            {
+              "name": "admin_set_creator_authority",
+              "type": "pubkey"
+            },
+            {
+              "name": "mint",
+              "type": "pubkey"
+            },
+            {
+              "name": "bonding_curve",
+              "type": "pubkey"
+            },
+            {
+              "name": "old_creator",
+              "type": "pubkey"
+            },
+            {
+              "name": "new_creator",
+              "type": "pubkey"
+            }
+          ]
+        }
+      },
+      {
+        "name": "AdminSetIdlAuthorityEvent",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "idl_authority",
+              "type": "pubkey"
+            }
+          ]
+        }
+      },
+      {
+        "name": "AdminUpdateTokenIncentivesEvent",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "start_time",
+              "type": "i64"
+            },
+            {
+              "name": "end_time",
+              "type": "i64"
+            },
+            {
+              "name": "day_number",
+              "type": "u64"
+            },
+            {
+              "name": "token_supply_per_day",
+              "type": "u64"
+            },
+            {
+              "name": "mint",
+              "type": "pubkey"
+            },
+            {
+              "name": "seconds_in_a_day",
+              "type": "i64"
+            },
+            {
+              "name": "timestamp",
+              "type": "i64"
+            }
+          ]
+        }
+      },
+      {
         "name": "BondingCurve",
         "docs": [],
         "type": {
@@ -1126,6 +2662,76 @@
             {
               "name": "creator",
               "type": "pubkey"
+            },
+            {
+              "name": "is_mayhem_mode",
+              "type": "bool"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ClaimTokenIncentivesEvent",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "user",
+              "type": "pubkey"
+            },
+            {
+              "name": "mint",
+              "type": "pubkey"
+            },
+            {
+              "name": "amount",
+              "type": "u64"
+            },
+            {
+              "name": "timestamp",
+              "type": "i64"
+            },
+            {
+              "name": "total_claimed_tokens",
+              "type": "u64"
+            },
+            {
+              "name": "current_sol_volume",
+              "type": "u64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "CloseUserVolumeAccumulatorEvent",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "user",
+              "type": "pubkey"
+            },
+            {
+              "name": "timestamp",
+              "type": "i64"
+            },
+            {
+              "name": "total_unclaimed_tokens",
+              "type": "u64"
+            },
+            {
+              "name": "total_claimed_tokens",
+              "type": "u64"
+            },
+            {
+              "name": "current_sol_volume",
+              "type": "u64"
+            },
+            {
+              "name": "last_update_timestamp",
+              "type": "i64"
             }
           ]
         }
@@ -1218,6 +2824,21 @@
         }
       },
       {
+        "name": "ConfigStatus",
+        "docs": [],
+        "type": {
+          "kind": "enum",
+          "variants": [
+            {
+              "name": "Paused"
+            },
+            {
+              "name": "Active"
+            }
+          ]
+        }
+      },
+      {
         "name": "CreateEvent",
         "docs": [],
         "type": {
@@ -1270,6 +2891,57 @@
             {
               "name": "token_total_supply",
               "type": "u64"
+            },
+            {
+              "name": "token_program",
+              "type": "pubkey"
+            },
+            {
+              "name": "is_mayhem_mode",
+              "type": "bool"
+            }
+          ]
+        }
+      },
+      {
+        "name": "DistributeCreatorFeesEvent",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "timestamp",
+              "type": "i64"
+            },
+            {
+              "name": "mint",
+              "type": "pubkey"
+            },
+            {
+              "name": "bonding_curve",
+              "type": "pubkey"
+            },
+            {
+              "name": "sharing_config",
+              "type": "pubkey"
+            },
+            {
+              "name": "admin",
+              "type": "pubkey"
+            },
+            {
+              "name": "shareholders",
+              "type": {
+                "vec": {
+                  "defined": {
+                    "name": "Shareholder"
+                  }
+                }
+              }
+            },
+            {
+              "name": "distributed",
+              "type": "u64"
             }
           ]
         }
@@ -1299,6 +2971,83 @@
             {
               "name": "timestamp",
               "type": "i64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "FeeConfig",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "bump",
+              "type": "u8"
+            },
+            {
+              "name": "admin",
+              "type": "pubkey"
+            },
+            {
+              "name": "flat_fees",
+              "type": {
+                "defined": {
+                  "name": "Fees"
+                }
+              }
+            },
+            {
+              "name": "fee_tiers",
+              "type": {
+                "vec": {
+                  "defined": {
+                    "name": "FeeTier"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "FeeTier",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "market_cap_lamports_threshold",
+              "type": "u128"
+            },
+            {
+              "name": "fees",
+              "type": {
+                "defined": {
+                  "name": "Fees"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Fees",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "lp_fee_bps",
+              "type": "u64"
+            },
+            {
+              "name": "protocol_fee_bps",
+              "type": "u64"
+            },
+            {
+              "name": "creator_fee_bps",
+              "type": "u64"
             }
           ]
         }
@@ -1369,6 +3118,189 @@
             {
               "name": "set_creator_authority",
               "type": "pubkey"
+            },
+            {
+              "name": "admin_set_creator_authority",
+              "type": "pubkey"
+            },
+            {
+              "name": "create_v2_enabled",
+              "type": "bool"
+            },
+            {
+              "name": "whitelist_pda",
+              "type": "pubkey"
+            },
+            {
+              "name": "reserved_fee_recipient",
+              "type": "pubkey"
+            },
+            {
+              "name": "mayhem_mode_enabled",
+              "type": "bool"
+            },
+            {
+              "name": "reserved_fee_recipients",
+              "type": {
+                "array": [
+                  "pubkey",
+                  7
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "GlobalVolumeAccumulator",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "start_time",
+              "type": "i64"
+            },
+            {
+              "name": "end_time",
+              "type": "i64"
+            },
+            {
+              "name": "seconds_in_a_day",
+              "type": "i64"
+            },
+            {
+              "name": "mint",
+              "type": "pubkey"
+            },
+            {
+              "name": "total_token_supply",
+              "type": {
+                "array": [
+                  "u64",
+                  30
+                ]
+              }
+            },
+            {
+              "name": "sol_volumes",
+              "type": {
+                "array": [
+                  "u64",
+                  30
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "InitUserVolumeAccumulatorEvent",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "payer",
+              "type": "pubkey"
+            },
+            {
+              "name": "user",
+              "type": "pubkey"
+            },
+            {
+              "name": "timestamp",
+              "type": "i64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "MigrateBondingCurveCreatorEvent",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "timestamp",
+              "type": "i64"
+            },
+            {
+              "name": "mint",
+              "type": "pubkey"
+            },
+            {
+              "name": "bonding_curve",
+              "type": "pubkey"
+            },
+            {
+              "name": "sharing_config",
+              "type": "pubkey"
+            },
+            {
+              "name": "old_creator",
+              "type": "pubkey"
+            },
+            {
+              "name": "new_creator",
+              "type": "pubkey"
+            }
+          ]
+        }
+      },
+      {
+        "name": "MinimumDistributableFeeEvent",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "minimum_required",
+              "type": "u64"
+            },
+            {
+              "name": "distributable_fees",
+              "type": "u64"
+            },
+            {
+              "name": "can_distribute",
+              "type": "bool"
+            }
+          ]
+        }
+      },
+      {
+        "name": "OptionBool",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            "bool"
+          ]
+        }
+      },
+      {
+        "name": "ReservedFeeRecipientsEvent",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "timestamp",
+              "type": "i64"
+            },
+            {
+              "name": "reserved_fee_recipient",
+              "type": "pubkey"
+            },
+            {
+              "name": "reserved_fee_recipients",
+              "type": {
+                "array": [
+                  "pubkey",
+                  7
+                ]
+              }
             }
           ]
         }
@@ -1489,13 +3421,108 @@
             {
               "name": "set_creator_authority",
               "type": "pubkey"
+            },
+            {
+              "name": "admin_set_creator_authority",
+              "type": "pubkey"
+            }
+          ]
+        }
+      },
+      {
+        "name": "Shareholder",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "address",
+              "type": "pubkey"
+            },
+            {
+              "name": "share_bps",
+              "type": "u16"
+            }
+          ]
+        }
+      },
+      {
+        "name": "SharingConfig",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "bump",
+              "type": "u8"
+            },
+            {
+              "name": "version",
+              "type": "u8"
+            },
+            {
+              "name": "status",
+              "type": {
+                "defined": {
+                  "name": "ConfigStatus"
+                }
+              }
+            },
+            {
+              "name": "mint",
+              "type": "pubkey"
+            },
+            {
+              "name": "admin",
+              "type": "pubkey"
+            },
+            {
+              "name": "admin_revoked",
+              "type": "bool"
+            },
+            {
+              "name": "shareholders",
+              "type": {
+                "vec": {
+                  "defined": {
+                    "name": "Shareholder"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "SyncUserVolumeAccumulatorEvent",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "user",
+              "type": "pubkey"
+            },
+            {
+              "name": "total_claimed_tokens_before",
+              "type": "u64"
+            },
+            {
+              "name": "total_claimed_tokens_after",
+              "type": "u64"
+            },
+            {
+              "name": "timestamp",
+              "type": "i64"
             }
           ]
         }
       },
       {
         "name": "TradeEvent",
-        "docs": [],
+        "docs": [
+          "ix_name: \"buy\" | \"sell\" | \"buy_exact_sol_in\""
+        ],
         "type": {
           "kind": "struct",
           "fields": [
@@ -1562,6 +3589,34 @@
             {
               "name": "creator_fee",
               "type": "u64"
+            },
+            {
+              "name": "track_volume",
+              "type": "bool"
+            },
+            {
+              "name": "total_unclaimed_tokens",
+              "type": "u64"
+            },
+            {
+              "name": "total_claimed_tokens",
+              "type": "u64"
+            },
+            {
+              "name": "current_sol_volume",
+              "type": "u64"
+            },
+            {
+              "name": "last_update_timestamp",
+              "type": "i64"
+            },
+            {
+              "name": "ix_name",
+              "type": "string"
+            },
+            {
+              "name": "mayhem_mode",
+              "type": "bool"
             }
           ]
         }
@@ -1590,9 +3645,157 @@
             }
           ]
         }
+      },
+      {
+        "name": "UpdateMayhemVirtualParamsEvent",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "timestamp",
+              "type": "i64"
+            },
+            {
+              "name": "mint",
+              "type": "pubkey"
+            },
+            {
+              "name": "virtual_token_reserves",
+              "type": "u64"
+            },
+            {
+              "name": "virtual_sol_reserves",
+              "type": "u64"
+            },
+            {
+              "name": "new_virtual_token_reserves",
+              "type": "u64"
+            },
+            {
+              "name": "new_virtual_sol_reserves",
+              "type": "u64"
+            },
+            {
+              "name": "real_token_reserves",
+              "type": "u64"
+            },
+            {
+              "name": "real_sol_reserves",
+              "type": "u64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "UserVolumeAccumulator",
+        "docs": [],
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "user",
+              "type": "pubkey"
+            },
+            {
+              "name": "needs_claim",
+              "type": "bool"
+            },
+            {
+              "name": "total_unclaimed_tokens",
+              "type": "u64"
+            },
+            {
+              "name": "total_claimed_tokens",
+              "type": "u64"
+            },
+            {
+              "name": "current_sol_volume",
+              "type": "u64"
+            },
+            {
+              "name": "last_update_timestamp",
+              "type": "i64"
+            },
+            {
+              "name": "has_total_claimed_tokens",
+              "type": "bool"
+            }
+          ]
+        }
       }
     ],
     "events": [
+      {
+        "name": "AdminSetCreatorEvent",
+        "discriminator": [
+          64,
+          69,
+          192,
+          104,
+          29,
+          30,
+          25,
+          107
+        ],
+        "docs": []
+      },
+      {
+        "name": "AdminSetIdlAuthorityEvent",
+        "discriminator": [
+          245,
+          59,
+          70,
+          34,
+          75,
+          185,
+          109,
+          92
+        ],
+        "docs": []
+      },
+      {
+        "name": "AdminUpdateTokenIncentivesEvent",
+        "discriminator": [
+          147,
+          250,
+          108,
+          120,
+          247,
+          29,
+          67,
+          222
+        ],
+        "docs": []
+      },
+      {
+        "name": "ClaimTokenIncentivesEvent",
+        "discriminator": [
+          79,
+          172,
+          246,
+          49,
+          205,
+          91,
+          206,
+          232
+        ],
+        "docs": []
+      },
+      {
+        "name": "CloseUserVolumeAccumulatorEvent",
+        "discriminator": [
+          146,
+          159,
+          189,
+          172,
+          146,
+          88,
+          56,
+          244
+        ],
+        "docs": []
+      },
       {
         "name": "CollectCreatorFeeEvent",
         "discriminator": [
@@ -1650,6 +3853,20 @@
         "docs": []
       },
       {
+        "name": "DistributeCreatorFeesEvent",
+        "discriminator": [
+          165,
+          55,
+          129,
+          112,
+          4,
+          179,
+          202,
+          40
+        ],
+        "docs": []
+      },
+      {
         "name": "ExtendAccountEvent",
         "discriminator": [
           97,
@@ -1660,6 +3877,62 @@
           146,
           22,
           124
+        ],
+        "docs": []
+      },
+      {
+        "name": "InitUserVolumeAccumulatorEvent",
+        "discriminator": [
+          134,
+          36,
+          13,
+          72,
+          232,
+          101,
+          130,
+          216
+        ],
+        "docs": []
+      },
+      {
+        "name": "MigrateBondingCurveCreatorEvent",
+        "discriminator": [
+          155,
+          167,
+          104,
+          220,
+          213,
+          108,
+          243,
+          3
+        ],
+        "docs": []
+      },
+      {
+        "name": "MinimumDistributableFeeEvent",
+        "discriminator": [
+          168,
+          216,
+          132,
+          239,
+          235,
+          182,
+          49,
+          52
+        ],
+        "docs": []
+      },
+      {
+        "name": "ReservedFeeRecipientsEvent",
+        "discriminator": [
+          43,
+          188,
+          250,
+          18,
+          221,
+          75,
+          187,
+          95
         ],
         "docs": []
       },
@@ -1706,6 +3979,20 @@
         "docs": []
       },
       {
+        "name": "SyncUserVolumeAccumulatorEvent",
+        "discriminator": [
+          197,
+          122,
+          167,
+          124,
+          116,
+          81,
+          91,
+          255
+        ],
+        "docs": []
+      },
+      {
         "name": "TradeEvent",
         "discriminator": [
           189,
@@ -1730,6 +4017,20 @@
           206,
           207,
           247
+        ],
+        "docs": []
+      },
+      {
+        "name": "UpdateMayhemVirtualParamsEvent",
+        "discriminator": [
+          117,
+          123,
+          228,
+          182,
+          161,
+          168,
+          220,
+          214
         ],
         "docs": []
       }
@@ -1889,15 +4190,130 @@
         "code": 6030,
         "name": "CreatorShouldNotBeZero",
         "msg": "Creator should not be zero"
+      },
+      {
+        "code": 6031,
+        "name": "StartTimeInThePast"
+      },
+      {
+        "code": 6032,
+        "name": "EndTimeInThePast"
+      },
+      {
+        "code": 6033,
+        "name": "EndTimeBeforeStartTime"
+      },
+      {
+        "code": 6034,
+        "name": "TimeRangeTooLarge"
+      },
+      {
+        "code": 6035,
+        "name": "EndTimeBeforeCurrentDay"
+      },
+      {
+        "code": 6036,
+        "name": "SupplyUpdateForFinishedRange"
+      },
+      {
+        "code": 6037,
+        "name": "DayIndexAfterEndIndex"
+      },
+      {
+        "code": 6038,
+        "name": "DayInActiveRange"
+      },
+      {
+        "code": 6039,
+        "name": "InvalidIncentiveMint"
+      },
+      {
+        "code": 6040,
+        "name": "BuyNotEnoughSolToCoverRent",
+        "msg": "Buy: Not enough SOL to cover for rent exemption."
+      },
+      {
+        "code": 6041,
+        "name": "BuyNotEnoughSolToCoverFees",
+        "msg": "Buy: Not enough SOL to cover for fees."
+      },
+      {
+        "code": 6042,
+        "name": "BuySlippageBelowMinTokensOut",
+        "msg": "Slippage: Would buy less tokens than expected min_tokens_out"
+      },
+      {
+        "code": 6043,
+        "name": "NameTooLong"
+      },
+      {
+        "code": 6044,
+        "name": "SymbolTooLong"
+      },
+      {
+        "code": 6045,
+        "name": "UriTooLong"
+      },
+      {
+        "code": 6046,
+        "name": "CreateV2Disabled"
+      },
+      {
+        "code": 6047,
+        "name": "CpitializeMayhemFailed"
+      },
+      {
+        "code": 6048,
+        "name": "MayhemModeDisabled"
+      },
+      {
+        "code": 6049,
+        "name": "CreatorMigratedToSharingConfig",
+        "msg": "creator has been migrated to sharing config, use pump_fees::reset_fee_sharing_config instead"
+      },
+      {
+        "code": 6050,
+        "name": "UnableToDistributeCreatorVaultMigratedToSharingConfig",
+        "msg": "creator_vault has been migrated to sharing config, use pump:distribute_creator_fees instead"
+      },
+      {
+        "code": 6051,
+        "name": "SharingConfigNotActive",
+        "msg": "Sharing config is not active"
+      },
+      {
+        "code": 6052,
+        "name": "UnableToDistributeCreatorFeesToExecutableRecipient",
+        "msg": "The recipient account is executable, so it cannot receive lamports, remove it from the team first"
+      },
+      {
+        "code": 6053,
+        "name": "BondingCurveAndSharingConfigCreatorMismatch",
+        "msg": "Bonding curve creator does not match sharing config"
+      },
+      {
+        "code": 6054,
+        "name": "ShareholdersAndRemainingAccountsMismatch",
+        "msg": "Remaining accounts do not match shareholders, make sure to pass exactly the same pubkeys in the same order"
+      },
+      {
+        "code": 6055,
+        "name": "InvalidShareBps",
+        "msg": "Share bps must be greater than 0"
       }
     ],
     "discriminant_size": 8
   },
   "identity": {
     "primary_keys": [
+      "id.mint",
       "id.mint"
     ],
     "lookup_indexes": [
+      {
+        "field_name": "id.bonding_curve",
+        "temporal_field": null
+      },
       {
         "field_name": "id.bonding_curve",
         "temporal_field": null
@@ -2177,7 +4593,215 @@
         "Source": {
           "program_id": null,
           "discriminator": null,
+          "type_name": "BuyExactSolInIxState"
+        }
+      },
+      "key_resolution": {
+        "Embedded": {
+          "primary_field": {
+            "segments": [
+              "accounts",
+              "mint"
+            ],
+            "offsets": null
+          }
+        }
+      },
+      "mappings": [
+        {
+          "target_path": "trading.total_buy_exact_sol_volume",
+          "source": {
+            "FromSource": {
+              "path": {
+                "segments": [
+                  "data",
+                  "spendable_sol_in"
+                ],
+                "offsets": null
+              },
+              "default": null,
+              "transform": null
+            }
+          },
+          "transform": null,
+          "population": "Sum"
+        },
+        {
+          "target_path": "trading.total_trades",
+          "source": {
+            "FromSource": {
+              "path": {
+                "segments": [
+                  "data"
+                ],
+                "offsets": null
+              },
+              "default": null,
+              "transform": null
+            }
+          },
+          "transform": null,
+          "population": "Count"
+        },
+        {
+          "target_path": "trading.buy_count",
+          "source": {
+            "FromSource": {
+              "path": {
+                "segments": [
+                  "data"
+                ],
+                "offsets": null
+              },
+              "default": null,
+              "transform": null
+            }
+          },
+          "transform": null,
+          "population": "Count"
+        },
+        {
+          "target_path": "trading.unique_traders",
+          "source": {
+            "FromSource": {
+              "path": {
+                "segments": [
+                  "accounts",
+                  "user"
+                ],
+                "offsets": null
+              },
+              "default": null,
+              "transform": "ToString"
+            }
+          },
+          "transform": null,
+          "population": "UniqueCount"
+        }
+      ],
+      "conditions": [],
+      "emit": true
+    },
+    {
+      "source": {
+        "Source": {
+          "program_id": null,
+          "discriminator": null,
           "type_name": "CreateIxState"
+        }
+      },
+      "key_resolution": {
+        "Embedded": {
+          "primary_field": {
+            "segments": [
+              "accounts",
+              "mint"
+            ],
+            "offsets": null
+          }
+        }
+      },
+      "mappings": [
+        {
+          "target_path": "id.mint",
+          "source": {
+            "FromSource": {
+              "path": {
+                "segments": [
+                  "accounts",
+                  "mint"
+                ],
+                "offsets": null
+              },
+              "default": null,
+              "transform": null
+            }
+          },
+          "transform": null,
+          "population": "SetOnce"
+        },
+        {
+          "target_path": "id.bonding_curve",
+          "source": {
+            "FromSource": {
+              "path": {
+                "segments": [
+                  "accounts",
+                  "bonding_curve"
+                ],
+                "offsets": null
+              },
+              "default": null,
+              "transform": null
+            }
+          },
+          "transform": null,
+          "population": "SetOnce"
+        },
+        {
+          "target_path": "info.name",
+          "source": {
+            "FromSource": {
+              "path": {
+                "segments": [
+                  "data",
+                  "name"
+                ],
+                "offsets": null
+              },
+              "default": null,
+              "transform": null
+            }
+          },
+          "transform": null,
+          "population": "SetOnce"
+        },
+        {
+          "target_path": "info.symbol",
+          "source": {
+            "FromSource": {
+              "path": {
+                "segments": [
+                  "data",
+                  "symbol"
+                ],
+                "offsets": null
+              },
+              "default": null,
+              "transform": null
+            }
+          },
+          "transform": null,
+          "population": "SetOnce"
+        },
+        {
+          "target_path": "info.uri",
+          "source": {
+            "FromSource": {
+              "path": {
+                "segments": [
+                  "data",
+                  "uri"
+                ],
+                "offsets": null
+              },
+              "default": null,
+              "transform": null
+            }
+          },
+          "transform": null,
+          "population": "SetOnce"
+        }
+      ],
+      "conditions": [],
+      "emit": true
+    },
+    {
+      "source": {
+        "Source": {
+          "program_id": null,
+          "discriminator": null,
+          "type_name": "CreateV2IxState"
         }
       },
       "key_resolution": {
@@ -2495,6 +5119,80 @@
         "Source": {
           "program_id": "instructions",
           "discriminator": null,
+          "type_name": "BuyExactSolInIxState"
+        }
+      },
+      "key_resolution": {
+        "Embedded": {
+          "primary_field": {
+            "segments": [
+              "accounts",
+              "mint"
+            ],
+            "offsets": null
+          }
+        }
+      },
+      "mappings": [
+        {
+          "target_path": "events.buys_exact_sol",
+          "source": {
+            "AsEvent": {
+              "fields": [
+                {
+                  "FromSource": {
+                    "path": {
+                      "segments": [
+                        "data",
+                        "spendable_sol_in"
+                      ],
+                      "offsets": null
+                    },
+                    "default": null,
+                    "transform": null
+                  }
+                },
+                {
+                  "FromSource": {
+                    "path": {
+                      "segments": [
+                        "data",
+                        "min_tokens_out"
+                      ],
+                      "offsets": null
+                    },
+                    "default": null,
+                    "transform": null
+                  }
+                },
+                {
+                  "FromSource": {
+                    "path": {
+                      "segments": [
+                        "accounts",
+                        "user"
+                      ],
+                      "offsets": null
+                    },
+                    "default": null,
+                    "transform": null
+                  }
+                }
+              ]
+            }
+          },
+          "transform": null,
+          "population": "Append"
+        }
+      ],
+      "conditions": [],
+      "emit": true
+    },
+    {
+      "source": {
+        "Source": {
+          "program_id": "instructions",
+          "discriminator": null,
           "type_name": "CreateIxState"
         }
       },
@@ -2512,6 +5210,40 @@
       "mappings": [
         {
           "target_path": "events.create",
+          "source": {
+            "AsEvent": {
+              "fields": []
+            }
+          },
+          "transform": null,
+          "population": "SetOnce"
+        }
+      ],
+      "conditions": [],
+      "emit": true
+    },
+    {
+      "source": {
+        "Source": {
+          "program_id": "instructions",
+          "discriminator": null,
+          "type_name": "CreateV2IxState"
+        }
+      },
+      "key_resolution": {
+        "Embedded": {
+          "primary_field": {
+            "segments": [
+              "accounts",
+              "mint"
+            ],
+            "offsets": null
+          }
+        }
+      },
+      "mappings": [
+        {
+          "target_path": "events.create_v2",
           "source": {
             "AsEvent": {
               "fields": []
@@ -2726,6 +5458,16 @@
         },
         {
           "field_name": "total_sell_volume",
+          "rust_type_name": "Option < u64 >",
+          "base_type": "Integer",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        {
+          "field_name": "total_buy_exact_sol_volume",
           "rust_type_name": "Option < u64 >",
           "base_type": "Integer",
           "is_optional": true,
@@ -3007,6 +5749,16 @@
           }
         },
         {
+          "field_name": "create_v2",
+          "rust_type_name": "Option < generated_sdk :: instructions :: CreateV2 >",
+          "base_type": "Object",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "generated_sdk :: instructions :: CreateV2",
+          "source_path": null,
+          "resolved_type": null
+        },
+        {
           "field_name": "buys",
           "rust_type_name": "Vec < generated_sdk :: instructions :: Buy >",
           "base_type": "Array",
@@ -3102,6 +5854,34 @@
                 "is_array": false
               },
               {
+                "field_name": "global_volume_accumulator",
+                "field_type": "Pubkey",
+                "base_type": "Pubkey",
+                "is_optional": false,
+                "is_array": false
+              },
+              {
+                "field_name": "user_volume_accumulator",
+                "field_type": "Pubkey",
+                "base_type": "Pubkey",
+                "is_optional": false,
+                "is_array": false
+              },
+              {
+                "field_name": "fee_config",
+                "field_type": "Pubkey",
+                "base_type": "Pubkey",
+                "is_optional": false,
+                "is_array": false
+              },
+              {
+                "field_name": "fee_program",
+                "field_type": "Pubkey",
+                "base_type": "Pubkey",
+                "is_optional": false,
+                "is_array": false
+              },
+              {
                 "field_name": "amount",
                 "field_type": "u64",
                 "base_type": "Integer",
@@ -3114,6 +5894,13 @@
                 "base_type": "Integer",
                 "is_optional": false,
                 "is_array": false
+              },
+              {
+                "field_name": "track_volume",
+                "field_type": "OptionBool",
+                "base_type": "Object",
+                "is_optional": false,
+                "is_array": false
               }
             ],
             "is_instruction": true,
@@ -3122,6 +5909,16 @@
             "is_enum": false,
             "enum_variants": []
           }
+        },
+        {
+          "field_name": "buys_exact_sol",
+          "rust_type_name": "Vec < generated_sdk :: instructions :: BuyExactSolIn >",
+          "base_type": "Array",
+          "is_optional": false,
+          "is_array": true,
+          "inner_type": "generated_sdk :: instructions :: BuyExactSolIn",
+          "source_path": null,
+          "resolved_type": null
         },
         {
           "field_name": "sells",
@@ -3219,6 +6016,20 @@
                 "is_array": false
               },
               {
+                "field_name": "fee_config",
+                "field_type": "Pubkey",
+                "base_type": "Pubkey",
+                "is_optional": false,
+                "is_array": false
+              },
+              {
+                "field_name": "fee_program",
+                "field_type": "Pubkey",
+                "base_type": "Pubkey",
+                "is_optional": false,
+                "is_array": false
+              },
+              {
                 "field_name": "amount",
                 "field_type": "u64",
                 "base_type": "Integer",
@@ -3306,6 +6117,13 @@
                 "base_type": "Pubkey",
                 "is_optional": false,
                 "is_array": false
+              },
+              {
+                "field_name": "is_mayhem_mode",
+                "field_type": "bool",
+                "base_type": "Boolean",
+                "is_optional": false,
+                "is_array": false
               }
             ],
             "is_instruction": false,
@@ -3378,6 +6196,13 @@
             "field_name": "creator",
             "field_type": "pubkey",
             "base_type": "Pubkey",
+            "is_optional": false,
+            "is_array": false
+          },
+          {
+            "field_name": "is_mayhem_mode",
+            "field_type": "bool",
+            "base_type": "Boolean",
             "is_optional": false,
             "is_array": false
           }
@@ -3485,6 +6310,34 @@
             "is_array": false
           },
           {
+            "field_name": "global_volume_accumulator",
+            "field_type": "Pubkey",
+            "base_type": "Pubkey",
+            "is_optional": false,
+            "is_array": false
+          },
+          {
+            "field_name": "user_volume_accumulator",
+            "field_type": "Pubkey",
+            "base_type": "Pubkey",
+            "is_optional": false,
+            "is_array": false
+          },
+          {
+            "field_name": "fee_config",
+            "field_type": "Pubkey",
+            "base_type": "Pubkey",
+            "is_optional": false,
+            "is_array": false
+          },
+          {
+            "field_name": "fee_program",
+            "field_type": "Pubkey",
+            "base_type": "Pubkey",
+            "is_optional": false,
+            "is_array": false
+          },
+          {
             "field_name": "amount",
             "field_type": "u64",
             "base_type": "Integer",
@@ -3497,6 +6350,13 @@
             "base_type": "Integer",
             "is_optional": false,
             "is_array": false
+          },
+          {
+            "field_name": "track_volume",
+            "field_type": "OptionBool",
+            "base_type": "Object",
+            "is_optional": false,
+            "is_array": false
           }
         ],
         "is_instruction": true,
@@ -3505,6 +6365,16 @@
         "is_enum": false,
         "enum_variants": []
       }
+    },
+    "events.buys_exact_sol": {
+      "field_name": "buys_exact_sol",
+      "rust_type_name": "Vec < generated_sdk :: instructions :: BuyExactSolIn >",
+      "base_type": "Array",
+      "is_optional": false,
+      "is_array": true,
+      "inner_type": "generated_sdk :: instructions :: BuyExactSolIn",
+      "source_path": null,
+      "resolved_type": null
     },
     "events.create": {
       "field_name": "create",
@@ -3651,6 +6521,16 @@
         "enum_variants": []
       }
     },
+    "events.create_v2": {
+      "field_name": "create_v2",
+      "rust_type_name": "Option < generated_sdk :: instructions :: CreateV2 >",
+      "base_type": "Object",
+      "is_optional": true,
+      "is_array": false,
+      "inner_type": "generated_sdk :: instructions :: CreateV2",
+      "source_path": null,
+      "resolved_type": null
+    },
     "events.sells": {
       "field_name": "sells",
       "rust_type_name": "Vec < generated_sdk :: instructions :: Sell >",
@@ -3741,6 +6621,20 @@
           },
           {
             "field_name": "program",
+            "field_type": "Pubkey",
+            "base_type": "Pubkey",
+            "is_optional": false,
+            "is_array": false
+          },
+          {
+            "field_name": "fee_config",
+            "field_type": "Pubkey",
+            "base_type": "Pubkey",
+            "is_optional": false,
+            "is_array": false
+          },
+          {
+            "field_name": "fee_program",
             "field_type": "Pubkey",
             "base_type": "Pubkey",
             "is_optional": false,
@@ -3978,6 +6872,16 @@
       "source_path": null,
       "resolved_type": null
     },
+    "trading.total_buy_exact_sol_volume": {
+      "field_name": "total_buy_exact_sol_volume",
+      "rust_type_name": "Option < u64 >",
+      "base_type": "Integer",
+      "is_optional": true,
+      "is_array": false,
+      "inner_type": "u64",
+      "source_path": null,
+      "resolved_type": null
+    },
     "trading.total_buy_volume": {
       "field_name": "total_buy_volume",
       "rust_type_name": "Option < u64 >",
@@ -4083,6 +6987,48 @@
   ],
   "instruction_hooks": [
     {
+      "instruction_type": "BuyExactSolInIxState",
+      "actions": [
+        {
+          "RegisterPdaMapping": {
+            "pda_field": {
+              "segments": [
+                "accounts",
+                "bonding_curve"
+              ],
+              "offsets": null
+            },
+            "seed_field": {
+              "segments": [
+                "accounts",
+                "mint"
+              ],
+              "offsets": null
+            },
+            "lookup_name": "default_pda_lookup"
+          }
+        },
+        {
+          "SetField": {
+            "target_field": "trading.last_trade_timestamp",
+            "source": {
+              "FromContext": {
+                "field": "timestamp"
+              }
+            },
+            "condition": null
+          }
+        }
+      ],
+      "lookup_by": {
+        "segments": [
+          "accounts",
+          "mint"
+        ],
+        "offsets": null
+      }
+    },
+    {
       "instruction_type": "BuyIxState",
       "actions": [
         {
@@ -4182,6 +7128,31 @@
     },
     {
       "instruction_type": "CreateIxState",
+      "actions": [
+        {
+          "RegisterPdaMapping": {
+            "pda_field": {
+              "segments": [
+                "accounts",
+                "bonding_curve"
+              ],
+              "offsets": null
+            },
+            "seed_field": {
+              "segments": [
+                "accounts",
+                "mint"
+              ],
+              "offsets": null
+            },
+            "lookup_name": "default_pda_lookup"
+          }
+        }
+      ],
+      "lookup_by": null
+    },
+    {
+      "instruction_type": "CreateV2IxState",
       "actions": [
         {
           "RegisterPdaMapping": {
@@ -4450,5 +7421,6 @@
       "result_type": "Option < f64 >"
     }
   ],
-  "content_hash": "668e6bea1631e7d80a1a8aa9d1428dc8f0d6a593546915b105a3c745c1696214"
+  "content_hash": "96998fabfab867ca1afb43d9bb29c6ec8e97105a5f743ec806088858bcd11c82",
+  "views": []
 }

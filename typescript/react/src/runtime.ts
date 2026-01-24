@@ -8,12 +8,14 @@ import {
 } from 'hyperstack-typescript';
 import { Connection as SolanaConnection } from '@solana/web3.js';
 import { ZustandAdapter, type HyperStackStore } from './zustand-adapter';
-import type { HyperstackConfig, WalletAdapter } from './types';
+import { DEFAULT_FLUSH_INTERVAL_MS, type HyperstackConfig, type WalletAdapter } from './types';
 
 export interface SubscriptionHandle {
   view: string;
   key?: string;
   filters?: Record<string, string>;
+  take?: number;
+  skip?: number;
   unsubscribe: () => void;
 }
 
@@ -24,7 +26,7 @@ export interface HyperstackRuntime {
   subscriptionRegistry: SubscriptionRegistry;
   wallet?: WalletAdapter;
   solanaConnection?: SolanaConnection;
-  subscribe(view: string, key?: string, filters?: Record<string, string>): SubscriptionHandle;
+  subscribe(view: string, key?: string, filters?: Record<string, string>, take?: number, skip?: number): SubscriptionHandle;
   unsubscribe(handle: SubscriptionHandle): void;
 }
 
@@ -32,6 +34,7 @@ export function createRuntime(config: HyperstackConfig & { wallet?: WalletAdapte
   const adapter = new ZustandAdapter();
   const processor = new FrameProcessor(adapter, {
     maxEntriesPerView: config.maxEntriesPerView,
+    flushIntervalMs: config.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS,
   });
 
   const connection = new ConnectionManager({
@@ -68,14 +71,16 @@ export function createRuntime(config: HyperstackConfig & { wallet?: WalletAdapte
     wallet: config.wallet,
     solanaConnection,
 
-    subscribe(view: string, key?: string, filters?: Record<string, string>): SubscriptionHandle {
-      const subscription: Subscription = { view, key, filters };
+    subscribe(view: string, key?: string, filters?: Record<string, string>, take?: number, skip?: number): SubscriptionHandle {
+      const subscription: Subscription = { view, key, filters, take, skip };
       const unsubscribe = subscriptionRegistry.subscribe(subscription);
 
       return {
         view,
         key,
         filters,
+        take,
+        skip,
         unsubscribe,
       };
     },

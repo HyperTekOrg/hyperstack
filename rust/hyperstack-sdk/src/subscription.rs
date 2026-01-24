@@ -18,6 +18,10 @@ pub struct Subscription {
     pub partition: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filters: Option<HashMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub take: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skip: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -61,6 +65,8 @@ impl Subscription {
             key: None,
             partition: None,
             filters: None,
+            take: None,
+            skip: None,
         }
     }
 
@@ -71,6 +77,16 @@ impl Subscription {
 
     pub fn with_filters(mut self, filters: HashMap<String, String>) -> Self {
         self.filters = Some(filters);
+        self
+    }
+
+    pub fn with_take(mut self, take: u32) -> Self {
+        self.take = Some(take);
+        self
+    }
+
+    pub fn with_skip(mut self, skip: u32) -> Self {
+        self.skip = Some(skip);
         self
     }
 

@@ -1,4 +1,5 @@
 import asyncio
+import bisect
 import logging
 from collections import OrderedDict
 from typing import (
@@ -10,10 +11,13 @@ from typing import (
     Generic,
     Callable,
     List,
+    Tuple,
     Union,
 )
 from dataclasses import dataclass
 from enum import Enum
+
+from hyperstack.types import SortConfig, SortOrder
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +30,38 @@ class Mode(Enum):
     STATE = "state"
     LIST = "list"
     APPEND = "append"
+
+
+def _extract_sort_value(data: Any, field_path: List[str]) -> Any:
+    current = data
+    for segment in field_path:
+        if isinstance(current, dict):
+            current = current.get(segment)
+            if current is None:
+                return None
+        else:
+            return None
+    return current
+
+
+def _make_sort_key(value: Any, key: str, order: SortOrder) -> Tuple[Any, str]:
+    if value is None:
+        sort_val: Any = (0, None)
+    elif isinstance(value, bool):
+        bool_val = not value if order == SortOrder.DESC else value
+        sort_val = (1, bool_val)
+    elif isinstance(value, (int, float)):
+        num_val = -value if order == SortOrder.DESC else value
+        sort_val = (2, num_val)
+    elif isinstance(value, str):
+        sort_val = (3, value) if order == SortOrder.ASC else (3, value)
+    else:
+        sort_val = (4, str(value))
+
+    if order == SortOrder.DESC and isinstance(value, str):
+        return (sort_val, key)
+
+    return (sort_val, key)
 
 
 @dataclass
@@ -41,11 +77,13 @@ class Store(Generic[T]):
         parser: Optional[Callable[[Dict[str, Any]], T]] = None,
         view: Optional[str] = None,
         max_entries: Optional[int] = DEFAULT_MAX_ENTRIES_PER_VIEW,
+        sort_config: Optional[SortConfig] = None,
     ):
         self.mode = mode
         self.parser = parser
         self.view = view
         self.max_entries = max_entries
+        self.sort_config = sort_config
         self._lock = asyncio.Lock()
         self._callbacks: List[Callable[[Update[T]], None]] = []
         self._update_queue: asyncio.Queue[Update[T]] = asyncio.Queue()
@@ -55,26 +93,104 @@ class Store(Generic[T]):
         else:
             self._data: Union[OrderedDict[str, T], List[T]] = []
 
+        self._sorted_keys: List[Tuple[Any, str]] = []
+        self._key_to_sort_key: Dict[str, Tuple[Any, str]] = {}
+
+    def set_sort_config(self, config: SortConfig) -> None:
+        if self.sort_config is not None:
+            return
+        self.sort_config = config
+        self._rebuild_sorted_keys()
+
+    def _rebuild_sorted_keys(self) -> None:
+        self._sorted_keys.clear()
+        self._key_to_sort_key.clear()
+        if self.sort_config is None or not isinstance(self._data, OrderedDict):
+            return
+
+        for key, value in self._data.items():
+            raw_data = value if isinstance(value, dict) else {}
+            sort_value = _extract_sort_value(raw_data, self.sort_config.field)
+            sort_key = _make_sort_key(sort_value, key, self.sort_config.order)
+            self._key_to_sort_key[key] = sort_key
+            bisect.insort(self._sorted_keys, sort_key)
+
+    def _insert_sorted(self, key: str, data: Any) -> None:
+        if self.sort_config is None:
+            return
+
+        if key in self._key_to_sort_key:
+            old_sort_key = self._key_to_sort_key[key]
+            idx = bisect.bisect_left(self._sorted_keys, old_sort_key)
+            if idx < len(self._sorted_keys) and self._sorted_keys[idx] == old_sort_key:
+                self._sorted_keys.pop(idx)
+
+        raw_data = data if isinstance(data, dict) else {}
+        sort_value = _extract_sort_value(raw_data, self.sort_config.field)
+        sort_key = _make_sort_key(sort_value, key, self.sort_config.order)
+        self._key_to_sort_key[key] = sort_key
+        bisect.insort(self._sorted_keys, sort_key)
+
+    def _remove_sorted(self, key: str) -> None:
+        if self.sort_config is None or key not in self._key_to_sort_key:
+            return
+
+        old_sort_key = self._key_to_sort_key.pop(key)
+        idx = bisect.bisect_left(self._sorted_keys, old_sort_key)
+        if idx < len(self._sorted_keys) and self._sorted_keys[idx] == old_sort_key:
+            self._sorted_keys.pop(idx)
+
     def _enforce_max_entries(self) -> None:
         if self.max_entries is None:
             return
         if isinstance(self._data, OrderedDict):
             while len(self._data) > self.max_entries:
-                self._data.popitem(last=False)
+                if self.sort_config is not None and self._sorted_keys:
+                    last_sort_key = self._sorted_keys.pop()
+                    evicted_key = last_sort_key[1]
+                    self._key_to_sort_key.pop(evicted_key, None)
+                    self._data.pop(evicted_key, None)
+                else:
+                    self._data.popitem(last=False)
 
     def get(self, key: Optional[str] = None) -> Optional[T]:
         if isinstance(self._data, OrderedDict):
             if key is None:
+                if self.sort_config is not None and self._sorted_keys:
+                    first_key = self._sorted_keys[0][1]
+                    return self._data.get(first_key)
                 return next(iter(self._data.values()), None)
-            if key in self._data:
+            if key in self._data and self.sort_config is None:
                 self._data.move_to_end(key)
             return self._data.get(key)
         else:
             return self._data[0] if self._data else None
 
+    def list_sorted(self) -> List[T]:
+        if not isinstance(self._data, OrderedDict):
+            return list(self._data)
+        if self.sort_config is not None and self._sorted_keys:
+            return [
+                self._data[sort_key[1]]
+                for sort_key in self._sorted_keys
+                if sort_key[1] in self._data
+            ]
+        return list(self._data.values())
+
+    def keys_sorted(self) -> List[str]:
+        if not isinstance(self._data, OrderedDict):
+            return []
+        if self.sort_config is not None and self._sorted_keys:
+            return [sort_key[1] for sort_key in self._sorted_keys]
+        return list(self._data.keys())
+
     async def get_async(self, key: Optional[str] = None) -> Optional[T]:
         async with self._lock:
             return self.get(key)
+
+    async def list_sorted_async(self) -> List[T]:
+        async with self._lock:
+            return self.list_sorted()
 
     def subscribe(self, callback: Callable[[Update[T]], None]) -> None:
         if callback not in self._callbacks:
@@ -109,7 +225,10 @@ class Store(Generic[T]):
                     merged = patch
                 parsed_data = self._parse_data(merged)
                 self._data[key] = parsed_data
-                self._data.move_to_end(key)
+                if self.sort_config is not None:
+                    self._insert_sorted(key, merged)
+                else:
+                    self._data.move_to_end(key)
                 self._enforce_max_entries()
                 await self._notify_update(key, parsed_data)
             else:
@@ -147,7 +266,10 @@ class Store(Generic[T]):
             parsed_data = self._parse_data(value)
             if isinstance(self._data, OrderedDict):
                 self._data[key] = parsed_data
-                self._data.move_to_end(key)
+                if self.sort_config is not None:
+                    self._insert_sorted(key, value)
+                else:
+                    self._data.move_to_end(key)
                 self._enforce_max_entries()
             else:
                 self._data.append(parsed_data)
@@ -157,6 +279,7 @@ class Store(Generic[T]):
     async def apply_delete(self, key: str) -> None:
         async with self._lock:
             if isinstance(self._data, OrderedDict) and key in self._data:
+                self._remove_sorted(key)
                 del self._data[key]
                 await self._notify_update(key, None)  # type: ignore[arg-type]
 

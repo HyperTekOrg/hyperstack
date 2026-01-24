@@ -388,20 +388,20 @@ pub fn process_struct_with_context(
         })
         .collect();
 
-    // Write AST file at compile time (during macro expansion)
     write_ast_at_compile_time(
         &name.to_string(),
         &primary_keys,
         &lookup_indexes,
         &sources_by_type,
         &events_by_instruction,
-        &[],             // No resolver hooks for proto-based specs
-        &[],             // No PDA registrations for proto-based specs
-        &HashMap::new(), // No derive_from mappings for proto-based specs
-        &HashMap::new(), // No aggregate conditions for proto-based specs
-        &[],             // No computed fields for proto-based specs
-        &[],             // Empty sections for proto-based specs
-        None,            // No IDL for proto-based specs
+        &[],
+        &[],
+        &HashMap::new(),
+        &HashMap::new(),
+        &[],
+        &[],
+        None,
+        Vec::new(),
     );
 
     let output = quote! {

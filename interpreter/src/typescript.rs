@@ -60,6 +60,7 @@ pub struct TypeScriptCompiler<S> {
     config: TypeScriptConfig,
     idl: Option<serde_json::Value>, // IDL for enum type generation
     handlers_json: Option<serde_json::Value>, // Raw handlers for event interface generation
+    views: Vec<ViewDef>,            // View definitions for derived views
 }
 
 impl<S> TypeScriptCompiler<S> {
@@ -70,6 +71,7 @@ impl<S> TypeScriptCompiler<S> {
             config: TypeScriptConfig::default(),
             idl: None,
             handlers_json: None,
+            views: Vec::new(),
         }
     }
 
@@ -85,6 +87,11 @@ impl<S> TypeScriptCompiler<S> {
 
     pub fn with_handlers_json(mut self, handlers: Option<serde_json::Value>) -> Self {
         self.handlers_json = handlers;
+        self
+    }
+
+    pub fn with_views(mut self, views: Vec<ViewDef>) -> Self {
+        self.views = views;
         self
     }
 
@@ -118,12 +125,12 @@ export interface ViewDef<T, TMode extends 'state' | 'list'> {
   readonly _entity?: T;
 }
 
-/** Helper to create typed state view definitions */
+/** Helper to create typed state view definitions (keyed lookups) */
 function stateView<T>(view: string): ViewDef<T, 'state'> {
   return { mode: 'state', view } as const;
 }
 
-/** Helper to create typed list view definitions */
+/** Helper to create typed list view definitions (collections) */
 function listView<T>(view: string): ViewDef<T, 'list'> {
   return { mode: 'list', view } as const;
 }"#
@@ -137,7 +144,7 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
 
         // Collect all interface sections from all handlers
         for handler in &self.spec.handlers {
-            let interface_sections = self.extract_interface_sections(handler);
+            let interface_sections = self.extract_interface_sections_from_handler(handler);
 
             for (section_name, mut fields) in interface_sections {
                 all_sections
@@ -146,6 +153,10 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
                     .append(&mut fields);
             }
         }
+
+        // Add unmapped fields from spec.sections ONCE (not per handler)
+        // These are fields without #[map] or #[event] attributes
+        self.add_unmapped_fields(&mut all_sections);
 
         // Deduplicate fields within each section and generate interfaces
         // Skip root section - its fields will be flattened into main entity interface
@@ -190,7 +201,7 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
         unique_fields
     }
 
-    fn extract_interface_sections(
+    fn extract_interface_sections_from_handler(
         &self,
         handler: &TypedHandlerSpec<S>,
     ) -> BTreeMap<String, Vec<TypeScriptField>> {
@@ -200,7 +211,6 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
             let parts: Vec<&str> = mapping.target_path.split('.').collect();
 
             if parts.len() > 1 {
-                // Nested field (e.g., "status.current")
                 let section_name = parts[0];
                 let field_name = parts[1];
 
@@ -216,7 +226,6 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
                     .or_default()
                     .push(ts_field);
             } else {
-                // Top-level field
                 let ts_field = TypeScriptField {
                     name: mapping.target_path.clone(),
                     ts_type: self.mapping_to_typescript_type(mapping),
@@ -231,10 +240,6 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
             }
         }
 
-        // Add any unmapped fields that exist in the original spec
-        // These are fields without #[map] or #[event] attributes
-        self.add_unmapped_fields(&mut sections);
-
         sections
     }
 
@@ -247,10 +252,9 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
 
                 for field_info in &section.fields {
                     // Check if field is already mapped
-                    let already_exists = section_fields.iter().any(|f| {
-                        f.name == field_info.field_name
-                            || f.name == to_camel_case(&field_info.field_name)
-                    });
+                    let already_exists = section_fields
+                        .iter()
+                        .any(|f| f.name == field_info.field_name);
 
                     if !already_exists {
                         section_fields.push(TypeScriptField {
@@ -272,9 +276,7 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
 
                     let section_fields = sections.entry(section_name.to_string()).or_default();
 
-                    let already_exists = section_fields
-                        .iter()
-                        .any(|f| f.name == field_name || f.name == to_camel_case(field_name));
+                    let already_exists = section_fields.iter().any(|f| f.name == field_name);
 
                     if !already_exists {
                         section_fields.push(TypeScriptField {
@@ -321,14 +323,13 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
         let field_definitions: Vec<String> = fields
             .iter()
             .map(|field| {
-                let field_name = to_camel_case(&field.name);
                 let ts_type = if field.optional {
                     // Spec-optional: can be explicitly null
                     format!("{} | null", field.ts_type)
                 } else {
                     field.ts_type.clone()
                 };
-                format!("  {}?: {};", field_name, ts_type)
+                format!("  {}?: {};", field.name, ts_type)
             })
             .collect();
 
@@ -381,11 +382,8 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
                     &self.entity_name
                 };
                 let section_interface_name = format!("{}{}", base_name, to_pascal_case(section));
-                fields.push(format!(
-                    "  {}?: {};",
-                    to_camel_case(section),
-                    section_interface_name
-                ));
+                // Keep section field names as-is (snake_case from AST)
+                fields.push(format!("  {}?: {};", section, section_interface_name));
             }
         }
 
@@ -394,14 +392,13 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
         for section in &self.spec.sections {
             if is_root_section(&section.name) {
                 for field in &section.fields {
-                    let field_name = to_camel_case(&field.field_name);
                     let base_ts_type = self.field_type_info_to_typescript(field);
                     let ts_type = if field.is_optional {
                         format!("{} | null", base_ts_type)
                     } else {
                         base_ts_type
                     };
-                    fields.push(format!("  {}?: {};", field_name, ts_type));
+                    fields.push(format!("  {}?: {};", field.field_name, ts_type));
                 }
             }
         }
@@ -427,6 +424,7 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
         );
 
         let view_helpers = self.generate_view_helpers();
+        let derived_views = self.generate_derived_view_entries();
 
         format!(
             r#"{}
@@ -441,7 +439,7 @@ export const {} = {{
   views: {{
     {}: {{
       state: stateView<{}>('{}/state'),
-      list: listView<{}>('{}/list'),
+      list: listView<{}>('{}/list'),{}
     }},
   }},
 }} as const;
@@ -455,15 +453,46 @@ export default {};"#,
             entity_pascal,
             export_name,
             stack_name,
-            to_camel_case(&self.entity_name),
-            entity_pascal,
             self.entity_name,
             entity_pascal,
             self.entity_name,
+            entity_pascal,
+            self.entity_name,
+            derived_views,
             entity_pascal,
             export_name,
             export_name
         )
+    }
+
+    fn generate_derived_view_entries(&self) -> String {
+        let derived_views: Vec<&ViewDef> = self
+            .views
+            .iter()
+            .filter(|v| {
+                !v.id.ends_with("/state")
+                    && !v.id.ends_with("/list")
+                    && v.id.starts_with(&self.entity_name)
+            })
+            .collect();
+
+        if derived_views.is_empty() {
+            return String::new();
+        }
+
+        let entity_pascal = to_pascal_case(&self.entity_name);
+        let mut entries = Vec::new();
+
+        for view in derived_views {
+            let view_name = view.id.split('/').nth(1).unwrap_or("unknown");
+
+            entries.push(format!(
+                "\n      {}: listView<{}>('{}'),",
+                view_name, entity_pascal, view.id
+            ));
+        }
+
+        entries.join("")
     }
 
     fn mapping_to_typescript_type(&self, mapping: &TypedFieldMapping<S>) -> String {
@@ -772,13 +801,33 @@ export default {};"#,
         None
     }
 
-    /// Extract instruction name from handler source
+    /// Extract instruction name from handler source, returning the raw PascalCase name
     fn extract_instruction_name(&self, source: &serde_json::Value) -> Option<String> {
         if let Some(source_obj) = source.get("Source") {
             if let Some(type_name) = source_obj.get("type_name").and_then(|t| t.as_str()) {
-                // Convert "CreateGameIxState" -> "create_game"
+                // Extract "CreateGame" from "CreateGameIxState"
                 if let Some(instruction_part) = type_name.strip_suffix("IxState") {
-                    return Some(to_snake_case(instruction_part));
+                    return Some(instruction_part.to_string());
+                }
+            }
+        }
+        None
+    }
+
+    /// Find an instruction in the IDL by name, handling different naming conventions.
+    /// IDLs may use snake_case (pumpfun: "admin_set_creator") or camelCase (ore: "claimSol").
+    /// The input name comes from Rust types which are PascalCase ("AdminSetCreator", "ClaimSol").
+    fn find_instruction_in_idl<'a>(
+        &self,
+        instructions: &'a [serde_json::Value],
+        rust_name: &str,
+    ) -> Option<&'a serde_json::Value> {
+        let normalized_search = normalize_for_comparison(rust_name);
+
+        for instruction in instructions {
+            if let Some(idl_name) = instruction.get("name").and_then(|n| n.as_str()) {
+                if normalize_for_comparison(idl_name) == normalized_search {
+                    return Some(instruction);
                 }
             }
         }
@@ -789,10 +838,9 @@ export default {};"#,
     fn generate_event_interface_from_idl(
         &self,
         interface_name: &str,
-        instruction_name: &str,
+        rust_instruction_name: &str,
         captured_fields: &[(String, Option<String>)],
     ) -> Option<String> {
-        // If no fields are captured, generate an empty interface
         if captured_fields.is_empty() {
             return Some(format!("export interface {} {{}}", interface_name));
         }
@@ -800,44 +848,31 @@ export default {};"#,
         let idl_value = self.idl.as_ref()?;
         let instructions = idl_value.get("instructions")?.as_array()?;
 
-        // Find the instruction in the IDL
-        for instruction in instructions {
-            if let Some(name) = instruction.get("name").and_then(|n| n.as_str()) {
-                if name == instruction_name {
-                    // Get the args
-                    if let Some(args) = instruction.get("args").and_then(|a| a.as_array()) {
-                        let mut fields = Vec::new();
+        let instruction = self.find_instruction_in_idl(instructions, rust_instruction_name)?;
+        let args = instruction.get("args")?.as_array()?;
 
-                        // Only include captured fields
-                        for (field_name, transform) in captured_fields {
-                            // Find this arg in the instruction
-                            for arg in args {
-                                if let Some(arg_name) = arg.get("name").and_then(|n| n.as_str()) {
-                                    if arg_name == field_name {
-                                        if let Some(arg_type) = arg.get("type") {
-                                            let ts_type = self.idl_type_to_typescript(
-                                                arg_type,
-                                                transform.as_deref(),
-                                            );
-                                            let camel_name = to_camel_case(field_name);
-                                            fields.push(format!("  {}: {};", camel_name, ts_type));
-                                        }
-                                        break;
-                                    }
-                                }
-                            }
+        let mut fields = Vec::new();
+        for (field_name, transform) in captured_fields {
+            for arg in args {
+                if let Some(arg_name) = arg.get("name").and_then(|n| n.as_str()) {
+                    if arg_name == field_name {
+                        if let Some(arg_type) = arg.get("type") {
+                            let ts_type =
+                                self.idl_type_to_typescript(arg_type, transform.as_deref());
+                            fields.push(format!("  {}: {};", field_name, ts_type));
                         }
-
-                        if !fields.is_empty() {
-                            return Some(format!(
-                                "export interface {} {{\n{}\n}}",
-                                interface_name,
-                                fields.join("\n")
-                            ));
-                        }
+                        break;
                     }
                 }
             }
+        }
+
+        if !fields.is_empty() {
+            return Some(format!(
+                "export interface {} {{\n{}\n}}",
+                interface_name,
+                fields.join("\n")
+            ));
         }
 
         None
@@ -906,14 +941,13 @@ export default {};"#,
             .fields
             .iter()
             .map(|field| {
-                let field_name = to_camel_case(&field.field_name);
                 let base_ts_type = self.resolved_field_to_typescript(field);
                 let ts_type = if field.is_optional {
                     format!("{} | null", base_ts_type)
                 } else {
                     base_ts_type
                 };
-                format!("  {}?: {};", field_name, ts_type)
+                format!("  {}?: {};", field.field_name, ts_type)
             })
             .collect();
 
@@ -1081,32 +1115,13 @@ fn to_pascal_case(s: &str) -> String {
         .collect()
 }
 
-/// Convert snake_case to camelCase
-fn to_camel_case(s: &str) -> String {
-    let pascal = to_pascal_case(s);
-    let mut chars = pascal.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(first) => first.to_lowercase().collect::<String>() + chars.as_str(),
-    }
-}
-
-/// Convert PascalCase/camelCase to snake_case
-fn to_snake_case(s: &str) -> String {
-    let mut result = String::new();
-
-    for ch in s.chars() {
-        if ch.is_uppercase() {
-            if !result.is_empty() {
-                result.push('_');
-            }
-            result.push(ch.to_lowercase().next().unwrap());
-        } else {
-            result.push(ch);
-        }
-    }
-
-    result
+/// Normalize a name for case-insensitive comparison across naming conventions.
+/// Removes underscores and converts to lowercase: "claim_sol", "claimSol", "ClaimSol" all become "claimsol"
+fn normalize_for_comparison(s: &str) -> String {
+    s.chars()
+        .filter(|c| *c != '_')
+        .flat_map(|c| c.to_lowercase())
+        .collect()
 }
 
 /// Check if a section name is the root section (case-insensitive)
@@ -1160,22 +1175,20 @@ pub fn compile_serializable_spec(
     entity_name: String,
     config: Option<TypeScriptConfig>,
 ) -> Result<TypeScriptOutput, String> {
-    // Extract IDL and convert to serde_json::Value
     let idl = spec
         .idl
         .as_ref()
         .and_then(|idl_snapshot| serde_json::to_value(idl_snapshot).ok());
 
-    // Extract handlers as JSON
     let handlers = serde_json::to_value(&spec.handlers).ok();
+    let views = spec.views.clone();
 
-    // Convert SerializableStreamSpec to TypedStreamSpec
-    // We use () as the phantom type since it won't be used
     let typed_spec: TypedStreamSpec<()> = TypedStreamSpec::from_serializable(spec);
 
     let compiler = TypeScriptCompiler::new(typed_spec, entity_name)
         .with_idl(idl)
         .with_handlers_json(handlers)
+        .with_views(views)
         .with_config(config.unwrap_or_default());
 
     Ok(compiler.compile())
@@ -1188,8 +1201,22 @@ mod tests {
     #[test]
     fn test_case_conversions() {
         assert_eq!(to_pascal_case("settlement_game"), "SettlementGame");
-        assert_eq!(to_camel_case("settlement_game"), "settlementGame");
         assert_eq!(to_kebab_case("SettlementGame"), "settlement-game");
+    }
+
+    #[test]
+    fn test_normalize_for_comparison() {
+        assert_eq!(normalize_for_comparison("claim_sol"), "claimsol");
+        assert_eq!(normalize_for_comparison("claimSol"), "claimsol");
+        assert_eq!(normalize_for_comparison("ClaimSol"), "claimsol");
+        assert_eq!(
+            normalize_for_comparison("admin_set_creator"),
+            "adminsetcreator"
+        );
+        assert_eq!(
+            normalize_for_comparison("AdminSetCreator"),
+            "adminsetcreator"
+        );
     }
 
     #[test]
@@ -1204,5 +1231,75 @@ mod tests {
             "boolean"
         );
         assert_eq!(value_to_typescript_type(&serde_json::json!([])), "any[]");
+    }
+
+    #[test]
+    fn test_derived_view_codegen() {
+        let spec = SerializableStreamSpec {
+            state_name: "OreRound".to_string(),
+            program_id: None,
+            idl: None,
+            identity: IdentitySpec {
+                primary_keys: vec!["id".to_string()],
+                lookup_indexes: vec![],
+            },
+            handlers: vec![],
+            sections: vec![],
+            field_mappings: BTreeMap::new(),
+            resolver_hooks: vec![],
+            instruction_hooks: vec![],
+            computed_fields: vec![],
+            computed_field_specs: vec![],
+            content_hash: None,
+            views: vec![
+                ViewDef {
+                    id: "OreRound/latest".to_string(),
+                    source: ViewSource::Entity {
+                        name: "OreRound".to_string(),
+                    },
+                    pipeline: vec![ViewTransform::Last],
+                    output: ViewOutput::Single,
+                },
+                ViewDef {
+                    id: "OreRound/top10".to_string(),
+                    source: ViewSource::Entity {
+                        name: "OreRound".to_string(),
+                    },
+                    pipeline: vec![ViewTransform::Take { count: 10 }],
+                    output: ViewOutput::Collection,
+                },
+            ],
+        };
+
+        let output =
+            compile_serializable_spec(spec, "OreRound".to_string(), None).expect("should compile");
+
+        let stack_def = &output.stack_definition;
+
+        assert!(
+            stack_def.contains("listView<OreRound>('OreRound/latest')"),
+            "Expected 'latest' derived view using listView, got:\n{}",
+            stack_def
+        );
+        assert!(
+            stack_def.contains("listView<OreRound>('OreRound/top10')"),
+            "Expected 'top10' derived view using listView, got:\n{}",
+            stack_def
+        );
+        assert!(
+            stack_def.contains("latest:"),
+            "Expected 'latest' key, got:\n{}",
+            stack_def
+        );
+        assert!(
+            stack_def.contains("top10:"),
+            "Expected 'top10' key, got:\n{}",
+            stack_def
+        );
+        assert!(
+            stack_def.contains("function listView<T>(view: string): ViewDef<T, 'list'>"),
+            "Expected listView helper function, got:\n{}",
+            stack_def
+        );
     }
 }

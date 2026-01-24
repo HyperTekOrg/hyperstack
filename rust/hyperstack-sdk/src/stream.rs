@@ -177,13 +177,15 @@ enum EntityStreamState<T> {
         store: SharedStore,
         subscription_view: String,
         subscription_key: Option<String>,
+        take: Option<u32>,
+        skip: Option<u32>,
     },
     Active {
         inner: BroadcastStream<StoreUpdate>,
     },
     Subscribing {
         fut: Pin<Box<dyn Future<Output = ()> + Send>>,
-        store: SharedStore,
+        inner: BroadcastStream<StoreUpdate>,
     },
     Invalid,
     _Phantom(PhantomData<T>),
@@ -235,12 +237,37 @@ impl<T: DeserializeOwned + Clone + Send + 'static> EntityStream<T> {
         key_filter: KeyFilter,
         subscription_key: Option<String>,
     ) -> Self {
+        Self::new_lazy_with_opts(
+            connection,
+            store,
+            entity_name,
+            subscription_view,
+            key_filter,
+            subscription_key,
+            None,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_lazy_with_opts(
+        connection: ConnectionManager,
+        store: SharedStore,
+        entity_name: String,
+        subscription_view: String,
+        key_filter: KeyFilter,
+        subscription_key: Option<String>,
+        take: Option<u32>,
+        skip: Option<u32>,
+    ) -> Self {
         Self {
             state: EntityStreamState::Lazy {
                 connection,
                 store,
                 subscription_view,
                 subscription_key,
+                take,
+                skip,
             },
             view: entity_name,
             key_filter,
@@ -284,31 +311,36 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for EntityStre
                         store,
                         subscription_view,
                         subscription_key,
+                        take,
+                        skip,
                     } = std::mem::replace(&mut this.state, EntityStreamState::Invalid)
                     else {
                         unreachable!()
                     };
 
+                    // Subscribe to broadcast BEFORE sending subscription to server
+                    // This ensures we don't miss any frames that arrive during setup
+                    let inner = BroadcastStream::new(store.subscribe());
+
                     let conn = connection.clone();
                     let view = subscription_view.clone();
                     let key = subscription_key.clone();
                     let fut = Box::pin(async move {
-                        conn.ensure_subscription(&view, key.as_deref()).await;
+                        conn.ensure_subscription_with_opts(&view, key.as_deref(), take, skip)
+                            .await;
                     });
 
-                    this.state = EntityStreamState::Subscribing { fut, store };
+                    this.state = EntityStreamState::Subscribing { fut, inner };
                     continue;
                 }
                 EntityStreamState::Subscribing { fut, .. } => match fut.as_mut().poll(cx) {
                     Poll::Ready(()) => {
-                        let EntityStreamState::Subscribing { store, .. } =
+                        let EntityStreamState::Subscribing { inner, .. } =
                             std::mem::replace(&mut this.state, EntityStreamState::Invalid)
                         else {
                             unreachable!()
                         };
-                        this.state = EntityStreamState::Active {
-                            inner: BroadcastStream::new(store.subscribe()),
-                        };
+                        this.state = EntityStreamState::Active { inner };
                         continue;
                     }
                     Poll::Pending => return Poll::Pending,
@@ -357,6 +389,9 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for EntityStre
                                     }
                                 }
                             }
+                            Operation::Subscribed => {
+                                continue;
+                            }
                         }
                     }
                     Poll::Ready(Some(Err(_lagged))) => {
@@ -392,13 +427,15 @@ enum RichEntityStreamState<T> {
         store: SharedStore,
         subscription_view: String,
         subscription_key: Option<String>,
+        take: Option<u32>,
+        skip: Option<u32>,
     },
     Active {
         inner: BroadcastStream<StoreUpdate>,
     },
     Subscribing {
         fut: Pin<Box<dyn Future<Output = ()> + Send>>,
-        store: SharedStore,
+        inner: BroadcastStream<StoreUpdate>,
     },
     Invalid,
     _Phantom(PhantomData<T>),
@@ -435,12 +472,37 @@ impl<T: DeserializeOwned + Clone + Send + 'static> RichEntityStream<T> {
         key_filter: KeyFilter,
         subscription_key: Option<String>,
     ) -> Self {
+        Self::new_lazy_with_opts(
+            connection,
+            store,
+            entity_name,
+            subscription_view,
+            key_filter,
+            subscription_key,
+            None,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_lazy_with_opts(
+        connection: ConnectionManager,
+        store: SharedStore,
+        entity_name: String,
+        subscription_view: String,
+        key_filter: KeyFilter,
+        subscription_key: Option<String>,
+        take: Option<u32>,
+        skip: Option<u32>,
+    ) -> Self {
         Self {
             state: RichEntityStreamState::Lazy {
                 connection,
                 store,
                 subscription_view,
                 subscription_key,
+                take,
+                skip,
             },
             view: entity_name,
             key_filter,
@@ -463,31 +525,36 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for RichEntity
                         store,
                         subscription_view,
                         subscription_key,
+                        take,
+                        skip,
                     } = std::mem::replace(&mut this.state, RichEntityStreamState::Invalid)
                     else {
                         unreachable!()
                     };
 
+                    // Subscribe to broadcast BEFORE sending subscription to server
+                    // This ensures we don't miss any frames that arrive during setup
+                    let inner = BroadcastStream::new(store.subscribe());
+
                     let conn = connection.clone();
                     let view = subscription_view.clone();
                     let key = subscription_key.clone();
                     let fut = Box::pin(async move {
-                        conn.ensure_subscription(&view, key.as_deref()).await;
+                        conn.ensure_subscription_with_opts(&view, key.as_deref(), take, skip)
+                            .await;
                     });
 
-                    this.state = RichEntityStreamState::Subscribing { fut, store };
+                    this.state = RichEntityStreamState::Subscribing { fut, inner };
                     continue;
                 }
                 RichEntityStreamState::Subscribing { fut, .. } => match fut.as_mut().poll(cx) {
                     Poll::Ready(()) => {
-                        let RichEntityStreamState::Subscribing { store, .. } =
+                        let RichEntityStreamState::Subscribing { inner, .. } =
                             std::mem::replace(&mut this.state, RichEntityStreamState::Invalid)
                         else {
                             unreachable!()
                         };
-                        this.state = RichEntityStreamState::Active {
-                            inner: BroadcastStream::new(store.subscribe()),
-                        };
+                        this.state = RichEntityStreamState::Active { inner };
                         continue;
                     }
                     Poll::Pending => return Poll::Pending,
@@ -550,6 +617,9 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for RichEntity
                                         }
                                     }
                                 }
+                            }
+                            Operation::Subscribed => {
+                                continue;
                             }
                         }
                     }

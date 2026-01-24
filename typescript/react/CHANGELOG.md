@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.3.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.3.4...hyperstack-react-v0.3.5) (2026-01-24)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-react:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-typescript bumped from ^0.3.4 to ^0.3.5
+
+## [0.3.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.3.3...hyperstack-react-v0.3.4) (2026-01-24)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-react:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-typescript bumped from ^0.3.3 to ^0.3.4
+
+## [0.3.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.3.2...hyperstack-react-v0.3.3) (2026-01-23)
+
+
+### Features
+
+* add derived view support to React SDK and macros ([5f6414f](https://github.com/HyperTekOrg/hyperstack/commit/5f6414f879f2891be2d8ee5c16173cf83ddf2ea9))
+* **react:** add configurable frame buffering to reduce render churn ([c4bdb13](https://github.com/HyperTekOrg/hyperstack/commit/c4bdb13bf8efa085b8105c1fbbdc1e19127e6590))
+* **react:** add type narrowing for take: 1 and useOne() method ([52d3538](https://github.com/HyperTekOrg/hyperstack/commit/52d3538ab0ad76f9562c7cd927e095ff3590fab5))
+* **sdk:** add sorted view support with server-side subscribed frame ([1a7d83f](https://github.com/HyperTekOrg/hyperstack/commit/1a7d83fe4000c26d282f2df9ce95f9d79414014d))
+
+
+### Bug Fixes
+
+* **react:** invalidate cache when sortedKeys changes ([e1230fd](https://github.com/HyperTekOrg/hyperstack/commit/e1230fd785c8a5bf0795b8e88d7d4631579779c0))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-typescript bumped from ^0.3.2 to ^0.3.3
+
 ## [0.3.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.3.1...hyperstack-react-v0.3.2) (2026-01-20)
 
 

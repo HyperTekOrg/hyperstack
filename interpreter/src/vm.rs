@@ -296,6 +296,8 @@ pub struct VmContext {
     pub pending_queue_size: u64,
     current_context: Option<UpdateContext>,
     warnings: Vec<String>,
+    last_pda_lookup_miss: Option<String>,
+    last_pda_registered: Option<String>,
 }
 
 #[derive(Debug)]
@@ -507,6 +509,27 @@ pub struct PendingAccountUpdate {
     pub queued_at: i64,
 }
 
+/// Input for queueing an instruction event when PDA lookup fails.
+#[derive(Debug, Clone)]
+pub struct QueuedInstructionEvent {
+    pub pda_address: String,
+    pub event_type: String,
+    pub event_data: Value,
+    pub slot: u64,
+    pub signature: String,
+}
+
+/// Internal representation of a pending instruction event with queue metadata.
+#[derive(Debug, Clone)]
+pub struct PendingInstructionEvent {
+    pub event_type: String,
+    pub pda_address: String,
+    pub event_data: Value,
+    pub slot: u64,
+    pub signature: String,
+    pub queued_at: i64,
+}
+
 #[derive(Debug, Clone)]
 pub struct PendingQueueStats {
     pub total_updates: usize,
@@ -615,6 +638,7 @@ pub struct StateTable {
     pub temporal_indexes: HashMap<String, TemporalIndex>,
     pub pda_reverse_lookups: HashMap<String, PdaReverseLookup>,
     pub pending_updates: DashMap<String, Vec<PendingAccountUpdate>>,
+    pub pending_instruction_events: DashMap<String, Vec<PendingInstructionEvent>>,
     version_tracker: VersionTracker,
     config: StateTableConfig,
     #[cfg_attr(not(feature = "otel"), allow(dead_code))]
@@ -733,6 +757,8 @@ impl VmContext {
             pending_queue_size: 0,
             current_context: None,
             warnings: Vec::new(),
+            last_pda_lookup_miss: None,
+            last_pda_registered: None,
         };
         vm.states.insert(
             0,
@@ -743,6 +769,7 @@ impl VmContext {
                 temporal_indexes: HashMap::new(),
                 pda_reverse_lookups: HashMap::new(),
                 pending_updates: DashMap::new(),
+                pending_instruction_events: DashMap::new(),
                 version_tracker: VersionTracker::new(),
                 config: StateTableConfig::default(),
                 entity_name: "default".to_string(),
@@ -763,6 +790,8 @@ impl VmContext {
             pending_queue_size: 0,
             current_context: None,
             warnings: Vec::new(),
+            last_pda_lookup_miss: None,
+            last_pda_registered: None,
         };
         vm.states.insert(
             0,
@@ -773,6 +802,7 @@ impl VmContext {
                 temporal_indexes: HashMap::new(),
                 pda_reverse_lookups: HashMap::new(),
                 pending_updates: DashMap::new(),
+                pending_instruction_events: DashMap::new(),
                 version_tracker: VersionTracker::new(),
                 config: state_config,
                 entity_name: "default".to_string(),
@@ -1025,7 +1055,51 @@ impl VmContext {
                             );
                         }
 
+                        if mutations.is_empty() {
+                            if let Some(missed_pda) = self.take_last_pda_lookup_miss() {
+                                if event_type.ends_with("IxState") {
+                                    let slot = context.and_then(|c| c.slot).unwrap_or(0);
+                                    let signature = context
+                                        .and_then(|c| c.signature.clone())
+                                        .unwrap_or_default();
+                                    let _ = self.queue_instruction_event(
+                                        entity_bytecode.state_id,
+                                        QueuedInstructionEvent {
+                                            pda_address: missed_pda,
+                                            event_type: event_type.to_string(),
+                                            event_data: event_value.clone(),
+                                            slot,
+                                            signature,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+
                         all_mutations.extend(mutations);
+
+                        if let Some(registered_pda) = self.take_last_pda_registered() {
+                            let pending_events = self.flush_pending_instruction_events(
+                                entity_bytecode.state_id,
+                                &registered_pda,
+                            );
+                            for pending in pending_events {
+                                if let Some(pending_handler) =
+                                    entity_bytecode.handlers.get(&pending.event_type)
+                                {
+                                    if let Ok(reprocessed_mutations) = self.execute_handler(
+                                        pending_handler,
+                                        &pending.event_data,
+                                        &pending.event_type,
+                                        entity_bytecode.state_id,
+                                        entity_name,
+                                        entity_bytecode.computed_fields_evaluator.as_ref(),
+                                    ) {
+                                        all_mutations.extend(reprocessed_mutations);
+                                    }
+                                }
+                            }
+                        }
                     } else if let Some(ref mut log) = log {
                         log.set("skip_reason", "no_handler");
                     }
@@ -1095,6 +1169,7 @@ impl VmContext {
         entity_evaluator: Option<&Box<dyn Fn(&mut Value) -> Result<()> + Send + Sync>>,
     ) -> Result<Vec<Mutation>> {
         self.reset_registers();
+        self.last_pda_lookup_miss = None;
 
         let mut pc: usize = 0;
         let mut output = Vec::new();
@@ -1171,6 +1246,7 @@ impl VmContext {
                             temporal_indexes: HashMap::new(),
                             pda_reverse_lookups: HashMap::new(),
                             pending_updates: DashMap::new(),
+                            pending_instruction_events: DashMap::new(),
                             version_tracker: VersionTracker::new(),
                             config: StateTableConfig::default(),
                             entity_name: entity_name_owned,
@@ -1530,9 +1606,11 @@ impl VmContext {
                                 if let Some(resolved) = pda_lookup.lookup(pda_str) {
                                     Value::String(resolved)
                                 } else {
+                                    self.last_pda_lookup_miss = Some(pda_str.to_string());
                                     Value::Null
                                 }
                             } else {
+                                self.last_pda_lookup_miss = Some(pda_str.to_string());
                                 Value::Null
                             }
                         } else {
@@ -1700,6 +1778,7 @@ impl VmContext {
                             });
 
                         pda_lookup.insert(pda_str.to_string(), pk_str.to_string());
+                        self.last_pda_registered = Some(pda_str.to_string());
                     } else if !pk_val.is_null() {
                         if let Some(pk_num) = pk_val.as_u64() {
                             if let Some(pda_str) = pda_val.as_str() {
@@ -1713,6 +1792,7 @@ impl VmContext {
                                     });
 
                                 pda_lookup.insert(pda_str.to_string(), pk_num.to_string());
+                                self.last_pda_registered = Some(pda_str.to_string());
                             }
                         }
                     }
@@ -2456,6 +2536,69 @@ impl VmContext {
         crate::vm_metrics::record_pending_update_queued(&state.entity_name);
 
         Ok(())
+    }
+
+    pub fn queue_instruction_event(
+        &mut self,
+        state_id: u32,
+        event: QueuedInstructionEvent,
+    ) -> Result<()> {
+        let state = self
+            .states
+            .get_mut(&state_id)
+            .ok_or("State table not found")?;
+
+        let pda_address = event.pda_address.clone();
+
+        let pending = PendingInstructionEvent {
+            event_type: event.event_type,
+            pda_address: event.pda_address,
+            event_data: event.event_data,
+            slot: event.slot,
+            signature: event.signature,
+            queued_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64,
+        };
+
+        let mut events = state
+            .pending_instruction_events
+            .entry(pda_address)
+            .or_insert_with(Vec::new);
+
+        if events.len() >= MAX_PENDING_UPDATES_PER_PDA {
+            events.remove(0);
+        }
+
+        events.push(pending);
+
+        Ok(())
+    }
+
+    pub fn take_last_pda_lookup_miss(&mut self) -> Option<String> {
+        self.last_pda_lookup_miss.take()
+    }
+
+    pub fn take_last_pda_registered(&mut self) -> Option<String> {
+        self.last_pda_registered.take()
+    }
+
+    pub fn flush_pending_instruction_events(
+        &mut self,
+        state_id: u32,
+        pda_address: &str,
+    ) -> Vec<PendingInstructionEvent> {
+        let state = match self.states.get_mut(&state_id) {
+            Some(s) => s,
+            None => return Vec::new(),
+        };
+
+        if let Some((_, events)) = state.pending_instruction_events.remove(pda_address) {
+            events
+        } else {
+            Vec::new()
+        }
     }
 
     /// Get statistics about the pending queue for monitoring

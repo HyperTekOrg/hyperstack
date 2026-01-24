@@ -1,6 +1,6 @@
 {
   "name": "hyperstack-react",
-  "version": "0.3.2",
+  "version": "0.3.5",
   "type": "module",
   "description": "React SDK for the Hyperstack Solana developer platform",
   "main": "dist/index.js",
@@ -45,7 +45,7 @@
     "@solana/wallet-adapter-base": "^0.9.23"
   },
   "dependencies": {
-    "hyperstack-typescript": "^0.3.2",
+    "hyperstack-typescript": "^0.3.5",
     "zustand": "^4.0.0"
   },
   "devDependencies": {

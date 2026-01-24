@@ -28,6 +28,8 @@ use std::process;
 mod api_client;
 mod commands;
 mod config;
+mod telemetry;
+mod templates;
 mod ui;
 
 #[derive(Parser)]
@@ -57,6 +59,28 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Create a new Hyperstack project from a template
+    Create {
+        /// Project name (creates directory)
+        name: Option<String>,
+
+        /// Template: react-pumpfun, react-ore
+        #[arg(short, long)]
+        template: Option<String>,
+
+        /// Use cached templates only (no network)
+        #[arg(long)]
+        offline: bool,
+
+        /// Force re-download templates even if cached
+        #[arg(long)]
+        force_refresh: bool,
+
+        /// Skip installing dependencies
+        #[arg(long)]
+        skip_install: bool,
+    },
+
     /// Initialize a new Hyperstack project (auto-detects AST files)
     Init,
 
@@ -106,6 +130,10 @@ enum Commands {
     /// Build commands (advanced) - low-level build management
     #[command(subcommand, hide = true)]
     Build(BuildCommands),
+
+    /// Manage anonymous usage telemetry
+    #[command(subcommand)]
+    Telemetry(TelemetryCommands),
 }
 
 #[derive(Subcommand)]
@@ -259,6 +287,18 @@ enum StackCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum TelemetryCommands {
+    /// Show current telemetry status
+    Status,
+
+    /// Enable telemetry collection
+    Enable,
+
+    /// Disable telemetry collection
+    Disable,
+}
+
 /// Build commands - advanced low-level build management
 /// These are power-user commands; most users should use `hs up` instead.
 #[derive(Subcommand)]
@@ -316,9 +356,45 @@ fn main() {
         return;
     }
 
-    if let Err(e) = run(cli) {
+    telemetry::show_consent_banner_if_needed();
+
+    let cmd_name = cli.command.as_ref().map(command_name).unwrap_or("help");
+    let start = std::time::Instant::now();
+    let result = run(cli);
+
+    telemetry::record_command(
+        cmd_name,
+        result.is_ok(),
+        result
+            .as_ref()
+            .err()
+            .and_then(telemetry::extract_error_code)
+            .as_deref(),
+        start.elapsed(),
+        None,
+    );
+
+    telemetry::flush();
+
+    if let Err(e) = result {
         eprintln!("{} {}", "Error:".red().bold(), e);
         process::exit(1);
+    }
+}
+
+fn command_name(cmd: &Commands) -> &'static str {
+    match cmd {
+        Commands::Create { .. } => "create",
+        Commands::Init => "init",
+        Commands::Up { .. } => "up",
+        Commands::Status => "status",
+        Commands::Push { .. } => "push",
+        Commands::Sdk(_) => "sdk",
+        Commands::Config(_) => "config",
+        Commands::Auth(_) => "auth",
+        Commands::Stack(_) => "stack",
+        Commands::Build(_) => "build",
+        Commands::Telemetry(_) => "telemetry",
     }
 }
 
@@ -329,6 +405,13 @@ fn run(cli: Cli) -> anyhow::Result<()> {
     };
 
     match command {
+        Commands::Create {
+            name,
+            template,
+            offline,
+            force_refresh,
+            skip_install,
+        } => commands::create::create(name, template, offline, force_refresh, skip_install),
         Commands::Init => commands::config::init(&cli.config),
         Commands::Up {
             stack_name,
@@ -418,6 +501,11 @@ fn run(cli: Cli) -> anyhow::Result<()> {
                 watch,
                 json,
             } => commands::build::status(build_id, watch, json || cli.json),
+        },
+        Commands::Telemetry(telemetry_cmd) => match telemetry_cmd {
+            TelemetryCommands::Status => commands::telemetry::status(),
+            TelemetryCommands::Enable => commands::telemetry::enable(),
+            TelemetryCommands::Disable => commands::telemetry::disable(),
         },
     }
 }

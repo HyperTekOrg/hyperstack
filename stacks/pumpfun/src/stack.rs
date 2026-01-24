@@ -31,27 +31,24 @@ pub mod pumpfun_stream {
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct TokenId {
-        #[from_instruction(generated_sdk::instructions::Create::mint, primary_key, strategy = SetOnce)]
+        #[from_instruction([generated_sdk::instructions::Create::mint, generated_sdk::instructions::CreateV2::mint], primary_key, strategy = SetOnce)]
         pub mint: String,
 
-        #[from_instruction(generated_sdk::instructions::Create::bonding_curve, lookup_index, strategy = SetOnce)]
+        #[from_instruction([generated_sdk::instructions::Create::bonding_curve, generated_sdk::instructions::CreateV2::bonding_curve], lookup_index, strategy = SetOnce)]
         pub bonding_curve: String,
     }
 
-    // TokenInfo section: Maps data from instructions (Create) and accounts (BondingCurve)
-    // - name, symbol, uri: Captured once from the Create instruction
-    // - is_complete: Updated whenever the BondingCurve account changes via the resolver system
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct TokenInfo {
-        #[from_instruction(generated_sdk::instructions::Create::name, strategy = SetOnce)]
+        #[from_instruction([generated_sdk::instructions::Create::name, generated_sdk::instructions::CreateV2::name], strategy = SetOnce)]
         pub name: Option<String>,
 
-        #[from_instruction(generated_sdk::instructions::Create::symbol, strategy = SetOnce)]
+        #[from_instruction([generated_sdk::instructions::Create::symbol, generated_sdk::instructions::CreateV2::symbol], strategy = SetOnce)]
         pub symbol: Option<String>,
 
-        #[from_instruction(generated_sdk::instructions::Create::uri, strategy = SetOnce)]
+        #[from_instruction([generated_sdk::instructions::Create::uri, generated_sdk::instructions::CreateV2::uri], strategy = SetOnce)]
         pub uri: Option<String>,
-        // Uses resolver to map BondingCurve account updates to the mint primary key
+
         #[map(generated_sdk::accounts::BondingCurve::complete, strategy = LastWrite)]
         pub is_complete: Option<bool>,
     }
@@ -80,55 +77,28 @@ pub mod pumpfun_stream {
         pub market_cap_sol: Option<f64>,
     }
 
-    // ========================================================================
-    // Trading Metrics Section - Demonstrates Declarative Aggregations
-    // ========================================================================
-    //
-    // The #[aggregate] macro provides a declarative way to accumulate metrics
-    // across multiple Buy/Sell events. Each field specifies:
-    // - from: Which instruction type(s) to aggregate from
-    // - field: Which field to aggregate (optional for Count strategy)
-    // - strategy: How to aggregate (Sum, Count, Min, Max, UniqueCount)
-    // - condition: Optional condition expression for conditional aggregation (Level 1!)
-    //
-    // Available Strategies:
-    // - Sum: Accumulate numeric values
-    // - Count: Count occurrences (increments by 1)
-    // - Min: Track minimum value
-    // - Max: Track maximum value
-    // - UniqueCount: Count unique values (maintains internal Set)
-    //
-    // The VM automatically generates opcodes to:
-    // 1. Initialize fields to 0/null on first update
-    // 2. Apply aggregation strategy on each event
-    // 3. Maintain internal state (e.g., Sets for UniqueCount)
-    //
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct TradingMetrics {
-        // ========================================================================
-        // Declarative Aggregations - Using #[aggregate] Macro
-        // ========================================================================
-
-        // Sum aggregations for trade volumes
         #[aggregate(from = generated_sdk::instructions::Buy, field = amount, strategy = Sum, lookup_by = accounts::mint)]
         pub total_buy_volume: Option<u64>,
 
         #[aggregate(from = generated_sdk::instructions::Sell, field = amount, strategy = Sum, lookup_by = accounts::mint)]
         pub total_sell_volume: Option<u64>,
 
-        // Count aggregations for trade occurrences
-        #[aggregate(from = [generated_sdk::instructions::Buy, generated_sdk::instructions::Sell], strategy = Count, lookup_by = accounts::mint)]
+        #[aggregate(from = generated_sdk::instructions::BuyExactSolIn, field = spendable_sol_in, strategy = Sum, lookup_by = accounts::mint)]
+        pub total_buy_exact_sol_volume: Option<u64>,
+
+        #[aggregate(from = [generated_sdk::instructions::Buy, generated_sdk::instructions::BuyExactSolIn, generated_sdk::instructions::Sell], strategy = Count, lookup_by = accounts::mint)]
         pub total_trades: Option<u64>,
 
-        #[aggregate(from = generated_sdk::instructions::Buy, strategy = Count, lookup_by = accounts::mint)]
+        #[aggregate(from = [generated_sdk::instructions::Buy, generated_sdk::instructions::BuyExactSolIn], strategy = Count, lookup_by = accounts::mint)]
         pub buy_count: Option<u64>,
 
         #[aggregate(from = generated_sdk::instructions::Sell, strategy = Count, lookup_by = accounts::mint)]
         pub sell_count: Option<u64>,
 
-        // Unique trader counting (requires transform since user is a pubkey)
         #[aggregate(
-            from = [generated_sdk::instructions::Buy, generated_sdk::instructions::Sell],
+            from = [generated_sdk::instructions::Buy, generated_sdk::instructions::BuyExactSolIn, generated_sdk::instructions::Sell],
             field = user,
             strategy = UniqueCount,
             transform = ToString,
@@ -136,7 +106,6 @@ pub mod pumpfun_stream {
         )]
         pub unique_traders: Option<u64>,
 
-        // Min/Max aggregations for trade sizes
         #[aggregate(
             from = [generated_sdk::instructions::Buy, generated_sdk::instructions::Sell],
             field = amount,
@@ -153,21 +122,16 @@ pub mod pumpfun_stream {
         )]
         pub smallest_trade: Option<u64>,
 
-        // Track timestamp from Buy/Sell instructions using special __timestamp field
         #[derive_from(
-            from = [generated_sdk::instructions::Buy, generated_sdk::instructions::Sell],
+            from = [generated_sdk::instructions::Buy, generated_sdk::instructions::BuyExactSolIn, generated_sdk::instructions::Sell],
             field = __timestamp,
             lookup_by = accounts::mint
         )]
         pub last_trade_timestamp: Option<i64>,
 
-        // Price calculation using cross-section computed field
-        // References reserve state values from the ReserveState section
-        // Formula: price = virtual_sol_reserves / virtual_token_reserves
         #[computed((reserves.virtual_sol_reserves.unwrap_or(0) as f64) / (reserves.virtual_token_reserves.unwrap_or(1).max(1) as f64))]
         pub last_trade_price: Option<f64>,
 
-        // Count whale trades (amount > 1 trillion) using conditional aggregation
         #[aggregate(
             from = [generated_sdk::instructions::Buy, generated_sdk::instructions::Sell],
             field = amount,
@@ -177,7 +141,6 @@ pub mod pumpfun_stream {
         )]
         pub whale_trade_count: Option<u64>,
 
-        // Track last whale address using conditional field deriving
         #[derive_from(
             from = [generated_sdk::instructions::Buy, generated_sdk::instructions::Sell],
             field = accounts::user,
@@ -186,8 +149,6 @@ pub mod pumpfun_stream {
         )]
         pub last_whale_address: Option<String>,
 
-        // Computed/derived metrics (calculated from other fields)
-        // These fields use #[computed] to automatically derive values from aggregated fields
         #[computed(total_buy_volume.unwrap_or(0) + total_sell_volume.unwrap_or(0))]
         pub total_volume: Option<u64>,
 
@@ -253,11 +214,12 @@ pub mod pumpfun_stream {
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct TokenEvents {
-        // This snapshots the entire Create instruction while TokenId/TokenInfo map specific fields.
         #[event(strategy = SetOnce, lookup_by = accounts::mint)]
         pub create: Option<generated_sdk::instructions::Create>,
 
-        // Runtime type: Vec<EventWrapper<{ amount, max_sol_cost, user }>>
+        #[event(strategy = SetOnce, lookup_by = accounts::mint)]
+        pub create_v2: Option<generated_sdk::instructions::CreateV2>,
+
         #[event(
             strategy = Append,
             lookup_by = accounts::mint,
@@ -265,7 +227,13 @@ pub mod pumpfun_stream {
         )]
         pub buys: Vec<generated_sdk::instructions::Buy>,
 
-        // Runtime type: Vec<EventWrapper<generated_sdk::instructions::Sell>>
+        #[event(
+            strategy = Append,
+            lookup_by = accounts::mint,
+            fields = [data::spendable_sol_in, data::min_tokens_out, accounts::user]
+        )]
+        pub buys_exact_sol: Vec<generated_sdk::instructions::BuyExactSolIn>,
+
         #[event(
             strategy = Append,
             lookup_by = accounts::mint
@@ -278,20 +246,19 @@ pub mod pumpfun_stream {
     // ========================================================================
     // Declarative syntax replaces imperative #[resolve_key_for] and #[after_instruction] hooks
 
-    // Declare how to resolve BondingCurve account addresses to mint keys
     #[resolve_key(
         account = generated_sdk::accounts::BondingCurve,
         strategy = "pda_reverse_lookup",
         queue_until = [
             generated_sdk::instructions::Create,
+            generated_sdk::instructions::CreateV2,
             generated_sdk::instructions::Buy,
+            generated_sdk::instructions::BuyExactSolIn,
             generated_sdk::instructions::Sell
         ]
     )]
     struct BondingCurveResolver;
 
-    // Register PDA mappings when each instruction is processed
-    // Maps the bonding_curve PDA address to the mint primary key
     #[register_pda(
         instruction = generated_sdk::instructions::Create,
         pda_field = accounts::bonding_curve,
@@ -300,11 +267,25 @@ pub mod pumpfun_stream {
     struct CreatePdaRegistration;
 
     #[register_pda(
+        instruction = generated_sdk::instructions::CreateV2,
+        pda_field = accounts::bonding_curve,
+        primary_key = accounts::mint
+    )]
+    struct CreateV2PdaRegistration;
+
+    #[register_pda(
         instruction = generated_sdk::instructions::Buy,
         pda_field = accounts::bonding_curve,
         primary_key = accounts::mint
     )]
     struct BuyPdaRegistration;
+
+    #[register_pda(
+        instruction = generated_sdk::instructions::BuyExactSolIn,
+        pda_field = accounts::bonding_curve,
+        primary_key = accounts::mint
+    )]
+    struct BuyExactSolInPdaRegistration;
 
     #[register_pda(
         instruction = generated_sdk::instructions::Sell,

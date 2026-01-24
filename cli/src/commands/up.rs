@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use crate::api_client::{ApiClient, BuildStatus, CreateBuildRequest, DEFAULT_DOMAIN_SUFFIX};
 use crate::config::{resolve_stacks_to_push, HyperstackConfig};
+use crate::telemetry;
 use crate::ui;
 
 fn generate_short_uuid() -> String {
@@ -23,6 +24,7 @@ pub fn up(
     preview: bool,
     dry_run: bool,
 ) -> Result<()> {
+    let start = std::time::Instant::now();
     let config = HyperstackConfig::load_optional(config_path)?;
 
     let branch = if preview {
@@ -51,10 +53,12 @@ pub fn up(
         );
     }
 
-    for ast in stacks {
-        deploy_single_stack(&client, &ast, branch.as_deref())?;
+    for ast in &stacks {
+        deploy_single_stack(&client, ast, branch.as_deref())?;
         println!();
     }
+
+    telemetry::record_stack_deployed(stack_name.unwrap_or(""), start.elapsed());
 
     Ok(())
 }

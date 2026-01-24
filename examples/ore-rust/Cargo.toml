@@ -1,0 +1,12 @@
+[package]
+name = "ore-rust-example"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+hyperstack-sdk = { path = "../../rust/hyperstack-sdk" }
+hyperstack-stacks = { path = "../../stacks/sdk/rust", features = ["ore"] }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"

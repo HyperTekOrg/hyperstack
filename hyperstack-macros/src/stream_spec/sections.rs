@@ -641,6 +641,22 @@ fn resolve_account_type(
                     });
                 }
             }
+            IdlTypeDefKind::TupleStruct {
+                fields: tuple_fields,
+                ..
+            } => {
+                for (i, field_type) in tuple_fields.iter().enumerate() {
+                    let (field_type_str, base_type, is_optional, is_array, _) =
+                        analyze_idl_type_with_resolution(field_type, idl);
+                    fields.push(ResolvedField {
+                        field_name: format!("_{}", i),
+                        field_type: field_type_str,
+                        base_type,
+                        is_optional,
+                        is_array,
+                    });
+                }
+            }
             IdlTypeDefKind::Enum { variants, .. } => {
                 // Enums: extract variant names
                 let variant_names: Vec<String> = variants.iter().map(|v| v.name.clone()).collect();
@@ -686,6 +702,32 @@ fn resolve_custom_type(
                 fields.push(ResolvedField {
                     field_name: field.name.clone(),
                     field_type,
+                    base_type,
+                    is_optional,
+                    is_array,
+                });
+            }
+
+            ResolvedStructType {
+                type_name: type_def.name.clone(),
+                fields,
+                is_instruction: false,
+                is_account: false,
+                is_event: false,
+                is_enum: false,
+                enum_variants: Vec::new(),
+            }
+        }
+        IdlTypeDefKind::TupleStruct {
+            fields: tuple_fields,
+            ..
+        } => {
+            for (i, field_type) in tuple_fields.iter().enumerate() {
+                let (field_type_str, base_type, is_optional, is_array, _) =
+                    analyze_idl_type_with_resolution(field_type, idl);
+                fields.push(ResolvedField {
+                    field_name: format!("_{}", i),
+                    field_type: field_type_str,
                     base_type,
                     is_optional,
                     is_array,

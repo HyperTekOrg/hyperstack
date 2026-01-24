@@ -87,6 +87,12 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
                             .collect(),
                     }
                 }
+                idl_parser::IdlTypeDefKind::TupleStruct { kind, fields } => {
+                    IdlTypeDefKindSnapshot::TupleStruct {
+                        kind: kind.clone(),
+                        fields: fields.iter().map(convert_idl_type).collect(),
+                    }
+                }
                 idl_parser::IdlTypeDefKind::Enum { kind, variants } => {
                     IdlTypeDefKindSnapshot::Enum {
                         kind: kind.clone(),
@@ -126,6 +132,16 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
                                     type_: convert_idl_type(&f.type_),
                                 })
                                 .collect(),
+                        },
+                    });
+                }
+                idl_parser::IdlTypeDefKind::TupleStruct { kind, fields } => {
+                    types.push(IdlTypeDefSnapshot {
+                        name: account.name.clone(),
+                        docs: account.docs.clone(),
+                        type_def: IdlTypeDefKindSnapshot::TupleStruct {
+                            kind: kind.clone(),
+                            fields: fields.iter().map(convert_idl_type).collect(),
                         },
                     });
                 }

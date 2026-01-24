@@ -19,7 +19,7 @@ function shortenAddress(address: string | undefined): string {
 
 export function PumpFunDashboard() {
   const stack = useHyperstack(PUMPFUNTOKEN_STACK);
-  const { data: tokens } = stack.views.pumpfunToken.list.use();
+  const { data: tokens } = stack.views.PumpfunToken.list.use();
 
   const connectionState = useConnectionState();
 
@@ -32,6 +32,7 @@ export function PumpFunDashboard() {
   const tokensList = tokens ?? [];
 
   const TokenDetails = ({ token }: { token: any }) => {
+    const info = token.info;
     const reserves = token.reserves;
     const trading = token.trading;
 
@@ -39,31 +40,73 @@ export function PumpFunDashboard() {
       <div className="p-6 bg-gray-50">
         <h4 className="text-lg font-medium text-gray-800 mb-6">Token Details</h4>
 
+        {/* Token Info */}
+        {(info?.name || info?.symbol || info?.uri || info?.is_complete !== undefined) && (
+          <div className="mb-6">
+            <h5 className="text-sm font-medium text-gray-700 mb-3">Token Info</h5>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {info?.name && (
+                <div className="bg-white p-4 rounded-lg border">
+                  <div className="text-sm text-gray-600">Name</div>
+                  <div className="text-lg font-medium text-gray-900">{info.name}</div>
+                </div>
+              )}
+              {info?.symbol && (
+                <div className="bg-white p-4 rounded-lg border">
+                  <div className="text-sm text-gray-600">Symbol</div>
+                  <div className="text-lg font-medium text-blue-600">${info.symbol}</div>
+                </div>
+              )}
+              {info?.uri && (
+                <div className="bg-white p-4 rounded-lg border">
+                  <div className="text-sm text-gray-600">Metadata URI</div>
+                  <a
+                    href={info.uri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-blue-600 hover:underline break-all"
+                  >
+                    {info.uri.length > 50 ? `${info.uri.slice(0, 50)}...` : info.uri}
+                  </a>
+                </div>
+              )}
+              {info?.is_complete !== undefined && (
+                <div className="bg-white p-4 rounded-lg border">
+                  <div className="text-sm text-gray-600">Status</div>
+                  <div className={`text-lg font-medium ${info.is_complete ? 'text-green-600' : 'text-yellow-600'}`}>
+                    {info.is_complete ? 'Complete' : 'In Progress'}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Reserves Info */}
         <div className="mb-6">
           <h5 className="text-sm font-medium text-gray-700 mb-3">Reserves</h5>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {reserves?.virtual_sol_reserves !== undefined && (
+            {reserves?.virtualSolReserves !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Virtual SOL Reserves</div>
                 <div className="text-lg font-medium text-gray-900">
-                  {formatSol(reserves.virtual_sol_reserves)} SOL
+                  {formatSol(reserves.virtualSolReserves)} SOL
                 </div>
               </div>
             )}
-            {reserves?.real_sol_reserves !== undefined && (
+            {reserves?.realSolReserves !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Real SOL Reserves</div>
                 <div className="text-lg font-medium text-green-600">
-                  {formatSol(reserves.real_sol_reserves)} SOL
+                  {formatSol(reserves.realSolReserves)} SOL
                 </div>
               </div>
             )}
-            {reserves?.token_total_supply !== undefined && (
+            {reserves?.tokenTotalSupply !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Total Supply</div>
                 <div className="text-lg font-medium text-blue-600">
-                  {formatNumber(reserves.token_total_supply)}
+                  {formatNumber(reserves.tokenTotalSupply)}
                 </div>
               </div>
             )}
@@ -74,11 +117,11 @@ export function PumpFunDashboard() {
         <div className="mb-6">
           <h5 className="text-sm font-medium text-gray-700 mb-3">Trading Statistics</h5>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {trading?.total_volume !== undefined && (
+            {trading?.totalVolume !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Total Volume</div>
                 <div className="text-lg font-medium text-gray-900">
-                  {formatNumber(trading.total_volume)}
+                  {formatNumber(trading.totalVolume)}
                 </div>
               </div>
             )}
@@ -98,19 +141,19 @@ export function PumpFunDashboard() {
                 </div>
               </div>
             )}
-            {trading?.buy_count !== undefined && (
+            {trading?.buyCount !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Buy Count</div>
                 <div className="text-lg font-medium text-green-600">
-                  {formatNumber(trading.buy_count)}
+                  {formatNumber(trading.buyCount)}
                 </div>
               </div>
             )}
-            {trading?.sell_count !== undefined && (
+            {trading?.sellCount !== undefined && (
               <div className="bg-white p-4 rounded-lg border">
                 <div className="text-sm text-gray-600">Sell Count</div>
                 <div className="text-lg font-medium text-red-600">
-                  {formatNumber(trading.sell_count)}
+                  {formatNumber(trading.sellCount)}
                 </div>
               </div>
             )}
@@ -192,9 +235,9 @@ export function PumpFunDashboard() {
                     {tokensList
                       .slice((tokensPage - 1) * ITEMS_PER_PAGE, tokensPage * ITEMS_PER_PAGE)
                       .map((token: any, index: number) => {
-                        const tokenKey = token.bonding_curve_snapshot?.account_address || `token-${index}`;
+                        const tokenKey = token.bonding_curve_snapshot?.creator || token.id?.bonding_curve || `token-${index}`;
                         const isExpanded = expandedTokens.has(tokenKey);
-                        const isComplete = token.info?.is_complete || token.bonding_curve_snapshot?.data?.complete;
+                        const isComplete = token.info?.is_complete || token.bonding_curve_snapshot?.complete;
 
                         return (
                           <div
@@ -217,10 +260,18 @@ export function PumpFunDashboard() {
                             >
                               <div className="flex justify-between items-start gap-4">
                                 <div>
-                                  <div className="text-lg text-gray-800 font-medium">
-                                    Token #{index + 1}
+                                  <div className="text-lg text-gray-800 font-medium flex items-center gap-2">
+                                    {token.info?.name || `Token #${index + 1}`}
+                                    {token.info?.symbol && (
+                                      <span className="text-sm font-normal text-gray-500">
+                                        ${token.info.symbol}
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="text-sm text-gray-600 mt-1">
+                                    {token.id?.mint && (
+                                      <>Mint: {shortenAddress(token.id.mint)} | </>
+                                    )}
                                     Bonding Curve: {shortenAddress(tokenKey)}
                                     {token.trading?.last_trade_price !== undefined && (
                                       <> | Price: {token.trading.last_trade_price.toFixed(10)} SOL</>
@@ -232,6 +283,9 @@ export function PumpFunDashboard() {
                                     )}
                                     {token.trading?.unique_traders !== undefined && (
                                       <> • {token.trading.unique_traders} traders</>
+                                    )}
+                                    {token.info?.uri && (
+                                      <> • <a href={token.info.uri} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>Metadata</a></>
                                     )}
                                   </div>
                                 </div>

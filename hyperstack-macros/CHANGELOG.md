@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.3.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.3.4...hyperstack-macros-v0.3.5) (2026-01-24)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-macros:** Synchronize hyperstack versions
+
+## [0.3.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.3.3...hyperstack-macros-v0.3.4) (2026-01-24)
+
+
+### Bug Fixes
+
+* **macros:** add explicit type annotation to account_names vector ([76a124e](https://github.com/HyperTekOrg/hyperstack/commit/76a124ef623c6aabd4d88ae688701403105a80dd))
+
+## [0.3.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.3.2...hyperstack-macros-v0.3.3) (2026-01-23)
+
+
+### Features
+
+* add derived view support to React SDK and macros ([5f6414f](https://github.com/HyperTekOrg/hyperstack/commit/5f6414f879f2891be2d8ee5c16173cf83ddf2ea9))
+* add view pipeline for derived views like `latest`, `top10` ([f2f72fa](https://github.com/HyperTekOrg/hyperstack/commit/f2f72fa8894d2a38a13e8ee05791b7e4124977ea))
+* **macros:** add #[view] attribute for declarative view definitions on entities ([3f0bdc5](https://github.com/HyperTekOrg/hyperstack/commit/3f0bdc51d7945c32082ffa8997362328c7b26022))
+* **macros:** support tuple structs, 8-byte discriminators, and optional error messages in IDL ([090b5d6](https://github.com/HyperTekOrg/hyperstack/commit/090b5d62999e7bbae2dfb577a0d028b6675def01))
+* **sdk:** add sorted view support with server-side subscribed frame ([1a7d83f](https://github.com/HyperTekOrg/hyperstack/commit/1a7d83fe4000c26d282f2df9ce95f9d79414014d))
+* **server:** add slot-based sequence ordering for list views ([892c3d5](https://github.com/HyperTekOrg/hyperstack/commit/892c3d526c71df4c4d848142908ce511e302e082))
+
+
+### Bug Fixes
+
+* Account lookup ([bdf8b55](https://github.com/HyperTekOrg/hyperstack/commit/bdf8b5564619695575503e817507c0c8238cecac))
+* convert field names to camelCase for JSON serialization ([3dc05a4](https://github.com/HyperTekOrg/hyperstack/commit/3dc05a4eddebca9636827562f9793fdf1c16c1c9))
+* Logging ([b727602](https://github.com/HyperTekOrg/hyperstack/commit/b727602bd0a232fcede8bfdeea4c9ec3d060483d))
+* **macros:** convert lookup_indexes field_name to camelCase ([0c65c07](https://github.com/HyperTekOrg/hyperstack/commit/0c65c071adb36a768708eb53d05f3dcf0fb3c3b6))
+* **macros:** simplify account mapping and warn on IDL mismatch ([597ea1e](https://github.com/HyperTekOrg/hyperstack/commit/597ea1e155e9fa19572f1d32a4c3089a7c7c57ca))
+
 ## [0.3.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.3.1...hyperstack-macros-v0.3.2) (2026-01-20)
 
 

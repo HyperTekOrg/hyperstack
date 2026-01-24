@@ -243,8 +243,6 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
         ComputedExpr::FieldRef { path } => {
             let parts: Vec<&str> = path.split('.').collect();
             if parts.len() >= 2 {
-                // Build a chain of .get() calls for nested paths
-                // e.g., "round_snapshot.slot_hash" -> state.get("round_snapshot").and_then(|s| s.get("slot_hash"))
                 let section = parts[0];
                 let mut chain = quote! { state.get(#section) };
 
@@ -254,7 +252,6 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
 
                 quote! { #chain.cloned() }
             } else if parts.len() == 1 {
-                // Single identifier - could be a local variable, treat as such
                 let ident = format_ident!("{}", parts[0]);
                 quote! { #ident }
             } else {

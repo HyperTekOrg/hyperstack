@@ -183,6 +183,11 @@ pub enum IdlTypeDefKindSnapshot {
         kind: String,
         fields: Vec<IdlFieldSnapshot>,
     },
+    /// Tuple struct: { "kind": "struct", "fields": ["type1", "type2"] }
+    TupleStruct {
+        kind: String,
+        fields: Vec<IdlTypeSnapshot>,
+    },
     /// Enum: { "kind": "enum", "variants": [...] }
     Enum {
         kind: String,
@@ -215,8 +220,9 @@ pub struct IdlErrorSnapshot {
     pub code: u32,
     /// Error name
     pub name: String,
-    /// Error message
-    pub msg: String,
+    /// Error message (optional - some IDLs omit this)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub msg: Option<String>,
 }
 
 impl IdlTypeSnapshot {
@@ -517,6 +523,9 @@ pub struct SerializableStreamSpec {
     /// Used for deduplication and version tracking
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_hash: Option<String>,
+    /// View definitions for derived/projected views
+    #[serde(default)]
+    pub views: Vec<ViewDef>,
 }
 
 #[derive(Debug, Clone)]
@@ -594,8 +603,8 @@ impl<S> TypedStreamSpec<S> {
     pub fn to_serializable(&self) -> SerializableStreamSpec {
         let mut spec = SerializableStreamSpec {
             state_name: self.state_name.clone(),
-            program_id: None, // Set externally when IDL is available
-            idl: None,        // Set externally when IDL is available
+            program_id: None,
+            idl: None,
             identity: self.identity.clone(),
             handlers: self.handlers.iter().map(|h| h.to_serializable()).collect(),
             sections: self.sections.clone(),
@@ -603,10 +612,10 @@ impl<S> TypedStreamSpec<S> {
             resolver_hooks: self.resolver_hooks.clone(),
             instruction_hooks: self.instruction_hooks.clone(),
             computed_fields: self.computed_fields.clone(),
-            computed_field_specs: Vec::new(), // Set externally when expression parsing is available
+            computed_field_specs: Vec::new(),
             content_hash: None,
+            views: Vec::new(),
         };
-        // Compute and set the content hash
         spec.content_hash = Some(spec.compute_content_hash());
         spec
     }
@@ -1199,6 +1208,177 @@ impl SerializableStreamSpec {
     pub fn with_content_hash(mut self) -> Self {
         self.content_hash = Some(self.compute_content_hash());
         self
+    }
+}
+
+// ============================================================================
+// View Pipeline Types - Composable View Definitions
+// ============================================================================
+
+/// Sort order for view transforms
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SortOrder {
+    #[default]
+    Asc,
+    Desc,
+}
+
+/// Comparison operators for predicates
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum CompareOp {
+    Eq,
+    Ne,
+    Gt,
+    Gte,
+    Lt,
+    Lte,
+}
+
+/// Value in a predicate comparison
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum PredicateValue {
+    /// Literal JSON value
+    Literal(serde_json::Value),
+    /// Dynamic runtime value (e.g., "now()" for current timestamp)
+    Dynamic(String),
+    /// Reference to another field
+    Field(FieldPath),
+}
+
+/// Predicate for filtering entities
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum Predicate {
+    /// Field comparison: field op value
+    Compare {
+        field: FieldPath,
+        op: CompareOp,
+        value: PredicateValue,
+    },
+    /// Logical AND of predicates
+    And(Vec<Predicate>),
+    /// Logical OR of predicates
+    Or(Vec<Predicate>),
+    /// Negation
+    Not(Box<Predicate>),
+    /// Field exists (is not null)
+    Exists { field: FieldPath },
+}
+
+/// Transform operation in a view pipeline
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ViewTransform {
+    /// Filter entities matching a predicate
+    Filter { predicate: Predicate },
+
+    /// Sort entities by a field
+    Sort {
+        key: FieldPath,
+        #[serde(default)]
+        order: SortOrder,
+    },
+
+    /// Take first N entities (after sort)
+    Take { count: usize },
+
+    /// Skip first N entities
+    Skip { count: usize },
+
+    /// Take only the first entity (after sort) - produces Single output
+    First,
+
+    /// Take only the last entity (after sort) - produces Single output
+    Last,
+
+    /// Get entity with maximum value for field - produces Single output
+    MaxBy { key: FieldPath },
+
+    /// Get entity with minimum value for field - produces Single output
+    MinBy { key: FieldPath },
+}
+
+/// Source for a view definition
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ViewSource {
+    /// Derive directly from entity mutations
+    Entity { name: String },
+    /// Derive from another view's output
+    View { id: String },
+}
+
+/// Output mode for a view
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub enum ViewOutput {
+    /// Multiple entities (list-like semantics)
+    #[default]
+    Collection,
+    /// Single entity (state-like semantics)
+    Single,
+    /// Keyed lookup by a specific field
+    Keyed { key_field: FieldPath },
+}
+
+/// Definition of a view in the pipeline
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ViewDef {
+    /// Unique view identifier (e.g., "OreRound/latest")
+    pub id: String,
+
+    /// Source this view derives from
+    pub source: ViewSource,
+
+    /// Pipeline of transforms to apply (in order)
+    #[serde(default)]
+    pub pipeline: Vec<ViewTransform>,
+
+    /// Output mode for this view
+    #[serde(default)]
+    pub output: ViewOutput,
+}
+
+impl ViewDef {
+    /// Create a new list view for an entity
+    pub fn list(entity_name: &str) -> Self {
+        ViewDef {
+            id: format!("{}/list", entity_name),
+            source: ViewSource::Entity {
+                name: entity_name.to_string(),
+            },
+            pipeline: vec![],
+            output: ViewOutput::Collection,
+        }
+    }
+
+    /// Create a new state view for an entity
+    pub fn state(entity_name: &str, key_field: &[&str]) -> Self {
+        ViewDef {
+            id: format!("{}/state", entity_name),
+            source: ViewSource::Entity {
+                name: entity_name.to_string(),
+            },
+            pipeline: vec![],
+            output: ViewOutput::Keyed {
+                key_field: FieldPath::new(key_field),
+            },
+        }
+    }
+
+    /// Check if this view produces a single entity
+    pub fn is_single(&self) -> bool {
+        matches!(self.output, ViewOutput::Single)
+    }
+
+    /// Check if any transform in the pipeline produces a single result
+    pub fn has_single_transform(&self) -> bool {
+        self.pipeline.iter().any(|t| {
+            matches!(
+                t,
+                ViewTransform::First
+                    | ViewTransform::Last
+                    | ViewTransform::MaxBy { .. }
+                    | ViewTransform::MinBy { .. }
+            )
+        })
     }
 }
 

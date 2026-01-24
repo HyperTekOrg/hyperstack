@@ -1,46 +1,51 @@
+
+
 export interface PumpfunTokenEvents {
-  buys?: EventWrapper<Buy>[];
+  buys?: EventWrapper<Buy>[] | null;
+  buys_exact_sol?: any[] | null;
   create?: Create | null;
-  sells?: EventWrapper<Sell>[];
+  create_v2?: Record<string, any> | null;
+  sells?: EventWrapper<Sell>[] | null;
 }
 
 export interface PumpfunTokenId {
-  bondingCurve?: string;
-  mint?: string;
+  bonding_curve?: string | null;
+  mint?: string | null;
 }
 
 export interface PumpfunTokenInfo {
-  isComplete?: boolean | null;
+  is_complete?: boolean | null;
   name?: string | null;
   symbol?: string | null;
   uri?: string | null;
 }
 
 export interface PumpfunTokenReserves {
-  currentPriceSol?: number | null;
-  marketCapSol?: number | null;
-  realSolReserves?: number | null;
-  realTokenReserves?: number | null;
-  tokenTotalSupply?: number | null;
-  virtualSolReserves?: number | null;
-  virtualTokenReserves?: number | null;
+  current_price_sol?: number | null;
+  market_cap_sol?: number | null;
+  real_sol_reserves?: number | null;
+  real_token_reserves?: number | null;
+  token_total_supply?: number | null;
+  virtual_sol_reserves?: number | null;
+  virtual_token_reserves?: number | null;
 }
 
 export interface PumpfunTokenTrading {
-  averageTradeSize?: number | null;
-  buyCount?: number | null;
-  largestTrade?: number | null;
-  lastTradePrice?: number | null;
-  lastTradeTimestamp?: number | null;
-  lastWhaleAddress?: string | null;
-  sellCount?: number | null;
-  smallestTrade?: number | null;
-  totalBuyVolume?: number | null;
-  totalSellVolume?: number | null;
-  totalTrades?: number | null;
-  totalVolume?: number | null;
-  uniqueTraders?: number | null;
-  whaleTradeCount?: number | null;
+  average_trade_size?: number | null;
+  buy_count?: number | null;
+  largest_trade?: number | null;
+  last_trade_price?: number | null;
+  last_trade_timestamp?: number | null;
+  last_whale_address?: string | null;
+  sell_count?: number | null;
+  smallest_trade?: number | null;
+  total_buy_exact_sol_volume?: number | null;
+  total_buy_volume?: number | null;
+  total_sell_volume?: number | null;
+  total_trades?: number | null;
+  total_volume?: number | null;
+  unique_traders?: number | null;
+  whale_trade_count?: number | null;
 }
 
 export interface PumpfunToken {
@@ -49,23 +54,23 @@ export interface PumpfunToken {
   info?: PumpfunTokenInfo;
   reserves?: PumpfunTokenReserves;
   trading?: PumpfunTokenTrading;
-  bondingCurveSnapshot?: BondingCurve | null;
+  bonding_curve_snapshot?: BondingCurve | null;
 }
 
 export interface Create {
   mint?: string;
-  mintAuthority?: string;
-  bondingCurve?: string;
-  associatedBondingCurve?: string;
+  mint_authority?: string;
+  bonding_curve?: string;
+  associated_bonding_curve?: string;
   global?: string;
-  mplTokenMetadata?: string;
+  mpl_token_metadata?: string;
   metadata?: string;
   user?: string;
-  systemProgram?: string;
-  tokenProgram?: string;
-  associatedTokenProgram?: string;
+  system_program?: string;
+  token_program?: string;
+  associated_token_program?: string;
   rent?: string;
-  eventAuthority?: string;
+  event_authority?: string;
   program?: string;
   name?: string;
   symbol?: string;
@@ -75,56 +80,73 @@ export interface Create {
 
 export interface Buy {
   global?: string;
-  feeRecipient?: string;
+  fee_recipient?: string;
   mint?: string;
-  bondingCurve?: string;
-  associatedBondingCurve?: string;
-  associatedUser?: string;
+  bonding_curve?: string;
+  associated_bonding_curve?: string;
+  associated_user?: string;
   user?: string;
-  systemProgram?: string;
-  tokenProgram?: string;
-  creatorVault?: string;
-  eventAuthority?: string;
+  system_program?: string;
+  token_program?: string;
+  creator_vault?: string;
+  event_authority?: string;
   program?: string;
+  global_volume_accumulator?: string;
+  user_volume_accumulator?: string;
+  fee_config?: string;
+  fee_program?: string;
   amount?: number;
-  maxSolCost?: number;
+  max_sol_cost?: number;
+  track_volume?: Record<string, any>;
 }
 
 export interface Sell {
   global?: string;
-  feeRecipient?: string;
+  fee_recipient?: string;
   mint?: string;
-  bondingCurve?: string;
-  associatedBondingCurve?: string;
-  associatedUser?: string;
+  bonding_curve?: string;
+  associated_bonding_curve?: string;
+  associated_user?: string;
   user?: string;
-  systemProgram?: string;
-  creatorVault?: string;
-  tokenProgram?: string;
-  eventAuthority?: string;
+  system_program?: string;
+  creator_vault?: string;
+  token_program?: string;
+  event_authority?: string;
   program?: string;
+  fee_config?: string;
+  fee_program?: string;
   amount?: number;
-  minSolOutput?: number;
+  min_sol_output?: number;
 }
 
 export interface BondingCurve {
-  virtualTokenReserves?: number;
-  virtualSolReserves?: number;
-  realTokenReserves?: number;
-  realSolReserves?: number;
-  tokenTotalSupply?: number;
+  virtual_token_reserves?: number;
+  virtual_sol_reserves?: number;
+  real_token_reserves?: number;
+  real_sol_reserves?: number;
+  token_total_supply?: number;
   complete?: boolean;
   creator?: string;
+  is_mayhem_mode?: boolean;
 }
 
 export interface BuysEvent {
   amount: number;
-  maxSolCost: number;
+  max_sol_cost: number;
 }
 
-export interface CreateEvent { }
+export interface BuysExactSolEvent {
+  spendable_sol_in: number;
+  min_tokens_out: number;
+}
 
-export interface SellsEvent { }
+export interface CreateEvent {}
+
+export interface CreateV2Event {}
+
+export interface SellsEvent {}
+
+export type ConfigStatus = "Paused" | "Active";
 
 /**
  * Wrapper for event data that includes context metadata.
@@ -153,12 +175,12 @@ export interface ViewDef<T, TMode extends 'state' | 'list'> {
   readonly _entity?: T;
 }
 
-/** Helper to create typed state view definitions */
+/** Helper to create typed state view definitions (keyed lookups) */
 function stateView<T>(view: string): ViewDef<T, 'state'> {
   return { mode: 'state', view } as const;
 }
 
-/** Helper to create typed list view definitions */
+/** Helper to create typed list view definitions (collections) */
 function listView<T>(view: string): ViewDef<T, 'list'> {
   return { mode: 'list', view } as const;
 }
@@ -171,7 +193,7 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
 export const PUMPFUNTOKEN_STACK = {
   name: 'pumpfun-token',
   views: {
-    pumpfunToken: {
+    PumpfunToken: {
       state: stateView<PumpfunToken>('PumpfunToken/state'),
       list: listView<PumpfunToken>('PumpfunToken/list'),
     },

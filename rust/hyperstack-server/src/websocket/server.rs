@@ -1,12 +1,16 @@
 use crate::bus::BusManager;
 use crate::cache::{EntityCache, SnapshotBatchConfig};
 use crate::compression::maybe_compress;
-use crate::view::ViewIndex;
+use crate::view::{ViewIndex, ViewSpec};
 use crate::websocket::client_manager::ClientManager;
-use crate::websocket::frame::{Mode, SnapshotEntity, SnapshotFrame};
+use crate::websocket::frame::{
+    Frame, Mode, SnapshotEntity, SnapshotFrame, SortConfig, SortOrder, SubscribedFrame,
+};
 use crate::websocket::subscription::{ClientMessage, Subscription};
 use anyhow::Result;
+use bytes::Bytes;
 use futures_util::StreamExt;
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
 #[cfg(feature = "otel")]
@@ -500,6 +504,43 @@ async fn send_snapshot_batches(
     Ok(())
 }
 
+fn extract_sort_config(view_spec: &ViewSpec) -> Option<SortConfig> {
+    if let Some(sort) = view_spec.pipeline.as_ref().and_then(|p| p.sort.as_ref()) {
+        return Some(SortConfig {
+            field: sort.field_path.clone(),
+            order: match sort.order {
+                crate::materialized_view::SortOrder::Asc => SortOrder::Asc,
+                crate::materialized_view::SortOrder::Desc => SortOrder::Desc,
+            },
+        });
+    }
+
+    if view_spec.mode == Mode::List {
+        return Some(SortConfig {
+            field: vec!["_seq".to_string()],
+            order: SortOrder::Desc,
+        });
+    }
+
+    None
+}
+
+fn send_subscribed_frame(
+    client_id: Uuid,
+    view_id: &str,
+    view_spec: &ViewSpec,
+    client_manager: &ClientManager,
+) -> Result<()> {
+    let sort_config = extract_sort_config(view_spec);
+    let subscribed_frame = SubscribedFrame::new(view_id.to_string(), view_spec.mode, sort_config);
+
+    let json_payload = serde_json::to_vec(&subscribed_frame)?;
+    let payload = Arc::new(Bytes::from(json_payload));
+    client_manager
+        .send_to_client(client_id, payload)
+        .map_err(|e| anyhow::anyhow!("Failed to send subscribed frame: {:?}", e))
+}
+
 #[cfg(feature = "otel")]
 async fn attach_client_to_bus(
     ctx: &SubscriptionContext<'_>,
@@ -509,12 +550,29 @@ async fn attach_client_to_bus(
     let view_id = &subscription.view;
 
     let view_spec = match ctx.view_index.get_view(view_id) {
-        Some(spec) => spec,
+        Some(spec) => spec.clone(),
         None => {
             warn!("Unknown view ID: {}", view_id);
             return;
         }
     };
+
+    if let Err(e) = send_subscribed_frame(ctx.client_id, view_id, &view_spec, ctx.client_manager) {
+        warn!("Failed to send subscribed frame: {}", e);
+        return;
+    }
+
+    let is_derived_with_sort = view_spec.is_derived()
+        && view_spec
+            .pipeline
+            .as_ref()
+            .map(|p| p.sort.is_some())
+            .unwrap_or(false);
+
+    if is_derived_with_sort {
+        attach_derived_view_subscription_otel(ctx, subscription, view_spec, cancel_token).await;
+        return;
+    }
 
     match view_spec.mode {
         Mode::State => {
@@ -635,6 +693,204 @@ async fn attach_client_to_bus(
     );
 }
 
+#[cfg(feature = "otel")]
+async fn attach_derived_view_subscription_otel(
+    ctx: &SubscriptionContext<'_>,
+    subscription: Subscription,
+    view_spec: ViewSpec,
+    cancel_token: CancellationToken,
+) {
+    let view_id = &subscription.view;
+    let pipeline_limit = view_spec
+        .pipeline
+        .as_ref()
+        .and_then(|p| p.limit)
+        .unwrap_or(100);
+    let take = subscription.take.unwrap_or(pipeline_limit);
+    let skip = subscription.skip.unwrap_or(0);
+    let is_single = take == 1;
+
+    let source_view_id = match &view_spec.source_view {
+        Some(s) => s.clone(),
+        None => {
+            warn!("Derived view {} has no source_view", view_id);
+            return;
+        }
+    };
+
+    let sorted_caches = ctx.view_index.sorted_caches();
+    let initial_window: Vec<(String, serde_json::Value)> = {
+        let mut caches = sorted_caches.write().await;
+        if let Some(cache) = caches.get_mut(view_id) {
+            cache.get_window(skip, take)
+        } else {
+            warn!("No sorted cache for derived view {}", view_id);
+            vec![]
+        }
+    };
+
+    let initial_keys: HashSet<String> = initial_window.iter().map(|(k, _)| k.clone()).collect();
+
+    if !initial_window.is_empty() {
+        let snapshot_entities: Vec<SnapshotEntity> = initial_window
+            .into_iter()
+            .map(|(key, data)| SnapshotEntity { key, data })
+            .collect();
+
+        let batch_config = ctx.entity_cache.snapshot_config();
+        if send_snapshot_batches(
+            ctx.client_id,
+            &snapshot_entities,
+            view_spec.mode,
+            view_id,
+            ctx.client_manager,
+            &batch_config,
+            ctx.metrics.as_ref(),
+        )
+        .await
+        .is_err()
+        {
+            return;
+        }
+    }
+
+    let mut rx = ctx
+        .bus_manager
+        .get_or_create_list_bus(&source_view_id)
+        .await;
+
+    let client_id = ctx.client_id;
+    let client_mgr = ctx.client_manager.clone();
+    let view_id_clone = view_id.clone();
+    let view_id_span = view_id.clone();
+    let sorted_caches_clone = sorted_caches;
+    let metrics_clone = ctx.metrics.clone();
+    let frame_mode = view_spec.mode;
+
+    tokio::spawn(
+        async move {
+            let mut current_window_keys = initial_keys;
+
+            loop {
+                tokio::select! {
+                    _ = cancel_token.cancelled() => {
+                        debug!("Derived view subscription cancelled for client {}", client_id);
+                        break;
+                    }
+                    result = rx.recv() => {
+                        match result {
+                            Ok(_envelope) => {
+                                let new_window: Vec<(String, serde_json::Value)> = {
+                                    let mut caches = sorted_caches_clone.write().await;
+                                    if let Some(cache) = caches.get_mut(&view_id_clone) {
+                                        cache.get_window(skip, take)
+                                    } else {
+                                        continue;
+                                    }
+                                };
+
+                                let new_keys: HashSet<String> =
+                                    new_window.iter().map(|(k, _)| k.clone()).collect();
+
+                                if is_single {
+                                    if let Some((new_key, data)) = new_window.first() {
+                                        for old_key in current_window_keys.difference(&new_keys) {
+                                            let delete_frame = Frame {
+                                                mode: frame_mode,
+                                                export: view_id_clone.clone(),
+                                                op: "delete",
+                                                key: old_key.clone(),
+                                                data: serde_json::Value::Null,
+                                                append: vec![],
+                                            };
+                                            if let Ok(json) = serde_json::to_vec(&delete_frame) {
+                                                let payload = Arc::new(Bytes::from(json));
+                                                if client_mgr.send_to_client(client_id, payload).is_err() {
+                                                    return;
+                                                }
+                                                if let Some(ref m) = metrics_clone {
+                                                    m.record_ws_message_sent();
+                                                }
+                                            }
+                                        }
+
+                                        let frame = Frame {
+                                            mode: frame_mode,
+                                            export: view_id_clone.clone(),
+                                            op: "upsert",
+                                            key: new_key.clone(),
+                                            data: data.clone(),
+                                            append: vec![],
+                                        };
+                                        if let Ok(json) = serde_json::to_vec(&frame) {
+                                            let payload = Arc::new(Bytes::from(json));
+                                            if client_mgr.send_to_client(client_id, payload).is_err() {
+                                                return;
+                                            }
+                                            if let Some(ref m) = metrics_clone {
+                                                m.record_ws_message_sent();
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    for key in current_window_keys.difference(&new_keys) {
+                                        let delete_frame = Frame {
+                                            mode: frame_mode,
+                                            export: view_id_clone.clone(),
+                                            op: "delete",
+                                            key: key.clone(),
+                                            data: serde_json::Value::Null,
+                                            append: vec![],
+                                        };
+                                        if let Ok(json) = serde_json::to_vec(&delete_frame) {
+                                            let payload = Arc::new(Bytes::from(json));
+                                            if client_mgr.send_to_client(client_id, payload).is_err() {
+                                                return;
+                                            }
+                                            if let Some(ref m) = metrics_clone {
+                                                m.record_ws_message_sent();
+                                            }
+                                        }
+                                    }
+
+                                    for (key, data) in &new_window {
+                                        let frame = Frame {
+                                            mode: frame_mode,
+                                            export: view_id_clone.clone(),
+                                            op: "upsert",
+                                            key: key.clone(),
+                                            data: data.clone(),
+                                            append: vec![],
+                                        };
+                                        if let Ok(json) = serde_json::to_vec(&frame) {
+                                            let payload = Arc::new(Bytes::from(json));
+                                            if client_mgr.send_to_client(client_id, payload).is_err() {
+                                                return;
+                                            }
+                                            if let Some(ref m) = metrics_clone {
+                                                m.record_ws_message_sent();
+                                            }
+                                        }
+                                    }
+                                }
+
+                                current_window_keys = new_keys;
+                            }
+                            Err(_) => break,
+                        }
+                    }
+                }
+            }
+        }
+        .instrument(info_span!("ws.subscribe.derived", %client_id, view = %view_id_span)),
+    );
+
+    info!(
+        "Client {} subscribed to derived view {} (take={}, skip={})",
+        ctx.client_id, view_id, take, skip
+    );
+}
+
 #[cfg(not(feature = "otel"))]
 async fn attach_client_to_bus(
     ctx: &SubscriptionContext<'_>,
@@ -644,12 +900,29 @@ async fn attach_client_to_bus(
     let view_id = &subscription.view;
 
     let view_spec = match ctx.view_index.get_view(view_id) {
-        Some(spec) => spec,
+        Some(spec) => spec.clone(),
         None => {
             warn!("Unknown view ID: {}", view_id);
             return;
         }
     };
+
+    if let Err(e) = send_subscribed_frame(ctx.client_id, view_id, &view_spec, ctx.client_manager) {
+        warn!("Failed to send subscribed frame: {}", e);
+        return;
+    }
+
+    let is_derived_with_sort = view_spec.is_derived()
+        && view_spec
+            .pipeline
+            .as_ref()
+            .map(|p| p.sort.is_some())
+            .unwrap_or(false);
+
+    if is_derived_with_sort {
+        attach_derived_view_subscription(ctx, subscription, view_spec, cancel_token).await;
+        return;
+    }
 
     match view_spec.mode {
         Mode::State => {
@@ -753,5 +1026,189 @@ async fn attach_client_to_bus(
     info!(
         "Client {} subscribed to {} (mode: {:?})",
         ctx.client_id, view_id, view_spec.mode
+    );
+}
+
+#[cfg(not(feature = "otel"))]
+async fn attach_derived_view_subscription(
+    ctx: &SubscriptionContext<'_>,
+    subscription: Subscription,
+    view_spec: ViewSpec,
+    cancel_token: CancellationToken,
+) {
+    let view_id = &subscription.view;
+    let pipeline_limit = view_spec
+        .pipeline
+        .as_ref()
+        .and_then(|p| p.limit)
+        .unwrap_or(100);
+    let take = subscription.take.unwrap_or(pipeline_limit);
+    let skip = subscription.skip.unwrap_or(0);
+    let is_single = take == 1;
+
+    let source_view_id = match &view_spec.source_view {
+        Some(s) => s.clone(),
+        None => {
+            warn!("Derived view {} has no source_view", view_id);
+            return;
+        }
+    };
+
+    let sorted_caches = ctx.view_index.sorted_caches();
+    let initial_window: Vec<(String, serde_json::Value)> = {
+        let mut caches = sorted_caches.write().await;
+        if let Some(cache) = caches.get_mut(view_id) {
+            cache.get_window(skip, take)
+        } else {
+            warn!("No sorted cache for derived view {}", view_id);
+            vec![]
+        }
+    };
+
+    let initial_keys: HashSet<String> = initial_window.iter().map(|(k, _)| k.clone()).collect();
+
+    if !initial_window.is_empty() {
+        let snapshot_entities: Vec<SnapshotEntity> = initial_window
+            .into_iter()
+            .map(|(key, data)| SnapshotEntity { key, data })
+            .collect();
+
+        let batch_config = ctx.entity_cache.snapshot_config();
+        if send_snapshot_batches(
+            ctx.client_id,
+            &snapshot_entities,
+            view_spec.mode,
+            view_id,
+            ctx.client_manager,
+            &batch_config,
+        )
+        .await
+        .is_err()
+        {
+            return;
+        }
+    }
+
+    let mut rx = ctx
+        .bus_manager
+        .get_or_create_list_bus(&source_view_id)
+        .await;
+
+    let client_id = ctx.client_id;
+    let client_mgr = ctx.client_manager.clone();
+    let view_id_clone = view_id.clone();
+    let view_id_span = view_id.clone();
+    let sorted_caches_clone = sorted_caches;
+    let frame_mode = view_spec.mode;
+
+    tokio::spawn(
+        async move {
+            let mut current_window_keys = initial_keys;
+
+            loop {
+                tokio::select! {
+                    _ = cancel_token.cancelled() => {
+                        debug!("Derived view subscription cancelled for client {}", client_id);
+                        break;
+                    }
+                    result = rx.recv() => {
+                        match result {
+                            Ok(_envelope) => {
+                                let new_window: Vec<(String, serde_json::Value)> = {
+                                    let mut caches = sorted_caches_clone.write().await;
+                                    if let Some(cache) = caches.get_mut(&view_id_clone) {
+                                        cache.get_window(skip, take)
+                                    } else {
+                                        continue;
+                                    }
+                                };
+
+                                let new_keys: HashSet<String> =
+                                    new_window.iter().map(|(k, _)| k.clone()).collect();
+
+                                if is_single {
+                                    if let Some((new_key, data)) = new_window.first() {
+                                        for old_key in current_window_keys.difference(&new_keys) {
+                                            let delete_frame = Frame {
+                                                mode: frame_mode,
+                                                export: view_id_clone.clone(),
+                                                op: "delete",
+                                                key: old_key.clone(),
+                                                data: serde_json::Value::Null,
+                                                append: vec![],
+                                            };
+                                            if let Ok(json) = serde_json::to_vec(&delete_frame) {
+                                                let payload = Arc::new(Bytes::from(json));
+                                                if client_mgr.send_to_client(client_id, payload).is_err() {
+                                                    return;
+                                                }
+                                            }
+                                        }
+
+                                        let frame = Frame {
+                                            mode: frame_mode,
+                                            export: view_id_clone.clone(),
+                                            op: "upsert",
+                                            key: new_key.clone(),
+                                            data: data.clone(),
+                                            append: vec![],
+                                        };
+                                        if let Ok(json) = serde_json::to_vec(&frame) {
+                                            let payload = Arc::new(Bytes::from(json));
+                                            if client_mgr.send_to_client(client_id, payload).is_err() {
+                                                return;
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    for key in current_window_keys.difference(&new_keys) {
+                                        let delete_frame = Frame {
+                                            mode: frame_mode,
+                                            export: view_id_clone.clone(),
+                                            op: "delete",
+                                            key: key.clone(),
+                                            data: serde_json::Value::Null,
+                                            append: vec![],
+                                        };
+                                        if let Ok(json) = serde_json::to_vec(&delete_frame) {
+                                            let payload = Arc::new(Bytes::from(json));
+                                            if client_mgr.send_to_client(client_id, payload).is_err() {
+                                                return;
+                                            }
+                                        }
+                                    }
+
+                                    for (key, data) in &new_window {
+                                        let frame = Frame {
+                                            mode: frame_mode,
+                                            export: view_id_clone.clone(),
+                                            op: "upsert",
+                                            key: key.clone(),
+                                            data: data.clone(),
+                                            append: vec![],
+                                        };
+                                        if let Ok(json) = serde_json::to_vec(&frame) {
+                                            let payload = Arc::new(Bytes::from(json));
+                                            if client_mgr.send_to_client(client_id, payload).is_err() {
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                current_window_keys = new_keys;
+                            }
+                            Err(_) => break,
+                        }
+                    }
+                }
+            }
+        }
+        .instrument(info_span!("ws.subscribe.derived", %client_id, view = %view_id_span)),
+    );
+
+    info!(
+        "Client {} subscribed to derived view {} (take={}, skip={})",
+        ctx.client_id, view_id, take, skip
     );
 }

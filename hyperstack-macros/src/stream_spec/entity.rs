@@ -22,7 +22,7 @@ use crate::ast::{EntitySection, FieldTypeInfo};
 use crate::codegen;
 use crate::parse;
 use crate::parse::idl as idl_parser;
-use crate::utils::{path_to_string, to_camel_case, to_snake_case};
+use crate::utils::{path_to_string, to_pascal_case, to_snake_case};
 
 use super::ast_writer::build_and_write_ast;
 use super::computed::{
@@ -459,15 +459,15 @@ pub fn process_entity_struct_with_idl(
         }
     }
 
-    // events_by_instruction already contains all events including those with lookup_by
-    // No need to merge - just use events_by_instruction directly
-
-    // =========================================================================
-    // UNIFIED HANDLER GENERATION
-    // =========================================================================
-    // Build the AST and write to disk for cloud compilation.
-    // Then use the same AST to generate handler code via shared codegen.
-    // This ensures identical output between #[hyperstack] and #[ast_spec].
+    let mut views = parse::parse_view_attributes(&input.attrs);
+    for view in &mut views {
+        if let crate::ast::ViewSource::Entity { name } = &mut view.source {
+            *name = entity_name.clone();
+        }
+        if !view.id.contains('/') {
+            view.id = format!("{}/{}", entity_name, view.id);
+        }
+    }
 
     let ast = build_and_write_ast(
         &entity_name,
@@ -482,6 +482,7 @@ pub fn process_entity_struct_with_idl(
         &computed_fields,
         &section_specs,
         idl,
+        views,
     );
 
     // Generate handler functions using the shared codegen
@@ -548,10 +549,14 @@ pub fn process_entity_struct_with_idl(
     let resolver_fns = generate_resolver_functions(&resolver_hooks, idl);
     let pda_registration_fns = generate_pda_registration_functions(&pda_registrations);
 
+    // Generate field accessors for type-safe view definitions
+    let field_accessors = codegen::generate_field_accessors(&section_specs);
+
     let module_name = format_ident!("{}", to_snake_case(&entity_name));
 
     let output = quote! {
         #[derive(Debug, Clone, hyperstack::runtime::serde::Serialize, hyperstack::runtime::serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
         pub struct #state_name {
             #(#state_fields),*
         }
@@ -563,6 +568,8 @@ pub fn process_entity_struct_with_idl(
 
             #(#accessor_defs)*
         }
+
+        #field_accessors
 
         pub fn #spec_fn_name() -> hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec<#state_name> {
             // Load AST file at compile time (includes instruction_hooks!)
@@ -612,7 +619,7 @@ pub fn process_map_attribute(
         pub #field_name: #field_type
     });
 
-    let accessor_name = to_camel_case(&field_name.to_string());
+    let accessor_name = to_pascal_case(&field_name.to_string());
     let accessor_ident = format_ident!("{}", accessor_name);
 
     if accessor_names.insert(accessor_name.clone()) {

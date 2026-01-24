@@ -196,21 +196,49 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
     let unpack_arms = idl.instructions.iter().map(|ix| {
         let variant_name = format_ident!("{}", to_pascal_case(&ix.name));
         let discriminator = ix.get_discriminator();
-        let discriminant_value = discriminator.first().copied().unwrap_or(0u8);
         let disc_size = discriminator_size;
 
         let has_args = !ix.args.is_empty();
-        if has_args {
-            quote! {
-                #discriminant_value => {
-                    let data = instructions::#variant_name::try_from_bytes(&data[#disc_size..])?;
-                    Ok(#ix_enum_name::#variant_name(data))
+
+        if uses_steel_discriminant {
+            let discriminant_value = discriminator.first().copied().unwrap_or(0u8);
+            if has_args {
+                quote! {
+                    [#discriminant_value, ..] => {
+                        let data = instructions::#variant_name::try_from_bytes(&data[#disc_size..])?;
+                        Ok(#ix_enum_name::#variant_name(data))
+                    }
+                }
+            } else {
+                quote! {
+                    [#discriminant_value, ..] => {
+                        Ok(#ix_enum_name::#variant_name(instructions::#variant_name::default()))
+                    }
                 }
             }
         } else {
-            quote! {
-                #discriminant_value => {
-                    Ok(#ix_enum_name::#variant_name(instructions::#variant_name::default()))
+            let disc_bytes: Vec<u8> = discriminator.iter().take(8).copied().collect();
+            let d0 = disc_bytes.first().copied().unwrap_or(0);
+            let d1 = disc_bytes.get(1).copied().unwrap_or(0);
+            let d2 = disc_bytes.get(2).copied().unwrap_or(0);
+            let d3 = disc_bytes.get(3).copied().unwrap_or(0);
+            let d4 = disc_bytes.get(4).copied().unwrap_or(0);
+            let d5 = disc_bytes.get(5).copied().unwrap_or(0);
+            let d6 = disc_bytes.get(6).copied().unwrap_or(0);
+            let d7 = disc_bytes.get(7).copied().unwrap_or(0);
+
+            if has_args {
+                quote! {
+                    [#d0, #d1, #d2, #d3, #d4, #d5, #d6, #d7, ..] => {
+                        let data = instructions::#variant_name::try_from_bytes(&data[#disc_size..])?;
+                        Ok(#ix_enum_name::#variant_name(data))
+                    }
+                }
+            } else {
+                quote! {
+                    [#d0, #d1, #d2, #d3, #d4, #d5, #d6, #d7, ..] => {
+                        Ok(#ix_enum_name::#variant_name(instructions::#variant_name::default()))
+                    }
                 }
             }
         }
@@ -253,7 +281,9 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
 
     let to_value_with_accounts_arms = idl.instructions.iter().map(|ix| {
         let variant_name = format_ident!("{}", to_pascal_case(&ix.name));
+        let ix_name = &ix.name;
         let account_names: Vec<_> = ix.accounts.iter().map(|acc| &acc.name).collect();
+        let expected_count = account_names.len();
 
         quote! {
             #ix_enum_name::#variant_name(data) => {
@@ -262,7 +292,20 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
                 });
 
                 if let Some(obj) = value.as_object_mut() {
-                    let account_names = vec![#(#account_names),*];
+                    let account_names: Vec<&str> = vec![#(#account_names),*];
+                    let expected_count = #expected_count;
+                    let actual_count = accounts.len();
+                    
+                    // Warn if account count doesn't match IDL expectation
+                    if actual_count != expected_count {
+                        hyperstack::runtime::tracing::warn!(
+                            instruction = #ix_name,
+                            expected = expected_count,
+                            actual = actual_count,
+                            "Account count mismatch - IDL may be out of sync with program. Update your IDL to match the current program version."
+                        );
+                    }
+                    
                     let mut accounts_obj = hyperstack::runtime::serde_json::Map::new();
                     for (i, name) in account_names.iter().enumerate() {
                         if i < accounts.len() {
@@ -292,10 +335,12 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
                     return Err("Empty instruction data".into());
                 }
 
-                let discriminator = data[0];
-                match discriminator {
+                match data {
                     #(#unpack_arms),*
-                    _ => Err(format!("Unknown instruction discriminator: {}", discriminator).into())
+                    _ => {
+                        let disc_preview: Vec<u8> = data.iter().take(8).copied().collect();
+                        Err(format!("Unknown instruction discriminator: {:?}", disc_preview).into())
+                    }
                 }
             }
 
@@ -349,10 +394,18 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
                 if ix_update.program.equals_ref(program_id()) {
                     let parsed = #ix_enum_name::try_unpack(&ix_update.data)
                         .map_err(|e| {
-                            if e.to_string().contains("Unknown instruction discriminator") {
+                            let err_str = e.to_string();
+                            if err_str.contains("Unknown instruction discriminator") {
                                 hyperstack::runtime::yellowstone_vixen_core::ParseError::Filtered
                             } else {
-                                hyperstack::runtime::yellowstone_vixen_core::ParseError::from(e.to_string())
+                                let disc_preview: Vec<u8> = ix_update.data.iter().take(8).copied().collect();
+                                hyperstack::runtime::tracing::warn!(
+                                    discriminator = ?disc_preview,
+                                    data_len = ix_update.data.len(),
+                                    error = %err_str,
+                                    "Failed to parse instruction"
+                                );
+                                hyperstack::runtime::yellowstone_vixen_core::ParseError::from(err_str)
                             }
                         })?;
 

@@ -10,6 +10,7 @@ use crate::api_client::{
     Spec as ApiSpec, DEFAULT_DOMAIN_SUFFIX,
 };
 use crate::config::{resolve_stacks_to_push, DiscoveredAst, HyperstackConfig};
+use crate::telemetry;
 
 pub fn push(config_path: &str, stack_name: Option<&str>) -> Result<()> {
     let config = HyperstackConfig::load_optional(config_path)?;
@@ -671,7 +672,9 @@ pub fn rollback(
 
     if watch {
         println!();
-        return watch_build(&client, response.build_id);
+        let result = watch_build(&client, response.build_id);
+        telemetry::record_stack_rollback(result.is_ok());
+        return result;
     }
 
     println!();
@@ -680,6 +683,8 @@ pub fn rollback(
         "  {}",
         format!("hs build status {} --watch", response.build_id).cyan()
     );
+
+    telemetry::record_stack_rollback(true);
 
     Ok(())
 }

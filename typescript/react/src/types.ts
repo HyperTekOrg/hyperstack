@@ -44,7 +44,11 @@ export interface StackDefinition {
 export interface ViewGroup {
   state?: ViewDef<unknown, 'state'>;
   list?: ViewDef<unknown, 'list'>;
+  /** Allow arbitrary derived views with any name */
+  [key: string]: ViewDef<unknown, ViewMode> | undefined;
 }
+
+export const DEFAULT_FLUSH_INTERVAL_MS = 16;
 
 export interface HyperstackConfig {
   websocketUrl?: string;
@@ -58,6 +62,13 @@ export interface HyperstackConfig {
   connection?: Connection;
   commitment?: 'processed' | 'confirmed' | 'finalized';
   wallets?: Adapter[];
+  /**
+   * Interval in milliseconds to buffer WebSocket updates before flushing to Zustand.
+   * Reduces React re-renders during high-frequency updates.
+   * Default: 16ms (one frame at 60fps)
+   * Set to 0 for immediate updates (no buffering).
+   */
+  flushIntervalMs?: number;
 }
 
 export interface TransactionOptions {
@@ -86,12 +97,23 @@ export interface ViewHookResult<T> {
   refresh: () => void;
 }
 
-export interface ListParams {
+export interface ListParamsBase {
   key?: string;
   where?: Record<string, unknown>;
   limit?: number;
   filters?: Record<string, string>;
+  skip?: number;
 }
+
+export interface ListParamsSingle extends ListParamsBase {
+  take: 1;
+}
+
+export interface ListParamsMultiple extends ListParamsBase {
+  take?: number;
+}
+
+export type ListParams = ListParamsSingle | ListParamsMultiple;
 
 export interface UseMutationReturn {
   submit: (instructionOrTx: unknown | unknown[]) => Promise<string>;
@@ -106,5 +128,7 @@ export interface StateViewHook<T> {
 }
 
 export interface ListViewHook<T> {
-  use: (params?: ListParams, options?: ViewHookOptions) => ViewHookResult<T[]>;
+  use(params: ListParamsSingle, options?: ViewHookOptions): ViewHookResult<T | undefined>;
+  use(params?: ListParamsMultiple, options?: ViewHookOptions): ViewHookResult<T[]>;
+  useOne: (params?: Omit<ListParamsBase, 'take'>, options?: ViewHookOptions) => ViewHookResult<T | undefined>;
 }

@@ -36,6 +36,8 @@ export interface Subscription {
   key?: string;
   partition?: string;
   filters?: Record<string, string>;
+  take?: number;
+  skip?: number;
 }
 
 export interface HyperStackOptions<TStack extends StackDefinition> {

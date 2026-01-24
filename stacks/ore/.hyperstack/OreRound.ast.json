@@ -3,7 +3,7 @@
   "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
   "idl": {
     "name": "ore",
-    "version": "3.7.5",
+    "version": "3.7.22",
     "accounts": [
       {
         "name": "Automation",
@@ -198,6 +198,10 @@
           {
             "name": "strategy",
             "type": "u8"
+          },
+          {
+            "name": "reload",
+            "type": "u64"
           }
         ]
       },
@@ -487,6 +491,7 @@
         "docs": [
           "Deploys SOL to selected squares for the current round.",
           "Automation PDA seeds: [\"automation\", authority].",
+          "Config PDA seeds: [\"config\"].",
           "Miner PDA seeds: [\"miner\", authority].",
           "Round PDA seeds: [\"round\", board.round_id]."
         ],
@@ -524,6 +529,14 @@
             "docs": []
           },
           {
+            "name": "config",
+            "writable": true,
+            "signer": false,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
             "name": "miner",
             "writable": true,
             "signer": false,
@@ -545,6 +558,14 @@
             "signer": false,
             "optional": false,
             "address": "11111111111111111111111111111111",
+            "docs": []
+          },
+          {
+            "name": "oreProgram",
+            "writable": false,
+            "signer": false,
+            "optional": false,
+            "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
             "docs": []
           },
           {
@@ -779,6 +800,14 @@
             "docs": []
           },
           {
+            "name": "payer",
+            "writable": true,
+            "signer": true,
+            "optional": false,
+            "address": null,
+            "docs": []
+          },
+          {
             "name": "mint",
             "writable": false,
             "signer": false,
@@ -846,6 +875,10 @@
         "args": [
           {
             "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "compound_fee",
             "type": "u64"
           }
         ]
@@ -1046,9 +1079,27 @@
         ]
       },
       {
-        "name": "bury",
+        "name": "buyback",
         "discriminator": [
           13,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "docs": [
+          "Buys back ORE from the market."
+        ],
+        "accounts": [],
+        "args": []
+      },
+      {
+        "name": "bury",
+        "discriminator": [
+          24,
           0,
           0,
           0,
@@ -1136,7 +1187,12 @@
             "docs": []
           }
         ],
-        "args": []
+        "args": [
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
       },
       {
         "name": "wrap",
@@ -1196,7 +1252,12 @@
             "docs": []
           }
         ],
-        "args": []
+        "args": [
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
       },
       {
         "name": "setAdmin",
@@ -1247,57 +1308,9 @@
         ]
       },
       {
-        "name": "setFeeCollector",
-        "discriminator": [
-          16,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Updates the fee collector authority."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": false,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "config",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          }
-        ],
-        "args": [
-          {
-            "name": "feeCollector",
-            "type": "publicKey"
-          }
-        ]
-      },
-      {
         "name": "newVar",
         "discriminator": [
-          17,
+          19,
           0,
           0,
           0,
@@ -1388,9 +1401,9 @@
         ]
       },
       {
-        "name": "setBuffer",
+        "name": "reloadSol",
         "discriminator": [
-          18,
+          21,
           0,
           0,
           0,
@@ -1400,40 +1413,46 @@
           0
         ],
         "docs": [
-          "Updates the global buffer value."
+          "Reloads SOL into the automation account."
         ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": false,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "config",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          }
+        "accounts": [],
+        "args": []
+      },
+      {
+        "name": "compoundYield",
+        "discriminator": [
+          22,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
         ],
-        "args": [
-          {
-            "name": "buffer",
-            "type": "u64"
-          }
-        ]
+        "docs": [
+          "Compounds staking yield."
+        ],
+        "accounts": [],
+        "args": []
+      },
+      {
+        "name": "liq",
+        "discriminator": [
+          25,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "docs": [
+          "Liquidation instruction."
+        ],
+        "accounts": [],
+        "args": []
       }
     ],
     "types": [
@@ -1492,6 +1511,10 @@
             {
               "name": "mask",
               "type": "u64"
+            },
+            {
+              "name": "reload",
+              "type": "u64"
             }
           ]
         }
@@ -1515,6 +1538,10 @@
             {
               "name": "end_slot",
               "type": "u64"
+            },
+            {
+              "name": "epoch_id",
+              "type": "u64"
             }
           ]
         }
@@ -1532,23 +1559,23 @@
               "type": "publicKey"
             },
             {
-              "name": "bury_authority",
+              "name": "buffer_a",
               "type": "publicKey"
             },
             {
-              "name": "fee_collector",
+              "name": "buffer_b",
               "type": "publicKey"
             },
             {
-              "name": "swap_program",
+              "name": "buffer_c",
               "type": "publicKey"
             },
             {
-              "name": "var_address",
+              "name": "buffer_d",
               "type": "publicKey"
             },
             {
-              "name": "buffer",
+              "name": "buffer_e",
               "type": "u64"
             }
           ]
@@ -1629,6 +1656,10 @@
             {
               "name": "lifetime_rewards_ore",
               "type": "u64"
+            },
+            {
+              "name": "lifetime_deployed",
+              "type": "u64"
             }
           ]
         }
@@ -1697,6 +1728,10 @@
               "type": "u64"
             },
             {
+              "name": "total_miners",
+              "type": "u64"
+            },
+            {
               "name": "total_vaulted",
               "type": "u64"
             },
@@ -1721,6 +1756,26 @@
             },
             {
               "name": "balance",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_a",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_b",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_c",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_d",
+              "type": "u64"
+            },
+            {
+              "name": "compound_fee_reserve",
               "type": "u64"
             },
             {
@@ -1750,7 +1805,7 @@
               "type": "u64"
             },
             {
-              "name": "is_seeker",
+              "name": "buffer_f",
               "type": "u64"
             }
           ]
@@ -1766,6 +1821,10 @@
           "fields": [
             {
               "name": "balance",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_a",
               "type": "u64"
             },
             {
@@ -1785,15 +1844,19 @@
               }
             },
             {
+              "name": "buffer_b",
+              "type": "u64"
+            },
+            {
+              "name": "total_refined",
+              "type": "u64"
+            },
+            {
               "name": "total_staked",
               "type": "u64"
             },
             {
               "name": "total_unclaimed",
-              "type": "u64"
-            },
-            {
-              "name": "total_refined",
               "type": "u64"
             }
           ]
@@ -1819,6 +1882,34 @@
         "name": "BuryEvent",
         "discriminator": [
           1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "docs": []
+      },
+      {
+        "name": "DeployEvent",
+        "discriminator": [
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "docs": []
+      },
+      {
+        "name": "LiqEvent",
+        "discriminator": [
+          3,
           0,
           0,
           0,
@@ -2464,6 +2555,13 @@
                 "is_array": false
               },
               {
+                "field_name": "total_miners",
+                "field_type": "u64",
+                "base_type": "Integer",
+                "is_optional": false,
+                "is_array": false
+              },
+              {
                 "field_name": "total_vaulted",
                 "field_type": "u64",
                 "base_type": "Integer",
@@ -2687,6 +2785,13 @@
           },
           {
             "field_name": "total_deployed",
+            "field_type": "u64",
+            "base_type": "Integer",
+            "is_optional": false,
+            "is_array": false
+          },
+          {
+            "field_name": "total_miners",
             "field_type": "u64",
             "base_type": "Integer",
             "is_optional": false,
@@ -3124,5 +3229,30 @@
       "result_type": "Option < bool >"
     }
   ],
-  "content_hash": "ccf6bbbc6b8694cd2aafa086de05534a2b595af9a52072bd3805eea7b6c9f91b"
+  "content_hash": "8a0895d4f90e59d84c546a3c6ee60cd80f22ca02efe318d7462df6f7542499af",
+  "views": [
+    {
+      "id": "OreRound/latest",
+      "source": {
+        "Entity": {
+          "name": "OreRound"
+        }
+      },
+      "pipeline": [
+        {
+          "Sort": {
+            "key": {
+              "segments": [
+                "id",
+                "round_id"
+              ],
+              "offsets": null
+            },
+            "order": "desc"
+          }
+        }
+      ],
+      "output": "Collection"
+    }
+  ]
 }

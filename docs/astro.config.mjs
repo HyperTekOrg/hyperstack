@@ -1,9 +1,12 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import starlightLlmsTxt from "starlight-llms-txt";
 
 export default defineConfig({
+  site: "https://docs.usehyperstack.com",
   integrations: [
     starlight({
+      plugins: [starlightLlmsTxt()],
       title: "Hyperstack",
       social: [
         {
@@ -19,6 +22,7 @@ export default defineConfig({
         EditLink: "./src/components/overrides/EditLink.astro",
         Head: "./src/components/overrides/Head.astro",
         Search: "./src/components/overrides/Search.astro",
+        PageTitle: "./src/components/overrides/PageTitle.astro",
       },
       // Autogenerate sidebar from directory structure
       // Contributors only need to add frontmatter to control ordering

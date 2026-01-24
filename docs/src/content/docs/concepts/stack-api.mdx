@@ -258,6 +258,14 @@ interface ListViewHookResult<T> {
   error?: Error; // Error if failed
   refresh: () => void; // Force refresh
 }
+
+// When using take: 1 or useOne(), the return type narrows:
+interface SingleItemHookResult<T> {
+  data: T | undefined; // Single entity (not array)
+  isLoading: boolean;
+  error?: Error;
+  refresh: () => void;
+}
 ```
 
 ### StateViewHookResult
@@ -279,7 +287,9 @@ interface StateViewHookResult<T> {
 interface ListParams {
   key?: string; // Filter by partition key
   where?: WhereClause; // Field filters
-  limit?: number; // Max results
+  limit?: number; // Max results (client-side)
+  take?: number; // Server-side limit (use 1 for single item with type narrowing)
+  skip?: number; // Server-side offset
   filters?: Record<string, string>; // Additional filters
 }
 
@@ -312,6 +322,15 @@ stack.views.tokens.list.use({
     created_at: { gt: Date.now() - 86400000 },
   },
   limit: 20,
+});
+
+// Single item with type narrowing (data: T | undefined)
+const { data: latest } = stack.views.tokens.list.use({ take: 1 });
+
+// Using useOne() for cleaner single-item queries
+const { data: latest } = stack.views.tokens.list.useOne();
+const { data: topToken } = stack.views.tokens.list.useOne({
+  where: { volume: { gte: 10000 } },
 });
 ```
 

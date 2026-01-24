@@ -118,11 +118,11 @@ serde_json = "1"
 mod entity;
 
 pub use types::*;
-pub use entity::{entity_name}Entity;
+pub use entity::{{{}Entity, {}Views}};
 
-pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState}};
+pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState, Views}};
 "#,
-            entity_name = self.entity_name
+            self.entity_name, self.entity_name
         )
     }
 
@@ -154,27 +154,9 @@ pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState}};
             let field_name = to_snake_case(&field.field_name);
             let rust_type = self.field_type_to_rust(field);
 
-            let serde_attr = if field_name != to_snake_case(&field.field_name)
-                || field_name != field.field_name
-            {
-                let original = &field.field_name;
-                if to_snake_case(original) != *original {
-                    format!(
-                        "    #[serde(rename = \"{}\", default)]\n",
-                        to_camel_case(original)
-                    )
-                } else {
-                    "    #[serde(default)]\n".to_string()
-                }
-            } else {
-                "    #[serde(default)]\n".to_string()
-            };
-
             fields.push(format!(
-                "{}    pub {}: {},",
-                serde_attr,
-                to_snake_case(&field.field_name),
-                rust_type
+                "    #[serde(default)]\n    pub {}: {},",
+                field_name, rust_type
             ));
         }
 
@@ -197,17 +179,9 @@ pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState}};
             if !Self::is_root_section(&section.name) {
                 let field_name = to_snake_case(&section.name);
                 let type_name = format!("{}{}", self.entity_name, to_pascal_case(&section.name));
-                let serde_attr = if field_name != section.name {
-                    format!(
-                        "    #[serde(rename = \"{}\", default)]\n",
-                        to_camel_case(&section.name)
-                    )
-                } else {
-                    "    #[serde(default)]\n".to_string()
-                };
                 fields.push(format!(
-                    "{}    pub {}: {},",
-                    serde_attr, field_name, type_name
+                    "    #[serde(default)]\n    pub {}: {},",
+                    field_name, type_name
                 ));
             }
         }
@@ -268,13 +242,8 @@ pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState}};
                 .iter()
                 .map(|f| {
                     let rust_type = self.resolved_field_to_rust(f);
-                    let serde_attr = format!(
-                        "    #[serde(rename = \"{}\", default)]\n",
-                        to_camel_case(&f.field_name)
-                    );
                     format!(
-                        "{}    pub {}: {},",
-                        serde_attr,
+                        "    #[serde(default)]\n    pub {}: {},",
                         to_snake_case(&f.field_name),
                         rust_type
                     )
@@ -325,8 +294,10 @@ impl<T: Default> Default for EventWrapper<T> {
             "crate::types"
         };
 
+        let views_struct = self.generate_views_struct();
+
         format!(
-            r#"use hyperstack_sdk::Entity;
+            r#"use hyperstack_sdk::{{Entity, StateView, ViewBuilder, ViewHandle, Views}};
 use {types_import}::{entity_name};
 
 pub struct {entity_name}Entity;
@@ -344,9 +315,76 @@ impl Entity for {entity_name}Entity {{
         "{entity_name}/list"
     }}
 }}
-"#,
+{views_struct}"#,
             types_import = types_import,
-            entity_name = entity_name
+            entity_name = entity_name,
+            views_struct = views_struct
+        )
+    }
+
+    fn generate_views_struct(&self) -> String {
+        let entity_name = &self.entity_name;
+
+        let derived: Vec<_> = self
+            .spec
+            .views
+            .iter()
+            .filter(|v| {
+                !v.id.ends_with("/state")
+                    && !v.id.ends_with("/list")
+                    && v.id.starts_with(entity_name)
+            })
+            .collect();
+
+        let mut derived_methods = String::new();
+        for view in &derived {
+            let view_name = view.id.split('/').nth(1).unwrap_or("unknown");
+            let method_name = to_snake_case(view_name);
+
+            derived_methods.push_str(&format!(
+                r#"
+    pub fn {method_name}(&self) -> ViewHandle<{entity_name}> {{
+        self.builder.view("{view_id}")
+    }}
+"#,
+                method_name = method_name,
+                entity_name = entity_name,
+                view_id = view.id
+            ));
+        }
+
+        format!(
+            r#"
+
+pub struct {entity_name}Views {{
+    builder: ViewBuilder,
+}}
+
+impl Views for {entity_name}Views {{
+    type Entity = {entity_name}Entity;
+
+    fn from_builder(builder: ViewBuilder) -> Self {{
+        Self {{ builder }}
+    }}
+}}
+
+impl {entity_name}Views {{
+    pub fn state(&self) -> StateView<{entity_name}> {{
+        StateView::new(
+            self.builder.connection().clone(),
+            self.builder.store().clone(),
+            "{entity_name}/state".to_string(),
+            self.builder.initial_data_timeout(),
+        )
+    }}
+
+    pub fn list(&self) -> ViewHandle<{entity_name}> {{
+        self.builder.view("{entity_name}/list")
+    }}
+{derived_methods}}}
+"#,
+            entity_name = entity_name,
+            derived_methods = derived_methods
         )
     }
 
@@ -450,13 +488,4 @@ fn to_snake_case(s: &str) -> String {
         }
     }
     result
-}
-
-fn to_camel_case(s: &str) -> String {
-    let pascal = to_pascal_case(s);
-    let mut chars = pascal.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(first) => first.to_lowercase().collect::<String>() + chars.as_str(),
-    }
 }
