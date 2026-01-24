@@ -1,4 +1,6 @@
+export * from './instructions.js';
 
+import { createBuyInstruction, createSellInstruction } from './instructions.js';
 
 export interface PumpfunTokenEvents {
   buys?: EventWrapper<Buy>[] | null;
@@ -196,6 +198,16 @@ export const PUMPFUNTOKEN_STACK = {
     PumpfunToken: {
       state: stateView<PumpfunToken>('PumpfunToken/state'),
       list: listView<PumpfunToken>('PumpfunToken/list'),
+    },
+  },
+  transactions: {
+    buy: {
+      build: createBuyInstruction,
+      refresh: [{ view: 'PumpfunToken/list' }],
+    },
+    sell: {
+      build: createSellInstruction,
+      refresh: [{ view: 'PumpfunToken/list' }],
     },
   },
 } as const;

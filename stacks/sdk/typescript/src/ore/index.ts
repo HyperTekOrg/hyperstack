@@ -1,4 +1,11 @@
+export * from './instructions.js';
 
+import {
+  createDeployInstruction,
+  createClaimSolInstruction,
+  createClaimOreInstruction,
+  createCheckpointInstruction,
+} from './instructions.js';
 
 export interface OreRoundId {
   round_address?: string | null;
@@ -88,6 +95,12 @@ export const OREROUND_STACK = {
       list: listView<OreRound>('OreRound/list'),
       latest: listView<OreRound>('OreRound/latest'),
     },
+  },
+  transactions: {
+    deploy: createDeployInstruction,
+    claimSol: createClaimSolInstruction,
+    claimOre: createClaimOreInstruction,
+    checkpoint: createCheckpointInstruction,
   },
 } as const;
 
