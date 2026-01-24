@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.3...hyperstack-cli-v0.3.4) (2026-01-24)
+
+
+### Features
+
+* **cli:** add create command for scaffolding projects from templates ([385ab5a](https://github.com/HyperTekOrg/hyperstack/commit/385ab5abfa78783475d7b2031ce425d28d84ec41))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.3 to 0.3.4
+
 ## [0.3.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.2...hyperstack-cli-v0.3.3) (2026-01-23)
 
 

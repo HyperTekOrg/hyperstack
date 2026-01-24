@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.3.3...hyperstack-interpreter-v0.3.4) (2026-01-24)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-interpreter:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-macros bumped from 0.3.3 to 0.3.4
+
 ## [0.3.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.3.2...hyperstack-interpreter-v0.3.3) (2026-01-23)
 
 
