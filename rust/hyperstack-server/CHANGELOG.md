@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.7](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.3.6...hyperstack-server-v0.3.7) (2026-01-26)
+
+
+### Bug Fixes
+
+* **server:** isolate HTTP health server on dedicated OS thread ([4695ec9](https://github.com/HyperTekOrg/hyperstack/commit/4695ec90bae65094f77a421b409f02fdd14be702))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.6 to 0.3.7
+
 ## [0.3.6](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.3.5...hyperstack-server-v0.3.6) (2026-01-26)
 
 
