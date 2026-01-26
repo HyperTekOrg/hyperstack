@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useHyperstack, useConnectionState } from 'hyperstack-react';
 import { PUMPFUNTOKEN_STACK } from 'hyperstack-stacks/pumpfun';
+import { TokenBuyButton } from './TokenBuyButton';
 
 function formatSol(lamports: number | undefined): string {
   if (lamports === undefined || lamports === null) return '-';
@@ -167,6 +168,18 @@ export function PumpFunDashboard() {
             )}
           </div>
         </div>
+
+        {/* Buy Token Section */}
+        {(token.id?.mint && token.id?.bonding_curve) && (
+          <div className="mb-6">
+            <h5 className="text-sm font-medium text-gray-700 mb-3">Trade Token</h5>
+            <TokenBuyButton
+              mint={token.id.mint}
+              bondingCurve={token.id.bonding_curve}
+              tokenSymbol={token.info?.symbol}
+            />
+          </div>
+        )}
 
         {/* Raw JSON */}
         <div className="bg-white p-4 rounded-lg border">

@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, ReactNode
 import type { ConnectionState } from 'hyperstack-typescript';
 import type { HyperstackConfig, NetworkConfig } from './types';
 import { createRuntime, HyperstackRuntime } from './runtime';
+import { useHyperstackWallet } from './wallet-adapter';
+import { WalletProvider, useWallet } from '@solana/wallet-adapter-react';
 
 interface HyperstackContextValue {
   runtime: HyperstackRuntime;
@@ -46,12 +48,14 @@ function resolveNetworkConfig(network: 'devnet' | 'mainnet' | 'localnet' | Netwo
   throw new Error('Must provide either network or websocketUrl');
 }
 
-export function HyperstackProvider({
+function InternalHyperstackProvider({
   children,
   ...config
 }: HyperstackConfig & {
   children: ReactNode;
 }) {
+  const wallet = useHyperstackWallet();
+  
   const networkConfig = useMemo(() => {
     try {
       return resolveNetworkConfig(config.network, config.websocketUrl);
@@ -68,7 +72,8 @@ export function HyperstackProvider({
       runtimeRef.current = createRuntime({
         ...config,
         websocketUrl: networkConfig.websocketUrl,
-        network: networkConfig
+        network: networkConfig,
+        wallet
       });
     } catch (error) {
       console.error('[Hyperstack] Failed to create runtime:', error);
@@ -77,6 +82,10 @@ export function HyperstackProvider({
   }
 
   const runtime = runtimeRef.current;
+  
+  useEffect(() => {
+    runtime.wallet = wallet;
+  }, [wallet, runtime]);
 
   const isMountedRef = useRef(true);
 
@@ -115,6 +124,39 @@ export function HyperstackProvider({
     <HyperstackContext.Provider value={value}>
       {children}
     </HyperstackContext.Provider>
+  );
+}
+
+export function HyperstackProvider({
+  children,
+  wallets,
+  ...config
+}: HyperstackConfig & {
+  children: ReactNode;
+}) {
+  let hasWalletContext = false;
+  
+  try {
+    useWallet();
+    hasWalletContext = true;
+  } catch {
+    hasWalletContext = false;
+  }
+  
+  if (!hasWalletContext && wallets && wallets.length > 0) {
+    return (
+      <WalletProvider wallets={wallets} autoConnect>
+        <InternalHyperstackProvider {...config}>
+          {children}
+        </InternalHyperstackProvider>
+      </WalletProvider>
+    );
+  }
+  
+  return (
+    <InternalHyperstackProvider {...config}>
+      {children}
+    </InternalHyperstackProvider>
   );
 }
 

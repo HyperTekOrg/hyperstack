@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Transaction, TransactionInstruction } from '@solana/web3.js';
 import { HyperstackRuntime } from './runtime';
 import { TransactionDefinition, UseMutationReturn } from './types';
 
@@ -11,55 +12,60 @@ export function createTxMutationHook(
     const [error, setError] = useState<string | undefined>();
     const [signature, setSignature] = useState<string | undefined>();
 
-    const submit = async (instructionOrTx: any): Promise<string> => {
+    const submit = async (
+      instructionOrBuilder: TransactionInstruction | TransactionInstruction[]
+    ): Promise<string> => {
       setStatus('pending');
       setError(undefined);
       setSignature(undefined);
 
       try {
-        if (!instructionOrTx) {
-          throw new Error('Transaction instruction or transaction object is required');
+        if (!instructionOrBuilder) {
+          throw new Error('Transaction instruction is required');
         }
 
         if (!runtime.wallet) {
           throw new Error('Wallet not connected. Please provide a wallet adapter to HyperstackProvider.');
         }
 
-        let txSignature: string;
-        let instructionsToRefresh: Array<{ instruction: string; params: any }> = [];
-
-        if (Array.isArray(instructionOrTx)) {
-          txSignature = await runtime.wallet.signAndSend(instructionOrTx);
-          instructionsToRefresh = instructionOrTx.filter(
-            inst => inst && typeof inst === 'object' && inst.instruction && inst.params !== undefined
-          );
-        } else if (
-          typeof instructionOrTx === 'object' &&
-          instructionOrTx.instruction &&
-          instructionOrTx.params !== undefined
-        ) {
-          txSignature = await runtime.wallet.signAndSend(instructionOrTx);
-          instructionsToRefresh = [instructionOrTx];
-        } else {
-          txSignature = await runtime.wallet.signAndSend(instructionOrTx);
+        if (!runtime.solanaConnection) {
+          throw new Error('Solana connection not initialized. Please provide rpcUrl or connection to HyperstackProvider.');
         }
+
+        const tx = new Transaction();
+        const { blockhash } = await runtime.solanaConnection.getLatestBlockhash();
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = runtime.wallet.publicKey!;
+
+        const instructions = Array.isArray(instructionOrBuilder) 
+          ? instructionOrBuilder 
+          : [instructionOrBuilder];
+        tx.add(...instructions);
+
+        const signedTx = await runtime.wallet.signTransaction(tx);
+
+        const txSignature = await runtime.solanaConnection.sendRawTransaction(
+          signedTx.serialize(),
+          { skipPreflight: false }
+        );
+
+        await runtime.solanaConnection.confirmTransaction(txSignature);
 
         setSignature(txSignature);
         setStatus('success');
 
-        if (transactions && instructionsToRefresh.length > 0) {
-          for (const inst of instructionsToRefresh) {
-            const txDef = transactions[inst.instruction];
-            if (txDef?.refresh) {
+        // Auto-refresh views if configured
+        if (transactions) {
+          for (const txDef of Object.values(transactions)) {
+            if (txDef.refresh) {
               for (const refreshTarget of txDef.refresh) {
                 try {
                   const key = typeof refreshTarget.key === 'function'
-                    ? refreshTarget.key(inst.params)
+                    ? refreshTarget.key()
                     : refreshTarget.key;
-
                   runtime.subscribe(refreshTarget.view, key);
                 } catch (err) {
-                  console.error('[Hyperstack] Error refreshing view after transaction:', err);
+                  console.error('[Hyperstack] Error refreshing view:', err);
                 }
               }
             }

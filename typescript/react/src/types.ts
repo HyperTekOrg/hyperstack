@@ -1,3 +1,6 @@
+import type { PublicKey, Transaction, Connection, TransactionInstruction } from '@solana/web3.js';
+import type { Adapter } from '@solana/wallet-adapter-base';
+
 export type {
   ConnectionState,
   Subscription,
@@ -24,12 +27,9 @@ export interface ViewDef<T, TMode extends ViewMode> {
   readonly _entity?: T;
 }
 
-export interface TransactionDefinition<TParams = unknown> {
-  build: (params: TParams) => {
-    instruction: string;
-    params: TParams;
-  };
-  refresh?: Array<{ view: string; key?: string | ((params: TParams) => string) }>;
+export interface TransactionDefinition<TArgs extends any[] = any[]> {
+  build: (...args: TArgs) => TransactionInstruction | TransactionInstruction[];
+  refresh?: ReadonlyArray<{ view: string; key?: string | ((...args: TArgs) => string) }>;
 }
 
 export interface StackDefinition {
@@ -52,10 +52,13 @@ export interface HyperstackConfig {
   network?: 'devnet' | 'mainnet' | 'localnet' | NetworkConfig;
   apiKey?: string;
   autoConnect?: boolean;
-  wallet?: WalletAdapter;
   reconnectIntervals?: number[];
   maxReconnectAttempts?: number;
   maxEntriesPerView?: number | null;
+  rpcUrl?: string;
+  connection?: Connection;
+  commitment?: 'processed' | 'confirmed' | 'finalized';
+  wallets?: Adapter[];
   /**
    * Interval in milliseconds to buffer WebSocket updates before flushing to Zustand.
    * Reduces React re-renders during high-frequency updates.
@@ -65,9 +68,19 @@ export interface HyperstackConfig {
   flushIntervalMs?: number;
 }
 
+export interface TransactionOptions {
+  skipPreflight?: boolean;
+  maxRetries?: number;
+  preflightCommitment?: 'processed' | 'confirmed' | 'finalized';
+}
+
 export interface WalletAdapter {
-  publicKey: string;
-  signAndSend: (transaction: unknown) => Promise<string>;
+  publicKey: PublicKey | null;
+  signTransaction<T extends Transaction>(tx: T): Promise<T>;
+  signAllTransactions<T extends Transaction>(txs: T[]): Promise<T[]>;
+  connected: boolean;
+  /** @deprecated Legacy support - use signTransaction instead */
+  signAndSend?: (transaction: unknown) => Promise<string>;
 }
 
 export interface ViewHookOptions {
@@ -102,7 +115,7 @@ export interface ListParamsMultiple extends ListParamsBase {
 export type ListParams = ListParamsSingle | ListParamsMultiple;
 
 export interface UseMutationReturn {
-  submit: (instructionOrTx: unknown | unknown[]) => Promise<string>;
+  submit: (instructionOrTx: TransactionInstruction | TransactionInstruction[]) => Promise<string>;
   status: 'idle' | 'pending' | 'success' | 'error';
   error?: string;
   signature?: string;

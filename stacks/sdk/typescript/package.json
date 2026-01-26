@@ -32,6 +32,9 @@
     "build": "tsup",
     "prepublishOnly": "npm run build"
   },
+  "dependencies": {
+    "@solana/web3.js": "^1.87.0"
+  },
   "peerDependencies": {
     "hyperstack-react": ">=0.2.0",
     "hyperstack-typescript": ">=0.2.0"
