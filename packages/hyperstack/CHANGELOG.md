@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.12](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-npm-v0.3.11...hyperstack-npm-v0.3.12) (2026-01-28)
+
+
+### Bug Fixes
+
+* **cli:** register only hyperstack-cli command to avoid overwriting hs binary ([1a9a291](https://github.com/HyperTekOrg/hyperstack/commit/1a9a291ce83e03749593eda9c066b12696f887df))
+
 ## [0.3.11](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-npm-v0.3.10...hyperstack-npm-v0.3.11) (2026-01-28)
 
 

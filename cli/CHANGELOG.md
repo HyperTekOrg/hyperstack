@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.12](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.11...hyperstack-cli-v0.3.12) (2026-01-28)
+
+
+### Features
+
+* **cli:** replace pumpfun template with ore-rust in scaffolding ([df1a52a](https://github.com/HyperTekOrg/hyperstack/commit/df1a52a95120914a89878c026df6486a285c2a2d))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.11 to 0.3.12
+
 ## [0.3.11](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.10...hyperstack-cli-v0.3.11) (2026-01-28)
 
 
