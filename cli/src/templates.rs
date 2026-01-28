@@ -13,64 +13,58 @@ use tar::Archive;
 /// Available project templates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Template {
-    ReactOre,
-    RustOre,
-    TypescriptOre,
+    React,
+    Rust,
+    Typescript,
 }
 
 impl Template {
     /// All available templates.
-    pub const ALL: &'static [Template] = &[
-        Template::ReactOre,
-        Template::RustOre,
-        Template::TypescriptOre,
-    ];
+    pub const ALL: &'static [Template] = &[Template::React, Template::Rust, Template::Typescript];
 
     /// Template directory name (as stored in tarball).
     pub fn dir_name(&self) -> &'static str {
         match self {
-            Template::ReactOre => "ore-react",
-            Template::RustOre => "ore-rust",
-            Template::TypescriptOre => "ore-typescript",
+            Template::React => "ore-react",
+            Template::Rust => "ore-rust",
+            Template::Typescript => "ore-typescript",
         }
     }
 
     /// Human-readable display name.
     pub fn display_name(&self) -> &'static str {
         match self {
-            Template::ReactOre => "react-ore",
-            Template::RustOre => "rust-ore",
-            Template::TypescriptOre => "typescript-ore",
+            Template::React => "react-ore",
+            Template::Rust => "rust-ore",
+            Template::Typescript => "typescript-ore",
         }
     }
 
     /// Description for interactive selection.
     pub fn description(&self) -> &'static str {
         match self {
-            Template::ReactOre => "ORE mining rounds viewer (React + Vite)",
-            Template::RustOre => "ORE mining rounds client (Rust + Tokio)",
-            Template::TypescriptOre => "ORE mining rounds client (TypeScript CLI)",
+            Template::React => "ORE mining rounds viewer (React + Vite)",
+            Template::Rust => "ORE mining rounds client (Rust + Tokio)",
+            Template::Typescript => "ORE mining rounds client (TypeScript CLI)",
         }
     }
 
     /// Parse from string (CLI argument).
     pub fn from_str(s: &str) -> Option<Template> {
         match s.to_lowercase().as_str() {
-            "react-ore" | "ore-react" => Some(Template::ReactOre),
-            "rust-ore" | "ore-rust" => Some(Template::RustOre),
-            "typescript-ore" | "ore-typescript" | "ts-ore" | "ore-ts" => {
-                Some(Template::TypescriptOre)
-            }
+            "react-ore" | "ore-react" => Some(Template::React),
+            "rust-ore" | "ore-rust" => Some(Template::Rust),
+            "typescript-ore" | "ore-typescript" | "ts-ore" | "ore-ts" => Some(Template::Typescript),
             _ => None,
         }
     }
 
     pub fn is_rust(&self) -> bool {
-        matches!(self, Template::RustOre)
+        matches!(self, Template::Rust)
     }
 
     pub fn is_typescript_cli(&self) -> bool {
-        matches!(self, Template::TypescriptOre)
+        matches!(self, Template::Typescript)
     }
 }
 
