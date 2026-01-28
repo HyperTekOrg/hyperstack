@@ -7,8 +7,8 @@ use std::process::{Command, Stdio};
 
 use crate::telemetry;
 use crate::templates::{
-    customize_project, detect_package_manager, dev_command, install_command, Template,
-    TemplateManager,
+    customize_project, detect_package_manager, dev_command, install_command, start_command,
+    Template, TemplateManager,
 };
 use crate::ui;
 
@@ -33,7 +33,10 @@ pub fn create(
 
     let selected_template = match template {
         Some(t) => Template::from_str(&t).ok_or_else(|| {
-            anyhow::anyhow!("Unknown template: {}. Available: react-ore, rust-ore", t)
+            anyhow::anyhow!(
+                "Unknown template: {}. Available: react-ore, rust-ore, typescript-ore",
+                t
+            )
         })?,
         None => {
             let items: Vec<String> = Template::ALL
@@ -96,11 +99,19 @@ pub fn create(
 
     println!("  {} Project scaffolded", ui::symbols::SUCCESS.green());
 
-    let is_rust_project = selected_template.is_rust();
-
-    if is_rust_project {
+    if selected_template.is_rust() {
         println!();
         print_rust_next_steps(&project_name);
+    } else if selected_template.is_typescript_cli() {
+        let pm = detect_package_manager();
+        let install_succeeded = if skip_install {
+            false
+        } else {
+            run_npm_install(project_dir, pm)?
+        };
+
+        println!();
+        print_ts_cli_next_steps(&project_name, pm, install_succeeded);
     } else {
         let pm = detect_package_manager();
         let install_succeeded = if skip_install {
@@ -200,5 +211,37 @@ fn print_rust_next_steps(project_name: &str) {
         format!("cd {}", project_name).cyan(),
         "cargo run".cyan()
     );
+    println!();
+}
+
+fn print_ts_cli_next_steps(project_name: &str, pm: &str, install_succeeded: bool) {
+    println!(
+        "{} {}",
+        ui::symbols::SUCCESS.green().bold(),
+        "Ready!".bold()
+    );
+    println!();
+
+    if install_succeeded {
+        println!("Run the CLI:");
+        println!();
+        println!(
+            "  {} {} && {}",
+            "$".dimmed(),
+            format!("cd {}", project_name).cyan(),
+            start_command(pm).cyan()
+        );
+    } else {
+        println!("Install dependencies and run:");
+        println!();
+        println!(
+            "  {} {} && {} && {}",
+            "$".dimmed(),
+            format!("cd {}", project_name).cyan(),
+            install_command(pm).cyan(),
+            start_command(pm).cyan()
+        );
+    }
+
     println!();
 }

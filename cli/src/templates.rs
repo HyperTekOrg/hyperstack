@@ -13,49 +13,58 @@ use tar::Archive;
 /// Available project templates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Template {
-    ReactOre,
-    RustOre,
+    React,
+    Rust,
+    Typescript,
 }
 
 impl Template {
     /// All available templates.
-    pub const ALL: &'static [Template] = &[Template::ReactOre, Template::RustOre];
+    pub const ALL: &'static [Template] = &[Template::React, Template::Rust, Template::Typescript];
 
     /// Template directory name (as stored in tarball).
     pub fn dir_name(&self) -> &'static str {
         match self {
-            Template::ReactOre => "ore-react",
-            Template::RustOre => "ore-rust",
+            Template::React => "ore-react",
+            Template::Rust => "ore-rust",
+            Template::Typescript => "ore-typescript",
         }
     }
 
     /// Human-readable display name.
     pub fn display_name(&self) -> &'static str {
         match self {
-            Template::ReactOre => "react-ore",
-            Template::RustOre => "rust-ore",
+            Template::React => "react-ore",
+            Template::Rust => "rust-ore",
+            Template::Typescript => "typescript-ore",
         }
     }
 
     /// Description for interactive selection.
     pub fn description(&self) -> &'static str {
         match self {
-            Template::ReactOre => "ORE mining rounds viewer (React + Vite)",
-            Template::RustOre => "ORE mining rounds client (Rust + Tokio)",
+            Template::React => "ORE mining rounds viewer (React + Vite)",
+            Template::Rust => "ORE mining rounds client (Rust + Tokio)",
+            Template::Typescript => "ORE mining rounds client (TypeScript CLI)",
         }
     }
 
     /// Parse from string (CLI argument).
     pub fn from_str(s: &str) -> Option<Template> {
         match s.to_lowercase().as_str() {
-            "react-ore" | "ore-react" => Some(Template::ReactOre),
-            "rust-ore" | "ore-rust" | "ore" => Some(Template::RustOre),
+            "react-ore" | "ore-react" => Some(Template::React),
+            "rust-ore" | "ore-rust" => Some(Template::Rust),
+            "typescript-ore" | "ore-typescript" | "ts-ore" | "ore-ts" => Some(Template::Typescript),
             _ => None,
         }
     }
 
     pub fn is_rust(&self) -> bool {
-        matches!(self, Template::RustOre)
+        matches!(self, Template::Rust)
+    }
+
+    pub fn is_typescript_cli(&self) -> bool {
+        matches!(self, Template::Typescript)
     }
 }
 
@@ -375,5 +384,15 @@ pub fn dev_command(pm: &str) -> &'static str {
         "pnpm" => "pnpm dev",
         "bun" => "bun dev",
         _ => "npm run dev",
+    }
+}
+
+/// Get the start command for a package manager.
+pub fn start_command(pm: &str) -> &'static str {
+    match pm {
+        "yarn" => "yarn start",
+        "pnpm" => "pnpm start",
+        "bun" => "bun start",
+        _ => "npm start",
     }
 }
