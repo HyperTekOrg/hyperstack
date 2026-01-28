@@ -6,8 +6,8 @@ use std::thread;
 use std::time::Duration;
 
 use crate::api_client::{
-    ApiClient, Build, BuildStatus, CreateBuildRequest, CreateSpecRequest, DeploymentStatus,
-    Spec as ApiSpec, DEFAULT_DOMAIN_SUFFIX,
+    ApiClient, Build, BuildStatus, CreateBuildRequest, CreateSpecRequest, DeploymentResponse,
+    DeploymentStatus, Spec as ApiSpec, DEFAULT_DOMAIN_SUFFIX,
 };
 use crate::config::{resolve_stacks_to_push, DiscoveredAst, HyperstackConfig};
 use crate::telemetry;
@@ -689,15 +689,107 @@ pub fn rollback(
     Ok(())
 }
 
-pub fn stop(stack_name: &str, _branch: Option<&str>, _force: bool) -> Result<()> {
-    bail!(
-        "Stop deployment is not yet implemented.\n\n\
-         To stop a deployment for '{}', you can:\n\
-         1. Delete the stack: hs stack delete {}\n\
-         2. Or manually scale down in Kubernetes",
+pub fn stop(stack_name: &str, branch: Option<&str>, force: bool) -> Result<()> {
+    let client = ApiClient::new()?;
+
+    println!("{} Looking up stack '{}'...", "→".blue().bold(), stack_name);
+
+    let spec = client
+        .get_spec_by_name(stack_name)?
+        .ok_or_else(|| anyhow::anyhow!("Stack '{}' not found", stack_name))?;
+
+    // Get deployments and find the one for this spec
+    let deployments = client.list_deployments(100)?;
+
+    let deployment = find_deployment(&deployments, spec.id, branch).ok_or_else(|| {
+        let branch_msg = branch.unwrap_or("production");
+        anyhow::anyhow!(
+            "No {} deployment found for stack '{}'",
+            branch_msg,
+            stack_name
+        )
+    })?;
+
+    // Check if already stopped
+    if deployment.status == DeploymentStatus::Stopped {
+        println!(
+            "{} Deployment for '{}' is already stopped.",
+            "!".yellow().bold(),
+            stack_name
+        );
+        return Ok(());
+    }
+
+    let branch_display = branch.unwrap_or("production");
+
+    if !force {
+        println!();
+        println!(
+            "{} You are about to stop the deployment for '{}'",
+            "!".yellow().bold(),
+            stack_name
+        );
+        println!("  Branch: {}", branch_display);
+        println!("  Current status: {}", format_deployment_status(deployment.status));
+        println!();
+        println!("  This will stop the running deployment.");
+        println!("  You can restart it later with 'hs up'.");
+        println!();
+
+        print!("Continue? [y/N] ");
+        use std::io::{self, Write};
+        io::stdout().flush()?;
+
+        let mut confirmation = String::new();
+        io::stdin().read_line(&mut confirmation)?;
+        let confirmation = confirmation.trim().to_lowercase();
+
+        if confirmation != "y" && confirmation != "yes" {
+            println!();
+            println!("{} Stop cancelled.", "!".yellow().bold());
+            return Ok(());
+        }
+    }
+
+    println!("{} Stopping deployment...", "→".blue().bold());
+
+    client.stop_deployment(deployment.id)?;
+
+    println!(
+        "{} Deployment for '{}' ({}) stopped successfully.",
+        "✓".green().bold(),
         stack_name,
-        stack_name
+        branch_display
     );
+
+    println!();
+    println!("To restart, run:");
+    println!("  {}", format!("hs up {}", stack_name).cyan());
+
+    Ok(())
+}
+
+fn find_deployment<'a>(
+    deployments: &'a [DeploymentResponse],
+    spec_id: i32,
+    branch: Option<&str>,
+) -> Option<&'a DeploymentResponse> {
+    deployments.iter().find(|d| {
+        d.spec_id == spec_id
+            && match branch {
+                Some(b) => d.branch.as_deref() == Some(b),
+                None => d.branch.is_none(), // production deployment has no branch
+            }
+    })
+}
+
+fn format_deployment_status(status: DeploymentStatus) -> String {
+    match status {
+        DeploymentStatus::Active => "active".green().to_string(),
+        DeploymentStatus::Updating => "updating".yellow().to_string(),
+        DeploymentStatus::Stopped => "stopped".dimmed().to_string(),
+        DeploymentStatus::Failed => "failed".red().to_string(),
+    }
 }
 
 fn load_and_upload_ast(
