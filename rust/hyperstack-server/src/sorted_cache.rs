@@ -178,6 +178,23 @@ impl SortedViewCache {
 
     /// Insert or update an entity, returns the position where it was inserted
     pub fn upsert(&mut self, entity_key: String, entity: Value) -> UpsertResult {
+        let debug_computed = std::env::var("HYPERSTACK_DEBUG_COMPUTED").is_ok();
+
+        if debug_computed {
+            if let Some(results) = entity.get("results") {
+                if results.get("rng").is_some() {
+                    tracing::warn!(
+                        "[SORTED_CACHE_UPSERT] view={} key={} entity.results: rng={:?} winning_square={:?} did_hit_motherlode={:?}",
+                        self.view_id,
+                        entity_key,
+                        results.get("rng"),
+                        results.get("winning_square"),
+                        results.get("did_hit_motherlode")
+                    );
+                }
+            }
+        }
+
         let sort_value = self.extract_sort_value(&entity);
 
         // Check if entity already exists
