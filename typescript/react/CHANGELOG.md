@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.8](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.3.7...hyperstack-react-v0.3.8) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-react:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-typescript bumped from ^0.3.7 to ^0.3.8
+
 ## [0.3.7](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.3.6...hyperstack-react-v0.3.7) (2026-01-26)
 
 
