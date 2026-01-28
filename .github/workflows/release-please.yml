@@ -173,7 +173,8 @@ jobs:
             --exclude='Cargo.lock' \
             -C examples \
             ore-react \
-            ore-rust
+            ore-rust \
+            ore-typescript
 
       - name: Upload templates to CLI release
         env:

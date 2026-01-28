@@ -15,17 +15,23 @@ use tar::Archive;
 pub enum Template {
     ReactOre,
     RustOre,
+    TypescriptOre,
 }
 
 impl Template {
     /// All available templates.
-    pub const ALL: &'static [Template] = &[Template::ReactOre, Template::RustOre];
+    pub const ALL: &'static [Template] = &[
+        Template::ReactOre,
+        Template::RustOre,
+        Template::TypescriptOre,
+    ];
 
     /// Template directory name (as stored in tarball).
     pub fn dir_name(&self) -> &'static str {
         match self {
             Template::ReactOre => "ore-react",
             Template::RustOre => "ore-rust",
+            Template::TypescriptOre => "ore-typescript",
         }
     }
 
@@ -34,6 +40,7 @@ impl Template {
         match self {
             Template::ReactOre => "react-ore",
             Template::RustOre => "rust-ore",
+            Template::TypescriptOre => "typescript-ore",
         }
     }
 
@@ -42,6 +49,7 @@ impl Template {
         match self {
             Template::ReactOre => "ORE mining rounds viewer (React + Vite)",
             Template::RustOre => "ORE mining rounds client (Rust + Tokio)",
+            Template::TypescriptOre => "ORE mining rounds client (TypeScript CLI)",
         }
     }
 
@@ -49,13 +57,20 @@ impl Template {
     pub fn from_str(s: &str) -> Option<Template> {
         match s.to_lowercase().as_str() {
             "react-ore" | "ore-react" => Some(Template::ReactOre),
-            "rust-ore" | "ore-rust" | "ore" => Some(Template::RustOre),
+            "rust-ore" | "ore-rust" => Some(Template::RustOre),
+            "typescript-ore" | "ore-typescript" | "ts-ore" | "ore-ts" => {
+                Some(Template::TypescriptOre)
+            }
             _ => None,
         }
     }
 
     pub fn is_rust(&self) -> bool {
         matches!(self, Template::RustOre)
+    }
+
+    pub fn is_typescript_cli(&self) -> bool {
+        matches!(self, Template::TypescriptOre)
     }
 }
 
@@ -375,5 +390,15 @@ pub fn dev_command(pm: &str) -> &'static str {
         "pnpm" => "pnpm dev",
         "bun" => "bun dev",
         _ => "npm run dev",
+    }
+}
+
+/// Get the start command for a package manager.
+pub fn start_command(pm: &str) -> &'static str {
+    match pm {
+        "yarn" => "yarn start",
+        "pnpm" => "pnpm start",
+        "bun" => "bun start",
+        _ => "npm start",
     }
 }
