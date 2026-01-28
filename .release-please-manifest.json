@@ -1,13 +1,13 @@
 {
-  "hyperstack": "0.3.10",
-  "interpreter": "0.3.10",
-  "hyperstack-macros": "0.3.10",
-  "cli": "0.3.10",
-  "rust/hyperstack-sdk": "0.3.10",
-  "rust/hyperstack-server": "0.3.10",
-  "typescript/react": "0.3.10",
-  "typescript/core": "0.3.10",
-  "stacks/sdk/typescript": "0.3.10",
-  "stacks/sdk/rust": "0.3.10",
-  "packages/hyperstack": "0.3.10"
+  "hyperstack": "0.3.11",
+  "interpreter": "0.3.11",
+  "hyperstack-macros": "0.3.11",
+  "cli": "0.3.11",
+  "rust/hyperstack-sdk": "0.3.11",
+  "rust/hyperstack-server": "0.3.11",
+  "typescript/react": "0.3.11",
+  "typescript/core": "0.3.11",
+  "stacks/sdk/typescript": "0.3.11",
+  "stacks/sdk/rust": "0.3.11",
+  "packages/hyperstack": "0.3.11"
 }
