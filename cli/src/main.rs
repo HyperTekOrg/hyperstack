@@ -64,7 +64,7 @@ enum Commands {
         /// Project name (creates directory)
         name: Option<String>,
 
-        /// Template: react-pumpfun, react-ore
+        /// Template: react-ore, rust-ore
         #[arg(short, long)]
         template: Option<String>,
 

@@ -13,45 +13,49 @@ use tar::Archive;
 /// Available project templates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Template {
-    ReactPumpfun,
     ReactOre,
+    RustOre,
 }
 
 impl Template {
     /// All available templates.
-    pub const ALL: &'static [Template] = &[Template::ReactPumpfun, Template::ReactOre];
+    pub const ALL: &'static [Template] = &[Template::ReactOre, Template::RustOre];
 
     /// Template directory name (as stored in tarball).
     pub fn dir_name(&self) -> &'static str {
         match self {
-            Template::ReactPumpfun => "pumpfun-react",
             Template::ReactOre => "ore-react",
+            Template::RustOre => "ore-rust",
         }
     }
 
     /// Human-readable display name.
     pub fn display_name(&self) -> &'static str {
         match self {
-            Template::ReactPumpfun => "react-pumpfun",
             Template::ReactOre => "react-ore",
+            Template::RustOre => "rust-ore",
         }
     }
 
     /// Description for interactive selection.
     pub fn description(&self) -> &'static str {
         match self {
-            Template::ReactPumpfun => "PumpFun token dashboard (React + Vite)",
             Template::ReactOre => "ORE mining rounds viewer (React + Vite)",
+            Template::RustOre => "ORE mining rounds client (Rust + Tokio)",
         }
     }
 
     /// Parse from string (CLI argument).
     pub fn from_str(s: &str) -> Option<Template> {
         match s.to_lowercase().as_str() {
-            "react-pumpfun" | "pumpfun-react" | "pumpfun" => Some(Template::ReactPumpfun),
-            "react-ore" | "ore-react" | "ore" => Some(Template::ReactOre),
+            "react-ore" | "ore-react" => Some(Template::ReactOre),
+            "rust-ore" | "ore-rust" | "ore" => Some(Template::RustOre),
             _ => None,
         }
+    }
+
+    pub fn is_rust(&self) -> bool {
+        matches!(self, Template::RustOre)
     }
 }
 
@@ -218,6 +222,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
 /// Customize the scaffolded project.
 pub fn customize_project(project_dir: &Path, project_name: &str) -> Result<()> {
     update_package_json_name(project_dir, project_name)?;
+    update_cargo_toml_name(project_dir, project_name)?;
     update_html_title(project_dir, project_name)?;
     copy_env_example(project_dir)?;
     Ok(())
@@ -243,6 +248,36 @@ fn update_package_json_name(project_dir: &Path, project_name: &str) -> Result<()
     let updated =
         serde_json::to_string_pretty(&json).context("Failed to serialize package.json")?;
     fs::write(&path, updated).context("Failed to write package.json")?;
+    Ok(())
+}
+
+fn update_cargo_toml_name(project_dir: &Path, project_name: &str) -> Result<()> {
+    let path = project_dir.join("Cargo.toml");
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let content = fs::read_to_string(&path).context("Failed to read Cargo.toml")?;
+
+    let updated = content
+        .lines()
+        .map(|line| {
+            if line.starts_with("name = ") {
+                format!("name = \"{}\"", project_name)
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let updated = if content.ends_with('\n') {
+        format!("{}\n", updated)
+    } else {
+        updated
+    };
+
+    fs::write(&path, updated).context("Failed to write Cargo.toml")?;
     Ok(())
 }
 

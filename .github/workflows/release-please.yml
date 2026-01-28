@@ -169,15 +169,17 @@ jobs:
           VERSION="${{ needs.release-please.outputs.cli_version }}"
           echo "Bundling templates for version ${VERSION}"
           
-          # Create tarball with only the template directories (excluding node_modules, dist, .env)
+          # Create tarball with only the template directories (excluding build artifacts)
           tar -czvf "hyperstack-templates-v${VERSION}.tar.gz" \
             --exclude='node_modules' \
             --exclude='dist' \
             --exclude='.env' \
             --exclude='package-lock.json' \
+            --exclude='target' \
+            --exclude='Cargo.lock' \
             -C examples \
-            pumpfun-react \
-            ore-react
+            ore-react \
+            ore-rust
 
       - name: Upload templates to CLI release
         env:
