@@ -1,0 +1,22 @@
+{
+  "name": "ore-typescript-example",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "TypeScript CLI example for Ore Round Hyperstack",
+  "main": "src/main.ts",
+  "scripts": {
+    "start": "npx tsx src/main.ts",
+    "build": "tsc",
+    "dev": "npx tsx --watch src/main.ts"
+  },
+  "dependencies": {
+    "hyperstack-typescript": "file:../../typescript/core",
+    "hyperstack-stacks": "file:../../stacks/sdk/typescript"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "tsx": "^4.0.0",
+    "@types/node": "^20.0.0"
+  }
+}
