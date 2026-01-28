@@ -1,7 +1,7 @@
 import { HyperStack, createUpdateStream, type Update } from 'hyperstack-typescript';
 import { OREROUND_STACK, type OreRound } from 'hyperstack-stacks/ore';
 
-const URL = 'wss://ore-round-ubhivg.stack.usehyperstack.com';
+const URL = 'wss://ore.stack.usehyperstack.com';
 
 function printRoundUpdate(prefix: string, key: string, data: OreRound) {
   console.log(`\n[${prefix}] === Round Update ===`);

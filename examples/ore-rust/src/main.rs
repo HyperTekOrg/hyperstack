@@ -3,8 +3,8 @@ use hyperstack_stacks::ore::OreRoundViews;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let hs = HyperStack::connect("wss://ore-round-ubhivg.stack.usehyperstack.com").await?;
-    println!("Connected to wss://ore-round-ubhivg.stack.usehyperstack.com");
+    let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
+    println!("Connected to wss://ore.stack.usehyperstack.com");
 
     let views = hs.views::<OreRoundViews>();
 
