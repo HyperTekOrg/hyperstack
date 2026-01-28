@@ -42,6 +42,10 @@
     "stacks/sdk/rust": {
       "release-type": "rust",
       "component": "hyperstack-stacks"
+    },
+    "packages/hyperstack": {
+      "release-type": "node",
+      "component": "hyperstack-npm"
     }
   },
   "plugins": [
@@ -66,7 +70,8 @@
         "hyperstack-server",
         "hyperstack-react",
         "hyperstack-typescript",
-        "hyperstack-stacks"
+        "hyperstack-stacks",
+        "hyperstack-npm"
       ]
     }
   ]

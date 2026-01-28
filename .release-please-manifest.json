@@ -8,5 +8,6 @@
   "typescript/react": "0.3.7",
   "typescript/core": "0.3.7",
   "stacks/sdk/typescript": "0.3.7",
-  "stacks/sdk/rust": "0.3.7"
+  "stacks/sdk/rust": "0.3.7",
+  "packages/hyperstack": "0.3.7"
 }
