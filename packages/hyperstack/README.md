@@ -28,11 +28,13 @@ cargo install hyperstack-cli
 
 | Command | Description |
 |---------|-------------|
-| `hs create [name]` | Scaffold a new app from a template |
-| `hs init` | Initialize a stack project |
-| `hs up` | Deploy your stack |
-| `hs status` | Show project overview |
-| `hs auth login` | Authenticate with Hyperstack |
+| `hyperstack-cli create [name]` | Scaffold a new app from a template |
+| `hyperstack-cli init` | Initialize a stack project |
+| `hyperstack-cli up` | Deploy your stack |
+| `hyperstack-cli status` | Show project overview |
+| `hyperstack-cli auth login` | Authenticate with Hyperstack |
+
+Note: If installed via Cargo, the command is `hs` instead of `hyperstack-cli`.
 
 ## Documentation
 
