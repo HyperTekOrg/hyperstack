@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.12](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-sdk-v0.3.11...hyperstack-sdk-v0.3.12) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-sdk:** Synchronize hyperstack versions
+
 ## [0.3.11](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-sdk-v0.3.10...hyperstack-sdk-v0.3.11) (2026-01-28)
 
 
