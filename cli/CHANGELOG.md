@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.9](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.8...hyperstack-cli-v0.3.9) (2026-01-28)
+
+
+### Bug Fixes
+
+* **cli:** use rustls instead of native-tls for cross-compilation ([8bea03a](https://github.com/HyperTekOrg/hyperstack/commit/8bea03a28eecd68736ff7592c77b1de1127d03c8))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3 to 0.3.9
+
 ## [0.3.8](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.7...hyperstack-cli-v0.3.8) (2026-01-28)
 
 
