@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.13](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.3.12...hyperstack-interpreter-v0.3.13) (2026-01-28)
+
+
+### Bug Fixes
+
+* remove unused protobuf compilation that broke Windows CI ([284a2fc](https://github.com/HyperTekOrg/hyperstack/commit/284a2fc2d4e587610205dd510327092dac73a115))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-macros bumped from 0.3.12 to 0.3.13
+
 ## [0.3.12](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.3.11...hyperstack-interpreter-v0.3.12) (2026-01-28)
 
 
