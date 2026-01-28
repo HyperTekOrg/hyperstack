@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.10](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.3.9...hyperstack-macros-v0.3.10) (2026-01-28)
+
+
+### Bug Fixes
+
+* Logs ([163b5ff](https://github.com/HyperTekOrg/hyperstack/commit/163b5ff75dababdf17761b193b7f3b8d3d7bc30c))
+
 ## [0.3.9](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.3.8...hyperstack-macros-v0.3.9) (2026-01-28)
 
 
