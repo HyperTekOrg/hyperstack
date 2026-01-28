@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.14](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.3.13...hyperstack-stacks-v0.3.14) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-stacks:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-sdk bumped from 0.3.13 to 0.3.14
+
 ## [0.3.13](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.3.12...hyperstack-stacks-v0.3.13) (2026-01-28)
 
 
