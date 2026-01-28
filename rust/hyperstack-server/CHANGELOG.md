@@ -1,5 +1,103 @@
 # Changelog
 
+## [0.3.12](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.3.11...hyperstack-server-v0.3.12) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-server:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.11 to 0.3.12
+
+## [0.3.11](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.3.10...hyperstack-server-v0.3.11) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-server:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.10 to 0.3.11
+
+## [0.3.10](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.3.9...hyperstack-server-v0.3.10) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-server:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.9 to 0.3.10
+
+## [0.3.9](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.3.8...hyperstack-server-v0.3.9) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-server:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.8 to 0.3.9
+
+## [0.3.8](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.3.7...hyperstack-server-v0.3.8) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-server:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.7 to 0.3.8
+
+## [0.3.7](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.3.6...hyperstack-server-v0.3.7) (2026-01-26)
+
+
+### Bug Fixes
+
+* **server:** isolate HTTP health server on dedicated OS thread ([4695ec9](https://github.com/HyperTekOrg/hyperstack/commit/4695ec90bae65094f77a421b409f02fdd14be702))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.6 to 0.3.7
+
+## [0.3.6](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.3.5...hyperstack-server-v0.3.6) (2026-01-26)
+
+
+### Bug Fixes
+
+* **server:** preserve sort order when entity updates lack the sort field ([7978edc](https://github.com/HyperTekOrg/hyperstack/commit/7978edc2f25eb2d4aa538e351beca2cc2542ee96))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.5 to 0.3.6
+
 ## [0.3.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.3.4...hyperstack-server-v0.3.5) (2026-01-24)
 
 

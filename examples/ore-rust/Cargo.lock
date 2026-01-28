@@ -230,7 +230,7 @@ checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
 
 [[package]]
 name = "hyperstack-sdk"
-version = "0.3.3"
+version = "0.3.10"
 dependencies = [
  "anyhow",
  "flate2",
@@ -247,7 +247,7 @@ dependencies = [
 
 [[package]]
 name = "hyperstack-stacks"
-version = "0.3.3"
+version = "0.3.10"
 dependencies = [
  "hyperstack-sdk",
  "serde",

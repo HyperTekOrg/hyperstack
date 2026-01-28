@@ -1,5 +1,110 @@
 # Changelog
 
+## [0.3.12](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.3.11...hyperstack-stacks-v0.3.12) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-stacks:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * peerDependencies
+    * hyperstack-react bumped from >=0.2.0 to >=0.3.12
+    * hyperstack-typescript bumped from >=0.2.0 to >=0.3.12
+
+## [0.3.11](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.3.10...hyperstack-stacks-v0.3.11) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-stacks:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * peerDependencies
+    * hyperstack-react bumped from >=0.2.0 to >=0.3.11
+    * hyperstack-typescript bumped from >=0.2.0 to >=0.3.11
+
+## [0.3.10](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.3.9...hyperstack-stacks-v0.3.10) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-stacks:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * peerDependencies
+    * hyperstack-react bumped from >=0.2.0 to >=0.3.10
+    * hyperstack-typescript bumped from >=0.2.0 to >=0.3.10
+
+## [0.3.9](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.3.8...hyperstack-stacks-v0.3.9) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-stacks:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * peerDependencies
+    * hyperstack-react bumped from >=0.2.0 to >=0.3.9
+    * hyperstack-typescript bumped from >=0.2.0 to >=0.3.9
+
+## [0.3.8](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.3.7...hyperstack-stacks-v0.3.8) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-stacks:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * peerDependencies
+    * hyperstack-react bumped from >=0.2.0 to >=0.3.8
+    * hyperstack-typescript bumped from >=0.2.0 to >=0.3.8
+
+## [0.3.7](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.3.6...hyperstack-stacks-v0.3.7) (2026-01-26)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-stacks:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * peerDependencies
+    * hyperstack-react bumped from >=0.2.0 to >=0.3.7
+    * hyperstack-typescript bumped from >=0.2.0 to >=0.3.7
+
+## [0.3.6](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.3.5...hyperstack-stacks-v0.3.6) (2026-01-26)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-stacks:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * peerDependencies
+    * hyperstack-react bumped from >=0.2.0 to >=0.3.6
+    * hyperstack-typescript bumped from >=0.2.0 to >=0.3.6
+
 ## [0.3.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.3.4...hyperstack-stacks-v0.3.5) (2026-01-24)
 
 

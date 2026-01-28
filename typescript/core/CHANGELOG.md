@@ -1,5 +1,54 @@
 # Changelog
 
+## [0.3.12](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.3.11...hyperstack-typescript-v0.3.12) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-typescript:** Synchronize hyperstack versions
+
+## [0.3.11](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.3.10...hyperstack-typescript-v0.3.11) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-typescript:** Synchronize hyperstack versions
+
+## [0.3.10](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.3.9...hyperstack-typescript-v0.3.10) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-typescript:** Synchronize hyperstack versions
+
+## [0.3.9](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.3.8...hyperstack-typescript-v0.3.9) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-typescript:** Synchronize hyperstack versions
+
+## [0.3.8](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.3.7...hyperstack-typescript-v0.3.8) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-typescript:** Synchronize hyperstack versions
+
+## [0.3.7](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.3.6...hyperstack-typescript-v0.3.7) (2026-01-26)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-typescript:** Synchronize hyperstack versions
+
+## [0.3.6](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.3.5...hyperstack-typescript-v0.3.6) (2026-01-26)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-typescript:** Synchronize hyperstack versions
+
 ## [0.3.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.3.4...hyperstack-typescript-v0.3.5) (2026-01-24)
 
 

@@ -169,15 +169,17 @@ jobs:
           VERSION="${{ needs.release-please.outputs.cli_version }}"
           echo "Bundling templates for version ${VERSION}"
           
-          # Create tarball with only the template directories (excluding node_modules, dist, .env)
+          # Create tarball with only the template directories (excluding build artifacts)
           tar -czvf "hyperstack-templates-v${VERSION}.tar.gz" \
             --exclude='node_modules' \
             --exclude='dist' \
             --exclude='.env' \
             --exclude='package-lock.json' \
+            --exclude='target' \
+            --exclude='Cargo.lock' \
             -C examples \
-            pumpfun-react \
-            ore-react
+            ore-react \
+            ore-rust
 
       - name: Upload templates to CLI release
         env:
@@ -187,6 +189,107 @@ jobs:
           gh release upload "hyperstack-cli-v${VERSION}" \
             "hyperstack-templates-v${VERSION}.tar.gz" \
             --clobber
+
+  build-cli-binaries:
+    name: Build CLI Binaries
+    needs: release-please
+    if: needs.release-please.outputs.cli_release_created == 'true'
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            binary_name: hs-darwin-arm64
+          - os: macos-15-large
+            target: x86_64-apple-darwin
+            binary_name: hs-darwin-x64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary_name: hs-linux-x64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            binary_name: hs-linux-arm64
+            cross: true
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary_name: hs-win32-x64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install protoc
+        if: matrix.os != 'windows-latest'
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            sudo apt-get update
+            sudo apt-get install -y protobuf-compiler
+          else
+            brew install protobuf
+          fi
+        shell: bash
+
+      - name: Install protoc (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install protoc
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cargo-zigbuild
+        if: matrix.cross
+        run: |
+          pip3 install ziglang
+          cargo install cargo-zigbuild
+
+      - name: Build binary
+        run: |
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            cargo zigbuild --release --target ${{ matrix.target }} --package hyperstack-cli
+          else
+            cargo build --release --target ${{ matrix.target }} --package hyperstack-cli
+          fi
+        shell: bash
+
+      - name: Rename binary
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp target/${{ matrix.target }}/release/hs.exe ${{ matrix.binary_name }}
+          else
+            cp target/${{ matrix.target }}/release/hs ${{ matrix.binary_name }}
+          fi
+        shell: bash
+
+      - name: Upload binary to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.release-please.outputs.cli_version }}"
+          gh release upload "hyperstack-cli-v${VERSION}" \
+            "${{ matrix.binary_name }}" \
+            --clobber
+        shell: bash
+
+  publish-npm-cli:
+    name: Publish CLI to npm
+    needs: [release-please, build-cli-binaries]
+    runs-on: ubuntu-latest
+    if: needs.release-please.outputs.cli_release_created == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish hyperstack CLI wrapper
+        run: npm publish --access public || echo "Package may already be published"
+        working-directory: packages/hyperstack
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # TODO: Uncomment when Python SDK is ready for PyPI publishing
   # publish-pypi:

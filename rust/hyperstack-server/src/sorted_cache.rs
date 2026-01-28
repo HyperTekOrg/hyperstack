@@ -178,15 +178,41 @@ impl SortedViewCache {
 
     /// Insert or update an entity, returns the position where it was inserted
     pub fn upsert(&mut self, entity_key: String, entity: Value) -> UpsertResult {
+        let debug_computed = std::env::var("HYPERSTACK_DEBUG_COMPUTED").is_ok();
+
+        if debug_computed {
+            if let Some(results) = entity.get("results") {
+                if results.get("rng").is_some() {
+                    tracing::warn!(
+                        "[SORTED_CACHE_UPSERT] view={} key={} entity.results: rng={:?} winning_square={:?} did_hit_motherlode={:?}",
+                        self.view_id,
+                        entity_key,
+                        results.get("rng"),
+                        results.get("winning_square"),
+                        results.get("did_hit_motherlode")
+                    );
+                }
+            }
+        }
+
         let sort_value = self.extract_sort_value(&entity);
-        let new_sort_key = SortKey {
-            sort_value,
-            entity_key: entity_key.clone(),
-        };
 
         // Check if entity already exists
-        if let Some((old_sort_key, _old_entity)) = self.entities.get(&entity_key) {
-            if old_sort_key == &new_sort_key {
+        if let Some((old_sort_key, _)) = self.entities.get(&entity_key).cloned() {
+            let effective_sort_value = if matches!(sort_value, SortValue::Null)
+                && !matches!(old_sort_key.sort_value, SortValue::Null)
+            {
+                old_sort_key.sort_value.clone()
+            } else {
+                sort_value
+            };
+
+            let new_sort_key = SortKey {
+                sort_value: effective_sort_value,
+                entity_key: entity_key.clone(),
+            };
+
+            if old_sort_key == new_sort_key {
                 // Sort key unchanged - just update entity data
                 self.entities
                     .insert(entity_key.clone(), (new_sort_key, entity));
@@ -196,8 +222,20 @@ impl SortedViewCache {
             }
 
             // Sort key changed - need to reposition
-            self.sorted.remove(old_sort_key);
+            self.sorted.remove(&old_sort_key);
+            self.sorted.insert(new_sort_key.clone(), ());
+            self.entities
+                .insert(entity_key.clone(), (new_sort_key, entity));
+            self.cache_dirty = true;
+
+            let position = self.find_position(&entity_key);
+            return UpsertResult::Inserted { position };
         }
+
+        let new_sort_key = SortKey {
+            sort_value,
+            entity_key: entity_key.clone(),
+        };
 
         self.sorted.insert(new_sort_key.clone(), ());
         self.entities
@@ -506,5 +544,61 @@ mod tests {
 
         let keys = cache.ordered_keys();
         assert_eq!(keys, vec!["b", "c", "a"]);
+    }
+
+    #[test]
+    fn test_update_with_missing_sort_field_preserves_position() {
+        let mut cache = SortedViewCache::new(
+            "test/latest".to_string(),
+            vec!["id".to_string(), "round_id".to_string()],
+            SortOrder::Desc,
+        );
+
+        cache.upsert(
+            "100".to_string(),
+            json!({"id": {"round_id": 100}, "data": "initial"}),
+        );
+        cache.upsert(
+            "200".to_string(),
+            json!({"id": {"round_id": 200}, "data": "initial"}),
+        );
+        cache.upsert(
+            "300".to_string(),
+            json!({"id": {"round_id": 300}, "data": "initial"}),
+        );
+
+        assert_eq!(cache.ordered_keys(), vec!["300", "200", "100"]);
+
+        cache.upsert("200".to_string(), json!({"data": "updated_without_id"}));
+
+        assert_eq!(
+            cache.ordered_keys(),
+            vec!["300", "200", "100"],
+            "Entity 200 should retain its position even when updated without sort field"
+        );
+
+        let entity = cache.get("200").unwrap();
+        assert_eq!(entity["data"], "updated_without_id");
+    }
+
+    #[test]
+    fn test_new_entity_with_missing_sort_field_gets_null_position() {
+        let mut cache = SortedViewCache::new(
+            "test/latest".to_string(),
+            vec!["id".to_string(), "round_id".to_string()],
+            SortOrder::Desc,
+        );
+
+        cache.upsert("100".to_string(), json!({"id": {"round_id": 100}}));
+        cache.upsert("200".to_string(), json!({"id": {"round_id": 200}}));
+
+        cache.upsert("new".to_string(), json!({"data": "no_sort_field"}));
+
+        let keys = cache.ordered_keys();
+        assert_eq!(
+            keys.first().unwrap(),
+            "new",
+            "New entity without sort field gets Null which sorts first (Null < any value)"
+        );
     }
 }

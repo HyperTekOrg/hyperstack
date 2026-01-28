@@ -185,21 +185,34 @@ impl Runtime {
             None
         };
 
-        let http_health_handle = if let Some(http_health_config) = &self.config.http_health {
+        // Run the HTTP health server on a dedicated OS thread with its own single-threaded
+        // tokio runtime. This isolates it from the main runtime so that liveness probes
+        // always respond even when the event processing pipeline saturates worker threads
+        // (e.g. due to std::sync::Mutex contention on VmContext under high throughput).
+        let _http_health_handle = if let Some(http_health_config) = &self.config.http_health {
             let mut http_server = HttpHealthServer::new(http_health_config.bind_address);
             if let Some(monitor) = health_monitor.clone() {
                 http_server = http_server.with_health_monitor(monitor);
             }
 
             let bind_addr = http_health_config.bind_address;
-            Some(tokio::spawn(
-                async move {
-                    if let Err(e) = http_server.start().await {
-                        error!("HTTP health server error: {}", e);
-                    }
-                }
-                .instrument(info_span!("http.health", %bind_addr)),
-            ))
+            let join_handle = std::thread::Builder::new()
+                .name("health-server".into())
+                .spawn(move || {
+                    let rt = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("Failed to create health server runtime");
+                    rt.block_on(async move {
+                        let _span = info_span!("http.health", %bind_addr).entered();
+                        if let Err(e) = http_server.start().await {
+                            error!("HTTP health server error: {}", e);
+                        }
+                    });
+                })
+                .expect("Failed to spawn health server thread");
+            info!("HTTP health server running on dedicated thread at {}", bind_addr);
+            Some(join_handle)
         } else {
             None
         };
@@ -266,15 +279,6 @@ impl Runtime {
                 }
             } => {
                 info!("Parser runtime task completed");
-            }
-            _ = async {
-                if let Some(handle) = http_health_handle {
-                    handle.await
-                } else {
-                    std::future::pending().await
-                }
-            } => {
-                info!("HTTP health server task completed");
             }
             _ = bus_cleanup_handle => {
                 info!("Bus cleanup task completed");

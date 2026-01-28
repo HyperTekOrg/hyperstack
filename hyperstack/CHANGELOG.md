@@ -1,5 +1,124 @@
 # Changelog
 
+## [0.3.12](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.3.11...hyperstack-v0.3.12) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.11 to 0.3.12
+    * hyperstack-macros bumped from 0.3.11 to 0.3.12
+    * hyperstack-server bumped from 0.3.11 to 0.3.12
+    * hyperstack-sdk bumped from 0.3.11 to 0.3.12
+
+## [0.3.11](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.3.10...hyperstack-v0.3.11) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.10 to 0.3.11
+    * hyperstack-macros bumped from 0.3.10 to 0.3.11
+    * hyperstack-server bumped from 0.3.10 to 0.3.11
+    * hyperstack-sdk bumped from 0.3.10 to 0.3.11
+
+## [0.3.10](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.3.9...hyperstack-v0.3.10) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.9 to 0.3.10
+    * hyperstack-macros bumped from 0.3.9 to 0.3.10
+    * hyperstack-server bumped from 0.3.9 to 0.3.10
+    * hyperstack-sdk bumped from 0.3.9 to 0.3.10
+
+## [0.3.9](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.3.8...hyperstack-v0.3.9) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.8 to 0.3.9
+    * hyperstack-macros bumped from 0.3.8 to 0.3.9
+    * hyperstack-server bumped from 0.3.8 to 0.3.9
+    * hyperstack-sdk bumped from 0.3.8 to 0.3.9
+
+## [0.3.8](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.3.7...hyperstack-v0.3.8) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.7 to 0.3.8
+    * hyperstack-macros bumped from 0.3.7 to 0.3.8
+    * hyperstack-server bumped from 0.3.7 to 0.3.8
+    * hyperstack-sdk bumped from 0.3.7 to 0.3.8
+
+## [0.3.7](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.3.6...hyperstack-v0.3.7) (2026-01-26)
+
+
+### Miscellaneous Chores
+
+* **hyperstack:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.6 to 0.3.7
+    * hyperstack-macros bumped from 0.3.6 to 0.3.7
+    * hyperstack-server bumped from 0.3.6 to 0.3.7
+    * hyperstack-sdk bumped from 0.3.6 to 0.3.7
+
+## [0.3.6](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.3.5...hyperstack-v0.3.6) (2026-01-26)
+
+
+### Miscellaneous Chores
+
+* **hyperstack:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.5 to 0.3.6
+    * hyperstack-macros bumped from 0.3.5 to 0.3.6
+    * hyperstack-server bumped from 0.3.5 to 0.3.6
+    * hyperstack-sdk bumped from 0.3.5 to 0.3.6
+
 ## [0.3.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.3.4...hyperstack-v0.3.5) (2026-01-24)
 
 

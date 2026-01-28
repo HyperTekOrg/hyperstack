@@ -1,5 +1,103 @@
 # Changelog
 
+## [0.3.12](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.11...hyperstack-cli-v0.3.12) (2026-01-28)
+
+
+### Features
+
+* **cli:** replace pumpfun template with ore-rust in scaffolding ([df1a52a](https://github.com/HyperTekOrg/hyperstack/commit/df1a52a95120914a89878c026df6486a285c2a2d))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.11 to 0.3.12
+
+## [0.3.11](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.10...hyperstack-cli-v0.3.11) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-cli:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.10 to 0.3.11
+
+## [0.3.10](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.9...hyperstack-cli-v0.3.10) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-cli:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.9 to 0.3.10
+
+## [0.3.9](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.8...hyperstack-cli-v0.3.9) (2026-01-28)
+
+
+### Bug Fixes
+
+* **cli:** use rustls instead of native-tls for cross-compilation ([8bea03a](https://github.com/HyperTekOrg/hyperstack/commit/8bea03a28eecd68736ff7592c77b1de1127d03c8))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3 to 0.3.9
+
+## [0.3.8](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.7...hyperstack-cli-v0.3.8) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-cli:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.7 to 0.3.8
+
+## [0.3.7](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.6...hyperstack-cli-v0.3.7) (2026-01-26)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-cli:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.6 to 0.3.7
+
+## [0.3.6](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.5...hyperstack-cli-v0.3.6) (2026-01-26)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-cli:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.5 to 0.3.6
+
 ## [0.3.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.4...hyperstack-cli-v0.3.5) (2026-01-24)
 
 

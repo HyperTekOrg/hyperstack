@@ -33,10 +33,7 @@ pub fn create(
 
     let selected_template = match template {
         Some(t) => Template::from_str(&t).ok_or_else(|| {
-            anyhow::anyhow!(
-                "Unknown template: {}. Available: react-pumpfun, react-ore",
-                t
-            )
+            anyhow::anyhow!("Unknown template: {}. Available: react-ore, rust-ore", t)
         })?,
         None => {
             let items: Vec<String> = Template::ALL
@@ -99,22 +96,29 @@ pub fn create(
 
     println!("  {} Project scaffolded", ui::symbols::SUCCESS.green());
 
-    let pm = detect_package_manager();
-    let install_succeeded = if skip_install {
-        false
-    } else {
-        run_install(project_dir, pm)?
-    };
+    let is_rust_project = selected_template.is_rust();
 
-    println!();
-    print_next_steps(&project_name, pm, install_succeeded);
+    if is_rust_project {
+        println!();
+        print_rust_next_steps(&project_name);
+    } else {
+        let pm = detect_package_manager();
+        let install_succeeded = if skip_install {
+            false
+        } else {
+            run_npm_install(project_dir, pm)?
+        };
+
+        println!();
+        print_js_next_steps(&project_name, pm, install_succeeded);
+    }
 
     telemetry::record_create_completed(selected_template.display_name(), start.elapsed());
 
     Ok(())
 }
 
-fn run_install(project_dir: &Path, pm: &str) -> Result<bool> {
+fn run_npm_install(project_dir: &Path, pm: &str) -> Result<bool> {
     ui::print_step("Installing dependencies...");
 
     let (cmd, args) = match pm {
@@ -149,7 +153,7 @@ fn run_install(project_dir: &Path, pm: &str) -> Result<bool> {
     }
 }
 
-fn print_next_steps(project_name: &str, pm: &str, install_succeeded: bool) {
+fn print_js_next_steps(project_name: &str, pm: &str, install_succeeded: bool) {
     println!(
         "{} {}",
         ui::symbols::SUCCESS.green().bold(),
@@ -178,5 +182,23 @@ fn print_next_steps(project_name: &str, pm: &str, install_succeeded: bool) {
         );
     }
 
+    println!();
+}
+
+fn print_rust_next_steps(project_name: &str) {
+    println!(
+        "{} {}",
+        ui::symbols::SUCCESS.green().bold(),
+        "Ready!".bold()
+    );
+    println!();
+    println!("Build and run:");
+    println!();
+    println!(
+        "  {} {} && {}",
+        "$".dimmed(),
+        format!("cd {}", project_name).cyan(),
+        "cargo run".cyan()
+    );
     println!();
 }
