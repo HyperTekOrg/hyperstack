@@ -800,7 +800,7 @@ fn generate_computed_fields_hook(
                     #expr_code
                 };
                 let serialized_value = hyperstack::runtime::serde_json::to_value(&computed_value)?;
-                
+
                 // Debug logging for computed field evaluation
                 if cfg!(debug_assertions) || std::env::var("HYPERSTACK_DEBUG_COMPUTED").is_ok() {
                     eprintln!(
@@ -810,7 +810,7 @@ fn generate_computed_fields_hook(
                         &serialized_value
                     );
                 }
-                
+
                 section_obj.insert(#field_str.to_string(), serialized_value);
 
                 // Re-extract the field with a new binding for dependent computed fields
@@ -818,7 +818,7 @@ fn generate_computed_fields_hook(
                 let #field_ident: #field_type = section_obj
                     .get(#field_str)
                     .and_then(|v| hyperstack::runtime::serde_json::from_value(v.clone()).ok());
-                    
+
                 // Debug: verify re-extraction
                 if cfg!(debug_assertions) || std::env::var("HYPERSTACK_DEBUG_COMPUTED").is_ok() {
                     eprintln!(
@@ -903,7 +903,7 @@ fn generate_computed_fields_hook(
         if dep_extractions.is_empty() {
             quote! {
                 let state_snapshot = state.clone();
-                
+
                 if cfg!(debug_assertions) || std::env::var("HYPERSTACK_DEBUG_COMPUTED").is_ok() {
                     if let Some(section_val) = state_snapshot.get(#section_str) {
                         eprintln!(
@@ -913,14 +913,15 @@ fn generate_computed_fields_hook(
                         );
                     }
                 }
-                
+
                 if let Some(section_value) = state.get_mut(#section_str) {
                     if let Some(section_obj) = section_value.as_object_mut() {
                         #eval_fn_name(section_obj, &state_snapshot)?;
                     }
                 }
-                
+
                 if cfg!(debug_assertions) || std::env::var("HYPERSTACK_DEBUG_COMPUTED").is_ok() {
+                    println!("TEST");
                     if let Some(section_val) = state.get(#section_str) {
                         eprintln!(
                             "[COMPUTED] Section '{}' AFTER eval: {}",
