@@ -33,9 +33,6 @@ opentelemetry_sdk = { version = "0.22", features = ["rt-tokio", "metrics"], opti
 opentelemetry-otlp = { version = "0.15", features = ["tonic", "metrics"], optional = true }
 tracing-opentelemetry = { version = "0.23", optional = true }
 
-[build-dependencies]
-tonic-build = "0.12"
-
 [features]
 default = []
 otel = [
