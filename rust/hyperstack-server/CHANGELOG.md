@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.8](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.3.7...hyperstack-server-v0.3.8) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-server:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.7 to 0.3.8
+
 ## [0.3.7](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.3.6...hyperstack-server-v0.3.7) (2026-01-26)
 
 
