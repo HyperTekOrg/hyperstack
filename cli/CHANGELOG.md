@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.14](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.13...hyperstack-cli-v0.3.14) (2026-01-28)
+
+
+### Features
+
+* Add typescript ore to cli templates ([f227b74](https://github.com/HyperTekOrg/hyperstack/commit/f227b74a18f051f208f37459a64d49f2b0567d03))
+
+
+### Bug Fixes
+
+* Clippy errors ([e36224f](https://github.com/HyperTekOrg/hyperstack/commit/e36224fa861e65225c5b1f5a55bacfd1d23dc14d))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.13 to 0.3.14
+
 ## [0.3.13](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.12...hyperstack-cli-v0.3.13) (2026-01-28)
 
 
