@@ -15,3 +15,10 @@ npm install && npm run dev
 cd ore-rust
 cargo run
 ```
+
+## TypeScript (CLI)
+
+```bash
+cd ore-typescript
+npm install && npm start
+```
