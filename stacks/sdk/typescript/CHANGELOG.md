@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.9](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.3.8...hyperstack-stacks-v0.3.9) (2026-01-28)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-stacks:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * peerDependencies
+    * hyperstack-react bumped from >=0.2.0 to >=0.3.9
+    * hyperstack-typescript bumped from >=0.2.0 to >=0.3.9
+
 ## [0.3.8](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.3.7...hyperstack-stacks-v0.3.8) (2026-01-28)
 
 
