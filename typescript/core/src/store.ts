@@ -347,9 +347,11 @@ export class EntityStore {
       case 'patch': {
         const existing = viewData.get(frame.key);
         const appendPaths = frame.append ?? [];
+        
         const merged = existing
           ? deepMergeWithAppend(existing, frame.data as Partial<unknown>, appendPaths)
           : frame.data;
+        
         viewData.set(frame.key, merged);
         this.enforceMaxEntries(viewData);
         this.notifyUpdate(viewPath, frame.key, {

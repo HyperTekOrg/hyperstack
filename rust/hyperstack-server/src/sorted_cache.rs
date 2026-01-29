@@ -178,27 +178,10 @@ impl SortedViewCache {
 
     /// Insert or update an entity, returns the position where it was inserted
     pub fn upsert(&mut self, entity_key: String, entity: Value) -> UpsertResult {
-        let debug_computed = std::env::var("HYPERSTACK_DEBUG_COMPUTED").is_ok();
-
-        if debug_computed {
-            if let Some(results) = entity.get("results") {
-                if results.get("rng").is_some() {
-                    tracing::warn!(
-                        "[SORTED_CACHE_UPSERT] view={} key={} entity.results: rng={:?} winning_square={:?} did_hit_motherlode={:?}",
-                        self.view_id,
-                        entity_key,
-                        results.get("rng"),
-                        results.get("winning_square"),
-                        results.get("did_hit_motherlode")
-                    );
-                }
-            }
-        }
-
         let sort_value = self.extract_sort_value(&entity);
 
         // Check if entity already exists
-        if let Some((old_sort_key, _)) = self.entities.get(&entity_key).cloned() {
+        if let Some((old_sort_key, old_entity)) = self.entities.get(&entity_key).cloned() {
             let effective_sort_value = if matches!(sort_value, SortValue::Null)
                 && !matches!(old_sort_key.sort_value, SortValue::Null)
             {
@@ -212,10 +195,13 @@ impl SortedViewCache {
                 entity_key: entity_key.clone(),
             };
 
+            // Merge incoming entity with existing to preserve fields not in the update
+            let merged_entity = Self::deep_merge(old_entity, entity);
+
             if old_sort_key == new_sort_key {
                 // Sort key unchanged - just update entity data
                 self.entities
-                    .insert(entity_key.clone(), (new_sort_key, entity));
+                    .insert(entity_key.clone(), (new_sort_key, merged_entity));
                 // Position unchanged, no structural change
                 let position = self.find_position(&entity_key);
                 return UpsertResult::Updated { position };
@@ -225,7 +211,7 @@ impl SortedViewCache {
             self.sorted.remove(&old_sort_key);
             self.sorted.insert(new_sort_key.clone(), ());
             self.entities
-                .insert(entity_key.clone(), (new_sort_key, entity));
+                .insert(entity_key.clone(), (new_sort_key, merged_entity));
             self.cache_dirty = true;
 
             let position = self.find_position(&entity_key);
@@ -244,6 +230,22 @@ impl SortedViewCache {
 
         let position = self.find_position(&entity_key);
         UpsertResult::Inserted { position }
+    }
+
+    fn deep_merge(base: Value, patch: Value) -> Value {
+        match (base, patch) {
+            (Value::Object(mut base_map), Value::Object(patch_map)) => {
+                for (key, patch_value) in patch_map {
+                    if let Some(base_value) = base_map.remove(&key) {
+                        base_map.insert(key, Self::deep_merge(base_value, patch_value));
+                    } else {
+                        base_map.insert(key, patch_value);
+                    }
+                }
+                Value::Object(base_map)
+            }
+            (_, patch) => patch,
+        }
     }
 
     /// Remove an entity, returns the position it was at

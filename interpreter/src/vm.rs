@@ -1415,7 +1415,6 @@ impl VmContext {
                     key,
                     state,
                 } => {
-                    let debug_computed = std::env::var("HYPERSTACK_DEBUG_COMPUTED").is_ok();
                     let primary_key = self.registers[*key].clone();
 
                     if primary_key.is_null() || dirty_tracker.is_empty() {
@@ -1433,24 +1432,6 @@ impl VmContext {
                     } else {
                         let patch =
                             self.extract_partial_state_with_tracker(*state, &dirty_tracker)?;
-
-                        if debug_computed {
-                            if let Some(results) = patch.get("results") {
-                                if results.get("rng").is_some()
-                                    || results.get("winning_square").is_some()
-                                    || results.get("did_hit_motherlode").is_some()
-                                {
-                                    tracing::warn!(
-                                        "[VM_EMIT_MUTATION] entity={} key={} patch.results: rng={:?} winning_square={:?} did_hit_motherlode={:?}",
-                                        entity_name,
-                                        primary_key,
-                                        results.get("rng"),
-                                        results.get("winning_square"),
-                                        results.get("did_hit_motherlode")
-                                    );
-                                }
-                            }
-                        }
 
                         let append = dirty_tracker.appended_paths();
                         let mutation = Mutation {
@@ -1755,65 +1736,25 @@ impl VmContext {
                     state,
                     computed_paths,
                 } => {
-                    let debug_computed = std::env::var("HYPERSTACK_DEBUG_COMPUTED").is_ok();
-
                     if let Some(evaluator) = entity_evaluator {
                         let old_values: Vec<_> = computed_paths
                             .iter()
                             .map(|path| Self::get_value_at_path(&self.registers[*state], path))
                             .collect();
 
-                        if debug_computed {
-                            tracing::warn!(
-                                "[VM_EVAL_COMPUTED] entity={} BEFORE evaluator: {:?}",
-                                entity_name,
-                                computed_paths
-                                    .iter()
-                                    .zip(old_values.iter())
-                                    .map(|(p, v)| format!("{}={:?}", p, v))
-                                    .collect::<Vec<_>>()
-                            );
-                        }
-
                         let state_value = &mut self.registers[*state];
                         let eval_result = evaluator(state_value);
-
-                        if debug_computed {
-                            if let Err(ref e) = eval_result {
-                                tracing::error!(
-                                    "[VM_EVAL_COMPUTED] entity={} evaluator FAILED: {:?}",
-                                    entity_name,
-                                    e
-                                );
-                            }
-                        }
 
                         if eval_result.is_ok() {
                             for (path, old_value) in computed_paths.iter().zip(old_values.iter()) {
                                 let new_value =
                                     Self::get_value_at_path(&self.registers[*state], path);
 
-                                if debug_computed {
-                                    tracing::warn!(
-                                        "[VM_EVAL_COMPUTED] entity={} path={} old={:?} new={:?} changed={}",
-                                        entity_name,
-                                        path,
-                                        old_value,
-                                        new_value,
-                                        new_value != *old_value
-                                    );
-                                }
-
                                 if new_value != *old_value {
                                     dirty_tracker.mark_replaced(path);
                                 }
                             }
                         }
-                    } else if debug_computed {
-                        tracing::warn!(
-                            "[VM_EVAL_COMPUTED] entity={} NO EVALUATOR - skipping computed fields",
-                            entity_name
-                        );
                     }
                     pc += 1;
                 }
@@ -1953,6 +1894,13 @@ impl VmContext {
         let compiled = self.get_compiled_path(path);
         let segments = compiled.segments();
         let value = self.registers[value_reg].clone();
+
+        // SetOnce should only set meaningful values. A null source typically means
+        // the field doesn't exist in this event type (e.g., instruction events don't
+        // have account data). Skip to preserve any existing value.
+        if value.is_null() {
+            return Ok(false);
+        }
 
         if !self.registers[object_reg].is_object() {
             self.registers[object_reg] = json!({});

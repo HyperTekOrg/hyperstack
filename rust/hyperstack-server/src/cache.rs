@@ -77,26 +77,6 @@ impl EntityCache {
         patch: Value,
         append_paths: &[String],
     ) {
-        let debug_computed = std::env::var("HYPERSTACK_DEBUG_COMPUTED").is_ok();
-
-        if debug_computed {
-            if let Some(results) = patch.get("results") {
-                if results.get("rng").is_some()
-                    || results.get("winning_square").is_some()
-                    || results.get("did_hit_motherlode").is_some()
-                {
-                    tracing::warn!(
-                        "[CACHE_UPSERT] view={} key={} patch.results: rng={:?} winning_square={:?} did_hit_motherlode={:?}",
-                        view_id,
-                        key,
-                        results.get("rng"),
-                        results.get("winning_square"),
-                        results.get("did_hit_motherlode")
-                    );
-                }
-            }
-        }
-
         let mut caches = self.caches.write().await;
 
         let cache = caches.entry(view_id.to_string()).or_insert_with(|| {
@@ -109,37 +89,7 @@ impl EntityCache {
         let max_array_length = self.config.max_array_length;
 
         if let Some(entity) = cache.get_mut(key) {
-            if debug_computed {
-                if let Some(results) = entity.get("results") {
-                    if results.get("rng").is_some() {
-                        tracing::warn!(
-                            "[CACHE_UPSERT] view={} key={} BEFORE merge entity.results: rng={:?} winning_square={:?} did_hit_motherlode={:?}",
-                            view_id,
-                            key,
-                            results.get("rng"),
-                            results.get("winning_square"),
-                            results.get("did_hit_motherlode")
-                        );
-                    }
-                }
-            }
-
             deep_merge_with_append(entity, patch, append_paths, max_array_length);
-
-            if debug_computed {
-                if let Some(results) = entity.get("results") {
-                    if results.get("rng").is_some() {
-                        tracing::warn!(
-                            "[CACHE_UPSERT] view={} key={} AFTER merge entity.results: rng={:?} winning_square={:?} did_hit_motherlode={:?}",
-                            view_id,
-                            key,
-                            results.get("rng"),
-                            results.get("winning_square"),
-                            results.get("did_hit_motherlode")
-                        );
-                    }
-                }
-            }
         } else {
             let new_entity = truncate_arrays_if_needed(patch, max_array_length);
             cache.put(key.to_string(), new_entity);
