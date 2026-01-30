@@ -779,7 +779,7 @@ fn generate_computed_fields_hook(
         // Get dependencies for this section
         let deps = section_dependencies.get(section).cloned().unwrap_or_default();
 
-        let section_str = section.as_str();
+        let _section_str = section.as_str();
         let field_evaluations: Vec<_> = fields.iter().map(|(field_name, expression, field_type)| {
             let field_str = field_name.as_str();
             let field_ident = format_ident!("{}", field_name);
