@@ -1,4 +1,4 @@
-import { HyperStack, createUpdateStream, type Update } from 'hyperstack-typescript';
+import { HyperStack, type Update } from 'hyperstack-typescript';
 import { OREROUND_STACK, type OreRound } from 'hyperstack-stacks/ore';
 
 const URL = 'wss://ore.stack.usehyperstack.com';
@@ -29,15 +29,9 @@ async function main() {
   });
   console.log(`Connected to ${URL}`);
 
-  const latestStream = createUpdateStream<OreRound>(
-    hs.store,
-    hs.getSubscriptionRegistry(),
-    { view: 'OreRound/latest', take: 1 }
-  );
-
   console.log('=== Watching Latest view ===');
 
-  for await (const update of latestStream) {
+  for await (const update of hs.views.OreRound.latest.watch()) {
     handleUpdate('LATEST', update);
   }
 }
