@@ -1,0 +1,607 @@
+---
+title: TypeScript SDK
+sidebar:
+  order: 2
+---
+
+The `hyperstack-typescript` SDK is a framework-agnostic client for consuming streaming data from Hyperstack. It uses `AsyncIterable`-based streaming and works in any JavaScript environment — Node.js, browsers, Deno, or Bun.
+
+:::tip[Using React?]
+If you're building a React application, use the [React SDK](/sdks/react/) instead. It provides hooks and providers built on top of this core SDK.
+:::
+
+---
+
+## Quick Start
+
+```typescript
+import { HyperStack } from "hyperstack-typescript";
+
+// Connect to a deployed stack
+const hs = await HyperStack.connect(
+  "wss://ore.stack.usehyperstack.com",
+);
+
+// Stream updates as they happen
+for await (const update of hs.subscribe("PumpfunToken/list")) {
+  if (update.type === "upsert") {
+    console.log("Token:", update.data.name, update.data.symbol);
+  }
+}
+```
+
+---
+
+## Installation
+
+```bash
+npm install hyperstack-typescript
+```
+
+No peer dependencies. Works anywhere JavaScript runs.
+
+---
+
+## Connection
+
+### Basic Connection
+
+```typescript
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
+```
+
+### With Options
+
+```typescript
+const hs = await HyperStack.connect(
+  "wss://ore.stack.usehyperstack.com",
+  {
+    // Maximum entries per view (prevents memory issues on long-running clients)
+    maxEntriesPerView: 5000, // default: 10000
+
+    // Or disable limiting entirely (not recommended for long sessions)
+    // maxEntriesPerView: null,
+  },
+);
+```
+
+### Connect with Stack Definition
+
+```typescript
+import { HyperStack } from "hyperstack-typescript";
+import { ORE_STACK } from "hyperstack-stacks/ore";
+
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
+  stack: ORE_STACK,
+});
+```
+
+### Connect without Stack (Raw WebSocket)
+
+```typescript
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
+
+// Subscribe to any view path directly
+for await (const update of hs.subscribe("Token/list")) {
+  console.log(update);
+}
+```
+
+### Connection Options
+
+```typescript
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
+  stack: MY_STACK,
+  maxEntriesPerView: 5000, // Limit entries per view (default: 10000)
+});
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `stack` | `StackDefinition` | `undefined` | Stack definition for typed views |
+| `maxEntriesPerView` | `number \| null` | `10000` | Max entries per view before LRU eviction |
+
+### Connection State
+
+```typescript
+// Check current state
+console.log(hs.connectionState);
+// 'connected' | 'connecting' | 'disconnected' | 'reconnecting' | 'error'
+
+// Listen for changes
+const unsubscribe = hs.onConnectionStateChange((state) => {
+  console.log("ORE Stack connection state:", state);
+});
+
+// Later: stop listening
+unsubscribe();
+```
+
+### Disconnect
+
+```typescript
+// Graceful disconnect
+await hs.disconnect();
+```
+
+---
+
+## Streaming Data
+
+### Subscribe to Updates
+
+The SDK uses `AsyncIterable` for streaming — modern, memory-efficient, and easy to use:
+
+```typescript
+interface Token {
+  mint: string;
+  name: string;
+  symbol: string;
+  price?: number;
+}
+
+// Stream all updates
+for await (const update of hs.subscribe<Token>("Token/list")) {
+  switch (update.type) {
+    case "upsert":
+      console.log("Token updated:", update.key, update.data);
+      break;
+    case "delete":
+      console.log("Token removed:", update.key);
+      break;
+  }
+}
+```
+
+### Watch List Views
+
+Stream all entities in a collection:
+
+```typescript
+for await (const update of hs.views.tokens.list.watch()) {
+  switch (update.type) {
+    case "upsert":
+      console.log("Created or updated:", update.data);
+      break;
+    case "patch":
+      console.log("Partial update:", update.data);
+      break;
+    case "delete":
+      console.log("Deleted:", update.key);
+      break;
+  }
+}
+```
+
+### Watch State Views
+
+Stream a single entity by key:
+
+```typescript
+const mintAddress = "So11111111111111111111111111111111111111112";
+
+for await (const update of hs.views.tokens.state.watch("token-123")) {
+  console.log("Token updated:", update.data);
+}
+```
+
+### Rich Diffs (Before/After)
+
+Get before/after state for each update:
+
+```typescript
+for await (const update of hs.views.tokens.list.watchRich()) {
+  if (update.type === "updated") {
+    console.log("Changed from:", update.before);
+    console.log("Changed to:", update.after);
+
+    // Detect specific field changes
+    if (update.before.price !== update.after.price) {
+      console.log(
+        `Price changed: ${update.before.price} → ${update.after.price}`
+      );
+    }
+  }
+}
+```
+
+### Rich Diffs with subscribeRich
+
+Get before/after state for each update:
+
+```typescript
+for await (const update of hs.subscribeRich<Token>("Token/list")) {
+  if (update.type === "updated") {
+    console.log("Before:", update.before);
+    console.log("After:", update.after);
+
+    // Example: detect price changes
+    if (update.before.price !== update.after.price) {
+      console.log(
+        `Price changed: ${update.before.price} → ${update.after.price}`,
+      );
+    }
+  }
+}
+```
+
+### Watch a Single Entity
+
+```typescript
+const mintAddress = "So11111111111111111111111111111111111111112";
+
+for await (const update of hs.subscribe<Token>("Token/state", {
+  key: mintAddress,
+})) {
+  console.log("Token updated:", update.data);
+}
+```
+
+---
+
+## One-Shot Queries
+
+Not streaming — just fetch the current state:
+
+```typescript
+// Get all tokens
+const tokens = await hs.get<Token[]>("Token/list");
+console.log(`Found ${tokens.length} tokens`);
+
+// Get a single token
+const token = await hs.get<Token>("Token/state", { key: mintAddress });
+console.log("Token:", token?.name);
+```
+
+### Using Views API
+
+```typescript
+// Get all rounds (snapshot)
+const rounds = await hs.views.rounds.list.get();
+
+// Get a single round by key
+const round = await hs.views.rounds.state.get("round-123");
+
+// Get with filters
+const recentRounds = await hs.views.rounds.list.get({
+  limit: 10,
+  where: { round_id: { gte: 1000 } },
+});
+```
+
+---
+
+## Store Size Limits
+
+Each view maintains an in-memory store of entities. By default, stores are limited to 10,000 entries to prevent memory issues on long-running clients. When the limit is reached, oldest entries are evicted (LRU).
+
+```typescript
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
+  maxEntriesPerView: 5000, // Custom limit
+});
+```
+
+To disable limiting (not recommended for production):
+
+```typescript
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
+  maxEntriesPerView: null, // Unlimited
+});
+```
+
+---
+
+## Error Handling
+
+```typescript
+import { HyperStackError } from "hyperstack-typescript";
+
+try {
+  const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
+} catch (error) {
+  if (error instanceof HyperStackError) {
+    console.error("ORE Stack connection failed:", error.message);
+    console.error("Code:", error.code);
+  }
+}
+} catch (error) {
+  if (error instanceof HyperStackError) {
+    console.error("Hyperstack error:", error.message);
+    console.error("Code:", error.code);
+  } else {
+    throw error;
+  }
+}
+```
+
+---
+
+## Framework Integration
+
+### Vue 3
+
+```typescript
+// composables/useHyperstack.ts
+import { ref, onMounted, onUnmounted } from "vue";
+import { HyperStack } from "hyperstack-typescript";
+
+export function useOreRoundList() {
+  const rounds = ref<OreRound[]>([]);
+  const isLoading = ref(true);
+  let hs: HyperStack | null = null;
+  let controller: AbortController | null = null;
+
+  onMounted(async () => {
+    hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
+    controller = new AbortController();
+
+    isLoading.value = false;
+
+    try {
+      for await (const update of hs.subscribe<OreRound>("OreRound/list")) {
+        if (controller.signal.aborted) break;
+
+        if (update.type === "upsert") {
+          const idx = rounds.value.findIndex((r) => r.round_id === update.key);
+          if (idx >= 0) {
+            rounds.value[idx] = update.data;
+          } else {
+            rounds.value.push(update.data);
+          }
+        } else if (update.type === "delete") {
+          rounds.value = rounds.value.filter((r) => r.round_id !== update.key);
+        }
+      }
+    } catch (e) {
+      if (!controller.signal.aborted) throw e;
+    }
+  });
+
+  onUnmounted(() => {
+    controller?.abort();
+    hs?.disconnect();
+  });
+
+  return { rounds, isLoading };
+}
+```
+
+```vue
+<!-- RoundList.vue -->
+<script setup lang="ts">
+import { useOreRoundList } from "./composables/useHyperstack";
+
+const { rounds, isLoading } = useOreRoundList();
+</script>
+
+<template>
+  <div v-if="isLoading">Connecting...</div>
+  <ul v-else>
+    <li v-for="round in rounds" :key="round.round_id">
+      Round #{{ round.round_id }} - Motherlode: {{ round.motherlode }}
+    </li>
+  </ul>
+</template>
+```
+
+### Svelte
+
+```typescript
+// stores/hyperstack.ts
+import { writable } from "svelte/store";
+import { HyperStack } from "hyperstack-typescript";
+
+export function createOreRoundStore() {
+  const { subscribe, update } = writable<OreRound[]>([]);
+  let hs: HyperStack | null = null;
+
+  async function connect() {
+    hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
+    for await (const event of hs.views.rounds.list.watch()) {
+      update((rounds) => {
+        if (event.type === "upsert") {
+          const idx = rounds.findIndex((r) => r.round_id === event.key);
+          if (idx >= 0) {
+            rounds[idx] = event.data;
+            return [...rounds];
+          }
+          return [...rounds, event.data];
+        } else if (event.type === "delete") {
+          return rounds.filter((r) => r.round_id !== event.key);
+        }
+        return rounds;
+      });
+    }
+  }
+
+  function disconnect() {
+    hs?.disconnect();
+  }
+
+  return { subscribe, connect, disconnect };
+}
+          return [...tokens, event.data];
+        } else {
+          return tokens.filter((t) => t.mint !== event.key);
+        }
+      });
+    }
+  }
+
+  function disconnect() {
+    hs?.disconnect();
+  }
+
+  return { subscribe, connect, disconnect };
+}
+```
+
+```svelte
+<!-- TokenList.svelte -->
+<script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
+  import { createTokenStore } from './stores/hyperstack';
+
+  const tokenStore = createTokenStore();
+
+  onMount(() => tokenStore.connect());
+  onDestroy(() => tokenStore.disconnect());
+</script>
+
+<ul>
+  {#each $tokenStore as token (token.mint)}
+    <li>{token.name} ({token.symbol})</li>
+  {/each}
+</ul>
+```
+
+### Node.js Script
+
+```typescript
+// monitor.ts
+import { HyperStack } from "hyperstack-typescript";
+
+async function main() {
+  const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
+
+  console.log("Monitoring ORE mining rounds...\n");
+
+  for await (const update of hs.subscribe<OreRound>("OreRound/list")) {
+    if (update.type === "upsert") {
+      const round = update.data;
+
+      // Example: Alert on high-motherlode rounds
+      if (round.motherlode && round.motherlode > 1000000000) {
+        console.log(`🚨 High motherlode round: #${round.round_id}`);
+        console.log(`   Motherlode: ${(round.motherlode / 1e9).toFixed(2)} SOL`);
+        console.log(`   Difficulty: ${round.difficulty}\n`);
+      }
+    }
+  }
+}
+
+main().catch(console.error);
+```
+
+Run with:
+
+```bash
+npx tsx monitor.ts
+```
+
+---
+
+## Complete Example
+
+A complete Node.js script that monitors tokens:
+
+```typescript
+import { HyperStack } from "hyperstack-typescript";
+import { ORE_STACK, type OreRound } from "hyperstack-stacks/ore";
+
+async function monitorOreRounds() {
+  const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
+    stack: ORE_STACK,
+  });
+
+  console.log("Monitoring ORE mining rounds...\n");
+  let updateCount = 0;
+
+  try {
+    for await (const update of hs.views.rounds.list.watch<OreRound>()) {
+      updateCount++;
+
+      switch (update.type) {
+        case "upsert":
+          console.log(`[${updateCount}] Round #${update.data.round_id} - Motherlode: ${update.data.motherlode}`);
+          break;
+        case "patch":
+          console.log(`[${updateCount}] Round #${update.data.round_id} updated`);
+          break;
+        case "delete":
+          console.log(`[${updateCount}] Round removed: ${update.key}`);
+          break;
+      }
+
+      // Print stats every 10 updates
+      if (updateCount % 10 == 0) {
+        const allRounds = await hs.views.rounds.list.get();
+        console.log(`\n--- Total rounds tracked: ${allRounds.length} ---\n`);
+      }
+    }
+  } catch (error) {
+    console.error("Stream error:", error);
+  } finally {
+    await hs.disconnect();
+  }
+}
+
+monitorOreRounds();
+```
+
+---
+
+## API Reference
+
+### `HyperStack.connect(url, options?)`
+
+Establishes a WebSocket connection to a Hyperstack stack.
+
+**Parameters:**
+- `url` — WebSocket URL of the deployed stack
+- `options` — Connection options
+
+**Returns:** `Promise<HyperStack>`
+
+### `hs.views`
+
+Typed views interface (when stack definition is provided).
+
+```typescript
+hs.views.<entity>.<view>.watch()      // Stream updates
+hs.views.<entity>.<view>.watchRich()  // Stream with before/after
+hs.views.<entity>.<view>.get()        // One-shot query
+```
+
+### `hs.subscribe<T>(viewPath, params?)`
+
+Returns an `AsyncIterable` of updates.
+
+| Parameter    | Type     | Description                      |
+| ------------ | -------- | -------------------------------- |
+| `viewPath`   | `string` | View path (e.g., `'Token/list'`) |
+| `params.key` | `string` | For state views, the entity key  |
+
+### `hs.subscribeRich<T>(viewPath, params?)`
+
+Like `subscribe` but includes before/after diffs.
+
+### `hs.get<T>(viewPath, params?)`
+
+One-shot query, returns current state.
+
+### `hs.connectionState`
+
+Current connection state:
+- `disconnected` — Not connected
+- `connecting` — Establishing connection
+- `connected` — Active connection
+- `reconnecting` — Auto-reconnecting after failure
+- `error` — Connection failed
+
+### `hs.onConnectionStateChange(callback)`
+
+Subscribe to connection state changes. Returns unsubscribe function.
+
+### `hs.disconnect()`
+
+Close the WebSocket connection gracefully.
+
+---
+
+## Next Steps
+
+- [React SDK](/sdks/react/) — Hooks and providers for React apps
+- [Rust SDK](/sdks/rust/) — Native Rust client
+- [Build Your Own Stack](/building-stacks/workflow) — Create custom data streams
+- [Core Concepts](/concepts/core-concepts/) — Understanding Stacks and Views

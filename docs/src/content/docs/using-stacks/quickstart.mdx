@@ -1,0 +1,262 @@
+---
+title: Quickstart
+sidebar:
+  order: 1
+  badge: Start Here
+description: Scaffold a new Hyperstack app in under 2 minutes.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Create a new app that streams live Solana data in under 2 minutes. The CLI scaffolds everything you need — no configuration required.
+
+:::tip[Adding to an existing project?]
+If you already have a project and want to add Hyperstack, see [Connect to a Stack](/using-stacks/connect/) instead.
+:::
+
+---
+
+## Prerequisites
+
+Choose how you want to run the CLI:
+
+<Tabs>
+<TabItem label="npx (no install)">
+
+No installation needed — just run:
+
+```bash
+npx hyperstack-cli create my-app
+```
+
+This downloads and runs the CLI without installing it globally.
+
+</TabItem>
+<TabItem label="npm (global)">
+
+Install globally via npm:
+
+```bash
+npm install -g hyperstack-cli
+```
+
+Then use the `hyperstack-cli` command:
+
+```bash
+hyperstack-cli create my-app
+```
+
+</TabItem>
+<TabItem label="Cargo (Rust)">
+
+Install the native binary via Cargo:
+
+```bash
+cargo install hyperstack-cli
+```
+
+Then use the `hs` command:
+
+```bash
+hs create my-app
+```
+
+This is the same CLI — Cargo installs it as `hs` while npm uses `hyperstack-cli`.
+
+</TabItem>
+</Tabs>
+
+---
+
+## Create Your App
+
+```bash
+npx hyperstack-cli create my-app
+```
+
+You'll be prompted to select a template:
+
+| Template | Description | Run Command |
+|----------|-------------|-------------|
+| `react-ore` | React + Vite dashboard | `npm run dev` → open [localhost:5173](http://localhost:5173) |
+| `typescript-ore` | TypeScript CLI client | `npm start` |
+| `rust-ore` | Rust + Tokio client | `cargo run` |
+
+:::note[About the ORE demo]
+All CLI templates use the same underlying example: **ORE mining rounds**. This demonstrates Hyperstack with a real, live Solana program. The templates differ only in language/framework — React for a web dashboard, TypeScript for a CLI tool, or Rust for a native binary. Each connects to the same public ORE stack and streams identical data.
+:::
+
+Or specify directly:
+
+```bash
+npx hyperstack-cli create my-app --template react-ore    # or typescript-ore, rust-ore
+```
+
+:::tip[Pure Rust workflow]
+If you prefer to avoid Node.js entirely:
+```bash
+cargo install hyperstack-cli
+hs create my-app --template rust-ore
+cd my-app
+cargo run
+```
+:::
+
+That's it. You're streaming live Solana data.
+
+---
+
+## What You Just Built
+
+The scaffolded app connects to a deployed **Hyperstack Stack** — a streaming data pipeline that:
+
+1. **Watches Solana** for ORE mining program activity
+2. **Transforms raw transactions** into structured round data (round ID, motherlode, deployment totals)
+3. **Streams updates** to your app via WebSocket as they happen on-chain
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│     Solana       │ ──▶ │   Hyperstack    │ ──▶ │    Your App     │
+│  ORE program     │     │   ore stack     │     │   (live feed)   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+No RPC calls. No polling. No custom indexer. Just streaming data.
+
+---
+
+## Available Templates
+
+| Template | Command | What You Get |
+|----------|---------|-------------|
+| **react-ore** | `npx hyperstack-cli create my-app` | React + Vite dashboard showing live ORE mining rounds |
+| **typescript-ore** | `npx hyperstack-cli create my-app` | TypeScript CLI that streams ORE data to your terminal |
+| **rust-ore** | `npx hyperstack-cli create my-app` | Rust + Tokio client streaming ORE round updates |
+
+All templates connect to the public ORE stack at `wss://ore.stack.usehyperstack.com`.
+
+You can also specify the template directly:
+
+```bash
+npx hyperstack-cli create my-app --template react-ore
+```
+
+---
+
+## What's Inside
+
+<Tabs>
+<TabItem label="React Template">
+
+The React template uses `hyperstack-react` with a pre-built stack definition:
+
+```tsx
+// App.tsx
+import { HyperstackProvider } from 'hyperstack-react';
+import { OreDashboard } from './components/OreDashboard';
+
+export default function App() {
+  return (
+    <HyperstackProvider
+      websocketUrl="wss://ore.stack.usehyperstack.com"
+      autoConnect={true}
+    >
+      <OreDashboard />
+    </HyperstackProvider>
+  );
+}
+```
+
+```tsx
+// components/OreDashboard.tsx
+import { useHyperstack, useConnectionState } from 'hyperstack-react';
+import { OREROUND_STACK } from 'hyperstack-stacks/ore';
+
+export function OreDashboard() {
+  const stack = useHyperstack(OREROUND_STACK);
+  const { data: rounds } = stack.views.OreRound.latest.use({ take: 5 });
+
+  return (
+    <div>
+      {rounds?.map(round => (
+        <div key={round.id?.round_id}>
+          Round #{round.id?.round_id} — Motherlode: {round.state?.motherlode}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+</TabItem>
+<TabItem label="TypeScript Template">
+
+The TypeScript template uses `hyperstack-typescript` with the core streaming API:
+
+```typescript
+// main.ts
+import { HyperStack, createUpdateStream } from 'hyperstack-typescript';
+import { OREROUND_STACK, type OreRound } from 'hyperstack-stacks/ore';
+
+const hs = await HyperStack.connect('wss://ore.stack.usehyperstack.com', {
+  stack: OREROUND_STACK,
+});
+
+const stream = createUpdateStream<OreRound>(
+  hs.store,
+  hs.getSubscriptionRegistry(),
+  { view: 'OreRound/latest', take: 1 }
+);
+
+for await (const update of stream) {
+  if (update.type === 'upsert' || update.type === 'patch') {
+    console.log(`Round #${update.data.id?.round_id}`);
+    console.log(`Motherlode: ${update.data.state?.motherlode}`);
+  }
+}
+```
+
+</TabItem>
+<TabItem label="Rust Template">
+
+The Rust template uses `hyperstack-sdk` with typed views:
+
+```rust
+// main.rs
+use hyperstack_sdk::prelude::*;
+use hyperstack_stacks::ore::OreRoundViews;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
+
+    let views = hs.views::<OreRoundViews>();
+    let mut stream = views.latest().watch();
+
+    while let Some(update) = stream.next().await {
+        match update {
+            Update::Upsert { data, .. } | Update::Patch { data, .. } => {
+                println!("Round # {:?}", data.id.round_id);
+                println!("Motherlode: {:?}", data.state.motherlode);
+            }
+            Update::Delete { key } => println!("Deleted: {}", key),
+        }
+    }
+    Ok(())
+}
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## Next Steps
+
+Now that you have a working app:
+
+- [Core Concepts](/concepts/core-concepts/) — Understand Stacks, Views, and live data streaming
+- [React SDK](/sdks/react/) — Build a complete React app with custom stack definitions
+- [TypeScript SDK](/sdks/typescript/) — Use Hyperstack with Node.js, Vue, Svelte, or vanilla JS
+- [Rust SDK](/sdks/rust/) — Native Rust client
+- [Build Your Own Stack](/building-stacks/workflow) — Create custom data streams for any Solana program

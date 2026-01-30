@@ -1,0 +1,269 @@
+---
+title: Connect to a Stack
+sidebar:
+  order: 2
+description: Add Hyperstack to your existing project and stream live Solana data.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Add Hyperstack to an existing project and start streaming live Solana data in minutes. Connect to stacks you have deployed or to one of our managed feeds like Ore. The Ore feed is available with no account required — just install the SDK and connect to the public Ore stack.
+
+Deploying custom stacks is currently in closed beta.
+
+:::tip[Starting fresh?]
+If you're creating a new app, the [Quickstart](/using-stacks/quickstart) scaffolds everything automatically with `npx hyperstack-cli create`.
+:::
+
+---
+
+## Quick Start
+
+Install the SDK for your platform and connect to the public ORE mining rounds stack:
+
+<Tabs>
+<TabItem label="React">
+
+### 1. Install
+
+```bash
+npm install hyperstack-react zustand
+```
+
+### 2. Add to your app
+
+```tsx
+// App.tsx
+import { HyperstackProvider, useHyperstack } from "hyperstack-react";
+import { OREROUND_STACK } from "hyperstack-stacks/ore";
+
+function OreRounds() {
+  const stack = useHyperstack(OREROUND_STACK);
+  const { data: rounds, isLoading } = stack.views.OreRound.latest.use({ take: 5 });
+
+  if (isLoading) return <div>Connecting...</div>;
+
+  return (
+    <div>
+      <h1>Live ORE Mining Rounds</h1>
+      {rounds?.map((round) => (
+        <div key={round.id?.round_id}>
+          Round #{round.id?.round_id} — Motherlode: {round.state?.motherlode}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <HyperstackProvider websocketUrl="wss://ore.stack.usehyperstack.com">
+      <OreRounds />
+    </HyperstackProvider>
+  );
+}
+```
+
+### 3. Run it
+
+```bash
+npm run dev
+```
+
+Watch as live ORE mining round data streams into your app.
+
+</TabItem>
+<TabItem label="TypeScript / Node.js">
+
+### 1. Install
+
+```bash
+npm install hyperstack-typescript
+```
+
+### 2. Create a script
+
+```typescript
+// stream.ts
+import { HyperStack } from "hyperstack-typescript";
+import { OREROUND_STACK, type OreRound } from "hyperstack-stacks/ore";
+
+async function main() {
+  console.log("Connecting to ORE stack...\n");
+
+  const hs = await HyperStack.connect(
+    "wss://ore.stack.usehyperstack.com",
+    { stack: OREROUND_STACK }
+  );
+
+  console.log("Connected! Streaming live ORE rounds:\n");
+
+  for await (const update of hs.subscribe<OreRound>("OreRound/latest")) {
+    if (update.type === "upsert") {
+      const round = update.data;
+      console.log(`Round #${round.id?.round_id}`);
+      console.log(`  Motherlode: ${round.state?.motherlode}`);
+      console.log("");
+    }
+  }
+}
+
+main().catch(console.error);
+```
+
+### 3. Run it
+
+```bash
+npx tsx stream.ts
+```
+
+You'll see live ORE mining round updates in your terminal as they happen on Solana.
+
+</TabItem>
+<TabItem label="Rust">
+
+### 1. Add to Cargo.toml
+
+```toml
+[dependencies]
+hyperstack-sdk = "0.2"
+hyperstack-stacks = "0.2"
+```
+
+### 2. Create a script
+
+```rust
+// src/main.rs
+use hyperstack_sdk::prelude::*;
+use hyperstack_stacks::ore::OreRoundViews;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    println!("Connecting to ORE stack...\n");
+
+    let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
+
+    println!("Connected! Streaming live ORE rounds:\n");
+
+    let views = hs.views::<OreRoundViews>();
+    let mut stream = views.latest().watch();
+
+    while let Some(update) = stream.next().await {
+        match update {
+            Update::Upsert { data, .. } | Update::Patch { data, .. } => {
+                println!("Round #{:?}", data.id.round_id);
+                println!("  Motherlode: {:?}", data.state.motherlode);
+            }
+            Update::Delete { key } => println!("Deleted: {}", key),
+        }
+    }
+
+    Ok(())
+}
+```
+
+### 3. Run it
+
+```bash
+cargo run
+```
+
+The Rust client connects and streams ORE round updates via WebSocket.
+
+</TabItem>
+<TabItem label="Browser (Raw WebSocket)">
+
+For testing without any SDK, open your browser console and paste:
+
+```javascript
+const ws = new WebSocket("wss://ore.stack.usehyperstack.com");
+
+ws.onopen = () => {
+  console.log("Connected to Hyperstack!");
+  ws.send(
+    JSON.stringify({
+      type: "subscribe",
+      view: "OreRound/latest",
+    }),
+  );
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  if (data.type === "upsert") {
+    console.log("Round update:", data.data);
+  }
+};
+```
+
+Watch your console as real ORE mining data streams in.
+
+</TabItem>
+</Tabs>
+
+---
+
+## What Just Happened?
+
+You just connected to a live Hyperstack stack. The ORE mining stack watches the Solana blockchain, extracts round data from on-chain transactions, and pushes updates to your app via WebSocket as they happen.
+
+The stack is public — no API key or account needed. Point your SDK at the WebSocket URL and start receiving data immediately.
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│     Solana      │ ──▶ │   Hyperstack    │ ──▶ │    Your App     │
+│   (on-chain)    │     │   (streaming)   │     │   (live feed)   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+---
+
+## Understanding the Code
+
+### Stack SDKs
+
+A **stack** is both a live data feed and a typed SDK. The SDK tells the core Hyperstack client how to interact with that specific feed — what entities exist, what views are available, and the TypeScript types for each.
+
+You can obtain a stack SDK in two ways:
+
+**Option 1: Pre-built from `hyperstack-stacks`**
+
+For popular Solana protocols, we publish ready-to-use SDKs:
+
+```bash
+npm install hyperstack-stacks
+```
+
+```typescript
+import { OREROUND_STACK } from "hyperstack-stacks/ore";
+```
+
+**Option 2: Generate from your own stack**
+
+When you build a custom stack, generate an SDK for any language:
+
+```bash
+hs sdk create typescript ore
+```
+
+Both approaches produce the same result: a typed SDK that works identically with the Hyperstack client. Share the generated SDK with your team or publish it — anyone with the SDK can connect to your stack's feed (assuming they're authorized).
+
+---
+
+## Available Public Stacks
+
+| Stack | WebSocket URL | Data |
+|-------|---------------|------|
+| **ORE Mining Rounds** | `wss://ore.stack.usehyperstack.com` | Live ORE mining round updates |
+
+---
+
+## Next Steps
+
+Now that you're streaming data:
+
+- [Core Concepts](/concepts/core-concepts/) — Understand Stacks, Views, and live data streaming
+- [React SDK](/sdks/react/) — Deep dive into React hooks and patterns
+- [TypeScript SDK](/sdks/typescript/) — Use with Node.js, Vue, Svelte, or vanilla JS
+- [Rust SDK](/sdks/rust/) — Native Rust client
+- [Build Your Own Stack](/building-stacks/workflow) — Create custom data streams for any Solana program

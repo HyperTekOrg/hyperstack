@@ -1,0 +1,523 @@
+---
+title: React SDK
+sidebar:
+  order: 1
+---
+
+The `hyperstack-react` SDK provides hooks and providers for building live Solana applications with React. It's built on top of `hyperstack-typescript` and adds React-specific features like automatic re-rendering, connection state management, and data transformation.
+
+:::tip[Not using React?]
+See the [TypeScript SDK](/sdks/typescript/) for the framework-agnostic core SDK.
+:::
+
+---
+
+## Quick Start
+
+```tsx
+import { HyperstackProvider, useHyperstack } from "hyperstack-react";
+import { ORE_STACK } from "hyperstack-stacks/ore";
+
+function App() {
+  return (
+    <HyperstackProvider websocketUrl="wss://ore.stack.usehyperstack.com">
+      <Dashboard />
+    </HyperstackProvider>
+  );
+}
+
+function Dashboard() {
+  const stack = useHyperstack(ORE_STACK);
+  const { data: tokens, isLoading } = stack.views.tokens.list.use();
+
+  if (isLoading) return <p>Loading...</p>;
+
+  return (
+    <ul>
+      {tokens?.map((token) => (
+        <li key={token.id}>{token.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+## Installation
+
+```bash
+npm install hyperstack-react zustand
+```
+
+### Peer Dependencies
+
+The SDK requires:
+
+- **React** (v19.0.0+)
+- **Zustand** (v4.0.0+) — Used for internal state management
+
+---
+
+## Project Setup
+
+### 1. Wrap Your App with the Provider
+
+```tsx
+// src/main.tsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { HyperstackProvider } from "hyperstack-react";
+import App from "./App";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <HyperstackProvider
+      websocketUrl="wss://ore.stack.usehyperstack.com"
+      autoConnect={true}
+    >
+      <App />
+    </HyperstackProvider>
+  </React.StrictMode>,
+);
+```
+
+This connects to the public ORE stack — a live Solana mining program feed anyone can use for testing.
+
+#### Provider Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `websocketUrl` | `string` | required | WebSocket URL of your stack |
+| `autoConnect` | `boolean` | `true` | Auto-connect on mount |
+| `maxEntriesPerView` | `number \| null` | `10000` | Max entries per view before LRU eviction |
+
+---
+
+### 2. Create Your Stack Definition
+
+Define the data types and views your app will use:
+
+```typescript
+// src/stack.ts
+import { defineStack, createListView, createStateView } from "hyperstack-react";
+
+// Define your entity type
+interface OreRound {
+  round_id: number;
+  motherlode: number;
+  difficulty: number;
+  total_difficulty: number;
+}
+
+// Create the stack definition
+export const OreStack = defineStack({
+  name: "ore-mining",
+
+  views: {
+    rounds: {
+      // List view: all entities as an array
+      list: createListView<OreRound>("OreRound/list"),
+      // State view: single entity by key
+      state: createStateView<OreRound>("OreRound/state"),
+    },
+  },
+
+  // Optional: shared utility functions
+  helpers: {
+    formatMotherlode: (amount: number) => `${(amount / 1e9).toFixed(2)} SOL`,
+    shortRoundId: (id: number) => `#${id}`,
+  },
+});
+```
+
+### View Factories
+
+#### `createStateView<T>(viewPath, options?)`
+
+Creates a view for a single entity state.
+
+```typescript
+const tokenView = createStateView<Token>("Token/state");
+```
+
+#### `createListView<T>(viewPath, options?)`
+
+Creates a view for a collection of entities.
+
+```typescript
+const tokensView = createListView<Token>("Token/list", {
+  transform: (raw) => ({
+    ...raw,
+    isNew: Date.now() - raw.createdAt < 3600000,
+  }),
+});
+```
+
+---
+
+## Using Views
+
+### useHyperstack Hook
+
+Access your stack's typed interface:
+
+```tsx
+import { useHyperstack } from "hyperstack-react";
+import { OreStack } from "./stack";
+
+function RoundList() {
+  const stack = useHyperstack(OreStack);
+  const { data: rounds, isLoading, error } = stack.views.rounds.list.use();
+
+  if (isLoading) return <p>Loading...</p>;
+  if (error) return <p>Error: {error.message}</p>;
+
+  return (
+    <div>
+      {rounds?.map((round) => (
+        <div key={round.round_id}>
+          {stack.helpers.shortRoundId(round.round_id)} — {stack.helpers.formatMotherlode(round.motherlode)}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+### List View: All Entities
+
+```tsx
+function RoundList() {
+  const stack = useHyperstack(OreStack);
+  const { data: rounds, isLoading, error } = stack.views.rounds.list.use();
+
+  if (isLoading) return <div>Connecting...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+
+  return (
+    <ul>
+      {rounds?.map((round) => (
+        <li key={round.round_id}>
+          Round #{round.round_id} — Motherlode: {stack.helpers.formatMotherlode(round.motherlode)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### State View: Single Entity
+
+```tsx
+function RoundDetail({ roundId }: { roundId: number }) {
+  const stack = useHyperstack(OreStack);
+  const { data: round, isLoading } = stack.views.rounds.state.use({
+    key: roundId.toString(),
+  });
+
+  if (isLoading) return <div>Loading...</div>;
+  if (!round) return <div>Round not found</div>;
+
+  return (
+    <div>
+      <h2>Round #{round.round_id}</h2>
+      <p>Motherlode: {stack.helpers.formatMotherlode(round.motherlode)}</p>
+      <p>Difficulty: {round.difficulty}</p>
+      <p>Total Difficulty: {round.total_difficulty}</p>
+    </div>
+  );
+}
+```
+
+---
+
+## View Options
+
+### Single Item Query
+
+```tsx
+// Get only one item with type-safe return (T | undefined instead of T[])
+const { data: latestToken } = stack.views.tokens.list.use({ take: 1 });
+// data: Token | undefined
+
+// Or use the dedicated useOne method
+const { data: latestToken } = stack.views.tokens.list.useOne();
+// data: Token | undefined
+
+// useOne with filters
+const { data: topToken } = stack.views.tokens.list.useOne({
+  where: { volume: { gte: 10000 } },
+});
+```
+
+### Filtering
+
+```tsx
+// Filter by field values
+const { data: recentRounds } = stack.views.rounds.list.use({
+  where: {
+    round_id: { gte: 1000 }, // Recent rounds
+  },
+  limit: 10,
+});
+```
+
+### Conditional Subscription
+
+```tsx
+// Only subscribe when we have a round ID
+const { data: round } = stack.views.rounds.state.use(
+  { key: roundId?.toString() },
+  { enabled: !!roundId },
+);
+```
+
+### Initial Data
+
+```tsx
+// Show placeholder while connecting
+const { data: rounds } = stack.views.rounds.list.use({}, { initialData: [] });
+```
+
+### View Hook Parameters
+
+The `.use()` method accepts:
+
+#### List Params
+
+```typescript
+const { data } = stack.views.tokens.list.use({
+  key: "partition-key",           // Filter by partition
+  where: { price: { gte: 100 } }, // Field filtering
+  limit: 10,                      // Max results
+});
+```
+
+#### View Hook Options
+
+```typescript
+const { data } = stack.views.tokens.list.use(
+  { limit: 10 },                  // Params
+  {
+    enabled: true,                // Enable/disable subscription
+    initialData: [],              // Initial data before first response
+  }
+);
+```
+
+### View Hook Return Value
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `data` | `T \| T[] \| undefined` | Current view data |
+| `isLoading` | `boolean` | True until first data received |
+| `error` | `Error \| undefined` | Subscription error if any |
+| `refresh` | `() => void` | Manually trigger refresh |
+
+---
+
+## Data Transformation
+
+Transform data as it arrives from the server:
+
+```typescript
+const OreStack = defineStack({
+  name: "ore-mining",
+  views: {
+    rounds: {
+      list: createListView<OreRound>("OreRound/list", {
+        transform: (raw) => ({
+          ...raw,
+          motherlodeInSol: raw.motherlode / 1e9,
+        }),
+      }),
+    },
+  },
+});
+```
+
+---
+
+## Connection State
+
+Monitor WebSocket health:
+
+```tsx
+import { useConnectionState } from "hyperstack-react";
+
+function ConnectionStatus() {
+  const state = useConnectionState();
+
+  const statusColors = {
+    connected: "green",
+    connecting: "yellow",
+    reconnecting: "orange",
+    disconnected: "gray",
+    error: "red",
+  };
+
+  return (
+    <div style={{ color: statusColors[state] }}>
+      {state === "connected" ? "Live" : state}
+    </div>
+  );
+}
+```
+
+### Connection States
+
+| State | Description |
+|-------|-------------|
+| `disconnected` | Not connected |
+| `connecting` | Establishing connection |
+| `connected` | Active and healthy |
+| `reconnecting` | Auto-reconnecting after failure |
+| `error` | Connection failed |
+
+---
+
+## API Reference
+
+### `useHyperstack(stackDefinition)`
+
+Returns a typed interface to your stack's views and helpers.
+
+```typescript
+const stack = useHyperstack(TokenStack);
+// stack.views.tokens.list.use()
+// stack.views.tokens.state.use({ key })
+// stack.helpers.formatPrice(price)
+```
+
+### `useConnectionState()`
+
+Returns the current WebSocket connection state.
+
+```typescript
+const state = useConnectionState();
+// 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error'
+```
+
+### `HyperstackProvider`
+
+Wrap your application to initialize the SDK:
+
+```tsx
+<HyperstackProvider 
+  websocketUrl="wss://ore.stack.usehyperstack.com"
+  autoConnect={true}
+  maxEntriesPerView={10000}
+>
+  <YourApp />
+</HyperstackProvider>
+```
+
+### View `.useOne()`
+
+A convenience method for fetching a single item from a list view with proper typing.
+
+```typescript
+const { data } = stack.views.tokens.list.useOne();
+// data: Token | undefined (not Token[])
+```
+
+Equivalent to `.use({ take: 1 })` but with a cleaner API and explicit intent.
+
+---
+
+## Complete Example
+
+A full React component combining everything:
+
+```tsx
+// src/App.tsx
+import { useHyperstack, useConnectionState } from "hyperstack-react";
+import { OreStack } from "./stack";
+
+function OreDashboard() {
+  const stack = useHyperstack(OreStack);
+  const connectionState = useConnectionState();
+
+  const {
+    data: rounds,
+    isLoading,
+    error,
+  } = stack.views.rounds.list.use({
+    limit: 20,
+  });
+
+  return (
+    <div className="app">
+      <header>
+        <h1>Live ORE Mining Rounds</h1>
+        <span className={`status ${connectionState}`}>{connectionState}</span>
+      </header>
+
+      <main>
+        {isLoading && <p>Connecting to stream...</p>}
+        {error && <p className="error">Error: {error.message}</p>}
+
+        {rounds && (
+          <>
+            <p>{rounds.length} rounds streaming</p>
+            <div className="round-grid">
+              {rounds.map((round) => (
+                <div key={round.round_id} className="round-card">
+                  <h3>Round #{round.round_id}</h3>
+                  <p className="motherlode">{stack.helpers.formatMotherlode(round.motherlode)}</p>
+                  <p className="difficulty">Difficulty: {round.difficulty}</p>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default App;
+```
+
+---
+
+## Accessing Core SDK
+
+The React SDK re-exports everything from `hyperstack-typescript`. Access low-level APIs when needed:
+
+```typescript
+// Import core features from React SDK
+import { HyperStack, ConnectionManager } from "hyperstack-react";
+```
+
+---
+
+## Choosing Between SDKs
+
+| Use Case | Recommended SDK |
+|----------|----------------|
+| React/Next.js apps | `hyperstack-react` |
+| Vue, Svelte, Solid, etc. | `hyperstack-typescript` |
+| Node.js backend/scripts | `hyperstack-typescript` |
+| Custom state management | `hyperstack-typescript` |
+| Need React hooks | `hyperstack-react` |
+| Maximum control | `hyperstack-typescript` |
+
+---
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| "WebSocket connection failed" | Check your connection to `wss://ore.stack.usehyperstack.com` |
+| Data not updating | Verify the view path matches the ORE stack entity name (e.g., `OreRound/list`) |
+| TypeScript errors | Ensure your interface matches the ORE stack's data shape |
+
+---
+
+## Next Steps
+
+- [TypeScript SDK](/sdks/typescript/) — Use Hyperstack without React
+- [Build Your Own Stack](/building-stacks/workflow) — Create custom data streams
+- [Core Concepts](/concepts/core-concepts/) — Understanding Stacks and Views
