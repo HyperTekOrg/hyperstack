@@ -23,6 +23,7 @@ import { OREROUND_STACK, OreRound } from 'hyperstack-stacks/ore';
 
 function App() {
 return (
+
 <HyperstackProvider websocketUrl="wss://ore.stack.usehyperstack.com">
 <LatestRounds />
 </HyperstackProvider>
@@ -36,6 +37,7 @@ const { data: rounds, isLoading } = stack.views.OreRound.latest.use({ take: 5 })
 if (isLoading) return <div>Connecting...</div>;
 
 return (
+
 <ul>
 {rounds?.map((round) => (
 <li key={round.id?.round_id}>
