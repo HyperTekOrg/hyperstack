@@ -24,6 +24,7 @@ export interface ViewDef<T, TMode extends 'state' | 'list'> {
 export interface StackDefinition {
   readonly name: string;
   readonly views: Record<string, ViewGroup>;
+  instructions?: Record<string, import('./instructions').InstructionDefinition>;
 }
 
 export interface ViewGroup {

@@ -1,5 +1,6 @@
 export { HyperStack } from './client';
-export type { HyperStackOptionsWithStorage } from './client';
+export type { HyperStackOptionsWithStorage, InstructionExecutorOptions, InstructionExecutor } from './client';
+
 export { ConnectionManager } from './connection';
 export { SubscriptionRegistry } from './subscription';
 
@@ -42,3 +43,39 @@ export type {
 } from './types';
 
 export { DEFAULT_CONFIG, DEFAULT_MAX_ENTRIES_PER_VIEW, HyperStackError } from './types';
+
+// Wallet types
+export type { WalletAdapter, WalletState, WalletConnectOptions } from './wallet/types';
+
+// Instruction execution
+export type {
+  AccountCategory,
+  AccountMeta,
+  PdaConfig,
+  PdaSeed,
+  ResolvedAccount,
+  AccountResolutionResult,
+  AccountResolutionOptions,
+  ArgSchema,
+  ArgType,
+  ConfirmationLevel,
+  ExecuteOptions,
+  ExecutionResult,
+  ProgramError,
+  ErrorMetadata,
+  InstructionDefinition,
+} from './instructions';
+
+export {
+  resolveAccounts,
+  validateAccountResolution,
+  derivePda,
+  createSeed,
+  createPublicKeySeed,
+  serializeInstructionData,
+  waitForConfirmation,
+  parseInstructionError,
+  formatProgramError,
+  executeInstruction,
+  createInstructionExecutor,
+} from './instructions';

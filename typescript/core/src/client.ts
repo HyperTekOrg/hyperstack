@@ -14,11 +14,28 @@ import type { StorageAdapter } from './storage/adapter';
 import { SubscriptionRegistry } from './subscription';
 import { createTypedViews } from './views';
 import type { Frame } from './frame';
+import type { WalletAdapter } from './wallet/types';
+import type { InstructionDefinition, ExecuteOptions, ExecutionResult } from './instructions';
+import { executeInstruction } from './instructions';
 
 export interface HyperStackOptionsWithStorage<TStack extends StackDefinition> extends HyperStackOptions<TStack> {
   storage?: StorageAdapter;
   maxEntriesPerView?: number | null;
 }
+
+export interface InstructionExecutorOptions extends Omit<ExecuteOptions, 'wallet'> {
+  wallet: WalletAdapter;
+}
+
+export type InstructionExecutor = (
+  args: Record<string, unknown>,
+  options: InstructionExecutorOptions
+) => Promise<ExecutionResult>;
+
+export type InstructionsInterface<TInstructions extends Record<string, InstructionDefinition> | undefined> = 
+  TInstructions extends Record<string, InstructionDefinition>
+    ? { [K in keyof TInstructions]: InstructionExecutor }
+    : {};
 
 export class HyperStack<TStack extends StackDefinition> {
   private readonly connection: ConnectionManager;
@@ -27,6 +44,7 @@ export class HyperStack<TStack extends StackDefinition> {
   private readonly subscriptionRegistry: SubscriptionRegistry;
   private readonly _views: TypedViews<TStack['views']>;
   private readonly stack: TStack;
+  private readonly _instructions: InstructionsInterface<TStack['instructions']>;
 
   private constructor(
     url: string,
@@ -49,6 +67,21 @@ export class HyperStack<TStack extends StackDefinition> {
     });
 
     this._views = createTypedViews(this.stack, this.storage, this.subscriptionRegistry);
+    this._instructions = this.buildInstructions();
+  }
+
+  private buildInstructions(): InstructionsInterface<TStack['instructions']> {
+    const instructions = {} as Record<string, InstructionExecutor>;
+    
+    if (this.stack.instructions) {
+      for (const [name, definition] of Object.entries(this.stack.instructions)) {
+        instructions[name] = (args: Record<string, unknown>, options: InstructionExecutorOptions) => {
+          return executeInstruction(definition as InstructionDefinition, args, options);
+        };
+      }
+    }
+    
+    return instructions as InstructionsInterface<TStack['instructions']>;
   }
 
   static async connect<T extends StackDefinition>(
@@ -73,6 +106,10 @@ export class HyperStack<TStack extends StackDefinition> {
 
   get views(): TypedViews<TStack['views']> {
     return this._views;
+  }
+
+  get instructions(): InstructionsInterface<TStack['instructions']> {
+    return this._instructions;
   }
 
   get connectionState(): ConnectionState {
