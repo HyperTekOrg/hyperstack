@@ -98,6 +98,16 @@ impl UpdateContext {
     }
 
     /// Add custom metadata
+    /// Returns true if this is an account update context (has write_version, no txn_index)
+    pub fn is_account_update(&self) -> bool {
+        self.write_version.is_some() && self.txn_index.is_none()
+    }
+
+    /// Returns true if this is an instruction update context (has txn_index, no write_version)
+    pub fn is_instruction_update(&self) -> bool {
+        self.txn_index.is_some() && self.write_version.is_none()
+    }
+
     pub fn with_metadata(mut self, key: String, value: Value) -> Self {
         self.metadata.insert(key, value);
         self
@@ -153,6 +163,10 @@ const DEFAULT_MAX_ARRAY_LENGTH: usize = 100;
 const DEFAULT_MAX_LOOKUP_INDEX_ENTRIES: usize = 2_500;
 
 const DEFAULT_MAX_VERSION_TRACKER_ENTRIES: usize = 2_500;
+
+// Smaller cache for instruction deduplication - provides shorter effective TTL
+// since we don't expect instruction duplicates to arrive much later
+const DEFAULT_MAX_INSTRUCTION_DEDUP_ENTRIES: usize = 500;
 
 const DEFAULT_MAX_TEMPORAL_INDEX_KEYS: usize = 2_500;
 
@@ -640,6 +654,7 @@ pub struct StateTable {
     pub pending_updates: DashMap<String, Vec<PendingAccountUpdate>>,
     pub pending_instruction_events: DashMap<String, Vec<PendingInstructionEvent>>,
     version_tracker: VersionTracker,
+    instruction_dedup_cache: VersionTracker,
     config: StateTableConfig,
     #[cfg_attr(not(feature = "otel"), allow(dead_code))]
     entity_name: String,
@@ -742,6 +757,37 @@ impl StateTable {
             .insert(primary_key, event_type, slot, ordering_value);
         true
     }
+
+    /// Check if an instruction is a duplicate of one we've seen recently.
+    /// Returns true if this exact instruction has been seen before (is a duplicate).
+    /// Returns false if this is a new instruction that should be processed.
+    ///
+    /// Unlike account updates, instructions don't use recency checks - all
+    /// unique instructions are processed. Only exact duplicates are skipped.
+    /// Uses a smaller cache capacity for shorter effective TTL.
+    pub fn is_duplicate_instruction(
+        &self,
+        primary_key: &Value,
+        event_type: &str,
+        slot: u64,
+        txn_index: u64,
+    ) -> bool {
+        // Check if we've seen this exact instruction before
+        let is_duplicate = self
+            .instruction_dedup_cache
+            .get(primary_key, event_type)
+            .map(|(last_slot, last_txn_index)| slot == last_slot && txn_index == last_txn_index)
+            .unwrap_or(false);
+
+        if is_duplicate {
+            return true;
+        }
+
+        // Record this instruction for deduplication
+        self.instruction_dedup_cache
+            .insert(primary_key, event_type, slot, txn_index);
+        false
+    }
 }
 
 impl VmContext {
@@ -771,6 +817,9 @@ impl VmContext {
                 pending_updates: DashMap::new(),
                 pending_instruction_events: DashMap::new(),
                 version_tracker: VersionTracker::new(),
+                instruction_dedup_cache: VersionTracker::with_capacity(
+                    DEFAULT_MAX_INSTRUCTION_DEDUP_ENTRIES,
+                ),
                 config: StateTableConfig::default(),
                 entity_name: "default".to_string(),
             },
@@ -804,6 +853,9 @@ impl VmContext {
                 pending_updates: DashMap::new(),
                 pending_instruction_events: DashMap::new(),
                 version_tracker: VersionTracker::new(),
+                instruction_dedup_cache: VersionTracker::with_capacity(
+                    DEFAULT_MAX_INSTRUCTION_DEDUP_ENTRIES,
+                ),
                 config: state_config,
                 entity_name: "default".to_string(),
             },
@@ -1248,6 +1300,9 @@ impl VmContext {
                             pending_updates: DashMap::new(),
                             pending_instruction_events: DashMap::new(),
                             version_tracker: VersionTracker::new(),
+                            instruction_dedup_cache: VersionTracker::with_capacity(
+                                DEFAULT_MAX_INSTRUCTION_DEDUP_ENTRIES,
+                            ),
                             config: StateTableConfig::default(),
                             entity_name: entity_name_owned,
                         });
@@ -1270,14 +1325,37 @@ impl VmContext {
 
                     if !key_value.is_null() {
                         if let Some(ctx) = &self.current_context {
-                            let ordering_value = ctx.write_version.or(ctx.txn_index);
-                            if let (Some(slot), Some(version)) = (ctx.slot, ordering_value) {
-                                if !state.is_fresh_update(&key_value, event_type, slot, version) {
-                                    self.add_warning(format!(
-                                        "Stale update skipped: slot={}, version={}",
-                                        slot, version
-                                    ));
-                                    return Ok(Vec::new());
+                            // Account updates: use recency check to discard stale updates
+                            if ctx.is_account_update() {
+                                if let (Some(slot), Some(write_version)) =
+                                    (ctx.slot, ctx.write_version)
+                                {
+                                    if !state.is_fresh_update(
+                                        &key_value,
+                                        event_type,
+                                        slot,
+                                        write_version,
+                                    ) {
+                                        self.add_warning(format!(
+                                            "Stale account update skipped: slot={}, write_version={}",
+                                            slot, write_version
+                                        ));
+                                        return Ok(Vec::new());
+                                    }
+                                }
+                            }
+                            // Instruction updates: process all, but skip exact duplicates
+                            else if ctx.is_instruction_update() {
+                                if let (Some(slot), Some(txn_index)) = (ctx.slot, ctx.txn_index) {
+                                    if state.is_duplicate_instruction(
+                                        &key_value, event_type, slot, txn_index,
+                                    ) {
+                                        self.add_warning(format!(
+                                            "Duplicate instruction skipped: slot={}, txn_index={}",
+                                            slot, txn_index
+                                        ));
+                                        return Ok(Vec::new());
+                                    }
                                 }
                             }
                         }
