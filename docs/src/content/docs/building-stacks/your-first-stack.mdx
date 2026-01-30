@@ -304,7 +304,7 @@ async function main() {
   console.log("Connected! Streaming ORE rounds...\n");
 
   // Stream updates with full type safety
-  for await (const update of hs.subscribe<OreRound>("OreRound/latest")) {
+  for await (const update of hs.views.OreRound.latest.watch()) {
     if (update.type === "upsert") {
       const round = update.data;
       console.log(`Round #${round.id.round_id}:`);

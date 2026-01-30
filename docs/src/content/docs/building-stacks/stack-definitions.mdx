@@ -27,28 +27,43 @@ Building data pipelines for Solana typically involves manual account parsing, co
 A Hyperstack definition is a Rust module annotated with `#[hyperstack]`. Inside this module, you define **Entities**—the structured data objects your application will consume.
 
 ```rust
-use hyperstack_macros::{hyperstack, Stream};
+use hyperstack::prelude::*;
 
 #[hyperstack(idl = "path/to/idl.json")]
 pub mod my_stream {
+    use hyperstack::macros::Stream;
+    use serde::{Deserialize, Serialize};
+
     #[entity(name = "Token")]
-    #[derive(Stream)]
     pub struct Token {
+        pub id: TokenId,
+        pub state: TokenState,
+        pub metrics: TokenMetrics,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
+    pub struct TokenId {
         /// The primary key (mint address)
-        #[from_instruction(Create::mint, primary_key)]
+        #[map(generated_sdk::accounts::BondingCurve::mint, primary_key, strategy = SetOnce)]
         pub mint: String,
+    }
 
+    #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
+    pub struct TokenState {
         /// Live reserves mapped from account state
-        #[map(BondingCurve::reserves)]
-        pub reserves: u64,
-
-        /// Total volume aggregated from individual trade events
-        #[aggregate(from = Trade, field = amount, strategy = Sum)]
-        pub total_volume: u64,
+        #[map(generated_sdk::accounts::BondingCurve::reserves, strategy = LastWrite)]
+        pub reserves: Option<u64>,
 
         /// Computed field derived from existing fields
-        #[computed(reserves * price)]
-        pub tvl: u64,
+        #[computed(state.reserves.map(|r| r * 100))]
+        pub tvl: Option<u64>,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
+    pub struct TokenMetrics {
+        /// Total volume aggregated from individual trade events
+        #[aggregate(from = generated_sdk::instructions::Trade, field = amount, strategy = Sum, lookup_by = accounts::mint)]
+        pub total_volume: Option<u64>,
     }
 }
 ```
@@ -56,9 +71,10 @@ pub mod my_stream {
 ### Key Components
 
 1.  **`#[hyperstack]` Module**: The container for your definition. It links to your data sources (IDL or Protobuf files).
-2.  **`#[entity]` Struct**: Defines a projection of on-chain data. Each entity represents a collection of related data that will be streamed as a single unit.
-3.  **Primary Key**: Every entity must have a primary key (usually a `Pubkey` or `String`). This is how Hyperstack tracks individual instances of an entity.
-4.  **Field Mappings**: Attributes on struct fields that define where the data comes from and how it's processed.
+2.  **`#[entity]` Struct**: Defines a projection of on-chain data. Each entity represents a collection of related data that will be streamed as a single unit. Entities compose nested structs—they do NOT use `#[derive(Stream)]`.
+3.  **`#[derive(Stream)]` Structs**: Nested structs that contain the actual field mappings. These derive `Stream` along with `Debug`, `Clone`, `Serialize`, and `Deserialize`.
+4.  **Primary Key**: Every entity must have a primary key (usually a `Pubkey` or `String`). This is how Hyperstack tracks individual instances of an entity.
+5.  **Field Mappings**: Attributes on struct fields that define where the data comes from and how it's processed.
 
 ---
 
@@ -93,14 +109,49 @@ When data arrives, **Strategies** determine how the field value is updated. This
 
 ---
 
-## How Definitions Become Data Streams
+## Example WebSocket Frames
 
-When you build your Rust project containing a Hyperstack definition, the macros perform several steps:
+The stack definition above produces WebSocket frames with the following structure. An `upsert` frame contains the full entity state:
 
-1.  **Validation**: The macro verifies that your mappings match the provided IDL or Protobuf definitions.
-2.  **AST Generation**: It generates a JSON-based **Abstract Syntax Tree (AST)** representing your data pipeline.
-3.  **Bytecode Compilation**: When you deploy your stack (`hs up`), Hyperstack Cloud compiles this AST into optimized bytecode.
-4.  **Execution**: The Hyperstack VM executes this bytecode against the Solana transaction firehose, updating your entity state and streaming diffs to your clients.
+```json
+{
+  "op": "upsert",
+  "mode": "state",
+  "entity": "Token",
+  "key": "So11111111111111111111111111111111111111112",
+  "data": {
+    "id": {
+      "mint": "So11111111111111111111111111111111111111112"
+    },
+    "state": {
+      "reserves": 1500000000,
+      "tvl": 150000000000
+    },
+    "metrics": {
+      "total_volume": 42000000000
+    }
+  }
+}
+```
+
+When only specific fields change, a `patch` frame contains just the updated values:
+
+```json
+{
+  "op": "patch",
+  "mode": "state",
+  "entity": "Token",
+  "key": "So11111111111111111111111111111111111111112",
+  "data": {
+    "state": {
+      "reserves": 1520000000,
+      "tvl": 152000000000
+    }
+  }
+}
+```
+
+The SDK merges patches into local state automatically, so your application always sees the complete entity.
 
 ---
 

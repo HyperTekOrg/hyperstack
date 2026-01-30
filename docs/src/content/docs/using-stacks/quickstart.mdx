@@ -193,24 +193,18 @@ export function OreDashboard() {
 </TabItem>
 <TabItem label="TypeScript Template">
 
-The TypeScript template uses `hyperstack-typescript` with the core streaming API:
+The TypeScript template uses `hyperstack-typescript` with typed views:
 
 ```typescript
 // main.ts
-import { HyperStack, createUpdateStream } from "hyperstack-typescript";
+import { HyperStack } from "hyperstack-typescript";
 import { OREROUND_STACK, type OreRound } from "hyperstack-stacks/ore";
 
 const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
   stack: OREROUND_STACK,
 });
 
-const stream = createUpdateStream<OreRound>(
-  hs.store,
-  hs.getSubscriptionRegistry(),
-  { view: "OreRound/latest", take: 1 },
-);
-
-for await (const update of stream) {
+for await (const update of hs.views.OreRound.latest.watch({ take: 1 })) {
   if (update.type === "upsert" || update.type === "patch") {
     console.log(`Round #${update.data.id?.round_id}`);
     console.log(`Motherlode: ${update.data.state?.motherlode}`);

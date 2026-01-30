@@ -99,7 +99,7 @@ async function main() {
 
   console.log("Connected! Streaming live ORE rounds:\n");
 
-  for await (const update of hs.subscribe<OreRound>("OreRound/latest")) {
+  for await (const update of hs.views.OreRound.latest.watch()) {
     if (update.type === "upsert") {
       const round = update.data;
       console.log(`Round #${round.id?.round_id}`);

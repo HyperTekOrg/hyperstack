@@ -1,0 +1,380 @@
+---
+title: Filtering Feeds
+sidebar:
+  order: 4
+description: Control what data streams to your client with pagination, sorting, and custom views.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+When streaming data from views, you can control what the server sends to reduce bandwidth and improve performance.
+
+---
+
+## Feed Parameters
+
+All Hyperstack SDKs support these parameters when subscribing to feeds:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `take` | `number` | Maximum number of entities to return |
+| `skip` | `number` | Number of entities to skip (for pagination) |
+| `key` | `string` | Entity key for state view subscriptions |
+
+### Pagination
+
+Use `take` and `skip` to paginate through large datasets:
+
+<Tabs>
+<TabItem label="React">
+
+```typescript
+import { useHyperStack } from "hyperstack-react";
+import { TOKEN_STACK } from "hyperstack-stacks/token";
+
+function TokenList() {
+  const hs = useHyperStack(TOKEN_STACK);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+
+  // Paginated subscription
+  const { data: tokens } = hs.views.Token.list.use({
+    take: pageSize,
+    skip: (page - 1) * pageSize,
+  });
+
+  return (
+    <div>
+      {tokens?.map(t => <TokenRow key={t.id.mint} token={t} />)}
+      <button onClick={() => setPage(p => p + 1)}>Next Page</button>
+    </div>
+  );
+}
+```
+
+</TabItem>
+<TabItem label="TypeScript">
+
+```typescript
+import { HyperStack } from "hyperstack-typescript";
+import { TOKEN_STACK } from "hyperstack-stacks/token";
+
+const hs = await HyperStack.connect("wss://token.stack.usehyperstack.com", {
+  stack: TOKEN_STACK,
+});
+
+// Get first 10 entities
+for await (const token of hs.views.Token.list.use({ take: 10 })) {
+  console.log(token.id.mint);
+}
+
+// Get page 3 (skip 20, take 10)
+const page = 3;
+const pageSize = 10;
+for await (const token of hs.views.Token.list.use({
+  take: pageSize,
+  skip: (page - 1) * pageSize
+})) {
+  console.log(token.id.mint);
+}
+```
+
+</TabItem>
+<TabItem label="Rust">
+
+```rust
+use hyperstack_sdk::prelude::*;
+use hyperstack_stacks::token::TokenViews;
+
+let hs = HyperStack::connect("wss://token.stack.usehyperstack.com").await?;
+let views = hs.views::<TokenViews>();
+
+// Get first 10 entities
+let mut stream = views.list()
+    .take(10)
+    .watch();
+
+// Get page 3 (skip 20, take 10)
+let page = 3;
+let page_size = 10;
+let mut stream = views.list()
+    .skip((page - 1) * page_size)
+    .take(page_size)
+    .watch();
+
+while let Some(update) = stream.next().await {
+    println!("Token: {:?}", update.data.id.mint);
+}
+```
+
+</TabItem>
+</Tabs>
+
+### State View Keys
+
+For state views, pass the entity key to subscribe to a specific entity:
+
+<Tabs>
+<TabItem label="React">
+
+```typescript
+const { data: token } = hs.views.Token.state.use(tokenAddress);
+```
+
+</TabItem>
+<TabItem label="TypeScript">
+
+```typescript
+const tokenAddress = "So11111111111111111111111111111111111111112";
+
+// One-shot query
+const token = await hs.views.Token.state.get(tokenAddress);
+
+// Stream updates
+for await (const token of hs.views.Token.state.use(tokenAddress)) {
+  console.log("Token updated:", token.id.mint);
+}
+```
+
+</TabItem>
+<TabItem label="Rust">
+
+```rust
+let token_address = "So11111111111111111111111111111111111111112";
+
+let mut stream = views.state(token_address).watch();
+
+while let Some(update) = stream.next().await {
+    println!("Token updated: {:?}", update.data.id.mint);
+}
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## Custom Views
+
+Beyond the default `state` and `list` views, stacks can define **custom views** with sorting and limits applied at the server level.
+
+:::note[For stack builders]
+Custom views are defined when [building a stack](/building-stacks/stack-definitions/) using the Rust DSL. If you're just consuming an existing stack, skip to the [Accessing Custom Views](#accessing-custom-views) section below.
+:::
+
+### Why Custom Views?
+
+- **Reduced bandwidth** - Server applies sorting/limits before transmitting
+- **Consistent ordering** - Sort order is defined once in your stack
+- **Pre-configured limits** - Useful for "top N" or "latest N" views
+
+### Defining Custom Views
+
+Custom views are defined using the `#[view]` attribute on your entity struct:
+
+```rust
+use hyperstack::prelude::*;
+
+#[hyperstack(idl = "idl/ore.json")]
+pub mod ore_stream {
+    #[entity(name = "OreRound")]
+    #[view(name = "latest", sort_by = "id.round_id", order = "desc")]
+    pub struct OreRound {
+        pub id: RoundId,
+        pub state: RoundState,
+        // ... other fields
+    }
+}
+```
+
+### View Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `string` | View name (e.g., `"latest"`) |
+| `sort_by` | `string` | Field path to sort by (e.g., `"id.round_id"`) |
+| `order` | `"asc"` \| `"desc"` | Sort order (default: `"desc"`) |
+| `take` | `number` | Optional limit on results |
+
+### Accessing Custom Views
+
+Custom views appear alongside the default views in your SDK:
+
+<Tabs>
+<TabItem label="React">
+
+```typescript
+import { useHyperStack } from "hyperstack-react";
+import { OREROUND_STACK } from "hyperstack-stacks/ore";
+
+function LatestRounds() {
+  const hs = useHyperStack(OREROUND_STACK);
+
+  // Default views
+  const { data: allRounds } = hs.views.OreRound.list.use();
+  const { data: round } = hs.views.OreRound.state.use(roundAddress);
+
+  // Custom view - sorted by round_id desc
+  const { data: latestRounds } = hs.views.OreRound.latest.use();
+
+  return <div>{latestRounds?.map(r => <Round key={r.id.round_id} round={r} />)}</div>;
+}
+```
+
+</TabItem>
+<TabItem label="TypeScript">
+
+```typescript
+import { HyperStack } from "hyperstack-typescript";
+import { OREROUND_STACK } from "hyperstack-stacks/ore";
+
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
+  stack: OREROUND_STACK,
+});
+
+// Default views
+const allRounds = await hs.views.OreRound.list.get();
+const round = await hs.views.OreRound.state.get(roundAddress);
+
+// Custom view - sorted by round_id desc
+for await (const round of hs.views.OreRound.latest.use()) {
+  console.log("Round:", round.id.round_id);
+}
+```
+
+</TabItem>
+<TabItem label="Rust">
+
+```rust
+use hyperstack_sdk::prelude::*;
+use hyperstack_stacks::ore::OreRoundViews;
+
+let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
+let views = hs.views::<OreRoundViews>();
+
+// Default views
+let mut list_stream = views.list().watch();
+let mut state_stream = views.state(round_address).watch();
+
+// Custom view - sorted by round_id desc
+let mut latest_stream = views.latest().watch();
+
+while let Some(update) = latest_stream.next().await {
+    println!("Round: {:?}", update.data.id.round_id);
+}
+```
+
+</TabItem>
+</Tabs>
+
+### Example: Top 10 View
+
+```rust
+#[entity(name = "Token")]
+#[view(name = "topByVolume", sort_by = "metrics.total_volume", order = "desc", take = 10)]
+pub struct Token {
+    pub id: TokenId,
+    pub metrics: TokenMetrics,
+}
+```
+
+```typescript
+// Get top 10 tokens by volume
+for await (const token of hs.views.Token.topByVolume.use()) {
+  console.log(token.id.mint, token.metrics.total_volume);
+}
+```
+
+See [Stack Definitions](/building-stacks/stack-definitions/) for complete documentation on defining entities and views.
+
+---
+
+## Client-Side Filtering
+
+If you need dynamic filtering that changes at runtime, apply filters client-side after receiving data:
+
+<Tabs>
+<TabItem label="React">
+
+The React SDK provides a `where` clause for declarative client-side filtering:
+
+```typescript
+import { useHyperStack } from "hyperstack-react";
+import { TOKEN_STACK } from "hyperstack-stacks/token";
+
+function HighVolumeTokens() {
+  const hs = useHyperStack(TOKEN_STACK);
+
+  // Client-side filtering with where clause
+  const { data: tokens } = hs.views.Token.list.use({
+    where: {
+      volume: { gte: 10000 },
+      price: { lte: 100 }
+    },
+    limit: 20,  // Client-side limit
+  });
+
+  return <TokenList tokens={tokens} />;
+}
+```
+
+**Supported `where` operators:**
+
+| Operator | Description |
+|----------|-------------|
+| `gte` | Greater than or equal |
+| `lte` | Less than or equal |
+| `gt` | Greater than |
+| `lt` | Less than |
+| _(value)_ | Exact match |
+
+</TabItem>
+<TabItem label="TypeScript">
+
+Filter data as it streams using standard JavaScript:
+
+```typescript
+import { HyperStack } from "hyperstack-typescript";
+import { OREROUND_STACK } from "hyperstack-stacks/ore";
+
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
+  stack: OREROUND_STACK,
+});
+
+// Filter in the streaming loop
+for await (const round of hs.views.OreRound.latest.use()) {
+  // Skip rounds below threshold
+  if ((round.state.motherlode ?? 0) < 1_000_000_000) continue;
+
+  console.log("High-value round:", round.id.round_id);
+}
+```
+
+</TabItem>
+<TabItem label="Rust">
+
+Use iterator adapters to filter streams:
+
+```rust
+use hyperstack_sdk::prelude::*;
+use hyperstack_stacks::ore::OreRoundViews;
+use futures::StreamExt;
+
+let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
+let views = hs.views::<OreRoundViews>();
+
+// Filter using stream adapters
+let mut stream = views.latest()
+    .watch()
+    .filter(|update| {
+        let high_value = update.data.state.motherlode.unwrap_or(0) >= 1_000_000_000;
+        async move { high_value }
+    });
+
+while let Some(update) = stream.next().await {
+    println!("High-value round: {:?}", update.data.id.round_id);
+}
+```
+
+</TabItem>
+</Tabs>

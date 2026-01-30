@@ -144,7 +144,7 @@ pub struct Token {
 
 ### Views
 
-**Views** are how you access data from a stack. There are two types:
+**Views** are how you access data from a stack. By default, every entity gets two built-in views:
 
 | Mode    | Path           | Returns           | Use Case     |
 | ------- | -------------- | ----------------- | ------------ |
@@ -158,6 +158,8 @@ const { data: tokens } = stack.views.tokens.list.use();
 // State - single token by key
 const { data: token } = stack.views.tokens.state.use({ key: mintAddress });
 ```
+
+**Custom Views:** If you need different sorting, filtering, or aggregation logic, you can define custom views using the `#[view]` macro in your stack specification. This lets you create specialized access patterns beyond the default list and state views.
 
 ### Stack SDKs
 
@@ -180,17 +182,6 @@ You can share generated SDKs with your team or publish them to npm/crates.io.
 3. Deploy with `hs up`
 4. Cloud compiles AST to bytecode
 
-### Runtime
-
-1. Solana events arrive via Yellowstone gRPC
-2. VM routes events to handlers
-3. Handlers execute bytecode:
-   - Extract fields from events
-   - Resolve primary keys
-   - Apply mappings and transforms
-   - Update state tables
-4. Changes stream to connected clients
-
 ### Client
 
 1. Connect to WebSocket
@@ -212,7 +203,7 @@ Unlike traditional APIs where you poll for changes, Hyperstack **pushes** update
 | `delete` | Entity was removed            |
 
 ```typescript
-for await (const update of hs.subscribe("Token/list")) {
+for await (const update of hs.views.token.list.watch()) {
   if (update.type === "upsert") {
     console.log("Token changed:", update.data);
   } else if (update.type === "delete") {
@@ -256,17 +247,6 @@ const { data: token } = stack.views.tokens.state.use({ key });
 console.log(token.mint); // string
 console.log(token.volume); // bigint
 ```
-
----
-
-## Self-Hosting vs Managed
-
-| Aspect   | Self-Hosted                    | Managed (Hyperstack Cloud) |
-| -------- | ------------------------------ | -------------------------- |
-| Setup    | Bring your own Geyser gRPC     | Zero config                |
-| Scaling  | You manage                     | We handle                  |
-| Cost     | Infrastructure only            | Subscription + bandwidth   |
-| Best for | Single stream, experimentation | Production apps            |
 
 ---
 
