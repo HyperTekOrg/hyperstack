@@ -290,11 +290,14 @@ The `.use()` method accepts:
 
 ```typescript
 const { data } = stack.views.tokens.list.use({
-  key: "partition-key", // Filter by partition
-  where: { price: { gte: 100 } }, // Field filtering
-  limit: 10, // Max results
+  take: 10,                         // Server-side: limit entities returned
+  skip: 0,                          // Server-side: pagination offset
+  where: { price: { gte: 100 } },   // Client-side: filter after receiving
+  limit: 10,                        // Client-side: max results to keep
 });
 ```
+
+For server-side filtering beyond pagination, use [custom views](/using-stacks/filtering-feeds/#server-side-filtering) defined in your stack.
 
 #### View Hook Options
 

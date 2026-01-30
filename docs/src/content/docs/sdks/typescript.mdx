@@ -12,24 +12,6 @@ If you're building a React application, use the [React SDK](/sdks/react/) instea
 
 ---
 
-## Quick Start
-
-```typescript
-import { HyperStack } from "hyperstack-typescript";
-
-// Connect to a deployed stack
-const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
-
-// Stream updates as they happen
-for await (const update of hs.subscribe("PumpfunToken/list")) {
-  if (update.type === "upsert") {
-    console.log("Token:", update.data.name, update.data.symbol);
-  }
-}
-```
-
----
-
 ## Installation
 
 ```bash
@@ -40,53 +22,48 @@ No peer dependencies. Works anywhere JavaScript runs.
 
 ---
 
+## Quick Start
+
+```typescript
+import { HyperStack } from "hyperstack-typescript";
+import { ORE_STACK, type OreRound } from "hyperstack-stacks/ore";
+
+// Connect with a stack definition for typed views
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.xyz", {
+  stack: ORE_STACK,
+});
+
+// Stream entities with full type safety
+for await (const round of hs.views.OreRound.latest.use()) {
+  console.log("Round:", round.id.round_id);
+}
+```
+
+---
+
 ## Connection
 
-### Basic Connection
-
-```typescript
-const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
-```
-
-### With Options
-
-```typescript
-const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
-  // Maximum entries per view (prevents memory issues on long-running clients)
-  maxEntriesPerView: 5000, // default: 10000
-
-  // Or disable limiting entirely (not recommended for long sessions)
-  // maxEntriesPerView: null,
-});
-```
-
 ### Connect with Stack Definition
+
+Always connect with a stack definition to get typed views:
 
 ```typescript
 import { HyperStack } from "hyperstack-typescript";
 import { ORE_STACK } from "hyperstack-stacks/ore";
 
-const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.xyz", {
   stack: ORE_STACK,
 });
-```
 
-### Connect without Stack (Raw WebSocket)
-
-```typescript
-const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
-
-// Subscribe to any view path directly
-for await (const update of hs.subscribe("Token/list")) {
-  console.log(update);
-}
+// Now you have fully typed views
+const rounds = await hs.views.OreRound.latest.get();
 ```
 
 ### Connection Options
 
 ```typescript
-const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
-  stack: MY_STACK,
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.xyz", {
+  stack: ORE_STACK,
   maxEntriesPerView: 5000, // Limit entries per view (default: 10000)
 });
 ```
@@ -105,7 +82,7 @@ console.log(hs.connectionState);
 
 // Listen for changes
 const unsubscribe = hs.onConnectionStateChange((state) => {
-  console.log("ORE Stack connection state:", state);
+  console.log("Connection state:", state);
 });
 
 // Later: stop listening
@@ -115,48 +92,103 @@ unsubscribe();
 ### Disconnect
 
 ```typescript
-// Graceful disconnect
 await hs.disconnect();
 ```
 
 ---
 
-## Streaming Data
+## Views
 
-### Subscribe to Updates
+### View Modes
 
-The SDK uses `AsyncIterable` for streaming — modern, memory-efficient, and easy to use:
+Every view operates in one of two modes, which determines how you access data:
+
+| Mode | Description | Key Required | Returns |
+|------|-------------|--------------|---------|
+| **State** | Lookup individual entities by key | Yes | Single entity (`T \| null`) |
+| **List** | Access a collection of entities | No | Array of entities (`T[]`) |
+
+### Default Views
+
+By default, each entity in a stack exposes two views:
+
+| View Name | Mode | Description |
+|-----------|------|-------------|
+| `state` | State | Lookup any entity by its key (e.g., address) |
+| `list` | List | Collection of all entities |
 
 ```typescript
-interface Token {
-  mint: string;
-  name: string;
-  symbol: string;
-  price?: number;
-}
+// State view — get a specific round by address
+const round = await hs.views.OreRound.state.get(roundAddress);
 
-// Stream all updates
-for await (const update of hs.subscribe<Token>("Token/list")) {
-  switch (update.type) {
-    case "upsert":
-      console.log("Token updated:", update.key, update.data);
-      break;
-    case "delete":
-      console.log("Token removed:", update.key);
-      break;
-  }
+// List view — get all rounds
+const rounds = await hs.views.OreRound.list.get();
+```
+
+### Custom Views
+
+Stacks can define additional views beyond the defaults. For example, the ORE stack includes a custom `latest` view that streams only recent rounds. Custom views are defined using the Rust DSL when building your stack — see [Stack Definitions](/building-stacks/stack-definitions/) for details.
+
+Custom views are accessed the same way as default views:
+
+```typescript
+// Custom list view defined in the ORE stack
+for await (const round of hs.views.OreRound.latest.use()) {
+  console.log("Recent round:", round.id.round_id);
 }
 ```
 
-### Watch List Views
+Each view type supports both **streaming** (real-time updates) and **one-shot** (point-in-time snapshot) access patterns.
 
-Stream all entities in a collection:
+---
+
+## Streaming Methods
+
+Streaming methods return `AsyncIterable` and continuously emit data as entities change. The connection stays open until you break out of the loop or abort.
+
+| Method | Emits | Use Case |
+|--------|-------|----------|
+| `.use()` | `T` | Simplest — just the current entity state after each change |
+| `.watch()` | `Update<T>` | When you need to know the operation type (upsert/patch/delete) |
+| `.watchRich()` | `RichUpdate<T>` | When you need before/after comparison |
+
+### `.use()` — Stream Merged Entities
+
+The simplest streaming method. Emits the full merged entity after each change:
 
 ```typescript
-for await (const update of hs.views.tokens.list.watch()) {
+// List view — no key required
+for await (const round of hs.views.OreRound.latest.use()) {
+  console.log("Round:", round.id.round_id);
+  console.log("Motherlode:", round.state.motherlode);
+}
+
+// State view — key required
+const roundAddress = "So11111111111111111111111111111111111111112";
+for await (const round of hs.views.OreRound.state.use(roundAddress)) {
+  console.log("Round updated:", round.state.motherlode);
+}
+```
+
+**Signatures:**
+
+```typescript
+// State view
+use(key: string, options?: WatchOptions): AsyncIterable<T>
+
+// List view
+use(options?: WatchOptions): AsyncIterable<T>
+```
+
+### `.watch()` — Stream Raw Updates
+
+Use when you need to know what operation occurred:
+
+```typescript
+for await (const update of hs.views.OreRound.latest.watch()) {
   switch (update.type) {
     case "upsert":
-      console.log("Created or updated:", update.data);
+      console.log("Created or replaced:", update.data);
       break;
     case "patch":
       console.log("Partial update:", update.data);
@@ -168,101 +200,131 @@ for await (const update of hs.views.tokens.list.watch()) {
 }
 ```
 
-### Watch State Views
-
-Stream a single entity by key:
+**Signatures:**
 
 ```typescript
-const mintAddress = "So11111111111111111111111111111111111111112";
+// State view
+watch(key: string, options?: WatchOptions): AsyncIterable<Update<T>>
 
-for await (const update of hs.views.tokens.state.watch("token-123")) {
-  console.log("Token updated:", update.data);
-}
+// List view
+watch(options?: WatchOptions): AsyncIterable<Update<T>>
 ```
 
-### Rich Diffs (Before/After)
-
-Get before/after state for each update:
+**Update types:**
 
 ```typescript
-for await (const update of hs.views.tokens.list.watchRich()) {
-  if (update.type === "updated") {
-    console.log("Changed from:", update.before);
-    console.log("Changed to:", update.after);
+type Update<T> =
+  | { type: "upsert"; key: string; data: T }        // Full entity create/replace
+  | { type: "patch"; key: string; data: Partial<T> } // Partial update
+  | { type: "delete"; key: string };                 // Entity removed
+```
 
-    // Detect specific field changes
-    if (update.before.price !== update.after.price) {
-      console.log(
-        `Price changed: ${update.before.price} → ${update.after.price}`,
-      );
-    }
+### `.watchRich()` — Stream with Before/After Diffs
+
+Use when you need to compare the previous and new state:
+
+```typescript
+for await (const update of hs.views.OreRound.latest.watchRich()) {
+  switch (update.type) {
+    case "created":
+      console.log("New entity:", update.data);
+      break;
+    case "updated":
+      console.log(`Changed: ${update.before.state.motherlode} → ${update.after.state.motherlode}`);
+      break;
+    case "deleted":
+      console.log("Removed:", update.lastKnown);
+      break;
   }
 }
 ```
 
-### Rich Diffs with subscribeRich
-
-Get before/after state for each update:
+**Signatures:**
 
 ```typescript
-for await (const update of hs.subscribeRich<Token>("Token/list")) {
-  if (update.type === "updated") {
-    console.log("Before:", update.before);
-    console.log("After:", update.after);
+// State view
+watchRich(key: string, options?: WatchOptions): AsyncIterable<RichUpdate<T>>
 
-    // Example: detect price changes
-    if (update.before.price !== update.after.price) {
-      console.log(
-        `Price changed: ${update.before.price} → ${update.after.price}`,
-      );
-    }
-  }
-}
+// List view
+watchRich(options?: WatchOptions): AsyncIterable<RichUpdate<T>>
 ```
 
-### Watch a Single Entity
+**RichUpdate types:**
 
 ```typescript
-const mintAddress = "So11111111111111111111111111111111111111112";
-
-for await (const update of hs.subscribe<Token>("Token/state", {
-  key: mintAddress,
-})) {
-  console.log("Token updated:", update.data);
-}
+type RichUpdate<T> =
+  | { type: "created"; key: string; data: T }
+  | { type: "updated"; key: string; before: T; after: T; patch?: unknown }
+  | { type: "deleted"; key: string; lastKnown?: T };
 ```
 
 ---
 
-## One-Shot Queries
+## One-Shot Methods
 
-Not streaming — just fetch the current state:
+One-shot methods return a point-in-time snapshot without subscribing to updates. Use these when you need the current state but don't need real-time streaming.
 
-```typescript
-// Get all tokens
-const tokens = await hs.get<Token[]>("Token/list");
-console.log(`Found ${tokens.length} tokens`);
+| Method | Returns | Behavior |
+|--------|---------|----------|
+| `.get()` | `Promise<T>` | Async — waits for data if not yet loaded |
+| `.getSync()` | `T \| undefined` | Sync — returns immediately, `undefined` if not loaded |
 
-// Get a single token
-const token = await hs.get<Token>("Token/state", { key: mintAddress });
-console.log("Token:", token?.name);
-```
+### `.get()` — Async Snapshot
 
-### Using Views API
+Fetches the current state. Returns a promise that resolves when data is available:
 
 ```typescript
-// Get all rounds (snapshot)
-const rounds = await hs.views.rounds.list.get();
+// List view — returns all entities
+const rounds = await hs.views.OreRound.latest.get();
+console.log(`Found ${rounds.length} rounds`);
 
-// Get a single round by key
-const round = await hs.views.rounds.state.get("round-123");
-
-// Get with filters
-const recentRounds = await hs.views.rounds.list.get({
-  limit: 10,
-  where: { round_id: { gte: 1000 } },
-});
+// State view — returns single entity or null
+const round = await hs.views.OreRound.state.get(roundAddress);
+if (round) {
+  console.log("Round:", round.id.round_id);
+}
 ```
+
+**Signatures:**
+
+```typescript
+// State view — returns single entity or null if not found
+get(key: string): Promise<T | null>
+
+// List view — returns array of all entities
+get(): Promise<T[]>
+```
+
+### `.getSync()` — Synchronous Snapshot
+
+Returns immediately with cached data. Returns `undefined` if data hasn't been loaded yet:
+
+```typescript
+// List view
+const rounds = hs.views.OreRound.latest.getSync();
+if (rounds) {
+  console.log(`Cached: ${rounds.length} rounds`);
+} else {
+  console.log("Data not yet loaded");
+}
+
+// State view
+const round = hs.views.OreRound.state.getSync(roundAddress);
+```
+
+**Signatures:**
+
+```typescript
+// State view — returns entity, null (not found), or undefined (not loaded)
+getSync(key: string): T | null | undefined
+
+// List view — returns array or undefined (not loaded)
+getSync(): T[] | undefined
+```
+
+:::tip[When to use getSync()]
+Use `getSync()` in synchronous contexts like React render functions where you can't await. The return value distinguishes between "not found" (`null`) and "not yet loaded" (`undefined`).
+:::
 
 ---
 
@@ -271,7 +333,8 @@ const recentRounds = await hs.views.rounds.list.get({
 Each view maintains an in-memory store of entities. By default, stores are limited to 10,000 entries to prevent memory issues on long-running clients. When the limit is reached, oldest entries are evicted (LRU).
 
 ```typescript
-const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.xyz", {
+  stack: ORE_STACK,
   maxEntriesPerView: 5000, // Custom limit
 });
 ```
@@ -279,9 +342,96 @@ const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
 To disable limiting (not recommended for production):
 
 ```typescript
-const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.xyz", {
+  stack: ORE_STACK,
   maxEntriesPerView: null, // Unlimited
 });
+```
+
+---
+
+## Subscription Options
+
+The streaming methods (`.use()`, `.watch()`, `.watchRich()`) accept options for server-side pagination:
+
+```typescript
+interface WatchOptions {
+  take?: number;    // Limit number of entities
+  skip?: number;    // Skip first N entities
+}
+```
+
+### Limit Results
+
+```typescript
+// Only receive the first 10 entities
+for await (const round of hs.views.OreRound.latest.use({ take: 10 })) {
+  console.log("Round:", round.id.round_id);
+}
+```
+
+### Pagination
+
+```typescript
+// Skip first 20, take next 10
+for await (const round of hs.views.OreRound.latest.use({ skip: 20, take: 10 })) {
+  console.log("Round:", round.id.round_id);
+}
+```
+
+### Server-Side Filtering
+
+For server-side filtering beyond pagination, use **custom views** defined in your stack. Custom views apply filters, sorting, and limits at the server level, reducing bandwidth before data reaches the client.
+
+See [Filtering Feeds](/using-stacks/filtering-feeds/) for details on all filtering options, or [Stack Definitions](/building-stacks/stack-definitions/) for how to define custom views using the Rust DSL.
+
+---
+
+## Stream Control
+
+Use standard `AsyncIterable` patterns to control streams client-side.
+
+### Stop on Condition
+
+```typescript
+for await (const update of hs.views.OreRound.latest.watch()) {
+  if (update.type === "upsert") {
+    const round = update.data;
+    if (round.state.motherlode && round.state.motherlode > 1_000_000_000) {
+      console.log("Found high-value round:", round.id.round_id);
+      break;
+    }
+  }
+}
+```
+
+### Cancellable Streams
+
+Use an `AbortController` to cancel from outside the loop:
+
+```typescript
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 30_000); // Cancel after 30s
+
+try {
+  for await (const update of hs.views.OreRound.latest.watch()) {
+    if (controller.signal.aborted) break;
+    console.log("Update:", update.data);
+  }
+} catch (e) {
+  if (!controller.signal.aborted) throw e;
+}
+```
+
+### Client-Side Filtering
+
+```typescript
+for await (const update of hs.views.OreRound.latest.watch()) {
+  if (update.type !== "upsert") continue;
+  if ((update.data.metrics.deploy_count ?? 0) < 100) continue;
+
+  console.log("Active round:", update.data.id.round_id);
+}
 ```
 
 ---
@@ -289,16 +439,12 @@ const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
 ## Error Handling
 
 ```typescript
-import { HyperStackError } from "hyperstack-typescript";
+import { HyperStack, HyperStackError } from "hyperstack-typescript";
 
 try {
-  const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
-} catch (error) {
-  if (error instanceof HyperStackError) {
-    console.error("ORE Stack connection failed:", error.message);
-    console.error("Code:", error.code);
-  }
-}
+  const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.xyz", {
+    stack: ORE_STACK,
+  });
 } catch (error) {
   if (error instanceof HyperStackError) {
     console.error("Hyperstack error:", error.message);
@@ -307,237 +453,6 @@ try {
     throw error;
   }
 }
-```
-
----
-
-## Framework Integration
-
-### Vue 3
-
-```typescript
-// composables/useHyperstack.ts
-import { ref, onMounted, onUnmounted } from "vue";
-import { HyperStack } from "hyperstack-typescript";
-
-export function useOreRoundList() {
-  const rounds = ref<OreRound[]>([]);
-  const isLoading = ref(true);
-  let hs: HyperStack | null = null;
-  let controller: AbortController | null = null;
-
-  onMounted(async () => {
-    hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
-    controller = new AbortController();
-
-    isLoading.value = false;
-
-    try {
-      for await (const update of hs.subscribe<OreRound>("OreRound/list")) {
-        if (controller.signal.aborted) break;
-
-        if (update.type === "upsert") {
-          const idx = rounds.value.findIndex((r) => r.round_id === update.key);
-          if (idx >= 0) {
-            rounds.value[idx] = update.data;
-          } else {
-            rounds.value.push(update.data);
-          }
-        } else if (update.type === "delete") {
-          rounds.value = rounds.value.filter((r) => r.round_id !== update.key);
-        }
-      }
-    } catch (e) {
-      if (!controller.signal.aborted) throw e;
-    }
-  });
-
-  onUnmounted(() => {
-    controller?.abort();
-    hs?.disconnect();
-  });
-
-  return { rounds, isLoading };
-}
-```
-
-```vue
-<!-- RoundList.vue -->
-<script setup lang="ts">
-import { useOreRoundList } from "./composables/useHyperstack";
-
-const { rounds, isLoading } = useOreRoundList();
-</script>
-
-<template>
-  <div v-if="isLoading">Connecting...</div>
-  <ul v-else>
-    <li v-for="round in rounds" :key="round.round_id">
-      Round #{{ round.round_id }} - Motherlode: {{ round.motherlode }}
-    </li>
-  </ul>
-</template>
-```
-
-### Svelte
-
-```typescript
-// stores/hyperstack.ts
-import { writable } from "svelte/store";
-import { HyperStack } from "hyperstack-typescript";
-
-export function createOreRoundStore() {
-  const { subscribe, update } = writable<OreRound[]>([]);
-  let hs: HyperStack | null = null;
-
-  async function connect() {
-    hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
-    for await (const event of hs.views.rounds.list.watch()) {
-      update((rounds) => {
-        if (event.type === "upsert") {
-          const idx = rounds.findIndex((r) => r.round_id === event.key);
-          if (idx >= 0) {
-            rounds[idx] = event.data;
-            return [...rounds];
-          }
-          return [...rounds, event.data];
-        } else if (event.type === "delete") {
-          return rounds.filter((r) => r.round_id !== event.key);
-        }
-        return rounds;
-      });
-    }
-  }
-
-  function disconnect() {
-    hs?.disconnect();
-  }
-
-  return { subscribe, connect, disconnect };
-}
-          return [...tokens, event.data];
-        } else {
-          return tokens.filter((t) => t.mint !== event.key);
-        }
-      });
-    }
-  }
-
-  function disconnect() {
-    hs?.disconnect();
-  }
-
-  return { subscribe, connect, disconnect };
-}
-```
-
-```svelte
-<!-- TokenList.svelte -->
-<script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-  import { createTokenStore } from './stores/hyperstack';
-
-  const tokenStore = createTokenStore();
-
-  onMount(() => tokenStore.connect());
-  onDestroy(() => tokenStore.disconnect());
-</script>
-
-<ul>
-  {#each $tokenStore as token (token.mint)}
-    <li>{token.name} ({token.symbol})</li>
-  {/each}
-</ul>
-```
-
-### Node.js Script
-
-```typescript
-// monitor.ts
-import { HyperStack } from "hyperstack-typescript";
-
-async function main() {
-  const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
-
-  console.log("Monitoring ORE mining rounds...\n");
-
-  for await (const update of hs.subscribe<OreRound>("OreRound/list")) {
-    if (update.type === "upsert") {
-      const round = update.data;
-
-      // Example: Alert on high-motherlode rounds
-      if (round.motherlode && round.motherlode > 1000000000) {
-        console.log(`🚨 High motherlode round: #${round.round_id}`);
-        console.log(
-          `   Motherlode: ${(round.motherlode / 1e9).toFixed(2)} SOL`,
-        );
-        console.log(`   Difficulty: ${round.difficulty}\n`);
-      }
-    }
-  }
-}
-
-main().catch(console.error);
-```
-
-Run with:
-
-```bash
-npx tsx monitor.ts
-```
-
----
-
-## Complete Example
-
-A complete Node.js script that monitors tokens:
-
-```typescript
-import { HyperStack } from "hyperstack-typescript";
-import { ORE_STACK, type OreRound } from "hyperstack-stacks/ore";
-
-async function monitorOreRounds() {
-  const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
-    stack: ORE_STACK,
-  });
-
-  console.log("Monitoring ORE mining rounds...\n");
-  let updateCount = 0;
-
-  try {
-    for await (const update of hs.views.rounds.list.watch<OreRound>()) {
-      updateCount++;
-
-      switch (update.type) {
-        case "upsert":
-          console.log(
-            `[${updateCount}] Round #${update.data.round_id} - Motherlode: ${update.data.motherlode}`,
-          );
-          break;
-        case "patch":
-          console.log(
-            `[${updateCount}] Round #${update.data.round_id} updated`,
-          );
-          break;
-        case "delete":
-          console.log(`[${updateCount}] Round removed: ${update.key}`);
-          break;
-      }
-
-      // Print stats every 10 updates
-      if (updateCount % 10 == 0) {
-        const allRounds = await hs.views.rounds.list.get();
-        console.log(`\n--- Total rounds tracked: ${allRounds.length} ---\n`);
-      }
-    }
-  } catch (error) {
-    console.error("Stream error:", error);
-  } finally {
-    await hs.disconnect();
-  }
-}
-
-monitorOreRounds();
 ```
 
 ---
@@ -551,36 +466,57 @@ Establishes a WebSocket connection to a Hyperstack stack.
 **Parameters:**
 
 - `url` — WebSocket URL of the deployed stack
-- `options` — Connection options
+- `options.stack` — Stack definition for typed views
+- `options.maxEntriesPerView` — Max entries per view before LRU eviction
 
 **Returns:** `Promise<HyperStack>`
 
 ### `hs.views`
 
-Typed views interface (when stack definition is provided).
+Typed views interface based on your stack definition. Access pattern:
 
 ```typescript
-hs.views.<entity>.<view>.watch()      // Stream updates
-hs.views.<entity>.<view>.watchRich()  // Stream with before/after
-hs.views.<entity>.<view>.get()        // One-shot query
+hs.views.<entity>.<viewName>.<method>()
+
+// Examples with default views:
+hs.views.OreRound.state.get(key)     // State mode — requires key
+hs.views.OreRound.list.get()         // List mode — no key
 ```
 
-### `hs.subscribe<T>(viewPath, params?)`
+#### State Mode Methods
 
-Returns an `AsyncIterable` of updates.
+For views in state mode (keyed lookup). All methods require a `key` parameter:
 
-| Parameter    | Type     | Description                      |
-| ------------ | -------- | -------------------------------- |
-| `viewPath`   | `string` | View path (e.g., `'Token/list'`) |
-| `params.key` | `string` | For state views, the entity key  |
+| Method | Signature | Returns |
+|--------|-----------|---------|
+| `use` | `use(key, options?)` | `AsyncIterable<T>` |
+| `watch` | `watch(key, options?)` | `AsyncIterable<Update<T>>` |
+| `watchRich` | `watchRich(key, options?)` | `AsyncIterable<RichUpdate<T>>` |
+| `get` | `get(key)` | `Promise<T \| null>` |
+| `getSync` | `getSync(key)` | `T \| null \| undefined` |
 
-### `hs.subscribeRich<T>(viewPath, params?)`
+#### List Mode Methods
 
-Like `subscribe` but includes before/after diffs.
+For views in list mode (collections). No key parameter:
 
-### `hs.get<T>(viewPath, params?)`
+| Method | Signature | Returns |
+|--------|-----------|---------|
+| `use` | `use(options?)` | `AsyncIterable<T>` |
+| `watch` | `watch(options?)` | `AsyncIterable<Update<T>>` |
+| `watchRich` | `watchRich(options?)` | `AsyncIterable<RichUpdate<T>>` |
+| `get` | `get()` | `Promise<T[]>` |
+| `getSync` | `getSync()` | `T[] \| undefined` |
 
-One-shot query, returns current state.
+#### WatchOptions
+
+Options for streaming methods:
+
+```typescript
+interface WatchOptions {
+  take?: number;    // Limit number of entities
+  skip?: number;    // Skip first N entities
+}
+```
 
 ### `hs.connectionState`
 
