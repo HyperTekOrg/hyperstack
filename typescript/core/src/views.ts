@@ -83,35 +83,26 @@ export function createTypedListView<T>(
   };
 }
 
-type InferViewGroup<TGroup> = {
-  state: TGroup extends { state: ViewDef<infer T, 'state'> }
-    ? TypedStateView<T>
-    : never;
-  list: TGroup extends { list: ViewDef<infer T, 'list'> }
-    ? TypedListView<T>
-    : never;
-};
-
 export function createTypedViews<TStack extends StackDefinition>(
   stack: TStack,
   storage: StorageAdapter,
   subscriptionRegistry: SubscriptionRegistry
 ): TypedViews<TStack['views']> {
-  const views = {} as Record<string, unknown>;
+  const views = {} as Record<string, Record<string, unknown>>;
 
-  for (const [viewName, viewGroup] of Object.entries(stack.views)) {
-    const group = viewGroup as { state?: ViewDef<unknown, 'state'>; list?: ViewDef<unknown, 'list'> };
-    const typedGroup: Partial<InferViewGroup<typeof group>> = {};
+  for (const [entityName, viewGroup] of Object.entries(stack.views)) {
+    const group = viewGroup as Record<string, ViewDef<unknown, 'state' | 'list'>>;
+    const typedGroup: Record<string, unknown> = {};
 
-    if (group.state) {
-      typedGroup.state = createTypedStateView(group.state, storage, subscriptionRegistry) as never;
+    for (const [viewName, viewDef] of Object.entries(group)) {
+      if (viewDef.mode === 'state') {
+        typedGroup[viewName] = createTypedStateView(viewDef as ViewDef<unknown, 'state'>, storage, subscriptionRegistry);
+      } else if (viewDef.mode === 'list') {
+        typedGroup[viewName] = createTypedListView(viewDef as ViewDef<unknown, 'list'>, storage, subscriptionRegistry);
+      }
     }
 
-    if (group.list) {
-      typedGroup.list = createTypedListView(group.list, storage, subscriptionRegistry) as never;
-    }
-
-    views[viewName] = typedGroup;
+    views[entityName] = typedGroup;
   }
 
   return views as TypedViews<TStack['views']>;

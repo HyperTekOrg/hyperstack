@@ -88,12 +88,11 @@ export type TypedViews<TViews extends StackDefinition['views']> = {
 };
 
 export type TypedViewGroup<TGroup> = {
-  state: TGroup extends { state: ViewDef<infer T, 'state'> }
+  [K in keyof TGroup]: TGroup[K] extends ViewDef<infer T, 'state'>
     ? TypedStateView<T>
-    : never;
-  list: TGroup extends { list: ViewDef<infer T, 'list'> }
-    ? TypedListView<T>
-    : never;
+    : TGroup[K] extends ViewDef<infer T, 'list'>
+      ? TypedListView<T>
+      : never;
 };
 
 export interface TypedStateView<T> {
