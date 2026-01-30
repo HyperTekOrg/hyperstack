@@ -156,6 +156,14 @@ const markdownContent = `# ${title}\n\n${entry.body}`;
         const textEl = btn.querySelector(".btn-text");
         if (textEl) textEl.textContent = "Copied!";
 
+        // Track copy event with PostHog
+        if (typeof window !== "undefined" && (window as any).posthog) {
+          (window as any).posthog.capture("docs_copy_markdown", {
+            page: window.location.pathname,
+            title: document.title,
+          });
+        }
+
         setTimeout(() => {
           btn.classList.remove("copied");
           if (textEl) textEl.textContent = "Copy Markdown";
