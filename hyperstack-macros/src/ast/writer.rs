@@ -31,7 +31,6 @@ pub fn write_ast_to_file(spec: &SerializableStreamSpec, entity_name: &str) -> st
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
 
     std::fs::write(&ast_file, json)?;
-    eprintln!("Generated AST: {}", ast_file.display());
 
     Ok(())
 }

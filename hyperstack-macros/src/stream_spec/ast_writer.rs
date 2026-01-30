@@ -219,7 +219,6 @@ pub fn write_ast_at_compile_time(
 
         if let Ok(json) = serde_json::to_string_pretty(&ast) {
             let _ = std::fs::write(&ast_file, json);
-            eprintln!("Generated AST: {}", ast_file.display());
         }
     }
 }
@@ -264,7 +263,6 @@ pub fn build_and_write_ast(
             let ast_file = ast_dir.join(format!("{}.ast.json", entity_name));
             if let Ok(json) = serde_json::to_string_pretty(&ast) {
                 let _ = std::fs::write(&ast_file, json);
-                eprintln!("Generated AST: {}", ast_file.display());
             }
         }
     }
