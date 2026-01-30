@@ -1,0 +1,281 @@
+---
+title: How It Works
+sidebar:
+  order: 3
+description: Architecture, core concepts, and data flow in Hyperstack.
+---
+
+Hyperstack is a declarative data layer for Solana. You define the data shape you need, and Hyperstack handles all the infrastructure to stream it to your app.
+
+---
+
+## The Problem
+
+Building data pipelines for Solana apps is painful:
+
+1. **Manual parsing** - You write custom code to decode accounts and instructions
+2. **ETL complexity** - You build pipelines to transform, aggregate, and store data
+3. **RPC overhead** - You manage websocket connections, retries, and state sync
+4. **Type mismatches** - On-chain types don't match your app types
+
+Most teams spend weeks on infrastructure before shipping features.
+
+---
+
+## The Hyperstack Solution
+
+Instead of building infrastructure, you **declare what data you need**:
+
+```rust
+#[entity(name = "Token")]
+pub struct Token {
+    #[from_instruction(Create::mint, primary_key)]
+    pub mint: String,
+
+    #[map(BondingCurve::virtual_sol_reserves)]
+    pub sol_reserves: u64,
+
+    #[aggregate(from = Buy, field = amount, strategy = Sum)]
+    pub total_volume: u64,
+}
+```
+
+Hyperstack then:
+
+- Subscribes to the relevant on-chain events
+- Transforms raw data into your entity shape
+- Streams updates to your app as they happen on-chain
+- Generates type-safe SDKs for your frontend
+
+---
+
+## Architecture Overview
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  YOUR APP                                                    │
+│  React hooks, TypeScript streams, or raw WebSocket           │
+└──────────────────────────────────────────────────────────────┘
+                              ▲
+                              │ WebSocket (live updates)
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│  HYPERSTACK CLOUD                                            │
+│                                                              │
+│   ┌────────────┐    ┌────────────┐    ┌────────────┐         │
+│   │  Compiler  │ -> │     VM     │ -> │  Streamer  │         │
+│   └────────────┘    └────────────┘    └────────────┘         │
+│         ^                 ^                  │               │
+│    AST Bytecode     State Tables      WebSocket              │
+│                                                              │
+│   ┌────────────────────────────────────────────────────┐    │
+│   │              Yellowstone gRPC                       │    │
+│   │         (Live Solana data feed)                     │    │
+│   └────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────┘
+                              ▲
+                              │ Yellowstone gRPC (raw transactions)
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│  SOLANA                                                      │
+│  On-chain programs emitting transactions and state changes   │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Key Concepts
+
+### Stacks
+
+A **Stack** is a deployed data pipeline that:
+
+1. **Subscribes** to specific Solana program events
+2. **Transforms** raw transaction data into structured entities
+3. **Aggregates** values over time (sums, counts, etc.)
+4. **Streams** updates to connected clients as they happen
+
+Think of it as a "live query" against Solana — you define what data you want, and Hyperstack keeps it updated.
+
+### Entities
+
+An **Entity** is a structured object representing on-chain state. Each entity has:
+
+- **Primary key** - Unique identifier (usually a pubkey)
+- **Fields** - Data attributes with population strategies
+- **Sections** - Logical groupings of fields
+
+```rust
+#[entity(name = "Token")]
+pub struct Token {
+    pub id: TokenId,       // Primary key section
+    pub info: TokenInfo,   // Metadata section
+    pub trading: Trading,  // Metrics section
+}
+```
+
+### Mappings
+
+**Mappings** define how on-chain data flows into entity fields:
+
+| Mapping Type          | Source                  | Example                                    |
+| --------------------- | ----------------------- | ------------------------------------------ |
+| `#[map]`              | Account field           | `#[map(BondingCurve::reserves)]`           |
+| `#[from_instruction]` | Instruction arg/account | `#[from_instruction(Create::mint)]`        |
+| `#[snapshot]`         | Account snapshot        | `#[snapshot(from = Account)]`              |
+| `#[derive_from]`      | Derive from instruction | `#[derive_from(from = Buy, field = user)]` |
+| `#[aggregate]`        | Computed from events    | `#[aggregate(from = Buy, strategy = Sum)]` |
+| `#[event]`            | Captured instruction    | `#[event(strategy = Append)]`              |
+| `#[computed]`         | Derived from fields     | `#[computed(field_a + field_b)]`           |
+
+### Population Strategies
+
+**Strategies** control how field values are updated:
+
+| Strategy      | Behavior                  |
+| ------------- | ------------------------- |
+| `SetOnce`     | Set once, never overwrite |
+| `LastWrite`   | Always use latest value   |
+| `Append`      | Collect into array        |
+| `Sum`         | Running total             |
+| `Count`       | Event counter             |
+| `UniqueCount` | Count unique values       |
+| `Max` / `Min` | Track extremes            |
+
+### Views
+
+**Views** are how you access data from a stack. There are two types:
+
+| Mode    | Path           | Returns           | Use Case     |
+| ------- | -------------- | ----------------- | ------------ |
+| `list`  | `Entity/list`  | Array of entities | All entities |
+| `state` | `Entity/state` | Single entity     | Get by key   |
+
+```typescript
+// List - all tokens as array
+const { data: tokens } = stack.views.tokens.list.use();
+
+// State - single token by key
+const { data: token } = stack.views.tokens.state.use({ key: mintAddress });
+```
+
+### Stack SDKs
+
+A **Stack SDK** is a generated package that tells the Hyperstack client how to interact with a specific feed. It contains:
+
+- **Entity types** — The shape of your data
+- **View definitions** — How to access entities (list, state, etc.)
+- **Helpers** — Shared formatting and transformation logic
+
+You can share generated SDKs with your team or publish them to npm/crates.io.
+
+---
+
+## Data Flow
+
+### Specification Time
+
+1. Write stream definition using Rust macros
+2. Build generates AST (`.hyperstack/*.ast.json`)
+3. Deploy with `hs up`
+4. Cloud compiles AST to bytecode
+
+### Runtime
+
+1. Solana events arrive via Yellowstone gRPC
+2. VM routes events to handlers
+3. Handlers execute bytecode:
+   - Extract fields from events
+   - Resolve primary keys
+   - Apply mappings and transforms
+   - Update state tables
+4. Changes stream to connected clients
+
+### Client
+
+1. Connect to WebSocket
+2. Subscribe to views
+3. Receive live updates
+4. React components re-render automatically
+
+---
+
+## Live Updates
+
+Unlike traditional APIs where you poll for changes, Hyperstack **pushes** updates to you.
+
+### Update Types
+
+| Type     | Meaning                       |
+| -------- | ----------------------------- |
+| `upsert` | Entity was created or updated |
+| `delete` | Entity was removed            |
+
+```typescript
+for await (const update of hs.subscribe("Token/list")) {
+  if (update.type === "upsert") {
+    console.log("Token changed:", update.data);
+  } else if (update.type === "delete") {
+    console.log("Token removed:", update.key);
+  }
+}
+```
+
+---
+
+## Connection Lifecycle
+
+```
+disconnected → connecting → connected → (reconnecting) → connected
+                                     ↘ error
+```
+
+| State          | Meaning                                |
+| -------------- | -------------------------------------- |
+| `disconnected` | Not connected                          |
+| `connecting`   | Establishing WebSocket connection      |
+| `connected`    | Active and receiving updates           |
+| `reconnecting` | Connection lost, attempting to restore |
+| `error`        | Failed to connect (check URL, network) |
+
+The SDK handles reconnection automatically. Your subscriptions resume when the connection is restored.
+
+---
+
+## Type Safety
+
+Hyperstack provides end-to-end type safety:
+
+1. **Spec types** - Rust ensures valid mappings at compile time
+2. **Generated types** - SDK types match your entity definitions
+3. **Runtime types** - Data arrives pre-shaped, no parsing needed
+
+```typescript
+// TypeScript knows token.mint is string, token.volume is bigint
+const { data: token } = stack.views.tokens.state.use({ key });
+console.log(token.mint); // string
+console.log(token.volume); // bigint
+```
+
+---
+
+## Self-Hosting vs Managed
+
+| Aspect   | Self-Hosted                    | Managed (Hyperstack Cloud) |
+| -------- | ------------------------------ | -------------------------- |
+| Setup    | Bring your own Geyser gRPC     | Zero config                |
+| Scaling  | You manage                     | We handle                  |
+| Cost     | Infrastructure only            | Subscription + bandwidth   |
+| Best for | Single stream, experimentation | Production apps            |
+
+---
+
+## Next Steps
+
+- [Quickstart](/using-stacks/quickstart) - Scaffold a working app in under 2 minutes
+- [Connect to a Stack](/using-stacks/connect/) - Add Hyperstack to your existing project
+- [React SDK](/sdks/react/) - Build a complete React app
+- [TypeScript SDK](/sdks/typescript/) - Framework-agnostic SDK
+- [Rust SDK](/sdks/rust/) - Native Rust client
+- [Building Stacks](/building-stacks/workflow) - Create custom data streams
+- [CLI Commands](/cli/commands) - Deployment and management

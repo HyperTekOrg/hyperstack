@@ -216,6 +216,67 @@ The stack is public — no API key or account needed. Point your SDK at the WebS
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
+### The Data You're Receiving
+
+Each `OreRound` entity streamed to your app has this JSON structure:
+
+```json
+{
+  "id": {
+    "round_id": 142857,
+    "round_address": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"
+  },
+  "state": {
+    "expires_at": 312645000,
+    "motherlode": 5000000000,
+    "total_deployed": 125000000000,
+    "total_vaulted": 12500000000,
+    "total_winnings": 98500000000
+  },
+  "results": {
+    "top_miner": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+    "top_miner_reward": 2500000000,
+    "rent_payer": "HN7cABqLq46Es1jh92dQQisAq662SmxELLLsHHe4YWrH",
+    "slot_hash": "2drjr5L1DnBfPYrMvGnvmMVz4Xp1ZcAs6ybqEqJakFji",
+    "rng": 8374652918374652918,
+    "winning_square": 18,
+    "did_hit_motherlode": false
+  },
+  "metrics": {
+    "deploy_count": 1847,
+    "total_deployed_sol": 125000000000,
+    "checkpoint_count": 423
+  },
+  "round_snapshot": {
+    "id": 142857,
+    "deployed": [5000000000, 5000000000, 5000000000, "..."],
+    "slot_hash": [42, 156, 78, "..."],
+    "count": [74, 82, 68, "..."],
+    "expires_at": 312645000,
+    "motherlode": 5000000000,
+    "rent_payer": "HN7cABqLq46Es1jh92dQQisAq662SmxELLLsHHe4YWrH",
+    "top_miner": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+    "top_miner_reward": 2500000000,
+    "total_deployed": 125000000000,
+    "total_miners": 1847,
+    "total_vaulted": 12500000000,
+    "total_winnings": 98500000000
+  }
+}
+```
+
+| Section | Description |
+|---------|-------------|
+| `id` | Primary key (`round_id`) and lookup index (`round_address`) |
+| `state` | Current round state from on-chain account |
+| `results` | Round outcome including computed fields (`rng`, `winning_square`, `did_hit_motherlode`) |
+| `metrics` | Aggregated counts and sums from instructions |
+| `round_snapshot` | Full on-chain account data with pubkeys as base58 strings |
+
+:::tip[View the source]
+The full ORE stack definition is available on GitHub: [stacks/ore/src/stack.rs](https://github.com/HyperTekOrg/hyperstack/blob/main/stacks/ore/src/stack.rs)
+:::
+
 ---
 
 ## Understanding the Code
@@ -262,7 +323,7 @@ Both approaches produce the same result: a typed SDK that works identically with
 
 Now that you're streaming data:
 
-- [Core Concepts](/concepts/core-concepts/) — Understand Stacks, Views, and live data streaming
+- [How It Works](/using-stacks/how-it-works/) — Understand Stacks, Views, and live data streaming
 - [React SDK](/sdks/react/) — Deep dive into React hooks and patterns
 - [TypeScript SDK](/sdks/typescript/) — Use with Node.js, Vue, Svelte, or vanilla JS
 - [Rust SDK](/sdks/rust/) — Native Rust client

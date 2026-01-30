@@ -33,12 +33,23 @@ export default defineConfig({
         },
         {
           label: "Building Stacks",
-          autogenerate: { directory: "building-stacks" },
+          items: [
+            { slug: "building-stacks/workflow" },
+            { slug: "building-stacks/stack-definitions" },
+            { slug: "building-stacks/installation" },
+            { slug: "building-stacks/configuration" },
+            { slug: "building-stacks/your-first-stack" },
+            {
+              label: "Rust DSL",
+              items: [
+                { slug: "building-stacks/rust-dsl/overview" },
+                { slug: "building-stacks/rust-dsl/macros" },
+                { slug: "building-stacks/rust-dsl/strategies" },
+              ],
+            },
+          ],
         },
-        {
-          label: "Concepts",
-          autogenerate: { directory: "concepts" },
-        },
+
         {
           label: "SDK Reference",
           items: [
