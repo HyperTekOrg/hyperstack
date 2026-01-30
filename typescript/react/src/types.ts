@@ -7,6 +7,10 @@ export type {
   SnapshotEntity,
   Update,
   RichUpdate,
+  StackDefinition,
+  ViewDef,
+  ViewGroup,
+  WalletAdapter,
 } from 'hyperstack-typescript';
 
 export { DEFAULT_MAX_ENTRIES_PER_VIEW } from 'hyperstack-typescript';
@@ -18,31 +22,12 @@ export interface NetworkConfig {
   websocketUrl: string;
 }
 
-export interface ViewDef<T, TMode extends ViewMode> {
-  readonly mode: TMode;
-  readonly view: string;
-  readonly _entity?: T;
-}
-
 export interface TransactionDefinition<TParams = unknown> {
   build: (params: TParams) => {
     instruction: string;
     params: TParams;
   };
   refresh?: Array<{ view: string; key?: string | ((params: TParams) => string) }>;
-}
-
-export interface StackDefinition {
-  readonly name: string;
-  readonly views: Record<string, ViewGroup>;
-  transactions?: Record<string, TransactionDefinition>;
-}
-
-export interface ViewGroup {
-  state?: ViewDef<unknown, 'state'>;
-  list?: ViewDef<unknown, 'list'>;
-  /** Allow arbitrary derived views with any name */
-  [key: string]: ViewDef<unknown, ViewMode> | undefined;
 }
 
 export const DEFAULT_FLUSH_INTERVAL_MS = 16;
@@ -56,18 +41,7 @@ export interface HyperstackConfig {
   reconnectIntervals?: number[];
   maxReconnectAttempts?: number;
   maxEntriesPerView?: number | null;
-  /**
-   * Interval in milliseconds to buffer WebSocket updates before flushing to Zustand.
-   * Reduces React re-renders during high-frequency updates.
-   * Default: 16ms (one frame at 60fps)
-   * Set to 0 for immediate updates (no buffering).
-   */
   flushIntervalMs?: number;
-}
-
-export interface WalletAdapter {
-  publicKey: string;
-  signAndSend: (transaction: unknown) => Promise<string>;
 }
 
 export interface ViewHookOptions {

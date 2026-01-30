@@ -1,8 +1,10 @@
 export { HyperstackProvider, useHyperstackContext, useConnectionState, useView, useEntity } from './provider';
 export { useHyperstack } from './stack';
-export { createRuntime } from './runtime';
 export { ZustandAdapter } from './zustand-adapter';
 export type { HyperStackStore } from './zustand-adapter';
+
+export { useInstructionMutation } from './hooks';
+export type { UseMutationOptions, UseMutationResult, MutationStatus } from './hooks';
 
 export {
   ConnectionManager,
@@ -17,6 +19,17 @@ export {
   HyperStackError,
   DEFAULT_CONFIG,
   DEFAULT_MAX_ENTRIES_PER_VIEW,
+  resolveAccounts,
+  validateAccountResolution,
+  derivePda,
+  createSeed,
+  createPublicKeySeed,
+  serializeInstructionData,
+  waitForConfirmation,
+  parseInstructionError,
+  formatProgramError,
+  executeInstruction,
+  createInstructionExecutor,
 } from 'hyperstack-typescript';
 
 export type {
@@ -26,6 +39,8 @@ export type {
   StorageAdapterConfig,
   FrameProcessorConfig,
   HyperStackOptionsWithStorage,
+  InstructionExecutorOptions,
+  InstructionExecutor,
   EntityFrame,
   SnapshotFrame,
   SnapshotEntity,
@@ -38,6 +53,24 @@ export type {
   Subscription,
   HyperStackOptions,
   HyperStackConfig,
+  WalletAdapter,
+  WalletState,
+  WalletConnectOptions,
+  AccountCategory,
+  AccountMeta,
+  PdaConfig,
+  PdaSeed,
+  ResolvedAccount,
+  AccountResolutionResult,
+  AccountResolutionOptions,
+  ArgSchema,
+  ArgType,
+  ConfirmationLevel,
+  ExecuteOptions,
+  ExecutionResult,
+  ProgramError,
+  ErrorMetadata,
+  InstructionDefinition,
 } from 'hyperstack-typescript';
 
 export type {
@@ -45,7 +78,6 @@ export type {
   TransactionDefinition,
   StackDefinition,
   HyperstackConfig,
-  WalletAdapter,
   ViewHookOptions,
   ViewHookResult,
   ListParams,
@@ -59,5 +91,3 @@ export type {
   ViewDef,
   ViewGroup,
 } from './types';
-
-export type { HyperstackRuntime, SubscriptionHandle } from './runtime';

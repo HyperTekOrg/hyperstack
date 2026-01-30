@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback, useSyncExternalStore, useRef, useMemo } from 'react';
 import { ViewDef, ViewHookOptions, ViewHookResult, ListParams, ListParamsBase } from './types';
-import { HyperstackRuntime } from './runtime';
+import type { HyperStack } from 'hyperstack-typescript';
 
 export function createStateViewHook<T>(
   viewDef: ViewDef<T, 'state'>,
-  runtime: HyperstackRuntime
+  client: HyperStack<any>
 ) {
   return {
     use: (key?: Record<string, string>, options?: ViewHookOptions): ViewHookResult<T> => {
@@ -18,12 +18,13 @@ export function createStateViewHook<T>(
         if (!enabled) return undefined;
 
         try {
-          const handle = runtime.subscribe(viewDef.view, keyString);
+          const registry = client.getSubscriptionRegistry();
+          const unsubscribe = registry.subscribe({ view: viewDef.view, key: keyString });
           setIsLoading(true);
 
           return () => {
             try {
-              handle.unsubscribe();
+              unsubscribe();
             } catch (err) {
               console.error('[Hyperstack] Error unsubscribing from view:', err);
             }
@@ -33,18 +34,19 @@ export function createStateViewHook<T>(
           setIsLoading(false);
           return undefined;
         }
-      }, [keyString, enabled]);
+      }, [keyString, enabled, client]);
 
       const refresh = useCallback(() => {
         if (!enabled) return;
 
         try {
-          const handle = runtime.subscribe(viewDef.view, keyString);
+          const registry = client.getSubscriptionRegistry();
+          const unsubscribe = registry.subscribe({ view: viewDef.view, key: keyString });
           setIsLoading(true);
 
           setTimeout(() => {
             try {
-              handle.unsubscribe();
+              unsubscribe();
             } catch (err) {
               console.error('[Hyperstack] Error during refresh unsubscribe:', err);
             }
@@ -53,23 +55,16 @@ export function createStateViewHook<T>(
           setError(err instanceof Error ? err : new Error('Refresh failed'));
           setIsLoading(false);
         }
-      }, [keyString, enabled]);
+      }, [keyString, enabled, client]);
 
+      const store = client.store;
       const data = useSyncExternalStore(
-        (callback) => {
-          const unsubscribe = runtime.zustandStore.subscribe(callback);
-          return unsubscribe;
-        },
+        (callback) => store.onUpdate(callback),
         () => {
-          const viewMap = runtime.zustandStore.getState().entities.get(viewDef.view);
-          if (!viewMap) return undefined;
-          
-          if (keyString) {
-            return viewMap.get(keyString) as T | undefined;
-          }
-          
-          const firstEntry = viewMap.values().next();
-          return firstEntry.done ? undefined : (firstEntry.value as T);
+          const entity = keyString 
+            ? store.get(viewDef.view, keyString)
+            : store.getAll(viewDef.view)[0];
+          return entity as T | undefined;
         }
       );
 
@@ -91,20 +86,16 @@ export function createStateViewHook<T>(
 
 function useListViewInternal<T>(
   viewDef: ViewDef<T, 'list'>,
-  runtime: HyperstackRuntime,
+  client: HyperStack<any>,
   params?: ListParams,
   options?: ViewHookOptions
 ): ViewHookResult<T[]> {
   const [isLoading, setIsLoading] = useState(!options?.initialData);
   const [error, setError] = useState<Error | undefined>();
   const cachedDataRef = useRef<T[] | undefined>(undefined);
-  const lastMapRef = useRef<Map<string, unknown> | undefined>(undefined);
-  const lastSortedKeysRef = useRef<string[] | undefined>(undefined);
 
   const enabled = options?.enabled !== false;
   const key = params?.key;
-  const take = params?.take;
-  const skip = params?.skip;
 
   const filtersJson = params?.filters ? JSON.stringify(params.filters) : undefined;
   const filters = useMemo(() => params?.filters, [filtersJson]);
@@ -113,12 +104,19 @@ function useListViewInternal<T>(
     if (!enabled) return undefined;
 
     try {
-      const handle = runtime.subscribe(viewDef.view, key, filters, take, skip);
+      const registry = client.getSubscriptionRegistry();
+      const unsubscribe = registry.subscribe({ 
+        view: viewDef.view, 
+        key, 
+        filters,
+        take: params?.take,
+        skip: params?.skip 
+      });
       setIsLoading(true);
 
       return () => {
         try {
-          handle.unsubscribe();
+          unsubscribe();
         } catch (err) {
           console.error('[Hyperstack] Error unsubscribing from list view:', err);
         }
@@ -128,18 +126,25 @@ function useListViewInternal<T>(
       setIsLoading(false);
       return undefined;
     }
-  }, [enabled, key, filtersJson, take, skip]);
+  }, [enabled, key, filtersJson, params?.take, params?.skip, client]);
 
   const refresh = useCallback(() => {
     if (!enabled) return;
 
     try {
-      const handle = runtime.subscribe(viewDef.view, key, filters, take, skip);
+      const registry = client.getSubscriptionRegistry();
+      const unsubscribe = registry.subscribe({ 
+        view: viewDef.view, 
+        key, 
+        filters,
+        take: params?.take,
+        skip: params?.skip 
+      });
       setIsLoading(true);
 
       setTimeout(() => {
         try {
-          handle.unsubscribe();
+          unsubscribe();
         } catch (err) {
           console.error('[Hyperstack] Error during list refresh unsubscribe:', err);
         }
@@ -148,40 +153,21 @@ function useListViewInternal<T>(
       setError(err instanceof Error ? err : new Error('Refresh failed'));
       setIsLoading(false);
     }
-  }, [enabled, key, filtersJson, take, skip]);
+  }, [enabled, key, filtersJson, params?.take, params?.skip, client]);
 
+  const store = client.store;
   const data = useSyncExternalStore(
-    (callback) => {
-      const unsubscribe = runtime.zustandStore.subscribe(callback);
-      return unsubscribe;
-    },
+    (callback) => store.onUpdate(callback),
     () => {
-      const state = runtime.zustandStore.getState();
-      const baseMap = state.entities.get(viewDef.view) as Map<string, unknown> | undefined;
-
-      const sortedKeys = state.sortedKeys.get(viewDef.view);
-
-      if (!baseMap) {
-        if (cachedDataRef.current !== undefined) {
-          cachedDataRef.current = undefined;
-          lastMapRef.current = undefined;
-          lastSortedKeysRef.current = undefined;
-        }
+      const viewData = store.getAll(viewDef.view);
+      
+      if (!viewData || viewData.length === 0) {
+        cachedDataRef.current = undefined;
         return undefined;
       }
 
-      if (lastMapRef.current === baseMap && lastSortedKeysRef.current === sortedKeys && cachedDataRef.current !== undefined) {
-        return cachedDataRef.current;
-      }
-
-      let items: T[];
+      let items = viewData;
       
-      if (sortedKeys && sortedKeys.length > 0) {
-        items = sortedKeys.map(k => baseMap.get(k)).filter(v => v !== undefined) as T[];
-      } else {
-        items = Array.from(baseMap.values()) as T[];
-      }
-
       if (params?.where) {
         items = items.filter((item) => {
           return Object.entries(params.where!).every(([fieldKey, condition]) => {
@@ -204,10 +190,8 @@ function useListViewInternal<T>(
         items = items.slice(0, params.limit);
       }
 
-      lastMapRef.current = baseMap;
-      lastSortedKeysRef.current = sortedKeys;
-      cachedDataRef.current = items;
-      return items;
+      cachedDataRef.current = items as T[];
+      return items as T[];
     }
   );
 
@@ -227,10 +211,10 @@ function useListViewInternal<T>(
 
 export function createListViewHook<T>(
   viewDef: ViewDef<T, 'list'>,
-  runtime: HyperstackRuntime
+  client: HyperStack<any>
 ) {
   function use(params?: ListParams, options?: ViewHookOptions): ViewHookResult<T[]> | ViewHookResult<T | undefined> {
-    const result = useListViewInternal(viewDef, runtime, params, options);
+    const result = useListViewInternal(viewDef, client, params, options);
     
     if (params?.take === 1) {
       return {
@@ -246,7 +230,7 @@ export function createListViewHook<T>(
 
   function useOne(params?: Omit<ListParamsBase, 'take'>, options?: ViewHookOptions): ViewHookResult<T | undefined> {
     const paramsWithTake = params ? { ...params, take: 1 as const } : { take: 1 as const };
-    const result = useListViewInternal(viewDef, runtime, paramsWithTake, options);
+    const result = useListViewInternal(viewDef, client, paramsWithTake, options);
     
     return {
       data: result.data?.[0],

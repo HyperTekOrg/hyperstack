@@ -1,22 +1,22 @@
+import { useEffect, useState, useCallback } from 'react';
 import type { StoreApi, UseBoundStore } from 'zustand';
 import { useHyperstackContext } from './provider';
 import { createStateViewHook, createListViewHook } from './view-hooks';
-import { createTxMutationHook } from './tx-hooks';
-import {
+import { useInstructionMutation, UseMutationResult } from './hooks';
+import type {
   StackDefinition,
   ViewDef,
   ViewMode,
-  TransactionDefinition,
   ViewHookOptions,
   ViewHookResult,
   ListParamsSingle,
   ListParamsMultiple,
   ListParamsBase,
-  UseMutationReturn,
   ViewGroup
 } from './types';
-import { HyperstackRuntime } from './runtime';
 import type { HyperStackStore } from './zustand-adapter';
+import type { InstructionDefinition, InstructionExecutor } from 'hyperstack-typescript';
+import type { HyperStack } from 'hyperstack-typescript';
 
 type ViewHookForDef<TDef> = TDef extends ViewDef<infer T, 'state'>
   ? {
@@ -55,62 +55,92 @@ type BuildViewInterface<TViews extends Record<string, ViewGroup>> = {
   };
 };
 
+type InstructionHook = {
+  useMutation: () => UseMutationResult;
+  execute: InstructionExecutor;
+};
+
+type BuildInstructionInterface<TInstructions extends Record<string, InstructionDefinition> | undefined> = 
+  TInstructions extends Record<string, InstructionDefinition>
+    ? { [K in keyof TInstructions]: InstructionHook }
+    : {};
+
 type StackClient<TStack extends StackDefinition> = {
   views: BuildViewInterface<TStack['views']>;
-  tx: TStack['transactions'] extends Record<string, TransactionDefinition>
-    ? {
-        [K in keyof TStack['transactions']]: TStack['transactions'][K]['build'];
-      } & {
-        useMutation: () => UseMutationReturn;
-      }
-    : { useMutation: () => UseMutationReturn };
+  instructions: BuildInstructionInterface<TStack['instructions']>;
   zustandStore: UseBoundStore<StoreApi<HyperStackStore>>;
-  runtime: HyperstackRuntime;
+  client: HyperStack<TStack>;
+  isLoading: boolean;
+  error: Error | null;
 };
 
 export function useHyperstack<TStack extends StackDefinition>(
   stack: TStack
 ): StackClient<TStack> {
-  if (!stack) {
-    throw new Error('[Hyperstack] Stack definition is required');
-  }
+  const { getOrCreateClient, getClient } = useHyperstackContext();
+  const [client, setClient] = useState<HyperStack<TStack> | null>(getClient(stack) as HyperStack<TStack> | null);
+  const [isLoading, setIsLoading] = useState(!client);
+  const [error, setError] = useState<Error | null>(null);
 
-  const { runtime } = useHyperstackContext();
+  useEffect(() => {
+    const existingClient = getClient(stack);
+    if (existingClient) {
+      setClient(existingClient as HyperStack<TStack>);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    getOrCreateClient(stack)
+      .then((newClient) => {
+        setClient(newClient as HyperStack<TStack>);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err : new Error(String(err)));
+        setIsLoading(false);
+      });
+  }, [stack, getOrCreateClient, getClient]);
 
   const views: Record<string, Record<string, unknown>> = {};
 
-  for (const [viewName, viewGroup] of Object.entries(stack.views)) {
-    views[viewName] = {};
+  if (client) {
+    for (const [viewName, viewGroup] of Object.entries(client.views)) {
+      views[viewName] = {};
 
-    if (typeof viewGroup === 'object' && viewGroup !== null) {
-      const group = viewGroup as ViewGroup;
+      if (typeof viewGroup === 'object' && viewGroup !== null) {
+        for (const [subViewName, viewDef] of Object.entries(viewGroup)) {
+          if (!viewDef || typeof viewDef !== 'object' || !('mode' in viewDef)) continue;
 
-      for (const [subViewName, viewDef] of Object.entries(group)) {
-        if (!viewDef || typeof viewDef !== 'object' || !('mode' in viewDef)) continue;
-
-        if (viewDef.mode === 'state') {
-          views[viewName]![subViewName] = createStateViewHook(viewDef as ViewDef<unknown, 'state'>, runtime);
-        } else if (viewDef.mode === 'list') {
-          views[viewName]![subViewName] = createListViewHook(viewDef as ViewDef<unknown, 'list'>, runtime);
+          if (viewDef.mode === 'state') {
+            views[viewName]![subViewName] = createStateViewHook(viewDef as ViewDef<unknown, 'state'>, client);
+          } else if (viewDef.mode === 'list') {
+            views[viewName]![subViewName] = createListViewHook(viewDef as ViewDef<unknown, 'list'>, client);
+          }
         }
       }
     }
   }
 
-  const tx: Record<string, unknown> = {};
+  const instructions: Record<string, InstructionHook> = {};
 
-  if (stack.transactions) {
-    for (const [txName, txDef] of Object.entries(stack.transactions)) {
-      tx[txName] = txDef.build;
+  if (client?.instructions) {
+    for (const [instructionName, executeFn] of Object.entries(client.instructions)) {
+      instructions[instructionName] = {
+        execute: executeFn as InstructionExecutor,
+        useMutation: () => useInstructionMutation(executeFn as InstructionExecutor)
+      };
     }
   }
 
-  tx.useMutation = createTxMutationHook(runtime, stack.transactions);
-
   return {
-    views,
-    tx,
-    zustandStore: runtime.zustandStore,
-    runtime
-  } as StackClient<TStack>;
+    views: views as BuildViewInterface<TStack['views']>,
+    instructions: instructions as BuildInstructionInterface<TStack['instructions']>,
+    zustandStore: client?.store as unknown as UseBoundStore<StoreApi<HyperStackStore>>,
+    client: client!,
+    isLoading,
+    error
+  };
 }
