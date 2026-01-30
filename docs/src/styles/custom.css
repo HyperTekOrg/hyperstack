@@ -1,5 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist+Sans:wght@100..900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Geist+Sans:wght@100..900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&display=swap");
 
 /* ============================================
    Hyperstack Docs - Modern Clean Design
@@ -14,16 +14,16 @@
   --sl-text-xl: 1.125rem;
   --sl-text-2xl: 1.5rem;
   --sl-text-3xl: 2rem;
-  
+
   /* Border Radius - Subtle, modern */
   --sl-border-radius-sm: 4px;
   --sl-border-radius-md: 6px;
   --sl-border-radius-lg: 8px;
-  
+
   /* Sidebar compact sizing */
   --sl-sidebar-item-padding-inline: 0.5rem;
   --sl-sidebar-pad-x: 1rem;
-  
+
   /* Content width */
   --sl-content-width: 50rem;
   --sl-sidebar-width: 18rem;
@@ -32,22 +32,22 @@
 /* ============================================
    Dark Mode - Slate/Purple Palette
    ============================================ */
-:root[data-theme='dark'] {
+:root[data-theme="dark"] {
   /* Primary accent - soft indigo/purple instead of harsh cyan */
   --sl-color-accent: #818cf8;
   --sl-color-accent-low: rgba(99, 102, 241, 0.15);
   --sl-color-accent-high: #a5b4fc;
-  
+
   /* Background layers */
   --sl-color-bg: #0f0f14;
   --sl-color-bg-nav: rgba(17, 17, 24, 0.85);
   --sl-color-bg-sidebar: rgba(17, 17, 24, 0.6);
   --sl-color-bg-inline-code: rgba(129, 140, 248, 0.12);
-  
+
   /* Text colors - high contrast but soft */
   --sl-color-text: #e4e4eb;
   --sl-color-text-accent: #a5b4fc;
-  
+
   /* Gray scale - slate tones */
   --sl-color-gray-1: #f1f1f4;
   --sl-color-gray-2: #c8c8d0;
@@ -56,14 +56,14 @@
   --sl-color-gray-5: #3d3d47;
   --sl-color-gray-6: #26262e;
   --sl-color-gray-7: #1a1a21;
-  
+
   /* Borders */
   --sl-color-hairline: rgba(255, 255, 255, 0.08);
   --sl-color-hairline-light: rgba(255, 255, 255, 0.04);
-  
+
   /* Code blocks */
   --sl-color-code-bg: #16161e;
-  
+
   /* Sidebar active state */
   --hs-sidebar-active-bg: rgba(129, 140, 248, 0.15);
   --hs-sidebar-active-border: rgba(129, 140, 248, 0.3);
@@ -72,22 +72,22 @@
 /* ============================================
    Light Mode - Clean, Bright
    ============================================ */
-:root[data-theme='light'] {
+:root[data-theme="light"] {
   /* Primary accent - clear indigo */
   --sl-color-accent: #4f46e5;
   --sl-color-accent-low: rgba(79, 70, 229, 0.08);
   --sl-color-accent-high: #4338ca;
-  
+
   /* Background layers */
   --sl-color-bg: #ffffff;
   --sl-color-bg-nav: rgba(255, 255, 255, 0.9);
   --sl-color-bg-sidebar: rgba(249, 250, 251, 0.8);
   --sl-color-bg-inline-code: rgba(79, 70, 229, 0.08);
-  
+
   /* Text colors */
   --sl-color-text: #1f2937;
   --sl-color-text-accent: #4338ca;
-  
+
   /* Gray scale - neutral */
   --sl-color-gray-1: #111827;
   --sl-color-gray-2: #374151;
@@ -96,14 +96,14 @@
   --sl-color-gray-5: #d1d5db;
   --sl-color-gray-6: #e5e7eb;
   --sl-color-gray-7: #f3f4f6;
-  
+
   /* Borders */
   --sl-color-hairline: rgba(0, 0, 0, 0.08);
   --sl-color-hairline-light: rgba(0, 0, 0, 0.04);
-  
+
   /* Code blocks */
   --sl-color-code-bg: #f8fafc;
-  
+
   /* Sidebar active state */
   --hs-sidebar-active-bg: rgba(79, 70, 229, 0.1);
   --hs-sidebar-active-border: rgba(79, 70, 229, 0.25);
@@ -113,15 +113,26 @@
    Typography
    ============================================ */
 body {
-  font-family: 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family:
+    "Geist Sans",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    system-ui,
+    sans-serif;
   background: var(--sl-color-bg);
   color: var(--sl-color-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-code, pre, kbd, samp {
-  font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+code,
+pre,
+kbd,
+samp {
+  font-family:
+    "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    monospace;
 }
 
 /* ============================================
@@ -155,7 +166,9 @@ nav[aria-label="Main"] a {
   color: var(--sl-color-gray-3);
   line-height: 1.4;
   display: block;
-  transition: color 0.15s ease, background-color 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 nav[aria-label="Main"] a:hover {
@@ -164,8 +177,8 @@ nav[aria-label="Main"] a:hover {
 }
 
 /* Active sidebar link */
-nav[aria-label="Main"] a[aria-current='page'],
-nav[aria-label="Main"] a[aria-current='true'] {
+nav[aria-label="Main"] a[aria-current="page"],
+nav[aria-label="Main"] a[aria-current="true"] {
   background: var(--hs-sidebar-active-bg);
   color: var(--sl-color-accent-high);
   font-weight: 500;
@@ -230,7 +243,7 @@ nav[aria-label="On this page"] a:hover {
   color: var(--sl-color-text);
 }
 
-nav[aria-label="On this page"] a[aria-current='true'] {
+nav[aria-label="On this page"] a[aria-current="true"] {
   color: var(--sl-color-accent-high);
   font-weight: 500;
 }
@@ -292,7 +305,8 @@ main p {
 }
 
 /* Lists */
-main ul, main ol {
+main ul,
+main ol {
   font-size: var(--sl-text-base);
   color: var(--sl-color-gray-2);
   padding-left: 1.5rem;
@@ -361,12 +375,51 @@ main a:hover {
 /* ============================================
    Callouts / Asides
    ============================================ */
-aside, .starlight-aside {
+aside,
+.starlight-aside {
   border-radius: var(--sl-border-radius-lg);
   padding: 1rem 1.25rem;
   margin: 1.5rem 0;
   border-left: 3px solid var(--sl-color-accent);
   background: var(--sl-color-accent-low);
+}
+
+/* ============================================
+   Tabs - Clean Tab Style
+   ============================================ */
+
+/* Remove double border: tabs have individual borders, container shouldn't */
+starlight-tabs {
+  border-bottom: none !important;
+}
+
+/* Tab list container */
+starlight-tabs [role="tablist"] {
+  /* border-bottom: 1px solid var(--sl-color-hairline); */
+  border-bottom: none;
+  margin-bottom: 0;
+  gap: 0;
+}
+
+/* Individual tabs */
+starlight-tabs [role="tab"] {
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 0.5rem 1rem;
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-3);
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+starlight-tabs [role="tab"]:hover {
+  color: var(--sl-color-text);
+}
+
+starlight-tabs [role="tab"][aria-selected="true"] {
+  color: var(--sl-color-accent-high);
+  border-bottom-color: var(--sl-color-accent);
 }
 
 /* ============================================
@@ -377,11 +430,11 @@ aside, .starlight-aside {
     font-size: var(--sl-text-base);
     padding: 0.5rem 0.75rem;
   }
-  
+
   main h1 {
     font-size: var(--sl-text-2xl);
   }
-  
+
   main h2 {
     font-size: var(--sl-text-xl);
   }

@@ -28,7 +28,7 @@ export default defineConfig({
       // Contributors only need to add frontmatter to control ordering
       sidebar: [
         {
-          label: "Using Stacks",
+          label: "Get Started",
           autogenerate: { directory: "using-stacks" },
         },
         {
@@ -40,15 +40,19 @@ export default defineConfig({
           autogenerate: { directory: "concepts" },
         },
         {
-          label: "SDKs",
+          label: "SDK Reference",
           items: [
             {
               label: "TypeScript",
-              autogenerate: { directory: "sdks/typescript" },
+              link: "/sdks/typescript/",
+            },
+            {
+              label: "React",
+              link: "/sdks/react/",
             },
             {
               label: "Rust",
-              autogenerate: { directory: "sdks/rust" },
+              link: "/sdks/rust/",
             },
           ],
         },
