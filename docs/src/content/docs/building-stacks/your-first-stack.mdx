@@ -1,10 +1,10 @@
 ---
 title: Your First Stack
 sidebar:
-  order: 4
+  order: 5
 ---
 
-In this tutorial, you'll build an end-to-end real-time data pipeline in 15 minutes. We'll create a "Counter" stack that tracks on-chain increment events and displays the live count in a React app.
+In this tutorial, you'll build an end-to-end streaming data pipeline in 15 minutes. We'll create a "Counter" stack that tracks on-chain increment events and displays the live count in a React app.
 
 ## What You'll Build
 
@@ -110,7 +110,7 @@ hs up counter-stack
 ✔ Stack pushed (v1)
 ✔ Build created (id: bld_123...)
 ✔ Build completed
-🚀 Deployed to: wss://counter-stack.stack.usehyperstack.com
+🚀 Deployed to: wss://ore.stack.usehyperstack.com
 ```
 
 :::tip[Checkpoint]
@@ -119,16 +119,32 @@ Copy the **WebSocket URL** from the output. You'll need it for the React app.
 
 ---
 
-## Part 3: Connect from Your App
+## Part 3: Generate SDK and Connect
 
-Finally, let's build the frontend. You can use either the React SDK or the pure TypeScript SDK.
+Finally, let's build the frontend. First, generate a typed SDK from your deployed stack, then connect using React or TypeScript.
+
+:::tip[What is the SDK?]
+The generated SDK contains the typed interface to your stack — it tells the Hyperstack client what entities exist, what views are available, and the TypeScript types for each. You can share this SDK with your team or publish it.
+:::
+
+### 1. Generate the SDK
+
+From your stack project directory (where you ran `hs up`):
+
+```bash
+hs sdk create typescript counter-stack --output ./sdk
+```
+
+This creates a typed SDK in `./sdk/` with full TypeScript support.
+
+---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 <Tabs>
 <TabItem label="React">
 
-### 1. Set up your React app
+### 2. Set up your React app
 
 ```bash
 npx create-react-app my-counter-app --template typescript
@@ -136,9 +152,15 @@ cd my-counter-app
 npm install hyperstack-react zustand
 ```
 
-### 2. Configure the Provider
+Copy the generated SDK into your React app:
 
-Wrap your app in `HyperstackProvider` using the URL you got from the previous step.
+```bash
+cp -r ../counter-stack/sdk ./src/counter-sdk
+```
+
+### 3. Configure the Provider
+
+Wrap your app in `HyperstackProvider` using the URL from `hs up`.
 
 ```tsx
 // src/index.tsx
@@ -146,44 +168,18 @@ import { HyperstackProvider } from "hyperstack-react";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 root.render(
-  <HyperstackProvider websocketUrl="wss://counter-stack.stack.usehyperstack.com">
+  <HyperstackProvider websocketUrl="wss://ore.stack.usehyperstack.com">
     <App />
   </HyperstackProvider>,
 );
 ```
 
-### 3. Define the Stack
-
-Tell the React SDK about your "Counter" entity.
-
-```tsx
-// src/stack.ts
-import { defineStack, createListView } from "hyperstack-react";
-
-export interface Counter {
-  owner: string;
-  total_count: number;
-  last_updated: number;
-}
-
-export const CounterStack = defineStack({
-  name: "counter-stack",
-  views: {
-    counters: {
-      list: createListView<Counter>("Counter/list"),
-    },
-  },
-});
-```
-
-### 4. Build the Component
-
-Create a component that displays the live data.
+### 4. Use the Generated Stack
 
 ```tsx
 // src/App.tsx
 import { useHyperstack } from "hyperstack-react";
-import { CounterStack } from "./stack";
+import { CounterStack } from "./counter-sdk";
 
 export default function App() {
   const stack = useHyperstack(CounterStack);
@@ -216,7 +212,7 @@ export default function App() {
 </TabItem>
 <TabItem label="TypeScript (Non-React)">
 
-### 1. Set up your project
+### 2. Set up your project
 
 ```bash
 mkdir my-counter-app && cd my-counter-app
@@ -224,30 +220,32 @@ npm init -y
 npm install hyperstack-typescript typescript
 ```
 
-### 2. Connect and stream data
+Copy the generated SDK:
+
+```bash
+cp -r ../counter-stack/sdk ./src/counter-sdk
+```
+
+### 3. Connect and stream data
 
 ```typescript
 // src/index.ts
 import { HyperStack } from "hyperstack-typescript";
-
-interface Counter {
-  owner: string;
-  total_count: number;
-  last_updated: number;
-}
+import { CounterStack, type Counter } from "./counter-sdk";
 
 async function main() {
-  // Connect to your deployed stack
+  // Connect to your deployed stack using the generated SDK
   const hs = await HyperStack.connect(
-    "wss://counter-stack.stack.usehyperstack.com",
+    "wss://ore.stack.usehyperstack.com",
+    { stack: CounterStack }
   );
 
   console.log("Connected! Streaming counters...\n");
 
-  // Stream updates using AsyncIterable
-  for await (const update of hs.views.counters.list.watch()) {
+  // Stream updates with full type safety
+  for await (const update of hs.subscribe<Counter>("Counter/list")) {
     if (update.type === "upsert") {
-      const counter = update.data as Counter;
+      const counter = update.data;
       console.log(`Counter updated:`);
       console.log(`  Owner: ${counter.owner}`);
       console.log(`  Count: ${counter.total_count}`);
@@ -262,7 +260,7 @@ async function main() {
 main().catch(console.error);
 ```
 
-### 3. Run your app
+### 4. Run your app
 
 ```bash
 npx tsx src/index.ts

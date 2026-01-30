@@ -5,12 +5,14 @@ sidebar:
 description: The end-to-end process of building and deploying a Hyperstack data pipeline.
 ---
 
-Building a stack follows a straightforward four-step workflow: define your data model in Rust, compile to generate the AST, deploy to Hyperstack Cloud, and connect from your application.
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Building a stack follows a straightforward four-step workflow: define your data model in Rust, compile to build the stack, deploy to Hyperstack Cloud, and connect from your application.
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │  1. Write   │     │  2. Build   │     │  3. Deploy  │     │ 4. Connect  │
-│    Rust     │ ──▶ │    AST      │ ──▶ │   via CLI   │ ──▶ │   from App  │
+│    Rust     │ ──▶ │   Stack     │ ──▶ │   via CLI   │ ──▶ │   from App  │
 │             │     │             │     │             │     │             │
 │ #[hyperstack]    │ cargo build │     │   hs up     │     │  SDK/WS     │
 └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
@@ -20,24 +22,24 @@ Building a stack follows a straightforward four-step workflow: define your data 
 
 ## Step 1: Write Your Stack Definition
 
-A stack definition is a Rust module that declares how on-chain Solana data maps to your application's data model. You define **entities** (the data objects you want) and **mappings** (where the data comes from).
+A stack definition is a Rust module that maps structure from the IDL into a rich, queryable state ready to consume in your application layer. Using Hyperstack's expressive DSL, you define **entities**, field mappings, aggregations, computed fields, relationships, and more — all in declarative Rust syntax.
 
 ```rust
 use hyperstack::{hyperstack, Stream};
 
 #[hyperstack(idl = "my_program.json")]
-pub mod my_stack {
+pub mod ore_stack {
     #[entity]
     #[derive(Stream)]
-    pub struct Token {
-        #[map(TokenAccount::mint, primary_key)]
-        pub mint: String,
+    pub struct OreRound {
+        #[map(RoundState::round_id, primary_key)]
+        pub round_id: u64,
 
-        #[map(TokenAccount::amount)]
-        pub balance: u64,
+        #[map(RoundState::motherlode)]
+        pub motherlode: u64,
 
-        #[aggregate(from = Transfer, field = amount, strategy = Sum)]
-        pub total_transferred: u64,
+        #[map(RoundState::difficulty)]
+        pub difficulty: u64,
     }
 }
 ```
@@ -48,15 +50,15 @@ The Rust code is purely declarative—you're describing **what** data you want, 
 
 ---
 
-## Step 2: Build to Generate AST
+## Step 2: Build the Stack
 
-When you compile your Rust project, Hyperstack macros transform your definition into a JSON **Abstract Syntax Tree (AST)**. This AST is the portable representation of your data pipeline.
+When you compile your Rust project, Hyperstack macros transform your definition into a portable JSON specification. This is the compiled representation of your data pipeline.
 
 ```bash
 cargo build
 ```
 
-After building, you'll find the generated AST in `.hyperstack/`:
+After building, you'll find the generated specification in `.hyperstack/`:
 
 ```
 my-stack/
@@ -66,23 +68,24 @@ my-stack/
     └── Token.ast.json    # Generated pipeline specification
 ```
 
-The AST contains everything Hyperstack needs to execute your pipeline: field mappings, aggregation logic, key resolution rules, and more.
+This specification contains everything Hyperstack needs to execute your pipeline: field mappings, aggregation logic, key resolution rules, and more.
 
 ---
 
 ## Step 3: Deploy with the CLI
 
-The Hyperstack CLI (`hs`) handles deployment to Hyperstack Cloud. A single command pushes your AST, builds the execution environment, and deploys to a global edge network.
+The Hyperstack CLI (`hs`) handles deployment to Hyperstack Cloud. A single command pushes your stack specification, builds the execution environment, and deploys to a global edge network.
+
+:::caution[Closed Beta]
+Hyperstack is currently in closed beta. You'll need an API key to deploy. [Contact us on X](https://x.com/usehyperstack) to request access.
+:::
 
 ```bash
-# First time: authenticate
-hs auth login
-
 # Initialize project config (creates hyperstack.toml)
 hs init
 
 # Deploy your stack
-hs up my-stack
+hs up
 ```
 
 On success, you'll receive a WebSocket URL:
@@ -90,33 +93,51 @@ On success, you'll receive a WebSocket URL:
 ```
 ✔ Stack pushed (v1)
 ✔ Build completed
-🚀 Deployed to: wss://my-stack.stack.usehyperstack.com
+🚀 Deployed to: wss://ore.stack.usehyperstack.com
 ```
 
 → [CLI Reference](/cli/commands) — Full command documentation
 
 ---
 
-## Step 4: Connect from Your Application
+## Step 4: Generate SDK and Connect
 
-Once deployed, your stack streams real-time data over WebSocket. Connect using the SDK for your platform:
+Once deployed, generate a typed SDK for your stack:
 
-import { Tabs, TabItem } from "@astrojs/starlight/components";
+<Tabs>
+<TabItem label="TypeScript">
+
+```bash
+hs sdk create typescript ore
+```
+
+</TabItem>
+<TabItem label="Rust">
+
+```bash
+hs sdk create rust ore
+```
+
+</TabItem>
+</Tabs>
+
+This creates a package containing the `ORE_STACK` definition that tells the Hyperstack client how to interact with your feed. Import it in your application:
 
 <Tabs>
 <TabItem label="React">
 
 ```tsx
 import { HyperstackProvider, useHyperstack } from "hyperstack-react";
+import { ORE_STACK } from "hyperstack-stacks/ore";  // Generated in Step 4
 
 // Wrap your app
-<HyperstackProvider websocketUrl="wss://my-stack.stack.usehyperstack.com">
+<HyperstackProvider websocketUrl="wss://ore.stack.usehyperstack.com">
   <App />
 </HyperstackProvider>;
 
 // In your component
-const stack = useHyperstack(MyStack);
-const { data: tokens } = stack.views.tokens.list.use();
+const stack = useHyperstack(ORE_STACK);
+const { data: rounds } = stack.views.rounds.list.use();
 ```
 
 </TabItem>
@@ -124,31 +145,55 @@ const { data: tokens } = stack.views.tokens.list.use();
 
 ```typescript
 import { HyperStack } from "hyperstack-typescript";
+import { ORE_STACK } from "hyperstack-stacks/ore";  // Generated in Step 4
 
-const hs = await HyperStack.connect("wss://my-stack.stack.usehyperstack.com");
+const hs = await HyperStack.connect(
+  "wss://ore.stack.usehyperstack.com",
+  { stack: ORE_STACK }
+);
 
-for await (const update of hs.views.tokens.list.watch()) {
-  console.log("Token updated:", update.data);
+for await (const update of hs.views.rounds.list.watch()) {
+  console.log("Round updated:", update.data);
+}
+```
+
+</TabItem>
+<TabItem label="Rust">
+
+```rust
+use hyperstack_sdk::prelude::*;
+use ore_stack::OreRoundViews;  // Generated in Step 4
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Connect to your deployed stack
+    let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
+
+    // Get typed views
+    let views = hs.views::<OreRoundViews>();
+    let mut stream = views.rounds().watch();
+
+    // Stream updates
+    while let Some(update) = stream.next().await {
+        match update {
+            Update::Upsert { data, .. } => {
+                println!("Round #{}: motherlode={}",
+                    data.round_id, data.motherlode);
+            }
+            Update::Delete { key } => println!("Round deleted: {}", key),
+        }
+    }
+
+    Ok(())
 }
 ```
 
 </TabItem>
 </Tabs>
 
+Share the generated SDK with your team or publish it — anyone with the SDK can connect to your stack's feed (assuming they're authorized).
+
 → [Your First Stack](/building-stacks/your-first-stack) — Complete tutorial with working code
-
----
-
-## Development Loop
-
-During development, the typical iteration cycle is:
-
-1. **Edit** your Rust definition (`src/lib.rs`)
-2. **Build** to regenerate the AST (`cargo build`)
-3. **Deploy** the updated stack (`hs up`)
-4. **Test** in your application
-
-The CLI detects changes and performs incremental deployments, so iteration is fast.
 
 ---
 

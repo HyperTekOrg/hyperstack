@@ -23,13 +23,56 @@ Complete reference for the Hyperstack CLI (`hs`).
 
 ## Quick Reference
 
-| Command         | Description                          |
-| --------------- | ------------------------------------ |
-| `hs init`       | Initialize project                   |
-| `hs up [stack]` | Deploy stack (push + build + deploy) |
-| `hs status`     | Show project overview                |
-| `hs stack list` | List all stacks                      |
-| `hs stack show` | Show stack details                   |
+| Command                         | Description                            |
+| ------------------------------- | -------------------------------------- |
+| `hyperstack-cli create [name]`  | Scaffold a new app from a template     |
+| `hs init`                       | Initialize a stack project             |
+| `hs up [stack]`                 | Deploy stack (push + build + deploy)   |
+| `hs status`                     | Show project overview                  |
+| `hs stack list`                 | List all stacks                        |
+| `hs stack show`                 | Show stack details                     |
+
+:::note[npm vs Cargo]
+When installed via npm (`npm install -g hyperstack-cli`), the command is `hyperstack-cli`. When installed via Cargo (`cargo install hyperstack-cli`), the command is `hs`. Both are the same CLI.
+:::
+
+---
+
+## Create a New App
+
+### hyperstack-cli create [name]
+
+Scaffold a new Hyperstack project from a template. This is the fastest way to get started.
+
+```bash
+# Interactive — prompts for name and template
+npx hyperstack-cli create
+
+# With project name
+npx hyperstack-cli create my-app
+
+# With specific template
+npx hyperstack-cli create my-app --template react-ore
+```
+
+**Available templates:**
+
+| Template | Description |
+| --- | --- |
+| `react-ore` | ORE mining rounds viewer (React + Vite) |
+| `rust-ore` | ORE mining rounds client (Rust + Tokio) |
+| `typescript-ore` | ORE mining rounds client (TypeScript CLI) |
+
+**Options:**
+
+| Flag | Description |
+| --- | --- |
+| `--template <name>` | Skip interactive selection |
+| `--offline` | Use cached templates only |
+| `--force-refresh` | Clear template cache and re-download |
+| `--skip-install` | Don't run `npm install` automatically |
+
+Templates are downloaded from GitHub releases and cached in `~/.hyperstack/templates/`.
 
 ---
 

@@ -2,7 +2,7 @@
 title: Stack Definitions
 sidebar:
   order: 2
-description: Introduction to the Hyperstack Rust DSL for defining real-time data streaming specifications.
+description: Introduction to the Hyperstack Rust DSL for defining streaming data specifications.
 ---
 
 Hyperstack uses a declarative Rust DSL (Domain Specific Language) to define how on-chain Solana data should be transformed, aggregated, and streamed to your application. Instead of writing complex ETL pipelines, you simply declare the final state you want, and Hyperstack handles the rest.
@@ -38,7 +38,7 @@ pub mod my_stream {
         #[from_instruction(Create::mint, primary_key)]
         pub mint: String,
 
-        /// Real-time reserves mapped from account state
+        /// Live reserves mapped from account state
         #[map(BondingCurve::reserves)]
         pub reserves: u64,
 
@@ -100,7 +100,7 @@ When you build your Rust project containing a Hyperstack definition, the macros 
 1.  **Validation**: The macro verifies that your mappings match the provided IDL or Protobuf definitions.
 2.  **AST Generation**: It generates a JSON-based **Abstract Syntax Tree (AST)** representing your data pipeline.
 3.  **Bytecode Compilation**: When you deploy your stack (`hs up`), Hyperstack Cloud compiles this AST into optimized bytecode.
-4.  **Execution**: The Hyperstack VM executes this bytecode in real-time against the Solana transaction firehose, updating your entity state and streaming diffs to your clients.
+4.  **Execution**: The Hyperstack VM executes this bytecode against the Solana transaction firehose, updating your entity state and streaming diffs to your clients.
 
 ---
 

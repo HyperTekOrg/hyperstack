@@ -4,7 +4,7 @@ sidebar:
   order: 1
 ---
 
-Hyperstack is a declarative data layer for Solana. You define the data shape you need, and Hyperstack handles all the infrastructure to stream it to your app in real-time.
+Hyperstack is a declarative data layer for Solana. You define the data shape you need, and Hyperstack handles all the infrastructure to stream it to your app.
 
 ---
 
@@ -43,7 +43,7 @@ Hyperstack then:
 
 - Subscribes to the relevant on-chain events
 - Transforms raw data into your entity shape
-- Streams updates to your app in real-time
+- Streams updates to your app as they happen on-chain
 - Generates type-safe SDKs for your frontend
 
 ---
@@ -67,7 +67,7 @@ Hyperstack then:
 |                                                              |
 |   +----------------------------------------------------+    |
 |   |              Yellowstone gRPC                       |    |
-|   |         (Real-time Solana data feed)                |    |
+|   |         (Live Solana data feed)                     |    |
 |   +----------------------------------------------------+    |
 +-------------------------------------------------------------+
                           |
@@ -153,7 +153,7 @@ pub struct Token {
 
 A **stack** is the client-side interface to your deployed stream. It provides:
 
-- **Views** - Real-time data subscriptions
+- **Views** - Live data subscriptions
 - **Transactions** - Instruction builders
 - **Helpers** - Utility functions
 
@@ -179,7 +179,7 @@ const TokenStack = defineStack({
 **TypeScript Core SDK:**
 
 ```typescript
-const hs = await HyperStack.connect("wss://my-stack.stack.usehyperstack.com");
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
 
 // AsyncIterable-based streaming
 for await (const update of hs.views.tokens.list.watch()) {
@@ -213,7 +213,7 @@ for await (const update of hs.views.tokens.list.watch()) {
 
 1. Connect to WebSocket
 2. Subscribe to views
-3. Receive real-time updates
+3. Receive live updates
 4. React components re-render automatically
 
 ---
@@ -265,8 +265,11 @@ console.log(token.volume); // bigint
 
 ## Next Steps
 
-- [Try It Now](/using-stacks/try-it-now) - Stream data in 2 minutes
-- [React Guide](/using-stacks/react) - Build a complete React app
+- [Quickstart](/using-stacks/quickstart) - Scaffold a working app in under 2 minutes
+- [Connect to a Stack](/using-stacks/connect/) - Add Hyperstack to your existing project
+- [React SDK](/sdks/react/) - Build a complete React app
+- [TypeScript SDK](/sdks/typescript/) - Framework-agnostic SDK
+- [Rust SDK](/sdks/rust/) - Native Rust client
 - [Stack API](/concepts/stack-api) - Client-side API reference
 - [Building Stacks](/building-stacks/workflow) - Create custom data streams
 - [CLI Commands](/cli/commands) - Deployment and management
