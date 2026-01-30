@@ -92,6 +92,82 @@ export function createUpdateStream<T>(
   };
 }
 
+export function createEntityStream<T>(
+  storage: StorageAdapter,
+  subscriptionRegistry: SubscriptionRegistry,
+  subscription: Subscription,
+  keyFilter?: string
+): AsyncIterable<T> {
+  return {
+    [Symbol.asyncIterator](): AsyncIterator<T> {
+      const queue: T[] = [];
+      let waitingResolve: ((value: IteratorResult<T>) => void) | null = null;
+      let unsubscribeStorage: UnsubscribeFn | null = null;
+      let unsubscribeRegistry: UnsubscribeFn | null = null;
+      let done = false;
+
+      const handler = (viewPath: string, key: string, update: RichUpdate<unknown>) => {
+        if (viewPath !== subscription.view) return;
+        if (keyFilter !== undefined && key !== keyFilter) return;
+        if (update.type === 'deleted') return;
+
+        const entity = (update.type === 'created' ? update.data : update.after) as T;
+
+        if (waitingResolve) {
+          const resolve = waitingResolve;
+          waitingResolve = null;
+          resolve({ value: entity, done: false });
+        } else {
+          if (queue.length >= MAX_QUEUE_SIZE) {
+            queue.shift();
+          }
+          queue.push(entity);
+        }
+      };
+
+      const start = () => {
+        unsubscribeStorage = storage.onRichUpdate(handler);
+        unsubscribeRegistry = subscriptionRegistry.subscribe(subscription);
+      };
+
+      const cleanup = () => {
+        done = true;
+        unsubscribeStorage?.();
+        unsubscribeRegistry?.();
+      };
+
+      start();
+
+      return {
+        async next(): Promise<IteratorResult<T>> {
+          if (done) {
+            return { value: undefined as unknown as T, done: true };
+          }
+
+          const queued = queue.shift();
+          if (queued) {
+            return { value: queued, done: false };
+          }
+
+          return new Promise((resolve) => {
+            waitingResolve = resolve;
+          });
+        },
+
+        async return(): Promise<IteratorResult<T>> {
+          cleanup();
+          return { value: undefined as unknown as T, done: true };
+        },
+
+        async throw(error?: unknown): Promise<IteratorResult<T>> {
+          cleanup();
+          throw error;
+        },
+      };
+    },
+  };
+}
+
 export function createRichUpdateStream<T>(
   storage: StorageAdapter,
   subscriptionRegistry: SubscriptionRegistry,

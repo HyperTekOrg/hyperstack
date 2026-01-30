@@ -16,7 +16,7 @@ export { MemoryAdapter } from './storage/memory-adapter';
 export { parseFrame, parseFrameFromBlob, isValidFrame, isSnapshotFrame, isSubscribedFrame, isEntityFrame } from './frame';
 export type { EntityFrame, SnapshotFrame, SnapshotEntity, SubscribedFrame, SortConfig, SortOrder, Frame, FrameMode, FrameOp } from './frame';
 
-export { createUpdateStream, createRichUpdateStream } from './stream';
+export { createUpdateStream, createEntityStream, createRichUpdateStream } from './stream';
 export {
   createTypedStateView,
   createTypedListView,
@@ -31,6 +31,7 @@ export type {
   StackDefinition,
   ViewGroup,
   Subscription,
+  WatchOptions,
   HyperStackOptions,
   HyperStackConfig,
   TypedViews,

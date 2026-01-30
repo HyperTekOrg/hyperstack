@@ -6,10 +6,11 @@ import type {
   ViewDef,
   StackDefinition,
   TypedViews,
+  WatchOptions,
 } from './types';
 import type { StorageAdapter } from './storage/adapter';
 import type { SubscriptionRegistry } from './subscription';
-import { createUpdateStream, createRichUpdateStream } from './stream';
+import { createUpdateStream, createEntityStream, createRichUpdateStream } from './stream';
 
 export function createTypedStateView<T>(
   viewDef: ViewDef<T, 'state'>,
@@ -17,20 +18,29 @@ export function createTypedStateView<T>(
   subscriptionRegistry: SubscriptionRegistry
 ): TypedStateView<T> {
   return {
-    watch(key: string): AsyncIterable<Update<T>> {
-      return createUpdateStream<T>(
+    use(key: string, options?: WatchOptions): AsyncIterable<T> {
+      return createEntityStream<T>(
         storage,
         subscriptionRegistry,
-        { view: viewDef.view, key },
+        { view: viewDef.view, key, ...options },
         key
       );
     },
 
-    watchRich(key: string): AsyncIterable<RichUpdate<T>> {
+    watch(key: string, options?: WatchOptions): AsyncIterable<Update<T>> {
+      return createUpdateStream<T>(
+        storage,
+        subscriptionRegistry,
+        { view: viewDef.view, key, ...options },
+        key
+      );
+    },
+
+    watchRich(key: string, options?: WatchOptions): AsyncIterable<RichUpdate<T>> {
       return createRichUpdateStream<T>(
         storage,
         subscriptionRegistry,
-        { view: viewDef.view, key },
+        { view: viewDef.view, key, ...options },
         key
       );
     },
@@ -51,12 +61,16 @@ export function createTypedListView<T>(
   subscriptionRegistry: SubscriptionRegistry
 ): TypedListView<T> {
   return {
-    watch(): AsyncIterable<Update<T>> {
-      return createUpdateStream<T>(storage, subscriptionRegistry, { view: viewDef.view });
+    use(options?: WatchOptions): AsyncIterable<T> {
+      return createEntityStream<T>(storage, subscriptionRegistry, { view: viewDef.view, ...options });
     },
 
-    watchRich(): AsyncIterable<RichUpdate<T>> {
-      return createRichUpdateStream<T>(storage, subscriptionRegistry, { view: viewDef.view });
+    watch(options?: WatchOptions): AsyncIterable<Update<T>> {
+      return createUpdateStream<T>(storage, subscriptionRegistry, { view: viewDef.view, ...options });
+    },
+
+    watchRich(options?: WatchOptions): AsyncIterable<RichUpdate<T>> {
+      return createRichUpdateStream<T>(storage, subscriptionRegistry, { view: viewDef.view, ...options });
     },
 
     async get(): Promise<T[]> {

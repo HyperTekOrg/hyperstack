@@ -41,6 +41,12 @@ export interface Subscription {
   skip?: number;
 }
 
+export interface WatchOptions {
+  take?: number;
+  skip?: number;
+  filters?: Record<string, string>;
+}
+
 export interface HyperStackOptions<TStack extends StackDefinition> {
   stack: TStack;
   autoReconnect?: boolean;
@@ -91,15 +97,17 @@ export type TypedViewGroup<TGroup> = {
 };
 
 export interface TypedStateView<T> {
-  watch(key: string): AsyncIterable<Update<T>>;
-  watchRich(key: string): AsyncIterable<RichUpdate<T>>;
+  use(key: string, options?: WatchOptions): AsyncIterable<T>;
+  watch(key: string, options?: WatchOptions): AsyncIterable<Update<T>>;
+  watchRich(key: string, options?: WatchOptions): AsyncIterable<RichUpdate<T>>;
   get(key: string): Promise<T | null>;
   getSync(key: string): T | null | undefined;
 }
 
 export interface TypedListView<T> {
-  watch(): AsyncIterable<Update<T>>;
-  watchRich(): AsyncIterable<RichUpdate<T>>;
+  use(options?: WatchOptions): AsyncIterable<T>;
+  watch(options?: WatchOptions): AsyncIterable<Update<T>>;
+  watchRich(options?: WatchOptions): AsyncIterable<RichUpdate<T>>;
   get(): Promise<T[]>;
   getSync(): T[] | undefined;
 }
