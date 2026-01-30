@@ -230,7 +230,9 @@ import { OreStack } from "./ore-sdk";
 
 export default function App() {
   const stack = useHyperstack(OreStack);
-  const { data: rounds, isLoading } = stack.views.OreRound.latest.use({ take: 5 });
+  const { data: rounds, isLoading } = stack.views.OreRound.latest.use({
+    take: 5,
+  });
 
   if (isLoading) return <div>Connecting to stream...</div>;
 
@@ -240,14 +242,27 @@ export default function App() {
       {rounds?.map((round) => (
         <div
           key={round.id.round_id}
-          style={{ padding: "1rem", border: "1px solid #ccc", margin: "0.5rem 0" }}
+          style={{
+            padding: "1rem",
+            border: "1px solid #ccc",
+            margin: "0.5rem 0",
+          }}
         >
           <h3>Round #{round.id.round_id}</h3>
           <p>Address: {round.id.round_address}</p>
-          <p>Total Deployed: {round.state.total_deployed?.toLocaleString()} lamports</p>
-          <p>Total Winnings: {round.state.total_winnings?.toLocaleString()} lamports</p>
+          <p>
+            Total Deployed: {round.state.total_deployed?.toLocaleString()}{" "}
+            lamports
+          </p>
+          <p>
+            Total Winnings: {round.state.total_winnings?.toLocaleString()}{" "}
+            lamports
+          </p>
           <p>Deploy Count: {round.metrics.deploy_count || 0}</p>
-          <p>Total SOL Deployed: {round.metrics.total_deployed_sol?.toLocaleString()} lamports</p>
+          <p>
+            Total SOL Deployed:{" "}
+            {round.metrics.total_deployed_sol?.toLocaleString()} lamports
+          </p>
         </div>
       ))}
     </div>
@@ -283,7 +298,7 @@ async function main() {
   // Connect to your deployed stack using the generated SDK
   const hs = await HyperStack.connect(
     "wss://<your-stack-name>.stack.usehyperstack.com",
-    { stack: OreStack }
+    { stack: OreStack },
   );
 
   console.log("Connected! Streaming ORE rounds...\n");
@@ -294,8 +309,12 @@ async function main() {
       const round = update.data;
       console.log(`Round #${round.id.round_id}:`);
       console.log(`  Address: ${round.id.round_address}`);
-      console.log(`  Total Deployed: ${round.state.total_deployed?.toLocaleString()} lamports`);
-      console.log(`  Total Winnings: ${round.state.total_winnings?.toLocaleString()} lamports`);
+      console.log(
+        `  Total Deployed: ${round.state.total_deployed?.toLocaleString()} lamports`,
+      );
+      console.log(
+        `  Total Winnings: ${round.state.total_winnings?.toLocaleString()} lamports`,
+      );
       console.log(`  Deploy Count: ${round.metrics.deploy_count || 0}`);
       console.log("");
     }

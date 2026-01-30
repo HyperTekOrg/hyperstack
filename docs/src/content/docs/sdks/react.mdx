@@ -86,11 +86,11 @@ This connects to the public ORE stack — a live Solana mining program feed anyo
 
 #### Provider Props
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `websocketUrl` | `string` | required | WebSocket URL of your stack |
-| `autoConnect` | `boolean` | `true` | Auto-connect on mount |
-| `maxEntriesPerView` | `number \| null` | `10000` | Max entries per view before LRU eviction |
+| Prop                | Type             | Default  | Description                              |
+| ------------------- | ---------------- | -------- | ---------------------------------------- |
+| `websocketUrl`      | `string`         | required | WebSocket URL of your stack              |
+| `autoConnect`       | `boolean`        | `true`   | Auto-connect on mount                    |
+| `maxEntriesPerView` | `number \| null` | `10000`  | Max entries per view before LRU eviction |
 
 ---
 
@@ -177,7 +177,8 @@ function RoundList() {
     <div>
       {rounds?.map((round) => (
         <div key={round.round_id}>
-          {stack.helpers.shortRoundId(round.round_id)} — {stack.helpers.formatMotherlode(round.motherlode)}
+          {stack.helpers.shortRoundId(round.round_id)} —{" "}
+          {stack.helpers.formatMotherlode(round.motherlode)}
         </div>
       ))}
     </div>
@@ -199,7 +200,8 @@ function RoundList() {
     <ul>
       {rounds?.map((round) => (
         <li key={round.round_id}>
-          Round #{round.round_id} — Motherlode: {stack.helpers.formatMotherlode(round.motherlode)}
+          Round #{round.round_id} — Motherlode:{" "}
+          {stack.helpers.formatMotherlode(round.motherlode)}
         </li>
       ))}
     </ul>
@@ -288,9 +290,9 @@ The `.use()` method accepts:
 
 ```typescript
 const { data } = stack.views.tokens.list.use({
-  key: "partition-key",           // Filter by partition
+  key: "partition-key", // Filter by partition
   where: { price: { gte: 100 } }, // Field filtering
-  limit: 10,                      // Max results
+  limit: 10, // Max results
 });
 ```
 
@@ -298,22 +300,22 @@ const { data } = stack.views.tokens.list.use({
 
 ```typescript
 const { data } = stack.views.tokens.list.use(
-  { limit: 10 },                  // Params
+  { limit: 10 }, // Params
   {
-    enabled: true,                // Enable/disable subscription
-    initialData: [],              // Initial data before first response
-  }
+    enabled: true, // Enable/disable subscription
+    initialData: [], // Initial data before first response
+  },
 );
 ```
 
 ### View Hook Return Value
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `data` | `T \| T[] \| undefined` | Current view data |
-| `isLoading` | `boolean` | True until first data received |
-| `error` | `Error \| undefined` | Subscription error if any |
-| `refresh` | `() => void` | Manually trigger refresh |
+| Property    | Type                    | Description                    |
+| ----------- | ----------------------- | ------------------------------ |
+| `data`      | `T \| T[] \| undefined` | Current view data              |
+| `isLoading` | `boolean`               | True until first data received |
+| `error`     | `Error \| undefined`    | Subscription error if any      |
+| `refresh`   | `() => void`            | Manually trigger refresh       |
 
 ---
 
@@ -367,13 +369,13 @@ function ConnectionStatus() {
 
 ### Connection States
 
-| State | Description |
-|-------|-------------|
-| `disconnected` | Not connected |
-| `connecting` | Establishing connection |
-| `connected` | Active and healthy |
+| State          | Description                     |
+| -------------- | ------------------------------- |
+| `disconnected` | Not connected                   |
+| `connecting`   | Establishing connection         |
+| `connected`    | Active and healthy              |
 | `reconnecting` | Auto-reconnecting after failure |
-| `error` | Connection failed |
+| `error`        | Connection failed               |
 
 ---
 
@@ -404,7 +406,7 @@ const state = useConnectionState();
 Wrap your application to initialize the SDK:
 
 ```tsx
-<HyperstackProvider 
+<HyperstackProvider
   websocketUrl="wss://ore.stack.usehyperstack.com"
   autoConnect={true}
   maxEntriesPerView={10000}
@@ -465,7 +467,9 @@ function OreDashboard() {
               {rounds.map((round) => (
                 <div key={round.round_id} className="round-card">
                   <h3>Round #{round.round_id}</h3>
-                  <p className="motherlode">{stack.helpers.formatMotherlode(round.motherlode)}</p>
+                  <p className="motherlode">
+                    {stack.helpers.formatMotherlode(round.motherlode)}
+                  </p>
                   <p className="difficulty">Difficulty: {round.difficulty}</p>
                 </div>
               ))}
@@ -495,24 +499,24 @@ import { HyperStack, ConnectionManager } from "hyperstack-react";
 
 ## Choosing Between SDKs
 
-| Use Case | Recommended SDK |
-|----------|----------------|
-| React/Next.js apps | `hyperstack-react` |
+| Use Case                 | Recommended SDK         |
+| ------------------------ | ----------------------- |
+| React/Next.js apps       | `hyperstack-react`      |
 | Vue, Svelte, Solid, etc. | `hyperstack-typescript` |
-| Node.js backend/scripts | `hyperstack-typescript` |
-| Custom state management | `hyperstack-typescript` |
-| Need React hooks | `hyperstack-react` |
-| Maximum control | `hyperstack-typescript` |
+| Node.js backend/scripts  | `hyperstack-typescript` |
+| Custom state management  | `hyperstack-typescript` |
+| Need React hooks         | `hyperstack-react`      |
+| Maximum control          | `hyperstack-typescript` |
 
 ---
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| "WebSocket connection failed" | Check your connection to `wss://ore.stack.usehyperstack.com` |
-| Data not updating | Verify the view path matches the ORE stack entity name (e.g., `OreRound/list`) |
-| TypeScript errors | Ensure your interface matches the ORE stack's data shape |
+| Issue                         | Solution                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------ |
+| "WebSocket connection failed" | Check your connection to `wss://ore.stack.usehyperstack.com`                   |
+| Data not updating             | Verify the view path matches the ORE stack entity name (e.g., `OreRound/list`) |
+| TypeScript errors             | Ensure your interface matches the ORE stack's data shape                       |
 
 ---
 

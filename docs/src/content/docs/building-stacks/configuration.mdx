@@ -18,6 +18,7 @@ hs init
 ```
 
 This command:
+
 - Creates `hyperstack.toml` with a project name based on your directory
 - Auto-discovers stacks from `.hyperstack/*.ast.json` files
 - Creates a `.hyperstack/` directory if it doesn't exist
@@ -85,42 +86,42 @@ rust_module = true                                     # Per-stack: generate as 
 
 ### `[project]` — Project Metadata
 
-| Option | Type | Required | Description |
-|--------|------|----------|-------------|
-| `name` | string | Yes | Project name (used for SDK package naming) |
-| `description` | string | No | Project description |
-| `version` | string | No | Project version |
+| Option        | Type   | Required | Description                                |
+| ------------- | ------ | -------- | ------------------------------------------ |
+| `name`        | string | Yes      | Project name (used for SDK package naming) |
+| `description` | string | No       | Project description                        |
+| `version`     | string | No       | Project version                            |
 
 ### `[sdk]` — SDK Generation Settings
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `output_dir` | string | `"./generated"` | Default output directory for all SDKs |
-| `typescript_output_dir` | string | `output_dir` | TypeScript SDK output directory |
-| `rust_output_dir` | string | `output_dir` | Rust SDK output directory |
-| `typescript_package` | string | `"hyperstack-stacks/{stack_name}"` | NPM package name for TypeScript SDKs |
-| `rust_module_mode` | boolean | `false` | Generate Rust SDKs as modules (`mod.rs`) instead of standalone crates |
+| Option                  | Type    | Default                            | Description                                                           |
+| ----------------------- | ------- | ---------------------------------- | --------------------------------------------------------------------- |
+| `output_dir`            | string  | `"./generated"`                    | Default output directory for all SDKs                                 |
+| `typescript_output_dir` | string  | `output_dir`                       | TypeScript SDK output directory                                       |
+| `rust_output_dir`       | string  | `output_dir`                       | Rust SDK output directory                                             |
+| `typescript_package`    | string  | `"hyperstack-stacks/{stack_name}"` | NPM package name for TypeScript SDKs                                  |
+| `rust_module_mode`      | boolean | `false`                            | Generate Rust SDKs as modules (`mod.rs`) instead of standalone crates |
 
 **Note:** When `rust_module_mode = true`, generated Rust SDKs are created as modules that can be embedded directly in your existing crate. When `false`, each SDK is generated as a standalone crate with its own `Cargo.toml`.
 
 ### `[build]` — Build Preferences
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `watch_by_default` | boolean | `true` | Enable file watching for automatic rebuilds during development |
+| Option             | Type    | Default | Description                                                    |
+| ------------------ | ------- | ------- | -------------------------------------------------------------- |
+| `watch_by_default` | boolean | `true`  | Enable file watching for automatic rebuilds during development |
 
 ### `[[stacks]]` — Stack Definitions
 
 Define stacks explicitly for custom naming or per-stack overrides. If not defined, stacks are auto-discovered from `.hyperstack/*.ast.json` files.
 
-| Option | Type | Required | Description |
-|--------|------|----------|-------------|
-| `name` | string | Yes | Stack name (used for SDK generation and CLI commands) |
-| `ast` | string | Yes | Entity name from your Rust code or path to `.ast.json` file |
-| `description` | string | No | Stack description |
-| `typescript_output_file` | string | No | Per-stack TypeScript output file path |
-| `rust_output_crate` | string | No | Per-stack Rust output crate/module directory |
-| `rust_module` | boolean | No | Per-stack override for module vs crate generation |
+| Option                   | Type    | Required | Description                                                 |
+| ------------------------ | ------- | -------- | ----------------------------------------------------------- |
+| `name`                   | string  | Yes      | Stack name (used for SDK generation and CLI commands)       |
+| `ast`                    | string  | Yes      | Entity name from your Rust code or path to `.ast.json` file |
+| `description`            | string  | No       | Stack description                                           |
+| `typescript_output_file` | string  | No       | Per-stack TypeScript output file path                       |
+| `rust_output_crate`      | string  | No       | Per-stack Rust output crate/module directory                |
+| `rust_module`            | boolean | No       | Per-stack override for module vs crate generation           |
 
 ---
 
@@ -199,9 +200,9 @@ typescript_output_file = "./src/game.ts"
 
 Environment variables override configuration file values:
 
-| Variable | Description | Overrides |
-|----------|-------------|-----------|
-| `HYPERSTACK_API_URL` | Override the API endpoint | Default API URL |
+| Variable             | Description                | Overrides          |
+| -------------------- | -------------------------- | ------------------ |
+| `HYPERSTACK_API_URL` | Override the API endpoint  | Default API URL    |
 | `HYPERSTACK_API_KEY` | API key for authentication | (no file override) |
 
 ---
@@ -237,6 +238,7 @@ hs config validate
 ```
 
 This checks:
+
 - Required fields are present
 - File paths are valid
 - Stack references resolve to valid `.ast.json` files

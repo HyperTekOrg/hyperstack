@@ -23,14 +23,14 @@ Complete reference for the Hyperstack CLI (`hs`).
 
 ## Quick Reference
 
-| Command                         | Description                            |
-| ------------------------------- | -------------------------------------- |
-| `hyperstack-cli create [name]`  | Scaffold a new app from a template     |
-| `hs init`                       | Initialize a stack project             |
-| `hs up [stack]`                 | Deploy stack (push + build + deploy)   |
-| `hs status`                     | Show project overview                  |
-| `hs stack list`                 | List all stacks                        |
-| `hs stack show`                 | Show stack details                     |
+| Command                        | Description                          |
+| ------------------------------ | ------------------------------------ |
+| `hyperstack-cli create [name]` | Scaffold a new app from a template   |
+| `hs init`                      | Initialize a stack project           |
+| `hs up [stack]`                | Deploy stack (push + build + deploy) |
+| `hs status`                    | Show project overview                |
+| `hs stack list`                | List all stacks                      |
+| `hs stack show`                | Show stack details                   |
 
 :::note[npm vs Cargo]
 When installed via npm (`npm install -g hyperstack-cli`), the command is `hyperstack-cli`. When installed via Cargo (`cargo install hyperstack-cli`), the command is `hs`. Both are the same CLI.
@@ -57,20 +57,20 @@ npx hyperstack-cli create my-app --template react-ore
 
 **Available templates:**
 
-| Template | Description |
-| --- | --- |
-| `react-ore` | ORE mining rounds viewer (React + Vite) |
-| `rust-ore` | ORE mining rounds client (Rust + Tokio) |
+| Template         | Description                               |
+| ---------------- | ----------------------------------------- |
+| `react-ore`      | ORE mining rounds viewer (React + Vite)   |
+| `rust-ore`       | ORE mining rounds client (Rust + Tokio)   |
 | `typescript-ore` | ORE mining rounds client (TypeScript CLI) |
 
 **Options:**
 
-| Flag | Description |
-| --- | --- |
-| `--template <name>` | Skip interactive selection |
-| `--offline` | Use cached templates only |
-| `--force-refresh` | Clear template cache and re-download |
-| `--skip-install` | Don't run `npm install` automatically |
+| Flag                | Description                           |
+| ------------------- | ------------------------------------- |
+| `--template <name>` | Skip interactive selection            |
+| `--offline`         | Use cached templates only             |
+| `--force-refresh`   | Clear template cache and re-download  |
+| `--skip-install`    | Don't run `npm install` automatically |
 
 Templates are downloaded from GitHub releases and cached in `~/.hyperstack/templates/`.
 

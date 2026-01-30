@@ -50,7 +50,7 @@ use hyperstack_stacks::ore::OreRoundViews;
 async fn main() -> anyhow::Result<()> {
     // Connect to the public ORE stack
     let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
-    
+
     println!("Connected! Streaming ORE rounds...\n");
 
     // Get typed views
@@ -111,7 +111,7 @@ use hyperstack_stacks::ore::OreRoundViews;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
-    
+
     let views = hs.views::<OreRoundViews>();
     let mut stream = views.latest().watch();
 
@@ -272,7 +272,7 @@ impl TokenViews for Views {
     fn all(&self) -> ListView<Token> {
         self.list_view("Token/list")
     }
-    
+
     fn by_mint(&self) -> StateView<Token> {
         self.state_view("Token/state")
     }
@@ -653,7 +653,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Get views
     let views = hs.views::<OreRoundViews>();
-    
+
     // Stream with stats
     let mut round_count = 0;
     let mut update_count = 0;
@@ -663,7 +663,7 @@ async fn main() -> anyhow::Result<()> {
 
     while let Some(update) = stream.next().await {
         update_count += 1;
-        
+
         match update {
             Update::Upsert { data, .. } => {
                 round_count += 1;
@@ -689,7 +689,7 @@ async fn main() -> anyhow::Result<()> {
 
         // Print stats every 10 updates
         if update_count % 10 == 0 {
-            println!("\n--- Stats: {} rounds tracked, {} updates received ---\n", 
+            println!("\n--- Stats: {} rounds tracked, {} updates received ---\n",
                 round_count, update_count);
         }
     }
@@ -732,14 +732,14 @@ loop {
     match HyperStack::connect("wss://ore.stack.usehyperstack.com").await {
         Ok(hs) => {
             println!("Connected!");
-            
+
             let views = hs.views::<OreRoundViews>();
             let mut stream = views.latest().watch();
-            
+
             while let Some(update) = stream.next().await {
                 process_update(update);
             }
-            
+
             // Stream ended - connection lost
             println!("Connection lost, reconnecting...");
         }

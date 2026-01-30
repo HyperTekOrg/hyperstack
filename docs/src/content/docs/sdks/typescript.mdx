@@ -18,9 +18,7 @@ If you're building a React application, use the [React SDK](/sdks/react/) instea
 import { HyperStack } from "hyperstack-typescript";
 
 // Connect to a deployed stack
-const hs = await HyperStack.connect(
-  "wss://ore.stack.usehyperstack.com",
-);
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
 
 // Stream updates as they happen
 for await (const update of hs.subscribe("PumpfunToken/list")) {
@@ -53,16 +51,13 @@ const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com");
 ### With Options
 
 ```typescript
-const hs = await HyperStack.connect(
-  "wss://ore.stack.usehyperstack.com",
-  {
-    // Maximum entries per view (prevents memory issues on long-running clients)
-    maxEntriesPerView: 5000, // default: 10000
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
+  // Maximum entries per view (prevents memory issues on long-running clients)
+  maxEntriesPerView: 5000, // default: 10000
 
-    // Or disable limiting entirely (not recommended for long sessions)
-    // maxEntriesPerView: null,
-  },
-);
+  // Or disable limiting entirely (not recommended for long sessions)
+  // maxEntriesPerView: null,
+});
 ```
 
 ### Connect with Stack Definition
@@ -96,10 +91,10 @@ const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
 });
 ```
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `stack` | `StackDefinition` | `undefined` | Stack definition for typed views |
-| `maxEntriesPerView` | `number \| null` | `10000` | Max entries per view before LRU eviction |
+| Option              | Type              | Default     | Description                              |
+| ------------------- | ----------------- | ----------- | ---------------------------------------- |
+| `stack`             | `StackDefinition` | `undefined` | Stack definition for typed views         |
+| `maxEntriesPerView` | `number \| null`  | `10000`     | Max entries per view before LRU eviction |
 
 ### Connection State
 
@@ -198,7 +193,7 @@ for await (const update of hs.views.tokens.list.watchRich()) {
     // Detect specific field changes
     if (update.before.price !== update.after.price) {
       console.log(
-        `Price changed: ${update.before.price} → ${update.after.price}`
+        `Price changed: ${update.before.price} → ${update.after.price}`,
       );
     }
   }
@@ -473,7 +468,9 @@ async function main() {
       // Example: Alert on high-motherlode rounds
       if (round.motherlode && round.motherlode > 1000000000) {
         console.log(`🚨 High motherlode round: #${round.round_id}`);
-        console.log(`   Motherlode: ${(round.motherlode / 1e9).toFixed(2)} SOL`);
+        console.log(
+          `   Motherlode: ${(round.motherlode / 1e9).toFixed(2)} SOL`,
+        );
         console.log(`   Difficulty: ${round.difficulty}\n`);
       }
     }
@@ -513,10 +510,14 @@ async function monitorOreRounds() {
 
       switch (update.type) {
         case "upsert":
-          console.log(`[${updateCount}] Round #${update.data.round_id} - Motherlode: ${update.data.motherlode}`);
+          console.log(
+            `[${updateCount}] Round #${update.data.round_id} - Motherlode: ${update.data.motherlode}`,
+          );
           break;
         case "patch":
-          console.log(`[${updateCount}] Round #${update.data.round_id} updated`);
+          console.log(
+            `[${updateCount}] Round #${update.data.round_id} updated`,
+          );
           break;
         case "delete":
           console.log(`[${updateCount}] Round removed: ${update.key}`);
@@ -548,6 +549,7 @@ monitorOreRounds();
 Establishes a WebSocket connection to a Hyperstack stack.
 
 **Parameters:**
+
 - `url` — WebSocket URL of the deployed stack
 - `options` — Connection options
 
@@ -583,6 +585,7 @@ One-shot query, returns current state.
 ### `hs.connectionState`
 
 Current connection state:
+
 - `disconnected` — Not connected
 - `connecting` — Establishing connection
 - `connected` — Active connection

@@ -39,7 +39,9 @@ import { OREROUND_STACK } from "hyperstack-stacks/ore";
 
 function OreRounds() {
   const stack = useHyperstack(OREROUND_STACK);
-  const { data: rounds, isLoading } = stack.views.OreRound.latest.use({ take: 5 });
+  const { data: rounds, isLoading } = stack.views.OreRound.latest.use({
+    take: 5,
+  });
 
   if (isLoading) return <div>Connecting...</div>;
 
@@ -91,10 +93,9 @@ import { OREROUND_STACK, type OreRound } from "hyperstack-stacks/ore";
 async function main() {
   console.log("Connecting to ORE stack...\n");
 
-  const hs = await HyperStack.connect(
-    "wss://ore.stack.usehyperstack.com",
-    { stack: OREROUND_STACK }
-  );
+  const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
+    stack: OREROUND_STACK,
+  });
 
   console.log("Connected! Streaming live ORE rounds:\n");
 
@@ -265,13 +266,13 @@ Each `OreRound` entity streamed to your app has this JSON structure:
 }
 ```
 
-| Section | Description |
-|---------|-------------|
-| `id` | Primary key (`round_id`) and lookup index (`round_address`) |
-| `state` | Current round state from on-chain account |
-| `results` | Round outcome including computed fields (`rng`, `winning_square`, `did_hit_motherlode`) |
-| `metrics` | Aggregated counts and sums from instructions |
-| `round_snapshot` | Full on-chain account data with pubkeys as base58 strings |
+| Section          | Description                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| `id`             | Primary key (`round_id`) and lookup index (`round_address`)                             |
+| `state`          | Current round state from on-chain account                                               |
+| `results`        | Round outcome including computed fields (`rng`, `winning_square`, `did_hit_motherlode`) |
+| `metrics`        | Aggregated counts and sums from instructions                                            |
+| `round_snapshot` | Full on-chain account data with pubkeys as base58 strings                               |
 
 :::tip[View the source]
 The full ORE stack definition is available on GitHub: [stacks/ore/src/stack.rs](https://github.com/HyperTekOrg/hyperstack/blob/main/stacks/ore/src/stack.rs)
@@ -313,8 +314,8 @@ Both approaches produce the same result: a typed SDK that works identically with
 
 ## Available Public Stacks
 
-| Stack | WebSocket URL | Data |
-|-------|---------------|------|
+| Stack                 | WebSocket URL                       | Data                          |
+| --------------------- | ----------------------------------- | ----------------------------- |
 | **ORE Mining Rounds** | `wss://ore.stack.usehyperstack.com` | Live ORE mining round updates |
 
 ---

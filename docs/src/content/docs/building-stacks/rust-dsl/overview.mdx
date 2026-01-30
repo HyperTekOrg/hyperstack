@@ -49,35 +49,35 @@ pub mod my_stream {
 
 ### Module-Level
 
-| Macro | Purpose |
-|-------|---------|
+| Macro           | Purpose                                                                   |
+| --------------- | ------------------------------------------------------------------------- |
 | `#[hyperstack]` | Entry point — defines the stream and links to data sources (IDL/Protobuf) |
 
 ### Entity-Level
 
-| Macro | Purpose |
-|-------|---------|
-| `#[entity]` | Marks a struct as a data projection |
-| `#[view]` | Defines queryable views (list, state) for the entity |
+| Macro       | Purpose                                              |
+| ----------- | ---------------------------------------------------- |
+| `#[entity]` | Marks a struct as a data projection                  |
+| `#[view]`   | Defines queryable views (list, state) for the entity |
 
 ### Field-Level
 
-| Macro | Purpose |
-|-------|---------|
-| `#[map]` | Maps fields from Solana account state |
-| `#[from_instruction]` | Extracts data from instruction arguments |
-| `#[aggregate]` | Computes running values (Sum, Count, etc.) |
-| `#[event]` | Captures instructions as structured events |
-| `#[snapshot]` | Captures complete account state |
-| `#[computed]` | Derives values from other entity fields |
-| `#[derive_from]` | Populates from instruction metadata |
+| Macro                 | Purpose                                    |
+| --------------------- | ------------------------------------------ |
+| `#[map]`              | Maps fields from Solana account state      |
+| `#[from_instruction]` | Extracts data from instruction arguments   |
+| `#[aggregate]`        | Computes running values (Sum, Count, etc.) |
+| `#[event]`            | Captures instructions as structured events |
+| `#[snapshot]`         | Captures complete account state            |
+| `#[computed]`         | Derives values from other entity fields    |
+| `#[derive_from]`      | Populates from instruction metadata        |
 
 ### Declarative Hooks
 
-| Macro | Purpose |
-|-------|---------|
-| `#[resolve_key]` | Custom primary key resolution (PDA lookups) |
-| `#[register_pda]` | Registers PDA mappings for reverse lookups |
+| Macro             | Purpose                                     |
+| ----------------- | ------------------------------------------- |
+| `#[resolve_key]`  | Custom primary key resolution (PDA lookups) |
+| `#[register_pda]` | Registers PDA mappings for reverse lookups  |
 
 ---
 
@@ -85,14 +85,14 @@ pub mod my_stream {
 
 When data arrives, **strategies** determine how it's merged with existing state:
 
-| Strategy | Behavior | Example Use |
-|----------|----------|-------------|
-| `LastWrite` | Overwrite with latest | Current balances |
-| `SetOnce` | Write only if empty | IDs, creation timestamps |
-| `Sum` | Add to existing total | Volume, TVL |
-| `Count` | Increment by 1 | Trade count |
-| `Append` | Add to list | Event history |
-| `Max` / `Min` | Keep extreme value | Price highs/lows |
+| Strategy      | Behavior              | Example Use              |
+| ------------- | --------------------- | ------------------------ |
+| `LastWrite`   | Overwrite with latest | Current balances         |
+| `SetOnce`     | Write only if empty   | IDs, creation timestamps |
+| `Sum`         | Add to existing total | Volume, TVL              |
+| `Count`       | Increment by 1        | Trade count              |
+| `Append`      | Add to list           | Event history            |
+| `Max` / `Min` | Keep extreme value    | Price highs/lows         |
 
 ---
 

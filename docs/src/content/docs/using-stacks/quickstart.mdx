@@ -76,11 +76,11 @@ npx hyperstack-cli create my-app
 
 You'll be prompted to select a template:
 
-| Template | Description | Run Command |
-|----------|-------------|-------------|
-| `react-ore` | React + Vite dashboard | `npm run dev` → open [localhost:5173](http://localhost:5173) |
-| `typescript-ore` | TypeScript CLI client | `npm start` |
-| `rust-ore` | Rust + Tokio client | `cargo run` |
+| Template         | Description            | Run Command                                                  |
+| ---------------- | ---------------------- | ------------------------------------------------------------ |
+| `react-ore`      | React + Vite dashboard | `npm run dev` → open [localhost:5173](http://localhost:5173) |
+| `typescript-ore` | TypeScript CLI client  | `npm start`                                                  |
+| `rust-ore`       | Rust + Tokio client    | `cargo run`                                                  |
 
 :::note[About the ORE demo]
 All CLI templates use the same underlying example: **ORE mining rounds**. This demonstrates Hyperstack with a real, live Solana program. The templates differ only in language/framework — React for a web dashboard, TypeScript for a CLI tool, or Rust for a native binary. Each connects to the same public ORE stack and streams identical data.
@@ -94,12 +94,14 @@ npx hyperstack-cli create my-app --template react-ore    # or typescript-ore, ru
 
 :::tip[Pure Rust workflow]
 If you prefer to avoid Node.js entirely:
+
 ```bash
 cargo install hyperstack-cli
 hs create my-app --template rust-ore
 cd my-app
 cargo run
 ```
+
 :::
 
 That's it. You're streaming live Solana data.
@@ -127,11 +129,11 @@ No RPC calls. No polling. No custom indexer. Just streaming data.
 
 ## Available Templates
 
-| Template | Command | What You Get |
-|----------|---------|-------------|
-| **react-ore** | `npx hyperstack-cli create my-app` | React + Vite dashboard showing live ORE mining rounds |
+| Template           | Command                            | What You Get                                          |
+| ------------------ | ---------------------------------- | ----------------------------------------------------- |
+| **react-ore**      | `npx hyperstack-cli create my-app` | React + Vite dashboard showing live ORE mining rounds |
 | **typescript-ore** | `npx hyperstack-cli create my-app` | TypeScript CLI that streams ORE data to your terminal |
-| **rust-ore** | `npx hyperstack-cli create my-app` | Rust + Tokio client streaming ORE round updates |
+| **rust-ore**       | `npx hyperstack-cli create my-app` | Rust + Tokio client streaming ORE round updates       |
 
 All templates connect to the public ORE stack at `wss://ore.stack.usehyperstack.com`.
 
@@ -152,8 +154,8 @@ The React template uses `hyperstack-react` with a pre-built stack definition:
 
 ```tsx
 // App.tsx
-import { HyperstackProvider } from 'hyperstack-react';
-import { OreDashboard } from './components/OreDashboard';
+import { HyperstackProvider } from "hyperstack-react";
+import { OreDashboard } from "./components/OreDashboard";
 
 export default function App() {
   return (
@@ -169,8 +171,8 @@ export default function App() {
 
 ```tsx
 // components/OreDashboard.tsx
-import { useHyperstack, useConnectionState } from 'hyperstack-react';
-import { OREROUND_STACK } from 'hyperstack-stacks/ore';
+import { useHyperstack, useConnectionState } from "hyperstack-react";
+import { OREROUND_STACK } from "hyperstack-stacks/ore";
 
 export function OreDashboard() {
   const stack = useHyperstack(OREROUND_STACK);
@@ -178,7 +180,7 @@ export function OreDashboard() {
 
   return (
     <div>
-      {rounds?.map(round => (
+      {rounds?.map((round) => (
         <div key={round.id?.round_id}>
           Round #{round.id?.round_id} — Motherlode: {round.state?.motherlode}
         </div>
@@ -195,21 +197,21 @@ The TypeScript template uses `hyperstack-typescript` with the core streaming API
 
 ```typescript
 // main.ts
-import { HyperStack, createUpdateStream } from 'hyperstack-typescript';
-import { OREROUND_STACK, type OreRound } from 'hyperstack-stacks/ore';
+import { HyperStack, createUpdateStream } from "hyperstack-typescript";
+import { OREROUND_STACK, type OreRound } from "hyperstack-stacks/ore";
 
-const hs = await HyperStack.connect('wss://ore.stack.usehyperstack.com', {
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
   stack: OREROUND_STACK,
 });
 
 const stream = createUpdateStream<OreRound>(
   hs.store,
   hs.getSubscriptionRegistry(),
-  { view: 'OreRound/latest', take: 1 }
+  { view: "OreRound/latest", take: 1 },
 );
 
 for await (const update of stream) {
-  if (update.type === 'upsert' || update.type === 'patch') {
+  if (update.type === "upsert" || update.type === "patch") {
     console.log(`Round #${update.data.id?.round_id}`);
     console.log(`Motherlode: ${update.data.state?.motherlode}`);
   }

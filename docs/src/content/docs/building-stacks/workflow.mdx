@@ -128,7 +128,7 @@ This creates a package containing the `ORE_STACK` definition that tells the Hype
 
 ```tsx
 import { HyperstackProvider, useHyperstack } from "hyperstack-react";
-import { ORE_STACK } from "hyperstack-stacks/ore";  // Generated in Step 4
+import { ORE_STACK } from "hyperstack-stacks/ore"; // Generated in Step 4
 
 // Wrap your app
 <HyperstackProvider websocketUrl="wss://ore.stack.usehyperstack.com">
@@ -145,12 +145,11 @@ const { data: rounds } = stack.views.rounds.list.use();
 
 ```typescript
 import { HyperStack } from "hyperstack-typescript";
-import { ORE_STACK } from "hyperstack-stacks/ore";  // Generated in Step 4
+import { ORE_STACK } from "hyperstack-stacks/ore"; // Generated in Step 4
 
-const hs = await HyperStack.connect(
-  "wss://ore.stack.usehyperstack.com",
-  { stack: ORE_STACK }
-);
+const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
+  stack: ORE_STACK,
+});
 
 for await (const update of hs.views.rounds.list.watch()) {
   console.log("Round updated:", update.data);
@@ -199,10 +198,10 @@ Share the generated SDK with your team or publish it — anyone with the SDK can
 
 ## Next Steps
 
-| Goal                                | Page                                                    |
-| ----------------------------------- | ------------------------------------------------------- |
-| Understand the DSL in depth         | [Stack Definitions](/building-stacks/stack-definitions) |
-| Set up your development environment | [Installation](/building-stacks/installation)           |
-| Build a complete example            | [Your First Stack](/building-stacks/your-first-stack)   |
-| Learn all available macros          | [Macro Reference](/building-stacks/rust-dsl/macros)              |
-| Master aggregation strategies       | [Population Strategies](/building-stacks/rust-dsl/strategies)    |
+| Goal                                | Page                                                          |
+| ----------------------------------- | ------------------------------------------------------------- |
+| Understand the DSL in depth         | [Stack Definitions](/building-stacks/stack-definitions)       |
+| Set up your development environment | [Installation](/building-stacks/installation)                 |
+| Build a complete example            | [Your First Stack](/building-stacks/your-first-stack)         |
+| Learn all available macros          | [Macro Reference](/building-stacks/rust-dsl/macros)           |
+| Master aggregation strategies       | [Population Strategies](/building-stacks/rust-dsl/strategies) |

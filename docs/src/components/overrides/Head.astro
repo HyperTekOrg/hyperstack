@@ -35,10 +35,13 @@ const { head } = Astro.locals.starlightRoute;
   function setupTabTracking() {
     // Listen for clicks on tab elements
     document.addEventListener("click", (e) => {
-      const tab = (e.target as HTMLElement).closest('starlight-tabs [role="tab"]');
+      const tab = (e.target as HTMLElement).closest(
+        'starlight-tabs [role="tab"]',
+      );
       if (!tab) return;
 
-      const tabLabel = tab.getAttribute("aria-label") || tab.textContent?.trim() || "unknown";
+      const tabLabel =
+        tab.getAttribute("aria-label") || tab.textContent?.trim() || "unknown";
 
       trackEvent("docs_tab_clicked", {
         tab_name: tabLabel,
@@ -58,7 +61,7 @@ const { head } = Astro.locals.starlightRoute;
       // Check if clicked element is a copy button in a code block
       // Expressive code uses a button with specific classes/attributes
       const copyButton = target.closest(
-        '.ec-copy, .expressive-code .copy, button[data-code-copy], [class*="copy"]'
+        '.ec-copy, .expressive-code .copy, button[data-code-copy], [class*="copy"]',
       );
 
       if (!copyButton) return;
