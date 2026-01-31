@@ -77,10 +77,10 @@ export type {
 } from 'hyperstack-typescript';
 
 export type {
-  NetworkConfig,
   TransactionDefinition,
   StackDefinition,
   HyperstackConfig,
+  UseHyperstackOptions,
   ViewHookOptions,
   ViewHookResult,
   ListParams,

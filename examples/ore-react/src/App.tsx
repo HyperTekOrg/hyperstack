@@ -3,10 +3,7 @@ import { HyperstackProvider } from 'hyperstack-react';
 
 export default function App() {
   return (
-    <HyperstackProvider
-      websocketUrl="wss://ore.stack.usehyperstack.com"
-      autoConnect={true}
-    >
+    <HyperstackProvider autoConnect={true}>
       <OreDashboard />
     </HyperstackProvider>
   );

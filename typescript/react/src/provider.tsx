@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, ReactNode, useSyncExternalStore, useCallback } from 'react';
 import { HyperStack, type ConnectionState, type StackDefinition } from 'hyperstack-typescript';
-import type { HyperstackConfig, NetworkConfig } from './types';
+import type { HyperstackConfig } from './types';
 
 interface ClientEntry {
   client: HyperStack<any>;
@@ -8,54 +8,12 @@ interface ClientEntry {
 }
 
 interface HyperstackContextValue {
-  getOrCreateClient: <TStack extends StackDefinition>(stack: TStack) => Promise<HyperStack<TStack>>;
+  getOrCreateClient: <TStack extends StackDefinition>(stack: TStack, urlOverride?: string) => Promise<HyperStack<TStack>>;
   getClient: <TStack extends StackDefinition>(stack: TStack | undefined) => HyperStack<TStack> | null;
-  config: {
-    websocketUrl: string;
-    autoConnect?: boolean;
-    reconnectIntervals?: number[];
-    maxReconnectAttempts?: number;
-    maxEntriesPerView?: number | null;
-  };
+  config: HyperstackConfig;
 }
 
 const HyperstackContext = createContext<HyperstackContextValue | null>(null);
-
-function resolveNetworkConfig(network: 'devnet' | 'mainnet' | 'localnet' | NetworkConfig | undefined, websocketUrl?: string): NetworkConfig {
-  if (websocketUrl) {
-    return {
-      name: 'custom',
-      websocketUrl
-    };
-  }
-
-  if (typeof network === 'object') {
-    return network;
-  }
-
-  if (network === 'mainnet') {
-    return {
-      name: 'mainnet',
-      websocketUrl: 'wss://mainnet.hyperstack.xyz',
-    };
-  }
-
-  if (network === 'devnet') {
-    return {
-      name: 'devnet',
-      websocketUrl: 'ws://localhost:8080',
-    };
-  }
-
-  if (network === 'localnet') {
-    return {
-      name: 'localnet',
-      websocketUrl: 'ws://localhost:8080',
-    };
-  }
-
-  throw new Error('Must provide either network or websocketUrl');
-}
 
 export function HyperstackProvider({
   children,
@@ -65,39 +23,40 @@ export function HyperstackProvider({
   children: ReactNode;
   fallback?: ReactNode;
 }) {
-  const networkConfig = resolveNetworkConfig(config.network, config.websocketUrl);
   const clientsRef = useRef<Map<string, ClientEntry>>(new Map());
   const connectingRef = useRef<Map<string, Promise<HyperStack<any>>>>(new Map());
 
-  const getOrCreateClient = useCallback(async <TStack extends StackDefinition>(stack: TStack): Promise<HyperStack<TStack>> => {
-    const existing = clientsRef.current.get(stack.name);
+  const getOrCreateClient = useCallback(async <TStack extends StackDefinition>(stack: TStack, urlOverride?: string): Promise<HyperStack<TStack>> => {
+    const cacheKey = urlOverride ? `${stack.name}:${urlOverride}` : stack.name;
+    
+    const existing = clientsRef.current.get(cacheKey);
     if (existing) {
       return existing.client as HyperStack<TStack>;
     }
 
-    const connecting = connectingRef.current.get(stack.name);
+    const connecting = connectingRef.current.get(cacheKey);
     if (connecting) {
       return connecting as Promise<HyperStack<TStack>>;
     }
 
     const connectionPromise = HyperStack.connect(stack, {
-      url: networkConfig.websocketUrl,
+      url: urlOverride,
       autoReconnect: config.autoConnect,
       reconnectIntervals: config.reconnectIntervals,
       maxReconnectAttempts: config.maxReconnectAttempts,
       maxEntriesPerView: config.maxEntriesPerView,
     }).then((client) => {
-      clientsRef.current.set(stack.name, {
+      clientsRef.current.set(cacheKey, {
         client,
         disconnect: () => client.disconnect()
       });
-      connectingRef.current.delete(stack.name);
+      connectingRef.current.delete(cacheKey);
       return client;
     });
 
-    connectingRef.current.set(stack.name, connectionPromise);
+    connectingRef.current.set(cacheKey, connectionPromise);
     return connectionPromise as Promise<HyperStack<TStack>>;
-  }, [networkConfig.websocketUrl, config.autoConnect, config.reconnectIntervals, config.maxReconnectAttempts, config.maxEntriesPerView]);
+  }, [config.autoConnect, config.reconnectIntervals, config.maxReconnectAttempts, config.maxEntriesPerView]);
 
   const getClient = useCallback(<TStack extends StackDefinition>(stack: TStack | undefined): HyperStack<TStack> | null => {
     if (!stack) return null;
@@ -118,13 +77,7 @@ export function HyperstackProvider({
   const value: HyperstackContextValue = {
     getOrCreateClient,
     getClient,
-    config: {
-      websocketUrl: networkConfig.websocketUrl,
-      autoConnect: config.autoConnect,
-      reconnectIntervals: config.reconnectIntervals,
-      maxReconnectAttempts: config.maxReconnectAttempts,
-      maxEntriesPerView: config.maxEntriesPerView,
-    }
+    config,
   };
 
   return (

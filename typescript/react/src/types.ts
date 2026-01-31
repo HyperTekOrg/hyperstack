@@ -19,11 +19,6 @@ export { DEFAULT_MAX_ENTRIES_PER_VIEW } from 'hyperstack-typescript';
 
 export type ViewMode = 'state' | 'list';
 
-export interface NetworkConfig {
-  name: string;
-  websocketUrl: string;
-}
-
 export interface TransactionDefinition<TParams = unknown> {
   build: (params: TParams) => {
     instruction: string;
@@ -34,16 +29,28 @@ export interface TransactionDefinition<TParams = unknown> {
 
 export const DEFAULT_FLUSH_INTERVAL_MS = 16;
 
+/**
+ * Global configuration for HyperstackProvider.
+ * 
+ * Note: WebSocket URL is no longer configured here. The URL is:
+ * 1. Embedded in the stack definition (stack.url)
+ * 2. Optionally overridden per-hook via useHyperstack(stack, { url: '...' })
+ */
 export interface HyperstackConfig {
-  websocketUrl?: string;
-  network?: 'devnet' | 'mainnet' | 'localnet' | NetworkConfig;
-  apiKey?: string;
   autoConnect?: boolean;
   wallet?: WalletAdapter;
   reconnectIntervals?: number[];
   maxReconnectAttempts?: number;
   maxEntriesPerView?: number | null;
   flushIntervalMs?: number;
+}
+
+/**
+ * Options for useHyperstack hook
+ */
+export interface UseHyperstackOptions {
+  /** Override the stack's embedded URL (useful for local development) */
+  url?: string;
 }
 
 export interface ViewHookOptions {

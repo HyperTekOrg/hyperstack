@@ -12,7 +12,8 @@ import type {
   ListParamsSingle,
   ListParamsMultiple,
   ListParamsBase,
-  ViewGroup
+  ViewGroup,
+  UseHyperstackOptions
 } from './types';
 import type { HyperStackStore } from './zustand-adapter';
 import type { InstructionHandler, InstructionExecutor } from 'hyperstack-typescript';
@@ -75,16 +76,18 @@ type StackClient<TStack extends StackDefinition> = {
 };
 
 export function useHyperstack<TStack extends StackDefinition>(
-  stack: TStack
+  stack: TStack,
+  options?: UseHyperstackOptions
 ): StackClient<TStack> {
   const { getOrCreateClient, getClient } = useHyperstackContext();
+  const urlOverride = options?.url;
   const [client, setClient] = useState<HyperStack<TStack> | null>(getClient(stack) as HyperStack<TStack> | null);
   const [isLoading, setIsLoading] = useState(!client);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     const existingClient = getClient(stack);
-    if (existingClient) {
+    if (existingClient && !urlOverride) {
       setClient(existingClient as HyperStack<TStack>);
       setIsLoading(false);
       return;
@@ -93,7 +96,7 @@ export function useHyperstack<TStack extends StackDefinition>(
     setIsLoading(true);
     setError(null);
 
-    getOrCreateClient(stack)
+    getOrCreateClient(stack, urlOverride)
       .then((newClient) => {
         setClient(newClient as HyperStack<TStack>);
         setIsLoading(false);
@@ -102,7 +105,7 @@ export function useHyperstack<TStack extends StackDefinition>(
         setError(err instanceof Error ? err : new Error(String(err)));
         setIsLoading(false);
       });
-  }, [stack, getOrCreateClient, getClient]);
+  }, [stack, getOrCreateClient, getClient, urlOverride]);
 
   const views = useMemo(() => {
     const result: Record<string, Record<string, unknown>> = {};
