@@ -2,6 +2,16 @@ import { useEffect, useState, useCallback, useSyncExternalStore, useRef } from '
 import { ViewDef, ViewHookOptions, ViewHookResult, ListParams, ListParamsBase } from './types';
 import type { HyperStack } from 'hyperstack-typescript';
 
+function shallowArrayEqual<T>(a: T[] | undefined, b: T[] | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 export function useStateView<T>(
   viewDef: ViewDef<T, 'state'>,
   client: HyperStack<any> | null,
@@ -12,6 +22,7 @@ export function useStateView<T>(
   const [error, setError] = useState<Error | undefined>();
   const clientRef = useRef(client);
   clientRef.current = client;
+  const cachedSnapshotRef = useRef<T | undefined>(undefined);
 
   const keyString = key ? Object.values(key)[0] : undefined;
   const enabled = options?.enabled !== false;
@@ -65,11 +76,16 @@ export function useStateView<T>(
   }, [client]);
 
   const getSnapshot = useCallback(() => {
-    if (!clientRef.current) return undefined;
+    if (!clientRef.current) return cachedSnapshotRef.current;
     const entity = keyString 
       ? clientRef.current.store.get(viewDef.view, keyString)
       : clientRef.current.store.getAll(viewDef.view)[0];
-    return entity as T | undefined;
+    
+    // Cache the result to return stable reference for useSyncExternalStore
+    if (entity !== cachedSnapshotRef.current) {
+      cachedSnapshotRef.current = entity as T | undefined;
+    }
+    return cachedSnapshotRef.current;
   }, [viewDef.view, keyString, client]);
 
   const data = useSyncExternalStore(subscribe, getSnapshot);
@@ -98,6 +114,7 @@ export function useListView<T>(
   const [error, setError] = useState<Error | undefined>();
   const clientRef = useRef(client);
   clientRef.current = client;
+  const cachedSnapshotRef = useRef<T[] | undefined>(undefined);
 
   const enabled = options?.enabled !== false;
   const key = params?.key;
@@ -168,11 +185,14 @@ export function useListView<T>(
   }, [client]);
 
   const getSnapshot = useCallback(() => {
-    if (!clientRef.current) return undefined;
+    if (!clientRef.current) return cachedSnapshotRef.current;
     const viewData = clientRef.current.store.getAll(viewDef.view);
     
     if (!viewData || viewData.length === 0) {
-      return undefined;
+      if (cachedSnapshotRef.current !== undefined) {
+        cachedSnapshotRef.current = undefined;
+      }
+      return cachedSnapshotRef.current;
     }
 
     let items = viewData;
@@ -199,7 +219,13 @@ export function useListView<T>(
       items = items.slice(0, limit);
     }
 
-    return items as T[];
+    const result = items as T[];
+    
+    // Cache the result - only update if data actually changed
+    if (!shallowArrayEqual(cachedSnapshotRef.current, result)) {
+      cachedSnapshotRef.current = result;
+    }
+    return cachedSnapshotRef.current;
   }, [viewDef.view, whereJson, limit, client]);
 
   const data = useSyncExternalStore(subscribe, getSnapshot);
