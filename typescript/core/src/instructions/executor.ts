@@ -4,13 +4,56 @@ import {
   validateAccountResolution,
   type AccountMeta,
   type AccountResolutionOptions,
+  type ResolvedAccount,
 } from './account-resolver';
-import { serializeInstructionData, type ArgSchema } from './serializer';
-import { waitForConfirmation, type ConfirmationLevel, type ExecuteOptions, type ExecutionResult } from './confirmation';
-import { parseInstructionError, type ErrorMetadata } from './error-parser';
+import { waitForConfirmation, type ExecuteOptions, type ExecutionResult } from './confirmation';
+import type { ErrorMetadata } from './error-parser';
 
 /**
- * Instruction definition from the generated stack.
+ * Resolved accounts map passed to the instruction builder.
+ * Keys are account names, values are base58 addresses.
+ */
+export type ResolvedAccounts = Record<string, string>;
+
+/**
+ * The instruction object returned by the handler's build function.
+ * This is a framework-agnostic representation that can be converted
+ * to @solana/web3.js TransactionInstruction.
+ */
+export interface BuiltInstruction {
+  /** Program ID (base58) */
+  programId: string;
+  /** Account keys in order */
+  keys: Array<{
+    pubkey: string;
+    isSigner: boolean;
+    isWritable: boolean;
+  }>;
+  /** Serialized instruction data */
+  data: Uint8Array;
+}
+
+/**
+ * Instruction handler from the generated stack SDK.
+ * The build() function is generated code that handles serialization.
+ */
+export interface InstructionHandler {
+  /** 
+   * Build the instruction with resolved accounts.
+   * This is generated code - serialization logic lives here.
+   */
+  build(args: Record<string, unknown>, accounts: ResolvedAccounts): BuiltInstruction;
+  
+  /** Account metadata - used by core SDK for resolution */
+  accounts: AccountMeta[];
+  
+  /** Error definitions - used by core SDK for error parsing */
+  errors: ErrorMetadata[];
+}
+
+/**
+ * @deprecated Use InstructionHandler instead. Will be removed in next major version.
+ * Legacy instruction definition for backwards compatibility.
  */
 export interface InstructionDefinition {
   /** Instruction name */
@@ -22,58 +65,61 @@ export interface InstructionDefinition {
   /** Account metadata */
   accounts: AccountMeta[];
   /** Argument schema for serialization */
-  argsSchema: ArgSchema[];
+  argsSchema: import('./serializer').ArgSchema[];
   /** Error definitions */
   errors: ErrorMetadata[];
 }
 
 /**
- * Executes an instruction with the given arguments and options.
+ * Converts resolved account array to a map for the builder.
+ */
+function toResolvedAccountsMap(accounts: ResolvedAccount[]): ResolvedAccounts {
+  const map: ResolvedAccounts = {};
+  for (const account of accounts) {
+    map[account.name] = account.address;
+  }
+  return map;
+}
+
+/**
+ * Executes an instruction handler with the given arguments and options.
  * 
  * This is the main function for executing Solana instructions. It handles:
  * 1. Account resolution (signer, PDA, user-provided)
- * 2. Instruction data serialization
+ * 2. Calling the generated build() function
  * 3. Transaction signing and sending
  * 4. Confirmation waiting
- * 5. Error parsing
  * 
- * @param instruction - Instruction definition
+ * @param handler - Instruction handler from generated SDK
  * @param args - Instruction arguments
  * @param options - Execution options
  * @returns Execution result with signature
  */
 export async function executeInstruction(
-  instruction: InstructionDefinition,
+  handler: InstructionHandler,
   args: Record<string, unknown>,
   options: ExecuteOptions = {}
 ): Promise<ExecutionResult> {
-  // Step 1: Resolve accounts
+  // Step 1: Resolve accounts using handler's account metadata
   const resolutionOptions: AccountResolutionOptions = {
     accounts: options.accounts,
     wallet: options.wallet,
   };
   
   const resolution = resolveAccounts(
-    instruction.accounts,
+    handler.accounts,
     args,
     resolutionOptions
   );
   
   validateAccountResolution(resolution);
   
-  // Step 2: Serialize instruction data
-  const instructionData = serializeInstructionData(
-    instruction.discriminator,
-    args,
-    instruction.argsSchema
-  );
+  // Step 2: Call generated build() function
+  const resolvedAccountsMap = toResolvedAccountsMap(resolution.accounts);
+  const instruction = handler.build(args, resolvedAccountsMap);
   
-  // Step 3: Build transaction
-  const transaction = buildTransaction(
-    resolution.accounts,
-    instructionData,
-    instruction.programId
-  );
+  // Step 3: Build transaction from the built instruction
+  const transaction = buildTransaction(instruction);
   
   // Step 4: Sign and send
   if (!options.wallet) {
@@ -100,27 +146,21 @@ export async function executeInstruction(
 }
 
 /**
- * Creates a transaction object from resolved accounts and instruction data.
+ * Creates a transaction object from a built instruction.
  * 
- * @param accounts - Resolved account metas
- * @param data - Serialized instruction data
- * @param programId - Program ID
- * @returns Transaction object
+ * @param instruction - Built instruction from handler
+ * @returns Transaction object ready for signing
  */
-function buildTransaction(
-  accounts: { name: string; address: string; isSigner: boolean; isWritable: boolean }[],
-  data: Buffer,
-  programId: string
-): unknown {
-  // In production, this would build a Solana Transaction object
+function buildTransaction(instruction: BuiltInstruction): unknown {
+  // This returns a framework-agnostic transaction representation.
+  // The wallet adapter is responsible for converting this to the
+  // appropriate format (@solana/web3.js Transaction, etc.)
   return {
-    accounts: accounts.map(a => ({
-      pubkey: a.address,
-      isSigner: a.isSigner,
-      isWritable: a.isWritable,
-    })),
-    programId,
-    data: Array.from(data),
+    instructions: [{
+      programId: instruction.programId,
+      keys: instruction.keys,
+      data: Array.from(instruction.data),
+    }],
   };
 }
 
@@ -133,11 +173,11 @@ function buildTransaction(
 export function createInstructionExecutor(wallet: WalletAdapter) {
   return {
     execute: async (
-      instruction: InstructionDefinition,
+      handler: InstructionHandler,
       args: Record<string, unknown>,
       options?: Omit<ExecuteOptions, 'wallet'>
     ) => {
-      return executeInstruction(instruction, args, {
+      return executeInstruction(handler, args, {
         ...options,
         wallet,
       });

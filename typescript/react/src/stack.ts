@@ -15,7 +15,7 @@ import type {
   ViewGroup
 } from './types';
 import type { HyperStackStore } from './zustand-adapter';
-import type { InstructionDefinition, InstructionExecutor } from 'hyperstack-typescript';
+import type { InstructionHandler, InstructionExecutor } from 'hyperstack-typescript';
 import type { HyperStack } from 'hyperstack-typescript';
 
 type ViewHookForDef<TDef> = TDef extends ViewDef<infer T, 'state'>
@@ -60,8 +60,8 @@ type InstructionHook = {
   execute: InstructionExecutor;
 };
 
-type BuildInstructionInterface<TInstructions extends Record<string, InstructionDefinition> | undefined> = 
-  TInstructions extends Record<string, InstructionDefinition>
+type BuildInstructionInterface<TInstructions extends Record<string, InstructionHandler> | undefined> = 
+  TInstructions extends Record<string, InstructionHandler>
     ? { [K in keyof TInstructions]: InstructionHook }
     : {};
 

@@ -25,7 +25,7 @@ export interface StackDefinition {
   readonly name: string;
   readonly url: string;
   readonly views: Record<string, ViewGroup>;
-  instructions?: Record<string, import('./instructions').InstructionDefinition>;
+  instructions?: Record<string, import('./instructions').InstructionHandler>;
 }
 
 export interface ViewGroup {

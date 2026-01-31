@@ -61,6 +61,7 @@ export type {
   PdaConfig,
   PdaSeed,
   ResolvedAccount,
+  ResolvedAccounts,
   AccountResolutionResult,
   AccountResolutionOptions,
   ArgSchema,
@@ -70,7 +71,9 @@ export type {
   ExecutionResult,
   ProgramError,
   ErrorMetadata,
+  InstructionHandler,
   InstructionDefinition,
+  BuiltInstruction,
 } from 'hyperstack-typescript';
 
 export type {

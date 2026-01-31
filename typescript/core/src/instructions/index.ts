@@ -16,5 +16,10 @@ export type { ConfirmationLevel, ExecuteOptions, ExecutionResult } from './confi
 export { waitForConfirmation } from './confirmation';
 export type { ProgramError, ErrorMetadata } from './error-parser';
 export { parseInstructionError, formatProgramError } from './error-parser';
-export type { InstructionDefinition } from './executor';
+export type { 
+  InstructionHandler,
+  InstructionDefinition,
+  BuiltInstruction,
+  ResolvedAccounts,
+} from './executor';
 export { executeInstruction, createInstructionExecutor } from './executor';

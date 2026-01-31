@@ -15,7 +15,7 @@ import { SubscriptionRegistry } from './subscription';
 import { createTypedViews } from './views';
 import type { Frame } from './frame';
 import type { WalletAdapter } from './wallet/types';
-import type { InstructionDefinition, ExecuteOptions, ExecutionResult } from './instructions';
+import type { InstructionHandler, ExecuteOptions, ExecutionResult } from './instructions';
 import { executeInstruction } from './instructions';
 
 export interface ConnectOptions {
@@ -42,8 +42,8 @@ export type InstructionExecutor = (
   options: InstructionExecutorOptions
 ) => Promise<ExecutionResult>;
 
-export type InstructionsInterface<TInstructions extends Record<string, InstructionDefinition> | undefined> = 
-  TInstructions extends Record<string, InstructionDefinition>
+export type InstructionsInterface<TInstructions extends Record<string, InstructionHandler> | undefined> = 
+  TInstructions extends Record<string, InstructionHandler>
     ? { [K in keyof TInstructions]: InstructionExecutor }
     : {};
 
@@ -84,9 +84,9 @@ export class HyperStack<TStack extends StackDefinition> {
     const instructions = {} as Record<string, InstructionExecutor>;
     
     if (this.stack.instructions) {
-      for (const [name, definition] of Object.entries(this.stack.instructions)) {
+      for (const [name, handler] of Object.entries(this.stack.instructions)) {
         instructions[name] = (args: Record<string, unknown>, options: InstructionExecutorOptions) => {
-          return executeInstruction(definition as InstructionDefinition, args, options);
+          return executeInstruction(handler as InstructionHandler, args, options);
         };
       }
     }
