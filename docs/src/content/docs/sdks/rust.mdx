@@ -232,11 +232,11 @@ To create views for your own Solana programs, you'll need to [build a stack](/bu
 
 The SDK provides three streaming methods with different levels of detail:
 
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `.listen()` | `T` | Merged entity directly (simplest - filters out deletes) |
-| `.watch()` | `Update<T>` | Upsert/Patch/Delete events |
-| `.watch_rich()` | `RichUpdate<T>` | Before/after diffs for tracking changes |
+| Method          | Returns         | Description                                             |
+| --------------- | --------------- | ------------------------------------------------------- |
+| `.listen()`     | `T`             | Merged entity directly (simplest - filters out deletes) |
+| `.watch()`      | `Update<T>`     | Upsert/Patch/Delete events                              |
+| `.watch_rich()` | `RichUpdate<T>` | Before/after diffs for tracking changes                 |
 
 ### Simple Streaming with `.listen()`
 
@@ -409,32 +409,32 @@ Note: Sync methods return empty/None if data hasn't been loaded yet.
 
 ### ViewHandle Methods (list/derived views)
 
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `.get().await` | `Vec<T>` | Get all items |
-| `.get_sync()` | `Vec<T>` | Synchronous cache read |
-| `.listen()` | `Stream<T>` | Stream merged entities (no deletes) |
-| `.watch()` | `Stream<Update<T>>` | Stream all update types |
-| `.watch_rich()` | `Stream<RichUpdate<T>>` | Stream with before/after diffs |
-| `.watch_keys(&[keys])` | `Stream<Update<T>>` | Stream updates for specific keys |
+| Method                 | Returns                 | Description                         |
+| ---------------------- | ----------------------- | ----------------------------------- |
+| `.get().await`         | `Vec<T>`                | Get all items                       |
+| `.get_sync()`          | `Vec<T>`                | Synchronous cache read              |
+| `.listen()`            | `Stream<T>`             | Stream merged entities (no deletes) |
+| `.watch()`             | `Stream<Update<T>>`     | Stream all update types             |
+| `.watch_rich()`        | `Stream<RichUpdate<T>>` | Stream with before/after diffs      |
+| `.watch_keys(&[keys])` | `Stream<Update<T>>`     | Stream updates for specific keys    |
 
 ### StateView Methods (keyed access)
 
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `.get(key).await` | `Option<T>` | Get entity by key |
-| `.get_sync(key)` | `Option<T>` | Synchronous cache read |
-| `.listen(key)` | `Stream<T>` | Stream merged entity values |
-| `.watch(key)` | `Stream<Update<T>>` | Stream updates for key |
-| `.watch_rich(key)` | `Stream<RichUpdate<T>>` | Stream with diffs for key |
+| Method             | Returns                 | Description                 |
+| ------------------ | ----------------------- | --------------------------- |
+| `.get(key).await`  | `Option<T>`             | Get entity by key           |
+| `.get_sync(key)`   | `Option<T>`             | Synchronous cache read      |
+| `.listen(key)`     | `Stream<T>`             | Stream merged entity values |
+| `.watch(key)`      | `Stream<Update<T>>`     | Stream updates for key      |
+| `.watch_rich(key)` | `Stream<RichUpdate<T>>` | Stream with diffs for key   |
 
 ### Stream Builder Options
 
-| Method | Description |
-|--------|-------------|
-| `.take(n)` | Server-side limit to N items |
-| `.skip(n)` | Server-side offset |
-| `.filter(key, value)` | Server-side filter |
+| Method                | Description                  |
+| --------------------- | ---------------------------- |
+| `.take(n)`            | Server-side limit to N items |
+| `.skip(n)`            | Server-side offset           |
+| `.filter(key, value)` | Server-side filter           |
 
 ---
 
@@ -478,11 +478,11 @@ if update.has_patch_field("trading") {
 
 Generated entity types often have fields typed as `Option<Option<T>>`. This represents the **patch semantics** of HyperStack updates:
 
-| Value | Meaning |
-|-------|---------|
-| `None` | Field was **not included** in this update (no change) |
-| `Some(None)` | Field was **explicitly set to null** |
-| `Some(Some(value))` | Field has a **concrete value** |
+| Value               | Meaning                                               |
+| ------------------- | ----------------------------------------------------- |
+| `None`              | Field was **not included** in this update (no change) |
+| `Some(None)`        | Field was **explicitly set to null**                  |
+| `Some(Some(value))` | Field has a **concrete value**                        |
 
 This distinction matters for partial updates (patches). When the server sends a patch, only changed fields are included. An absent field means "keep the previous value", while an explicit `null` means "clear this field".
 

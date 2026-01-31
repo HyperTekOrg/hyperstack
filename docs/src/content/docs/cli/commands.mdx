@@ -59,10 +59,10 @@ npx hyperstack-cli create my-app --template react-ore
 
 **Available templates:**
 
-| Template         | Aliases                          | Description                               |
-| ---------------- | -------------------------------- | ----------------------------------------- |
-| `react-ore`      | `ore-react`                      | ORE mining rounds viewer (React + Vite)   |
-| `rust-ore`       | `ore-rust`                       | ORE mining rounds client (Rust + Tokio)   |
+| Template         | Aliases                              | Description                               |
+| ---------------- | ------------------------------------ | ----------------------------------------- |
+| `react-ore`      | `ore-react`                          | ORE mining rounds viewer (React + Vite)   |
+| `rust-ore`       | `ore-rust`                           | ORE mining rounds client (Rust + Tokio)   |
 | `typescript-ore` | `ore-typescript`, `ts-ore`, `ore-ts` | ORE mining rounds client (TypeScript CLI) |
 
 **Options:**
@@ -118,9 +118,9 @@ hs auth login --key <your-api-key>
 
 **Options:**
 
-| Flag           | Description                     |
-| -------------- | ------------------------------- |
-| `--key, -k`    | API key (prompts if not provided) |
+| Flag        | Description                       |
+| ----------- | --------------------------------- |
+| `--key, -k` | API key (prompts if not provided) |
 
 ### hs auth logout
 
@@ -236,9 +236,9 @@ hs stack show my-stack -v 3
 
 **Options:**
 
-| Flag               | Description                  |
-| ------------------ | ---------------------------- |
-| `--version, -v <n>`| Show specific version details |
+| Flag                | Description                   |
+| ------------------- | ----------------------------- |
+| `--version, -v <n>` | Show specific version details |
 
 **Output includes:**
 
@@ -319,10 +319,10 @@ hs stack stop my-stack --force  # Skip confirmation
 
 **Options:**
 
-| Flag              | Description                            |
-| ----------------- | -------------------------------------- |
-| `--branch <name>` | Branch deployment to stop              |
-| `--force, -f`     | Skip confirmation prompt               |
+| Flag              | Description               |
+| ----------------- | ------------------------- |
+| `--branch <name>` | Branch deployment to stop |
+| `--force, -f`     | Skip confirmation prompt  |
 
 ---
 
@@ -349,11 +349,11 @@ hs sdk create typescript my-stack --url wss://my-stack.stack.usehyperstack.com
 
 **Options:**
 
-| Flag                       | Description                              |
-| -------------------------- | ---------------------------------------- |
-| `--output, -o <path>`      | Output file path (overrides config)      |
-| `--package-name, -p <name>`| Package name for TypeScript              |
-| `--url <url>`              | WebSocket URL for the stack              |
+| Flag                        | Description                         |
+| --------------------------- | ----------------------------------- |
+| `--output, -o <path>`       | Output file path (overrides config) |
+| `--package-name, -p <name>` | Package name for TypeScript         |
+| `--url <url>`               | WebSocket URL for the stack         |
 
 ### hs sdk create rust \<stack-name\>
 
@@ -547,10 +547,10 @@ hs telemetry disable
 
 ## Environment Variables
 
-| Variable                       | Description                              |
-| ------------------------------ | ---------------------------------------- |
-| `HYPERSTACK_API_URL`           | Override API endpoint                    |
-| `DO_NOT_TRACK=1`               | Disable telemetry (standard)             |
+| Variable                          | Description                             |
+| --------------------------------- | --------------------------------------- |
+| `HYPERSTACK_API_URL`              | Override API endpoint                   |
+| `DO_NOT_TRACK=1`                  | Disable telemetry (standard)            |
 | `HYPERSTACK_TELEMETRY_DISABLED=1` | Disable telemetry (Hyperstack-specific) |
 
 ---

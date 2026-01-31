@@ -83,11 +83,11 @@ The provider manages connections to stacks. Each stack definition includes its o
 
 #### Provider Props
 
-| Prop                | Type             | Default  | Description                              |
-| ------------------- | ---------------- | -------- | ---------------------------------------- |
-| `websocketUrl`      | `string`         | -        | Override URL for all stacks (optional)   |
-| `autoConnect`       | `boolean`        | `true`   | Auto-connect on mount                    |
-| `maxEntriesPerView` | `number \| null` | `10000`  | Max entries per view before LRU eviction |
+| Prop                | Type             | Default | Description                              |
+| ------------------- | ---------------- | ------- | ---------------------------------------- |
+| `websocketUrl`      | `string`         | -       | Override URL for all stacks (optional)   |
+| `autoConnect`       | `boolean`        | `true`  | Auto-connect on mount                    |
+| `maxEntriesPerView` | `number \| null` | `10000` | Max entries per view before LRU eviction |
 
 ---
 
@@ -247,13 +247,13 @@ const { data: highValueRounds } = stack.views.OreRound.list.use({
 });
 ```
 
-| Operator | Description |
-|----------|-------------|
-| `gte` | Greater than or equal |
-| `gt` | Greater than |
-| `lte` | Less than or equal |
-| `lt` | Less than |
-| *(value)* | Exact match |
+| Operator  | Description           |
+| --------- | --------------------- |
+| `gte`     | Greater than or equal |
+| `gt`      | Greater than          |
+| `lte`     | Less than or equal    |
+| `lt`      | Less than             |
+| _(value)_ | Exact match           |
 
 ```tsx
 // Exact match example
@@ -285,11 +285,11 @@ The `.use()` method accepts two arguments: params and options.
 
 #### List Params
 
-| Param | Type | Side | Description |
-|-------|------|------|-------------|
-| `take` | `number` | Server | Limit entities returned from server |
-| `skip` | `number` | Server | Skip first N entities (pagination) |
-| `where` | `object` | Client | Filter with comparison operators |
+| Param   | Type     | Side   | Description                         |
+| ------- | -------- | ------ | ----------------------------------- |
+| `take`  | `number` | Server | Limit entities returned from server |
+| `skip`  | `number` | Server | Skip first N entities (pagination)  |
+| `where` | `object` | Client | Filter with comparison operators    |
 | `limit` | `number` | Client | Max results to keep after filtering |
 
 ```typescript
@@ -502,11 +502,11 @@ import { HyperStack, ConnectionManager } from "hyperstack-react";
 
 ## Troubleshooting
 
-| Issue                         | Solution                                                                       |
-| ----------------------------- | ------------------------------------------------------------------------------ |
-| "WebSocket connection failed" | Check your connection to `wss://ore.stack.usehyperstack.com`                   |
-| Data not updating             | Verify the view path matches the stack entity name (e.g., `OreRound/list`)     |
-| TypeScript errors             | Ensure your interface matches the stack's data shape                           |
+| Issue                         | Solution                                                                   |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| "WebSocket connection failed" | Check your connection to `wss://ore.stack.usehyperstack.com`               |
+| Data not updating             | Verify the view path matches the stack entity name (e.g., `OreRound/list`) |
+| TypeScript errors             | Ensure your interface matches the stack's data shape                       |
 
 ---
 

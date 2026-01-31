@@ -15,11 +15,11 @@ When streaming data from views, you can control what the server sends to reduce 
 
 All Hyperstack SDKs support these parameters when subscribing to feeds:
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `take` | `number` | Maximum number of entities to return |
-| `skip` | `number` | Number of entities to skip (for pagination) |
-| `key` | `string` | Entity key for state view subscriptions |
+| Parameter | Type     | Description                                 |
+| --------- | -------- | ------------------------------------------- |
+| `take`    | `number` | Maximum number of entities to return        |
+| `skip`    | `number` | Number of entities to skip (for pagination) |
+| `key`     | `string` | Entity key for state view subscriptions     |
 
 ### Pagination
 
@@ -189,12 +189,12 @@ pub mod ore_stream {
 
 ### View Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `name` | `string` | View name (e.g., `"latest"`) |
-| `sort_by` | `string` | Field path to sort by (e.g., `"id.round_id"`) |
-| `order` | `"asc"` \| `"desc"` | Sort order (default: `"desc"`) |
-| `take` | `number` | Optional limit on results |
+| Parameter | Type                | Description                                   |
+| --------- | ------------------- | --------------------------------------------- |
+| `name`    | `string`            | View name (e.g., `"latest"`)                  |
+| `sort_by` | `string`            | Field path to sort by (e.g., `"id.round_id"`) |
+| `order`   | `"asc"` \| `"desc"` | Sort order (default: `"desc"`)                |
+| `take`    | `number`            | Optional limit on results                     |
 
 ### Accessing Custom Views
 
@@ -320,13 +320,13 @@ function HighVolumeTokens() {
 
 **Supported `where` operators:**
 
-| Operator | Description |
-|----------|-------------|
-| `gte` | Greater than or equal |
-| `lte` | Less than or equal |
-| `gt` | Greater than |
-| `lt` | Less than |
-| _(value)_ | Exact match |
+| Operator  | Description           |
+| --------- | --------------------- |
+| `gte`     | Greater than or equal |
+| `lte`     | Less than or equal    |
+| `gt`      | Greater than          |
+| `lt`      | Less than             |
+| _(value)_ | Exact match           |
 
 </TabItem>
 <TabItem label="TypeScript">

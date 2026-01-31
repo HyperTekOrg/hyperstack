@@ -74,10 +74,10 @@ const hs = await HyperStack.connect(OREROUND_STACK, {
 });
 ```
 
-| Option              | Type             | Default        | Description                              |
-| ------------------- | ---------------- | -------------- | ---------------------------------------- |
-| `url`               | `string`         | `stack.url`    | Override the stack's default URL         |
-| `maxEntriesPerView` | `number \| null` | `10000`        | Max entries per view before LRU eviction |
+| Option              | Type             | Default     | Description                              |
+| ------------------- | ---------------- | ----------- | ---------------------------------------- |
+| `url`               | `string`         | `stack.url` | Override the stack's default URL         |
+| `maxEntriesPerView` | `number \| null` | `10000`     | Max entries per view before LRU eviction |
 
 ### Connection State
 
@@ -109,19 +109,19 @@ await hs.disconnect();
 
 Every view operates in one of two modes, which determines how you access data:
 
-| Mode | Description | Key Required | Returns |
-|------|-------------|--------------|---------|
-| **State** | Lookup individual entities by key | Yes | Single entity (`T \| null`) |
-| **List** | Access a collection of entities | No | Array of entities (`T[]`) |
+| Mode      | Description                       | Key Required | Returns                     |
+| --------- | --------------------------------- | ------------ | --------------------------- |
+| **State** | Lookup individual entities by key | Yes          | Single entity (`T \| null`) |
+| **List**  | Access a collection of entities   | No           | Array of entities (`T[]`)   |
 
 ### Default Views
 
 By default, each entity in a stack exposes two views:
 
-| View Name | Mode | Description |
-|-----------|------|-------------|
-| `state` | State | Lookup any entity by its key (e.g., address) |
-| `list` | List | Collection of all entities |
+| View Name | Mode  | Description                                  |
+| --------- | ----- | -------------------------------------------- |
+| `state`   | State | Lookup any entity by its key (e.g., address) |
+| `list`    | List  | Collection of all entities                   |
 
 ```typescript
 // State view — get a specific round by address
@@ -152,11 +152,11 @@ Each view type supports both **streaming** (real-time updates) and **one-shot** 
 
 Streaming methods return `AsyncIterable` and continuously emit data as entities change. The connection stays open until you break out of the loop or abort.
 
-| Method | Emits | Use Case |
-|--------|-------|----------|
-| `.use()` | `T` | Simplest — just the current entity state after each change |
-| `.watch()` | `Update<T>` | When you need to know the operation type (upsert/patch/delete) |
-| `.watchRich()` | `RichUpdate<T>` | When you need before/after comparison |
+| Method         | Emits           | Use Case                                                       |
+| -------------- | --------------- | -------------------------------------------------------------- |
+| `.use()`       | `T`             | Simplest — just the current entity state after each change     |
+| `.watch()`     | `Update<T>`     | When you need to know the operation type (upsert/patch/delete) |
+| `.watchRich()` | `RichUpdate<T>` | When you need before/after comparison                          |
 
 ### `.use()` — Stream Merged Entities
 
@@ -270,9 +270,9 @@ type RichUpdate<T> =
 
 One-shot methods return a point-in-time snapshot without subscribing to updates. Use these when you need the current state but don't need real-time streaming.
 
-| Method | Returns | Behavior |
-|--------|---------|----------|
-| `.get()` | `Promise<T>` | Async — waits for data if not yet loaded |
+| Method       | Returns          | Behavior                                              |
+| ------------ | ---------------- | ----------------------------------------------------- |
+| `.get()`     | `Promise<T>`     | Async — waits for data if not yet loaded              |
 | `.getSync()` | `T \| undefined` | Sync — returns immediately, `undefined` if not loaded |
 
 ### `.get()` — Async Snapshot
@@ -490,25 +490,25 @@ hs.views.OreRound.list.get()         // List mode — no key
 
 For views in state mode (keyed lookup). All methods require a `key` parameter:
 
-| Method | Signature | Returns |
-|--------|-----------|---------|
-| `use` | `use(key, options?)` | `AsyncIterable<T>` |
-| `watch` | `watch(key, options?)` | `AsyncIterable<Update<T>>` |
+| Method      | Signature                  | Returns                        |
+| ----------- | -------------------------- | ------------------------------ |
+| `use`       | `use(key, options?)`       | `AsyncIterable<T>`             |
+| `watch`     | `watch(key, options?)`     | `AsyncIterable<Update<T>>`     |
 | `watchRich` | `watchRich(key, options?)` | `AsyncIterable<RichUpdate<T>>` |
-| `get` | `get(key)` | `Promise<T \| null>` |
-| `getSync` | `getSync(key)` | `T \| null \| undefined` |
+| `get`       | `get(key)`                 | `Promise<T \| null>`           |
+| `getSync`   | `getSync(key)`             | `T \| null \| undefined`       |
 
 #### List Mode Methods
 
 For views in list mode (collections). No key parameter:
 
-| Method | Signature | Returns |
-|--------|-----------|---------|
-| `use` | `use(options?)` | `AsyncIterable<T>` |
-| `watch` | `watch(options?)` | `AsyncIterable<Update<T>>` |
+| Method      | Signature             | Returns                        |
+| ----------- | --------------------- | ------------------------------ |
+| `use`       | `use(options?)`       | `AsyncIterable<T>`             |
+| `watch`     | `watch(options?)`     | `AsyncIterable<Update<T>>`     |
 | `watchRich` | `watchRich(options?)` | `AsyncIterable<RichUpdate<T>>` |
-| `get` | `get()` | `Promise<T[]>` |
-| `getSync` | `getSync()` | `T[] \| undefined` |
+| `get`       | `get()`               | `Promise<T[]>`                 |
+| `getSync`   | `getSync()`           | `T[] \| undefined`             |
 
 #### WatchOptions
 

@@ -30,11 +30,11 @@ Server::builder()
 
 These environment variables are read automatically by the generated parser code:
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `YELLOWSTONE_ENDPOINT` | Yes | — | Yellowstone gRPC endpoint URL |
-| `YELLOWSTONE_X_TOKEN` | Usually | — | Authentication token for the endpoint |
-| `RUST_LOG` | No | `info` | Log level filter (e.g., `debug`, `info,hyperstack_server=debug`) |
+| Variable               | Required | Default | Description                                                      |
+| ---------------------- | -------- | ------- | ---------------------------------------------------------------- |
+| `YELLOWSTONE_ENDPOINT` | Yes      | —       | Yellowstone gRPC endpoint URL                                    |
+| `YELLOWSTONE_X_TOKEN`  | Usually  | —       | Authentication token for the endpoint                            |
+| `RUST_LOG`             | No       | `info`  | Log level filter (e.g., `debug`, `info,hyperstack_server=debug`) |
 
 ## WebSocket Configuration
 
@@ -72,8 +72,8 @@ Server::builder()
     .await?;
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
+| Field          | Type         | Default     | Description                               |
+| -------------- | ------------ | ----------- | ----------------------------------------- |
 | `bind_address` | `SocketAddr` | `[::]:8877` | Address and port for the WebSocket server |
 
 ## Yellowstone Configuration
@@ -94,17 +94,17 @@ Server::builder()
 
 ### YellowstoneConfig
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `endpoint` | `String` | — | Yellowstone gRPC endpoint URL |
-| `x_token` | `Option<String>` | `None` | Authentication token |
+| Field      | Type             | Default | Description                   |
+| ---------- | ---------------- | ------- | ----------------------------- |
+| `endpoint` | `String`         | —       | Yellowstone gRPC endpoint URL |
+| `x_token`  | `Option<String>` | `None`  | Authentication token          |
 
 ### Builder Methods
 
-| Method | Description |
-|--------|-------------|
-| `YellowstoneConfig::new(endpoint)` | Create with endpoint |
-| `.with_token(token)` | Set authentication token |
+| Method                             | Description              |
+| ---------------------------------- | ------------------------ |
+| `YellowstoneConfig::new(endpoint)` | Create with endpoint     |
+| `.with_token(token)`               | Set authentication token |
 
 ## Health Monitoring
 
@@ -136,17 +136,17 @@ Server::builder()
     .await?;
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `heartbeat_interval` | `Duration` | 30s | How often to check stream health |
-| `health_check_timeout` | `Duration` | 10s | Timeout for health check operations |
+| Field                  | Type       | Default | Description                         |
+| ---------------------- | ---------- | ------- | ----------------------------------- |
+| `heartbeat_interval`   | `Duration` | 30s     | How often to check stream health    |
+| `health_check_timeout` | `Duration` | 10s     | Timeout for health check operations |
 
 ### Builder Methods
 
-| Method | Description |
-|--------|-------------|
-| `HealthConfig::new()` | Create with defaults |
-| `.with_heartbeat_interval(duration)` | Set heartbeat interval |
+| Method                                 | Description              |
+| -------------------------------------- | ------------------------ |
+| `HealthConfig::new()`                  | Create with defaults     |
+| `.with_heartbeat_interval(duration)`   | Set heartbeat interval   |
 | `.with_health_check_timeout(duration)` | Set health check timeout |
 
 ## HTTP Health Server
@@ -183,17 +183,17 @@ Server::builder()
     .await?;
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
+| Field          | Type         | Default     | Description                                 |
+| -------------- | ------------ | ----------- | ------------------------------------------- |
 | `bind_address` | `SocketAddr` | `[::]:8081` | Address and port for the HTTP health server |
 
 ### Health Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` or `/healthz` | GET | Liveness check — returns `200 OK` if server is running |
-| `/ready` or `/readiness` | GET | Readiness check — returns `200 OK` if stream is healthy, `503` otherwise |
-| `/status` | GET | Detailed JSON status with health state and error count |
+| Endpoint                 | Method | Description                                                              |
+| ------------------------ | ------ | ------------------------------------------------------------------------ |
+| `/health` or `/healthz`  | GET    | Liveness check — returns `200 OK` if server is running                   |
+| `/ready` or `/readiness` | GET    | Readiness check — returns `200 OK` if stream is healthy, `503` otherwise |
+| `/status`                | GET    | Detailed JSON status with health state and error count                   |
 
 #### Example `/status` Response
 
@@ -238,24 +238,24 @@ Server::builder()
     .await?;
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `initial_delay` | `Duration` | 100ms | Delay before first reconnection attempt |
-| `max_delay` | `Duration` | 60s | Maximum delay between attempts (caps exponential backoff) |
-| `max_attempts` | `Option<u32>` | `None` (infinite) | Maximum reconnection attempts before giving up |
-| `backoff_multiplier` | `f64` | 2.0 | Multiplier for exponential backoff |
-| `http2_keep_alive_interval` | `Option<Duration>` | 30s | HTTP/2 keep-alive to prevent silent disconnects |
+| Field                       | Type               | Default           | Description                                               |
+| --------------------------- | ------------------ | ----------------- | --------------------------------------------------------- |
+| `initial_delay`             | `Duration`         | 100ms             | Delay before first reconnection attempt                   |
+| `max_delay`                 | `Duration`         | 60s               | Maximum delay between attempts (caps exponential backoff) |
+| `max_attempts`              | `Option<u32>`      | `None` (infinite) | Maximum reconnection attempts before giving up            |
+| `backoff_multiplier`        | `f64`              | 2.0               | Multiplier for exponential backoff                        |
+| `http2_keep_alive_interval` | `Option<Duration>` | 30s               | HTTP/2 keep-alive to prevent silent disconnects           |
 
 ### Builder Methods
 
-| Method | Description |
-|--------|-------------|
-| `ReconnectionConfig::new()` | Create with defaults |
-| `.with_initial_delay(duration)` | Set initial reconnection delay |
-| `.with_max_delay(duration)` | Set maximum backoff delay |
-| `.with_max_attempts(n)` | Limit reconnection attempts |
-| `.with_backoff_multiplier(m)` | Set exponential backoff multiplier |
-| `.with_http2_keep_alive_interval(duration)` | Set HTTP/2 keep-alive interval |
+| Method                                      | Description                        |
+| ------------------------------------------- | ---------------------------------- |
+| `ReconnectionConfig::new()`                 | Create with defaults               |
+| `.with_initial_delay(duration)`             | Set initial reconnection delay     |
+| `.with_max_delay(duration)`                 | Set maximum backoff delay          |
+| `.with_max_attempts(n)`                     | Limit reconnection attempts        |
+| `.with_backoff_multiplier(m)`               | Set exponential backoff multiplier |
+| `.with_http2_keep_alive_interval(duration)` | Set HTTP/2 keep-alive interval     |
 
 ## Feature Flags
 
@@ -266,9 +266,9 @@ Enable optional features in your `Cargo.toml`:
 hyperstack-server = { version = "{{VERSION}}", features = ["otel"] }
 ```
 
-| Feature | Default | Description |
-|---------|---------|-------------|
-| `otel` | No | OpenTelemetry integration for metrics and distributed tracing |
+| Feature | Default | Description                                                   |
+| ------- | ------- | ------------------------------------------------------------- |
+| `otel`  | No      | OpenTelemetry integration for metrics and distributed tracing |
 
 ### Using OpenTelemetry Metrics
 
