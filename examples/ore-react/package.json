@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "hyperstack-react": "^0.3",
-    "hyperstack-stacks": "^0.3",
+    "hyperstack-react": "^0.4",
+    "hyperstack-stacks": "^0.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zustand": "^4.4.1"

@@ -11,8 +11,8 @@
     "dev": "npx tsx --watch src/main.ts"
   },
   "dependencies": {
-    "hyperstack-typescript": "^0.3",
-    "hyperstack-stacks": "^0.3"
+    "hyperstack-typescript": "^0.4",
+    "hyperstack-stacks": "^0.4"
   },
   "devDependencies": {
     "typescript": "^5.0.0",
