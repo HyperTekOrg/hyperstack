@@ -140,11 +140,11 @@ export interface BuysExactSolEvent {
   min_tokens_out: number;
 }
 
-export interface CreateEvent { }
+export interface CreateEvent {}
 
-export interface CreateV2Event { }
+export interface CreateV2Event {}
 
-export interface SellsEvent { }
+export interface SellsEvent {}
 
 export type ConfigStatus = "Paused" | "Active";
 
