@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.15](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.3.14...hyperstack-interpreter-v0.3.15) (2026-01-31)
+
+
+### Features
+
+* **sdk:** update CLI SDK generation for new Stack trait pattern ([b71d8b2](https://github.com/HyperTekOrg/hyperstack/commit/b71d8b2575ec4ce13546f22dc8793827cfce2a22))
+
+
+### Bug Fixes
+
+* prevent entity field loss from partial patches in sorted cache ([1e3c8e6](https://github.com/HyperTekOrg/hyperstack/commit/1e3c8e6f25b2b7968e60754e8175c7a66f68c908))
+* separate recency handling for account vs instruction updates ([e0d6a6e](https://github.com/HyperTekOrg/hyperstack/commit/e0d6a6ef756a4f1446b4b82d7bb78b166cb08264))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-macros bumped from 0.3.14 to 0.3.15
+
 ## [0.3.14](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.3.13...hyperstack-interpreter-v0.3.14) (2026-01-28)
 
 
