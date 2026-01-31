@@ -22,33 +22,30 @@ import { HyperstackProvider, useHyperstack } from 'hyperstack-react';
 import { OREROUND_STACK, OreRound } from 'hyperstack-stacks/ore';
 
 function App() {
-return (
-
-<HyperstackProvider websocketUrl="wss://ore.stack.usehyperstack.com">
-<LatestRounds />
-</HyperstackProvider>
-);
+  return (
+    <HyperstackProvider websocketUrl="wss://ore.stack.usehyperstack.com">
+      <LatestRounds />
+    </HyperstackProvider>
+  );
 }
 
 function LatestRounds() {
-const stack = useHyperstack(OREROUND_STACK);
-const { data: rounds, isLoading } = stack.views.OreRound.latest.use({ take: 5 });
+  const stack = useHyperstack(OREROUND_STACK);
+  const { data: rounds, isLoading } = stack.views.OreRound.latest.use({ take: 5 });
 
-if (isLoading) return <div>Connecting...</div>;
+  if (isLoading) return <div>Connecting...</div>;
 
-return (
-
-<ul>
-{rounds?.map((round) => (
-<li key={round.id?.round_id}>
-Round #{round.id?.round_id} — Motherlode: {round.state?.motherlode}
-</li>
-))}
-</ul>
-);
+  return (
+    <ul>
+      {rounds?.map((round) => (
+        <li key={round.id?.round_id}>
+          Round #{round.id?.round_id} — Motherlode: {round.state?.motherlode}
+        </li>
+      ))}
+    </ul>
+  );
 }
-
-````
+```
 </TabItem>
 <TabItem label="TypeScript">
 ```typescript
@@ -65,8 +62,7 @@ for await (const update of hs.views.OreRound.latest.watch({ take: 1 })) {
     console.log(`Motherlode: ${update.data.state?.motherlode}`);
   }
 }
-````
-
+```
 </TabItem>
 <TabItem label="Rust">
 ```rust
@@ -75,7 +71,7 @@ use hyperstack_stacks::ore::OreRoundViews;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
+    let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
 
     let views = hs.views::<OreRoundViews>();
     let mut stream = views.latest().watch().take(1);
@@ -91,10 +87,8 @@ let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
     }
 
     Ok(())
-
 }
-
-````
+```
 </TabItem>
 </Tabs>
 
@@ -102,7 +96,7 @@ let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
 The `hyperstack-stacks` package provides ready-to-use SDKs for popular Solana protocols. You can also [generate your own SDK](/building-stacks/workflow) from any stack you build. Install it alongside your SDK:
 ```bash
 npm install hyperstack-stacks hyperstack-react
-````
+```
 
 :::
 
