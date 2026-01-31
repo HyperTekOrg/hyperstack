@@ -8,12 +8,19 @@
  */
 import type { Props } from "@astrojs/starlight/props";
 import Default from "@astrojs/starlight/components/PageTitle.astro";
+// Import the manifest directly - Vite handles this at build time
+import manifest from "../../../../.release-please-manifest.json";
 
 const { entry } = Astro.locals.starlightRoute;
 const { title } = entry.data;
 
-// Build clean markdown content with title
-const markdownContent = `# ${title}\n\n${entry.body}`;
+// Get version from the imported manifest (resolved at build time by Vite)
+const version = manifest["hyperstack"] || manifest["packages/hyperstack"] || "0.0.0";
+
+// Build clean markdown content with title, replacing {{VERSION}} placeholders
+const rawBody = entry.body || "";
+const processedBody = rawBody.replaceAll("{{VERSION}}", version);
+const markdownContent = `# ${title}\n\n${processedBody}`;
 ---
 
 <div class="page-title-wrapper">

@@ -14,8 +14,8 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hyperstack-sdk = "0.2"
-hyperstack-stacks = { version = "0.2", optional = true }
+hyperstack-sdk = "{{VERSION}}"
+hyperstack-stacks = { version = "{{VERSION}}", optional = true }
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
 futures = "0.3"
@@ -29,7 +29,7 @@ By default, the SDK uses `rustls` for TLS. You can switch to native TLS:
 
 ```toml
 [dependencies]
-hyperstack-sdk = { version = "0.2", default-features = false, features = ["native-tls"] }
+hyperstack-sdk = { version = "{{VERSION}}", default-features = false, features = ["native-tls"] }
 ```
 
 ### Tokio Runtime
@@ -88,8 +88,8 @@ cd my-hyperstack-app
 
 ```toml
 [dependencies]
-hyperstack-sdk = "0.2"
-hyperstack-stacks = "0.2"
+hyperstack-sdk = "{{VERSION}}"
+hyperstack-stacks = "{{VERSION}}"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 anyhow = "1"
 futures = "0.3"
@@ -553,7 +553,7 @@ Add the generated crate to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hyperstack-sdk = "0.2"
+hyperstack-sdk = "{{VERSION}}"
 settlement-game-stack = { path = "./generated/settlement-game-stack" }
 ```
 

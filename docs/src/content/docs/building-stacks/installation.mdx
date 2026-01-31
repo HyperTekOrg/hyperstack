@@ -45,7 +45,7 @@ Add the Hyperstack crate to your stack project's `Cargo.toml`:
 
 ```toml
 [dependencies]
-hyperstack = "0.2"
+hyperstack = "{{VERSION}}"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -113,5 +113,5 @@ hs config validate
 | Issue                   | Solution                                     |
 | ----------------------- | -------------------------------------------- |
 | `hs: command not found` | Add `~/.cargo/bin` to your PATH              |
-| `cargo build` fails     | Ensure `hyperstack = "0.2"` is in Cargo.toml |
+| `cargo build` fails     | Ensure `hyperstack = "{{VERSION}}"` is in Cargo.toml |
 | `hs init` fails         | Check you're in a valid Cargo project        |

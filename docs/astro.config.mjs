@@ -1,11 +1,19 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightLlmsTxt from "starlight-llms-txt";
+import { ecVersionPlugin } from "./src/plugins/ec-version-plugin.mjs";
+import { remarkVersion } from "./src/plugins/remark-version.mjs";
 
 export default defineConfig({
+  markdown: {
+    remarkPlugins: [remarkVersion],
+  },
   site: "https://docs.usehyperstack.com",
   integrations: [
     starlight({
+      expressiveCode: {
+        plugins: [ecVersionPlugin()],
+      },
       plugins: [starlightLlmsTxt()],
       title: "Hyperstack",
       social: [
@@ -72,7 +80,7 @@ export default defineConfig({
           autogenerate: { directory: "cli" },
         },
         {
-          label: "hyperstack-server",
+          label: "Server",
           autogenerate: { directory: "hyperstack-server" },
         },
       ],
