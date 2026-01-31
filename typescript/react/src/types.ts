@@ -1,3 +1,5 @@
+import type { WalletAdapter } from 'hyperstack-typescript';
+
 export type {
   ConnectionState,
   Subscription,

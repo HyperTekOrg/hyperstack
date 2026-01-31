@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import type { StoreApi, UseBoundStore } from 'zustand';
 import { useHyperstackContext } from './provider';
 import { createStateViewHook, createListViewHook } from './view-hooks';
@@ -104,36 +104,42 @@ export function useHyperstack<TStack extends StackDefinition>(
       });
   }, [stack, getOrCreateClient, getClient]);
 
-  const views: Record<string, Record<string, unknown>> = {};
+  const views = useMemo(() => {
+    const result: Record<string, Record<string, unknown>> = {};
 
-  if (client) {
-    for (const [viewName, viewGroup] of Object.entries(client.views)) {
-      views[viewName] = {};
+    for (const [viewName, viewGroup] of Object.entries(stack.views)) {
+      result[viewName] = {};
 
       if (typeof viewGroup === 'object' && viewGroup !== null) {
         for (const [subViewName, viewDef] of Object.entries(viewGroup)) {
           if (!viewDef || typeof viewDef !== 'object' || !('mode' in viewDef)) continue;
 
           if (viewDef.mode === 'state') {
-            views[viewName]![subViewName] = createStateViewHook(viewDef as ViewDef<unknown, 'state'>, client);
+            result[viewName]![subViewName] = createStateViewHook(viewDef as ViewDef<unknown, 'state'>, client);
           } else if (viewDef.mode === 'list') {
-            views[viewName]![subViewName] = createListViewHook(viewDef as ViewDef<unknown, 'list'>, client);
+            result[viewName]![subViewName] = createListViewHook(viewDef as ViewDef<unknown, 'list'>, client);
           }
         }
       }
     }
-  }
 
-  const instructions: Record<string, InstructionHook> = {};
+    return result;
+  }, [stack, client]);
 
-  if (client?.instructions) {
-    for (const [instructionName, executeFn] of Object.entries(client.instructions)) {
-      instructions[instructionName] = {
-        execute: executeFn as InstructionExecutor,
-        useMutation: () => useInstructionMutation(executeFn as InstructionExecutor)
-      };
+  const instructions = useMemo(() => {
+    const result: Record<string, InstructionHook> = {};
+
+    if (client?.instructions) {
+      for (const [instructionName, executeFn] of Object.entries(client.instructions)) {
+        result[instructionName] = {
+          execute: executeFn as InstructionExecutor,
+          useMutation: () => useInstructionMutation(executeFn as InstructionExecutor)
+        };
+      }
     }
-  }
+
+    return result;
+  }, [client]);
 
   return {
     views: views as BuildViewInterface<TStack['views']>,

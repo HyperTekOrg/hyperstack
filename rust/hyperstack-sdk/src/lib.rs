@@ -2,23 +2,14 @@
 //!
 //! ```rust,ignore
 //! use hyperstack_sdk::prelude::*;
-//! use my_stack::{PumpfunToken, PumpfunTokenEntity};
+//! use hyperstack_stacks::ore::OreStack;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     let hs = HyperStack::connect("wss://mainnet.hyperstack.xyz").await?;
+//!     let hs = HyperStack::<OreStack>::connect().await?;
 //!     
-//!     if let Some(token) = hs.get::<PumpfunTokenEntity>("mint_address").await {
-//!         println!("Token: {:?}", token);
-//!     }
-//!     
-//!     let mut stream = hs.watch::<PumpfunTokenEntity>().await;
-//!     while let Some(update) = stream.next().await {
-//!         match update {
-//!             Update::Upsert { key, data } => println!("Updated: {}", key),
-//!             Update::Delete { key } => println!("Deleted: {}", key),
-//!             _ => {}
-//!         }
+//!     for round in hs.views.latest().listen() {
+//!         println!("Round: {:?}", round);
 //!     }
 //!     
 //!     Ok(())
@@ -38,17 +29,14 @@ mod subscription;
 pub mod view;
 
 pub use client::{HyperStack, HyperStackBuilder};
-pub use config::HyperStackConfig;
 pub use connection::ConnectionState;
-pub use entity::{Entity, EntityData, Filterable};
+pub use entity::Stack;
 pub use error::HyperStackError;
 pub use frame::{Frame, Mode, Operation};
 pub use store::{SharedStore, StoreUpdate};
 pub use stream::{
     EntityStream, FilterMapStream, FilteredStream, KeyFilter, MapStream, RichEntityStream,
-    RichUpdate, Update,
+    RichUpdate, Update, UseStream,
 };
 pub use subscription::Subscription;
-pub use view::{StateView, ViewBuilder, ViewHandle, Views};
-
-pub use serde_json::Value;
+pub use view::{RichWatchBuilder, StateView, UseBuilder, ViewBuilder, ViewHandle, Views, WatchBuilder};

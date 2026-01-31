@@ -1,116 +1,123 @@
-import { useEffect, useState, useCallback, useSyncExternalStore, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useSyncExternalStore, useRef } from 'react';
 import { ViewDef, ViewHookOptions, ViewHookResult, ListParams, ListParamsBase } from './types';
 import type { HyperStack } from 'hyperstack-typescript';
 
-export function createStateViewHook<T>(
+export function useStateView<T>(
   viewDef: ViewDef<T, 'state'>,
-  client: HyperStack<any>
-) {
-  return {
-    use: (key?: Record<string, string>, options?: ViewHookOptions): ViewHookResult<T> => {
-      const [isLoading, setIsLoading] = useState(!options?.initialData);
-      const [error, setError] = useState<Error | undefined>();
+  client: HyperStack<any> | null,
+  key?: Record<string, string>,
+  options?: ViewHookOptions
+): ViewHookResult<T> {
+  const [isLoading, setIsLoading] = useState(!options?.initialData);
+  const [error, setError] = useState<Error | undefined>();
+  const clientRef = useRef(client);
+  clientRef.current = client;
 
-      const keyString = key ? Object.values(key)[0] : undefined;
-      const enabled = options?.enabled !== false;
+  const keyString = key ? Object.values(key)[0] : undefined;
+  const enabled = options?.enabled !== false;
 
-      useEffect(() => {
-        if (!enabled) return undefined;
+  useEffect(() => {
+    if (!enabled || !clientRef.current) return undefined;
 
+    try {
+      const registry = clientRef.current.getSubscriptionRegistry();
+      const unsubscribe = registry.subscribe({ view: viewDef.view, key: keyString });
+      setIsLoading(true);
+
+      return () => {
         try {
-          const registry = client.getSubscriptionRegistry();
-          const unsubscribe = registry.subscribe({ view: viewDef.view, key: keyString });
-          setIsLoading(true);
-
-          return () => {
-            try {
-              unsubscribe();
-            } catch (err) {
-              console.error('[Hyperstack] Error unsubscribing from view:', err);
-            }
-          };
+          unsubscribe();
         } catch (err) {
-          setError(err instanceof Error ? err : new Error('Subscription failed'));
-          setIsLoading(false);
-          return undefined;
+          console.error('[Hyperstack] Error unsubscribing from view:', err);
         }
-      }, [keyString, enabled, client]);
-
-      const refresh = useCallback(() => {
-        if (!enabled) return;
-
-        try {
-          const registry = client.getSubscriptionRegistry();
-          const unsubscribe = registry.subscribe({ view: viewDef.view, key: keyString });
-          setIsLoading(true);
-
-          setTimeout(() => {
-            try {
-              unsubscribe();
-            } catch (err) {
-              console.error('[Hyperstack] Error during refresh unsubscribe:', err);
-            }
-          }, 0);
-        } catch (err) {
-          setError(err instanceof Error ? err : new Error('Refresh failed'));
-          setIsLoading(false);
-        }
-      }, [keyString, enabled, client]);
-
-      const store = client.store;
-      const data = useSyncExternalStore(
-        (callback) => store.onUpdate(callback),
-        () => {
-          const entity = keyString 
-            ? store.get(viewDef.view, keyString)
-            : store.getAll(viewDef.view)[0];
-          return entity as T | undefined;
-        }
-      );
-
-      useEffect(() => {
-        if (data && isLoading) {
-          setIsLoading(false);
-        }
-      }, [data, isLoading]);
-
-      return {
-        data: (options?.initialData ?? data) as T | undefined,
-        isLoading,
-        error,
-        refresh
       };
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Subscription failed'));
+      setIsLoading(false);
+      return undefined;
     }
+  }, [viewDef.view, keyString, enabled, client]);
+
+  const refresh = useCallback(() => {
+    if (!enabled || !clientRef.current) return;
+
+    try {
+      const registry = clientRef.current.getSubscriptionRegistry();
+      const unsubscribe = registry.subscribe({ view: viewDef.view, key: keyString });
+      setIsLoading(true);
+
+      setTimeout(() => {
+        try {
+          unsubscribe();
+        } catch (err) {
+          console.error('[Hyperstack] Error during refresh unsubscribe:', err);
+        }
+      }, 0);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Refresh failed'));
+      setIsLoading(false);
+    }
+  }, [viewDef.view, keyString, enabled]);
+
+  const subscribe = useCallback((callback: () => void) => {
+    if (!clientRef.current) return () => {};
+    return clientRef.current.store.onUpdate(callback);
+  }, [client]);
+
+  const getSnapshot = useCallback(() => {
+    if (!clientRef.current) return undefined;
+    const entity = keyString 
+      ? clientRef.current.store.get(viewDef.view, keyString)
+      : clientRef.current.store.getAll(viewDef.view)[0];
+    return entity as T | undefined;
+  }, [viewDef.view, keyString, client]);
+
+  const data = useSyncExternalStore(subscribe, getSnapshot);
+
+  useEffect(() => {
+    if (data !== undefined && isLoading) {
+      setIsLoading(false);
+    }
+  }, [data, isLoading]);
+
+  return {
+    data: (options?.initialData ?? data) as T | undefined,
+    isLoading: client === null || isLoading,
+    error,
+    refresh
   };
 }
 
-function useListViewInternal<T>(
+export function useListView<T>(
   viewDef: ViewDef<T, 'list'>,
-  client: HyperStack<any>,
+  client: HyperStack<any> | null,
   params?: ListParams,
   options?: ViewHookOptions
 ): ViewHookResult<T[]> {
   const [isLoading, setIsLoading] = useState(!options?.initialData);
   const [error, setError] = useState<Error | undefined>();
-  const cachedDataRef = useRef<T[] | undefined>(undefined);
+  const clientRef = useRef(client);
+  clientRef.current = client;
 
   const enabled = options?.enabled !== false;
   const key = params?.key;
-
+  const take = params?.take;
+  const skip = params?.skip;
+  const whereJson = params?.where ? JSON.stringify(params.where) : undefined;
   const filtersJson = params?.filters ? JSON.stringify(params.filters) : undefined;
-  const filters = useMemo(() => params?.filters, [filtersJson]);
+  const limit = params?.limit;
 
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!enabled || !clientRef.current) return undefined;
 
     try {
-      const registry = client.getSubscriptionRegistry();
+      const registry = clientRef.current.getSubscriptionRegistry();
       const unsubscribe = registry.subscribe({ 
         view: viewDef.view, 
         key, 
-        filters,
-        take: params?.take,
-        skip: params?.skip 
+        filters: params?.filters,
+        take,
+        skip 
       });
       setIsLoading(true);
 
@@ -126,19 +133,19 @@ function useListViewInternal<T>(
       setIsLoading(false);
       return undefined;
     }
-  }, [enabled, key, filtersJson, params?.take, params?.skip, client]);
+  }, [viewDef.view, enabled, key, filtersJson, take, skip, client]);
 
   const refresh = useCallback(() => {
-    if (!enabled) return;
+    if (!enabled || !clientRef.current) return;
 
     try {
-      const registry = client.getSubscriptionRegistry();
+      const registry = clientRef.current.getSubscriptionRegistry();
       const unsubscribe = registry.subscribe({ 
         view: viewDef.view, 
         key, 
-        filters,
-        take: params?.take,
-        skip: params?.skip 
+        filters: params?.filters,
+        take,
+        skip 
       });
       setIsLoading(true);
 
@@ -153,68 +160,81 @@ function useListViewInternal<T>(
       setError(err instanceof Error ? err : new Error('Refresh failed'));
       setIsLoading(false);
     }
-  }, [enabled, key, filtersJson, params?.take, params?.skip, client]);
+  }, [viewDef.view, enabled, key, filtersJson, take, skip]);
 
-  const store = client.store;
-  const data = useSyncExternalStore(
-    (callback) => store.onUpdate(callback),
-    () => {
-      const viewData = store.getAll(viewDef.view);
-      
-      if (!viewData || viewData.length === 0) {
-        cachedDataRef.current = undefined;
-        return undefined;
-      }
+  const subscribe = useCallback((callback: () => void) => {
+    if (!clientRef.current) return () => {};
+    return clientRef.current.store.onUpdate(callback);
+  }, [client]);
 
-      let items = viewData;
-      
-      if (params?.where) {
-        items = items.filter((item) => {
-          return Object.entries(params.where!).every(([fieldKey, condition]) => {
-            const value = (item as Record<string, unknown>)[fieldKey];
-
-            if (typeof condition === 'object' && condition !== null) {
-              const cond = condition as Record<string, unknown>;
-              if ('gte' in cond) return (value as number) >= (cond.gte as number);
-              if ('lte' in cond) return (value as number) <= (cond.lte as number);
-              if ('gt' in cond) return (value as number) > (cond.gt as number);
-              if ('lt' in cond) return (value as number) < (cond.lt as number);
-            }
-
-            return value === condition;
-          });
-        });
-      }
-
-      if (params?.limit) {
-        items = items.slice(0, params.limit);
-      }
-
-      cachedDataRef.current = items as T[];
-      return items as T[];
+  const getSnapshot = useCallback(() => {
+    if (!clientRef.current) return undefined;
+    const viewData = clientRef.current.store.getAll(viewDef.view);
+    
+    if (!viewData || viewData.length === 0) {
+      return undefined;
     }
-  );
+
+    let items = viewData;
+    
+    if (params?.where) {
+      items = items.filter((item) => {
+        return Object.entries(params.where!).every(([fieldKey, condition]) => {
+          const value = (item as Record<string, unknown>)[fieldKey];
+
+          if (typeof condition === 'object' && condition !== null) {
+            const cond = condition as Record<string, unknown>;
+            if ('gte' in cond) return (value as number) >= (cond.gte as number);
+            if ('lte' in cond) return (value as number) <= (cond.lte as number);
+            if ('gt' in cond) return (value as number) > (cond.gt as number);
+            if ('lt' in cond) return (value as number) < (cond.lt as number);
+          }
+
+          return value === condition;
+        });
+      });
+    }
+
+    if (limit) {
+      items = items.slice(0, limit);
+    }
+
+    return items as T[];
+  }, [viewDef.view, whereJson, limit, client]);
+
+  const data = useSyncExternalStore(subscribe, getSnapshot);
 
   useEffect(() => {
-    if (data && isLoading) {
+    if (data !== undefined && isLoading) {
       setIsLoading(false);
     }
   }, [data, isLoading]);
 
   return {
     data: (options?.initialData ?? data) as T[] | undefined,
-    isLoading,
+    isLoading: client === null || isLoading,
     error,
     refresh
   };
 }
 
+export function createStateViewHook<T>(
+  viewDef: ViewDef<T, 'state'>,
+  client: HyperStack<any> | null
+) {
+  return {
+    use: (key?: Record<string, string>, options?: ViewHookOptions): ViewHookResult<T> => {
+      return useStateView(viewDef, client, key, options);
+    }
+  };
+}
+
 export function createListViewHook<T>(
   viewDef: ViewDef<T, 'list'>,
-  client: HyperStack<any>
+  client: HyperStack<any> | null
 ) {
   function use(params?: ListParams, options?: ViewHookOptions): ViewHookResult<T[]> | ViewHookResult<T | undefined> {
-    const result = useListViewInternal(viewDef, client, params, options);
+    const result = useListView(viewDef, client, params, options);
     
     if (params?.take === 1) {
       return {
@@ -230,7 +250,7 @@ export function createListViewHook<T>(
 
   function useOne(params?: Omit<ListParamsBase, 'take'>, options?: ViewHookOptions): ViewHookResult<T | undefined> {
     const paramsWithTake = params ? { ...params, take: 1 as const } : { take: 1 as const };
-    const result = useListViewInternal(viewDef, client, paramsWithTake, options);
+    const result = useListView(viewDef, client, paramsWithTake, options);
     
     return {
       data: result.data?.[0],

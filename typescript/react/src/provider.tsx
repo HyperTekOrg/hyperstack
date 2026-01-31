@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, ReactNode, useSyncExternalStore, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useRef, ReactNode, useSyncExternalStore, useCallback } from 'react';
 import { HyperStack, type ConnectionState, type StackDefinition } from 'hyperstack-typescript';
 import type { HyperstackConfig, NetworkConfig } from './types';
 
@@ -9,7 +9,7 @@ interface ClientEntry {
 
 interface HyperstackContextValue {
   getOrCreateClient: <TStack extends StackDefinition>(stack: TStack) => Promise<HyperStack<TStack>>;
-  getClient: <TStack extends StackDefinition>(stack: TStack) => HyperStack<TStack> | null;
+  getClient: <TStack extends StackDefinition>(stack: TStack | undefined) => HyperStack<TStack> | null;
   config: {
     websocketUrl: string;
     autoConnect?: boolean;
@@ -80,8 +80,8 @@ export function HyperstackProvider({
       return connecting as Promise<HyperStack<TStack>>;
     }
 
-    const connectionPromise = HyperStack.connect(networkConfig.websocketUrl, {
-      stack,
+    const connectionPromise = HyperStack.connect(stack, {
+      url: networkConfig.websocketUrl,
       autoReconnect: config.autoConnect,
       reconnectIntervals: config.reconnectIntervals,
       maxReconnectAttempts: config.maxReconnectAttempts,
@@ -99,7 +99,8 @@ export function HyperstackProvider({
     return connectionPromise as Promise<HyperStack<TStack>>;
   }, [networkConfig.websocketUrl, config.autoConnect, config.reconnectIntervals, config.maxReconnectAttempts, config.maxEntriesPerView]);
 
-  const getClient = useCallback(<TStack extends StackDefinition>(stack: TStack): HyperStack<TStack> | null => {
+  const getClient = useCallback(<TStack extends StackDefinition>(stack: TStack | undefined): HyperStack<TStack> | null => {
+    if (!stack) return null;
     const entry = clientsRef.current.get(stack.name);
     return entry ? (entry.client as HyperStack<TStack>) : null;
   }, []);
@@ -141,9 +142,9 @@ export function useHyperstackContext() {
   return context;
 }
 
-export function useConnectionState(stack: StackDefinition): ConnectionState {
+export function useConnectionState(stack?: StackDefinition): ConnectionState {
   const { getClient } = useHyperstackContext();
-  const client = getClient(stack);
+  const client = stack ? getClient(stack) : null;
   
   return useSyncExternalStore(
     (callback) => {

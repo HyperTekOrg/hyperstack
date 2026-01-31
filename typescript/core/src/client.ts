@@ -18,6 +18,16 @@ import type { WalletAdapter } from './wallet/types';
 import type { InstructionDefinition, ExecuteOptions, ExecutionResult } from './instructions';
 import { executeInstruction } from './instructions';
 
+export interface ConnectOptions {
+  url?: string;
+  storage?: StorageAdapter;
+  maxEntriesPerView?: number | null;
+  autoReconnect?: boolean;
+  reconnectIntervals?: number[];
+  maxReconnectAttempts?: number;
+}
+
+/** @deprecated Use ConnectOptions instead */
 export interface HyperStackOptionsWithStorage<TStack extends StackDefinition> extends HyperStackOptions<TStack> {
   storage?: StorageAdapter;
   maxEntriesPerView?: number | null;
@@ -85,19 +95,27 @@ export class HyperStack<TStack extends StackDefinition> {
   }
 
   static async connect<T extends StackDefinition>(
-    url: string,
-    options: HyperStackOptionsWithStorage<T>
+    stack: T,
+    options?: ConnectOptions
   ): Promise<HyperStack<T>> {
+    const url = options?.url ?? stack.url;
+
     if (!url) {
-      throw new HyperStackError('URL is required', 'INVALID_CONFIG');
-    }
-    if (!options.stack) {
-      throw new HyperStackError('Stack definition is required', 'INVALID_CONFIG');
+      throw new HyperStackError('URL is required (provide url option or define url in stack)', 'INVALID_CONFIG');
     }
 
-    const client = new HyperStack(url, options);
+    const internalOptions: HyperStackOptionsWithStorage<T> = {
+      stack,
+      storage: options?.storage,
+      maxEntriesPerView: options?.maxEntriesPerView,
+      autoReconnect: options?.autoReconnect,
+      reconnectIntervals: options?.reconnectIntervals,
+      maxReconnectAttempts: options?.maxReconnectAttempts,
+    };
 
-    if (options.autoReconnect !== false) {
+    const client = new HyperStack(url, internalOptions);
+
+    if (options?.autoReconnect !== false) {
       await client.connection.connect();
     }
 

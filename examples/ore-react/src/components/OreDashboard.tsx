@@ -22,7 +22,6 @@ export function OreDashboard() {
 
           <div
             className="flex items-center gap-3 px-4 py-2 rounded-xl bg-white/10 cursor-pointer hover:bg-white/20 transition-all"
-            onClick={isConnected ? () => stack.runtime.connection.disconnect() : () => stack.runtime.connection.connect()}
           >
             <div className="relative">
               <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-500'}`} />

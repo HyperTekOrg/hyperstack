@@ -1,8 +1,7 @@
 import { HyperStack } from 'hyperstack-typescript';
 import { OREROUND_STACK, type OreRound } from 'hyperstack-stacks/ore';
 
-// const URL = 'wss://ore.stack.usehyperstack.com';
-const URL = 'ws://localhost:8878';
+const LOCAL_URL = 'ws://localhost:8878';
 
 function printRound(round: OreRound) {
   console.log(`\n=== Round #${round.id?.round_id ?? 'N/A'} ===`);
@@ -15,10 +14,10 @@ function printRound(round: OreRound) {
 }
 
 async function main() {
-  const hs = await HyperStack.connect(URL, {
-    stack: OREROUND_STACK,
+  const hs = await HyperStack.connect(OREROUND_STACK, {
+    url: LOCAL_URL,
   });
-  console.log(`Connected to ${URL}\n`);
+  console.log(`Connected to ${LOCAL_URL}\n`);
 
   for await (const round of hs.views.OreRound.latest.use({ take: 1 })) {
     printRound(round);

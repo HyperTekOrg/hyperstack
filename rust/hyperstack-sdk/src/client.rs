@@ -1,119 +1,46 @@
 use crate::config::{ConnectionConfig, HyperStackConfig};
 use crate::connection::{ConnectionManager, ConnectionState};
-use crate::entity::{Entity, EntityData};
+use crate::entity::Stack;
 use crate::error::HyperStackError;
 use crate::frame::Frame;
 use crate::store::{SharedStore, StoreConfig};
-use crate::stream::{EntityStream, KeyFilter, RichEntityStream};
-use crate::view::{ViewBuilder, Views};
+use crate::view::Views;
+use std::marker::PhantomData;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-pub struct HyperStack {
+/// HyperStack client with typed views access.
+///
+/// ```ignore
+/// use hyperstack_sdk::prelude::*;
+/// use hyperstack_stacks::ore::OreStack;
+///
+/// let hs = HyperStack::<OreStack>::connect().await?;
+/// let rounds = hs.views.latest().get().await;
+/// ```
+pub struct HyperStack<S: Stack> {
     connection: ConnectionManager,
     store: SharedStore,
     #[allow(dead_code)]
     config: HyperStackConfig,
+    pub views: S::Views,
+    _stack: PhantomData<S>,
 }
 
-impl HyperStack {
-    pub fn builder() -> HyperStackBuilder {
-        HyperStackBuilder::default()
+impl<S: Stack> HyperStack<S> {
+    /// Connect to the stack's default URL.
+    pub async fn connect() -> Result<Self, HyperStackError> {
+        Self::builder().connect().await
     }
 
-    pub async fn connect(url: &str) -> Result<Self, HyperStackError> {
+    /// Connect with custom URL.
+    pub async fn connect_url(url: &str) -> Result<Self, HyperStackError> {
         Self::builder().url(url).connect().await
     }
 
-    pub async fn get<E: Entity>(&self, key: &str) -> Option<E::Data> {
-        self.connection
-            .ensure_subscription(E::state_view(), Some(key))
-            .await;
-        self.store
-            .wait_for_view_ready(E::NAME, self.config.initial_data_timeout)
-            .await;
-        self.store.get::<E::Data>(E::NAME, key).await
-    }
-
-    pub async fn list<E: Entity>(&self) -> Vec<E::Data> {
-        self.connection
-            .ensure_subscription(E::list_view(), None)
-            .await;
-        self.store
-            .wait_for_view_ready(E::NAME, self.config.initial_data_timeout)
-            .await;
-        self.store.list::<E::Data>(E::NAME).await
-    }
-
-    pub fn watch<E: Entity>(&self) -> EntityStream<E::Data> {
-        EntityStream::new_lazy(
-            self.connection.clone(),
-            self.store.clone(),
-            E::NAME.to_string(),
-            E::list_view().to_string(),
-            KeyFilter::None,
-            None,
-        )
-    }
-
-    pub fn watch_key<E: Entity>(&self, key: &str) -> EntityStream<E::Data> {
-        EntityStream::new_lazy(
-            self.connection.clone(),
-            self.store.clone(),
-            E::NAME.to_string(),
-            E::list_view().to_string(),
-            KeyFilter::Single(key.to_string()),
-            Some(key.to_string()),
-        )
-    }
-
-    pub fn watch_keys<E: Entity>(&self, keys: &[&str]) -> EntityStream<E::Data> {
-        EntityStream::new_lazy(
-            self.connection.clone(),
-            self.store.clone(),
-            E::NAME.to_string(),
-            E::list_view().to_string(),
-            KeyFilter::Multiple(keys.iter().map(|s| s.to_string()).collect()),
-            None,
-        )
-    }
-
-    pub fn watch_rich<E: Entity>(&self) -> RichEntityStream<E::Data> {
-        RichEntityStream::new_lazy(
-            self.connection.clone(),
-            self.store.clone(),
-            E::NAME.to_string(),
-            E::list_view().to_string(),
-            KeyFilter::None,
-            None,
-        )
-    }
-
-    pub fn watch_key_rich<E: Entity>(&self, key: &str) -> RichEntityStream<E::Data> {
-        RichEntityStream::new_lazy(
-            self.connection.clone(),
-            self.store.clone(),
-            E::NAME.to_string(),
-            E::list_view().to_string(),
-            KeyFilter::Single(key.to_string()),
-            Some(key.to_string()),
-        )
-    }
-
-    pub async fn get_data<D: EntityData>(&self, key: &str) -> Option<D> {
-        self.get::<D::Entity>(key).await
-    }
-
-    pub async fn list_data<D: EntityData>(&self) -> Vec<D> {
-        self.list::<D::Entity>().await
-    }
-
-    pub fn watch_data<D: EntityData>(&self) -> EntityStream<D> {
-        self.watch::<D::Entity>()
-    }
-
-    pub fn watch_key_data<D: EntityData>(&self, key: &str) -> EntityStream<D> {
-        self.watch_key::<D::Entity>(key)
+    /// Create a builder for custom configuration.
+    pub fn builder() -> HyperStackBuilder<S> {
+        HyperStackBuilder::new()
     }
 
     pub async fn connection_state(&self) -> ConnectionState {
@@ -127,46 +54,26 @@ impl HyperStack {
     pub fn store(&self) -> &SharedStore {
         &self.store
     }
-
-    /// Create a view builder for constructing typed view accessors.
-    ///
-    /// This is used by generated code to create view accessor structs.
-    pub fn view_builder(&self) -> ViewBuilder {
-        ViewBuilder::new(
-            self.connection.clone(),
-            self.store.clone(),
-            self.config.initial_data_timeout,
-        )
-    }
-
-    /// Get a views accessor for the specified entity type.
-    ///
-    /// This provides a fluent API for accessing all views (state, list, derived)
-    /// for an entity.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use my_stack::OreRoundViews;
-    ///
-    /// let views = hs.views::<OreRoundViews>();
-    /// let latest = views.latest().get().await;
-    /// let all_rounds = views.list().get().await;
-    /// ```
-    pub fn views<V: Views>(&self) -> V {
-        V::from_builder(self.view_builder())
-    }
 }
 
-#[derive(Default)]
-pub struct HyperStackBuilder {
-    url: Option<String>,
+/// Builder for HyperStack with custom configuration.
+pub struct HyperStackBuilder<S: Stack> {
+    url: String,
     config: HyperStackConfig,
+    _stack: PhantomData<S>,
 }
 
-impl HyperStackBuilder {
+impl<S: Stack> HyperStackBuilder<S> {
+    fn new() -> Self {
+        Self {
+            url: S::url().to_string(),
+            config: HyperStackConfig::default(),
+            _stack: PhantomData,
+        }
+    }
+
     pub fn url(mut self, url: &str) -> Self {
-        self.url = Some(url.to_string());
+        self.url = url.to_string();
         self
     }
 
@@ -205,8 +112,7 @@ impl HyperStackBuilder {
         self
     }
 
-    pub async fn connect(self) -> Result<HyperStack, HyperStackError> {
-        let url = self.url.ok_or(HyperStackError::MissingUrl)?;
+    pub async fn connect(self) -> Result<HyperStack<S>, HyperStackError> {
         let store_config = StoreConfig {
             max_entries_per_view: self.config.max_entries_per_view,
         };
@@ -216,7 +122,7 @@ impl HyperStackBuilder {
         let (frame_tx, mut frame_rx) = mpsc::channel::<Frame>(1000);
 
         let connection_config: ConnectionConfig = self.config.clone().into();
-        let connection = ConnectionManager::new(url, connection_config, frame_tx).await;
+        let connection = ConnectionManager::new(self.url, connection_config, frame_tx).await;
 
         tokio::spawn(async move {
             while let Some(frame) = frame_rx.recv().await {
@@ -224,10 +130,19 @@ impl HyperStackBuilder {
             }
         });
 
+        let view_builder = crate::view::ViewBuilder::new(
+            connection.clone(),
+            store.clone(),
+            self.config.initial_data_timeout,
+        );
+        let views = S::Views::from_builder(view_builder);
+
         Ok(HyperStack {
             connection,
             store,
             config: self.config,
+            views,
+            _stack: PhantomData,
         })
     }
 }

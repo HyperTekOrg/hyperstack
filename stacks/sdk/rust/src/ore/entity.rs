@@ -1,36 +1,37 @@
-use hyperstack_sdk::{Entity, StateView, ViewBuilder, ViewHandle, Views};
 use super::types::OreRound;
+use hyperstack_sdk::{Stack, StateView, ViewBuilder, ViewHandle, Views};
 
-pub struct OreRoundEntity;
+pub struct OreStack;
 
-impl Entity for OreRoundEntity {
-    type Data = OreRound;
-    
-    const NAME: &'static str = "OreRound";
-    
-    fn state_view() -> &'static str {
-        "OreRound/state"
+impl Stack for OreStack {
+    type Views = OreStackViews;
+
+    fn name() -> &'static str {
+        "ore-round"
     }
-    
-    fn list_view() -> &'static str {
-        "OreRound/list"
+
+    fn url() -> &'static str {
+        "wss://ore.stack.usehyperstack.com"
     }
 }
 
+pub struct OreStackViews {
+    pub ore_round: OreRoundEntityViews,
+}
 
-pub struct OreRoundViews {
+impl Views for OreStackViews {
+    fn from_builder(builder: ViewBuilder) -> Self {
+        Self {
+            ore_round: OreRoundEntityViews { builder },
+        }
+    }
+}
+
+pub struct OreRoundEntityViews {
     builder: ViewBuilder,
 }
 
-impl Views for OreRoundViews {
-    type Entity = OreRoundEntity;
-
-    fn from_builder(builder: ViewBuilder) -> Self {
-        Self { builder }
-    }
-}
-
-impl OreRoundViews {
+impl OreRoundEntityViews {
     pub fn state(&self) -> StateView<OreRound> {
         StateView::new(
             self.builder.connection().clone(),

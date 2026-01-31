@@ -528,6 +528,45 @@ impl SharedStore {
             .unwrap_or_default()
     }
 
+    /// Synchronously get a single entity by key.
+    ///
+    /// Returns `None` if the view doesn't exist or the key is not found.
+    /// This is a non-blocking operation using `try_read()`.
+    ///
+    /// Use this in synchronous contexts where you can't await.
+    /// If the lock is held by another task, returns `None`.
+    pub fn get_sync<T: DeserializeOwned>(&self, view: &str, key: &str) -> Option<T> {
+        let views = self.views.try_read().ok()?;
+        views
+            .get(view)?
+            .entities
+            .get(key)
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+    }
+
+    /// Synchronously get all entities from a view.
+    ///
+    /// Returns an empty vector if the view doesn't exist.
+    /// This is a non-blocking operation using `try_read()`.
+    ///
+    /// Use this in synchronous contexts where you can't await.
+    /// If the lock is held by another task, returns an empty vector.
+    pub fn list_sync<T: DeserializeOwned>(&self, view: &str) -> Vec<T> {
+        let Some(views) = self.views.try_read().ok() else {
+            return Vec::new();
+        };
+        views
+            .get(view)
+            .map(|view_data| {
+                view_data
+                    .ordered_values()
+                    .into_iter()
+                    .filter_map(|v| serde_json::from_value(v).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     pub fn subscribe(&self) -> broadcast::Receiver<StoreUpdate> {
         self.updates_tx.subscribe()
     }

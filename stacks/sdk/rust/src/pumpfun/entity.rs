@@ -1,36 +1,37 @@
-use hyperstack_sdk::{Entity, StateView, ViewBuilder, ViewHandle, Views};
 use super::types::PumpfunToken;
+use hyperstack_sdk::{Stack, StateView, ViewBuilder, ViewHandle, Views};
 
-pub struct PumpfunTokenEntity;
+pub struct PumpfunStack;
 
-impl Entity for PumpfunTokenEntity {
-    type Data = PumpfunToken;
-    
-    const NAME: &'static str = "PumpfunToken";
-    
-    fn state_view() -> &'static str {
-        "PumpfunToken/state"
+impl Stack for PumpfunStack {
+    type Views = PumpfunStackViews;
+
+    fn name() -> &'static str {
+        "pumpfun-token"
     }
-    
-    fn list_view() -> &'static str {
-        "PumpfunToken/list"
+
+    fn url() -> &'static str {
+        "wss://pumpfun.stack.usehyperstack.com"
     }
 }
 
+pub struct PumpfunStackViews {
+    pub pumpfun_token: PumpfunTokenEntityViews,
+}
 
-pub struct PumpfunTokenViews {
+impl Views for PumpfunStackViews {
+    fn from_builder(builder: ViewBuilder) -> Self {
+        Self {
+            pumpfun_token: PumpfunTokenEntityViews { builder },
+        }
+    }
+}
+
+pub struct PumpfunTokenEntityViews {
     builder: ViewBuilder,
 }
 
-impl Views for PumpfunTokenViews {
-    type Entity = PumpfunTokenEntity;
-
-    fn from_builder(builder: ViewBuilder) -> Self {
-        Self { builder }
-    }
-}
-
-impl PumpfunTokenViews {
+impl PumpfunTokenEntityViews {
     pub fn state(&self) -> StateView<PumpfunToken> {
         StateView::new(
             self.builder.connection().clone(),

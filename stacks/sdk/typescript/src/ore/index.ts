@@ -82,6 +82,7 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
 /** Stack definition for OreRound */
 export const OREROUND_STACK = {
   name: 'ore-round',
+  url: 'wss://ore.stack.usehyperstack.com',
   views: {
     OreRound: {
       state: stateView<OreRound>('OreRound/state'),

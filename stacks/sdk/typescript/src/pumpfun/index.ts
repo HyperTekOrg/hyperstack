@@ -140,11 +140,11 @@ export interface BuysExactSolEvent {
   min_tokens_out: number;
 }
 
-export interface CreateEvent {}
+export interface CreateEvent { }
 
-export interface CreateV2Event {}
+export interface CreateV2Event { }
 
-export interface SellsEvent {}
+export interface SellsEvent { }
 
 export type ConfigStatus = "Paused" | "Active";
 
@@ -192,6 +192,7 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
 /** Stack definition for PumpfunToken */
 export const PUMPFUNTOKEN_STACK = {
   name: 'pumpfun-token',
+  url: 'wss://pumpfun.stack.usehyperstack.com',
   views: {
     PumpfunToken: {
       state: stateView<PumpfunToken>('PumpfunToken/state'),
