@@ -16,6 +16,13 @@ cd ore-rust
 cargo run
 ```
 
+## Server
+
+```bash
+cd ore-server
+cargo run
+```
+
 ## TypeScript (CLI)
 
 ```bash
