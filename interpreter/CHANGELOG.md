@@ -1,5 +1,58 @@
 # Changelog
 
+## [0.4.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.3.15...hyperstack-interpreter-v0.4.0) (2026-01-31)
+
+
+### Features
+
+* add append hints to frame protocol for granular array updates ([ce2213f](https://github.com/HyperTekOrg/hyperstack/commit/ce2213fc5a2c242cb4833ab417ff3d71f918812f))
+* add derived view support to React SDK and macros ([5f6414f](https://github.com/HyperTekOrg/hyperstack/commit/5f6414f879f2891be2d8ee5c16173cf83ddf2ea9))
+* Add Rust codegen module for SDK generation ([24fac1c](https://github.com/HyperTekOrg/hyperstack/commit/24fac1cc894729ec44596ddadb969fce79dafbd4))
+* add unified Views API to Rust SDK ([97afb97](https://github.com/HyperTekOrg/hyperstack/commit/97afb97f1f9d21030ba400fef5a7727d674a93e0))
+* add view pipeline for derived views like `latest`, `top10` ([f2f72fa](https://github.com/HyperTekOrg/hyperstack/commit/f2f72fa8894d2a38a13e8ee05791b7e4124977ea))
+* Better sdk types during generation ([f9555ef](https://github.com/HyperTekOrg/hyperstack/commit/f9555ef440eb9271a147d178d8b3554cf532b9c7))
+* **cli:** add --module flag for Rust SDK generation ([42812e6](https://github.com/HyperTekOrg/hyperstack/commit/42812e673d5b763792b96937d8dd6dee20314253))
+* **interpreter:** add canonical logging and OpenTelemetry metrics ([e07de40](https://github.com/HyperTekOrg/hyperstack/commit/e07de40b0a4523dea4958b485b493aed8bbc20b6))
+* **interpreter:** add memory limits and LRU eviction to prevent unbounded growth ([33198a6](https://github.com/HyperTekOrg/hyperstack/commit/33198a69833de6e57f0c5fe568b0714a2105e987))
+* **interpreter:** add staleness detection to reject out-of-order gRPC updates ([d693f42](https://github.com/HyperTekOrg/hyperstack/commit/d693f421742258bbbd3528ffbbd4731d638c992b))
+* **interpreter:** implement granular dirty tracking for field emissions ([c490c9c](https://github.com/HyperTekOrg/hyperstack/commit/c490c9ccb912f872ab92fadbfab674fc3ba56090))
+* **macros:** support tuple structs, 8-byte discriminators, and optional error messages in IDL ([090b5d6](https://github.com/HyperTekOrg/hyperstack/commit/090b5d62999e7bbae2dfb577a0d028b6675def01))
+* **sdk:** add default export to generated TypeScript SDK ([b24f39f](https://github.com/HyperTekOrg/hyperstack/commit/b24f39f0899bfe53d4307f5b0fa06733178006e2))
+* **sdk:** update CLI SDK generation for new Stack trait pattern ([b71d8b2](https://github.com/HyperTekOrg/hyperstack/commit/b71d8b2575ec4ce13546f22dc8793827cfce2a22))
+
+
+### Bug Fixes
+
+* Broken streams after naming refactor ([64437b4](https://github.com/HyperTekOrg/hyperstack/commit/64437b4d80c3b2ec68468ce11bbeaab49678aa8b))
+* Clippy errors ([d6a9f4d](https://github.com/HyperTekOrg/hyperstack/commit/d6a9f4d27f619d05189f421e214f6eacb8c19542))
+* Clippy errors/warnings ([e18fcd6](https://github.com/HyperTekOrg/hyperstack/commit/e18fcd66fb45ee33b0c6019ab65562d286c16eab))
+* emit canonical log data as structured field for OTEL/Axiom parsing ([247e807](https://github.com/HyperTekOrg/hyperstack/commit/247e807019b793a2194d3c9d670c4ab2a01615ac))
+* Handle root section case-insensitively and flatten fields ([1cf7110](https://github.com/HyperTekOrg/hyperstack/commit/1cf7110a28450a63b607007237ab46a9a6125bf5))
+* increase cache limits 5x to reduce eviction pressure ([49ed3c4](https://github.com/HyperTekOrg/hyperstack/commit/49ed3c4148fbbdc8ad61817ebf31d5989552b181))
+* **interpreter:** add bounded LRU caches to prevent unbounded memory growth ([4d9042e](https://github.com/HyperTekOrg/hyperstack/commit/4d9042e2ca115fe41827fcdeac037bea8a1b5589))
+* **interpreter:** make all TypeScript interface fields optional for patch semantics ([d2d959c](https://github.com/HyperTekOrg/hyperstack/commit/d2d959c2d02ceff4c2cf0c76d147df770222cf25))
+* **interpreter:** prevent duplicate unmapped fields in TypeScript generation ([a7b2870](https://github.com/HyperTekOrg/hyperstack/commit/a7b28709c67994b09eef973e0a14e9be965e3367))
+* **interpreter:** queue instruction events when PDA lookup fails ([c5779b4](https://github.com/HyperTekOrg/hyperstack/commit/c5779b48a6ed31670fdbf2884e2748488adadc0c))
+* Naming issues in generated sdk ([179da1f](https://github.com/HyperTekOrg/hyperstack/commit/179da1f2f6c8c75f99c35c0fb90b38576ffc19e2))
+* Preserve integer types in computed field expressions ([616f042](https://github.com/HyperTekOrg/hyperstack/commit/616f04288637a84a4eed0febebf9867e06d134cb))
+* prevent entity field loss from partial patches in sorted cache ([1e3c8e6](https://github.com/HyperTekOrg/hyperstack/commit/1e3c8e6f25b2b7968e60754e8175c7a66f68c908))
+* reduce memory allocations in VM and projector ([d265a4f](https://github.com/HyperTekOrg/hyperstack/commit/d265a4fc358799f33d549412932cce9919b5dc56))
+* remove deprecated kv mode from SDKs and documentation ([2097af0](https://github.com/HyperTekOrg/hyperstack/commit/2097af05165eed4a7d9b6ef4ede1b5722ab90215))
+* remove needless borrow in rust codegen ([398047b](https://github.com/HyperTekOrg/hyperstack/commit/398047b5c8308ccb05c4426ffecbdd1daf6d6f7b))
+* remove unused protobuf compilation that broke Windows CI ([284a2fc](https://github.com/HyperTekOrg/hyperstack/commit/284a2fc2d4e587610205dd510327092dac73a115))
+* remove unused serde_helpers module from Rust SDK generator ([57e2d13](https://github.com/HyperTekOrg/hyperstack/commit/57e2d13dbcd9bbceaa5cd5bbaf8e1d37f7df99a7))
+* separate recency handling for account vs instruction updates ([e0d6a6e](https://github.com/HyperTekOrg/hyperstack/commit/e0d6a6ef756a4f1446b4b82d7bb78b166cb08264))
+* Update naming ([4381946](https://github.com/HyperTekOrg/hyperstack/commit/4381946147e9c51c7de0cb0e63a052c9e9379600))
+* Update typescript package name ([6267eae](https://github.com/HyperTekOrg/hyperstack/commit/6267eaeb19e00a3e1c1f76fca417f56170edafb9))
+* use derive macro for LogLevel Default impl ([c2e30ed](https://github.com/HyperTekOrg/hyperstack/commit/c2e30ed0e1968e00f1b789e7d2cfb04dd4cb4867))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-macros bumped from 0.3.15 to 0.4.0
+
 ## [0.3.15](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.3.14...hyperstack-interpreter-v0.3.15) (2026-01-31)
 
 

@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.4.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.15...hyperstack-cli-v0.4.0) (2026-01-31)
+
+
+### Features
+
+* Add 'hs sdk create rust' command for Rust SDK generation ([baadf84](https://github.com/HyperTekOrg/hyperstack/commit/baadf84ce36053acd07eb3743ccadbb28a3df8cb))
+* Add per-language output directory configuration ([0f58344](https://github.com/HyperTekOrg/hyperstack/commit/0f58344e715b393c4d0bc14422a1baeec1dccad7))
+* add stop command for HYP-145 ([247625e](https://github.com/HyperTekOrg/hyperstack/commit/247625e64c646f8e883f3b8ef7d4b884949f248f))
+* add stop command for HYP-145 ([5838dff](https://github.com/HyperTekOrg/hyperstack/commit/5838dffdec4c56aa4c6fc311f3251c262435deed))
+* Add typescript ore to cli templates ([f227b74](https://github.com/HyperTekOrg/hyperstack/commit/f227b74a18f051f208f37459a64d49f2b0567d03))
+* add view pipeline for derived views like `latest`, `top10` ([f2f72fa](https://github.com/HyperTekOrg/hyperstack/commit/f2f72fa8894d2a38a13e8ee05791b7e4124977ea))
+* **cli:** add --module flag for Rust SDK generation ([42812e6](https://github.com/HyperTekOrg/hyperstack/commit/42812e673d5b763792b96937d8dd6dee20314253))
+* **cli:** add create command for scaffolding projects from templates ([385ab5a](https://github.com/HyperTekOrg/hyperstack/commit/385ab5abfa78783475d7b2031ce425d28d84ec41))
+* **cli:** add per-stack output path overrides for SDK generation ([ebbabfd](https://github.com/HyperTekOrg/hyperstack/commit/ebbabfd241b1084f4800a037d6525e9fac2bb8fe))
+* **cli:** add privacy-respecting telemetry ([5aebab5](https://github.com/HyperTekOrg/hyperstack/commit/5aebab5897b9b05ef3f116a0b06fba1bfb0c79ff))
+* **cli:** auto-install dependencies in `hs create` ([da64ce2](https://github.com/HyperTekOrg/hyperstack/commit/da64ce2aa0219c91769cdb03b324aae41b1bf4c7))
+* **cli:** replace pumpfun template with ore-rust in scaffolding ([df1a52a](https://github.com/HyperTekOrg/hyperstack/commit/df1a52a95120914a89878c026df6486a285c2a2d))
+* improve CLI UI/UX with indicatif, dry-run, and shell completions ([8565eae](https://github.com/HyperTekOrg/hyperstack/commit/8565eaeae01206b128b522008b5f45d78e1242e1))
+* remove logs commands from CLI ([d1418eb](https://github.com/HyperTekOrg/hyperstack/commit/d1418eb968bbdef3a21e5e370b89d2d9ff2c53f6))
+* **sdk:** update CLI SDK generation for new Stack trait pattern ([b71d8b2](https://github.com/HyperTekOrg/hyperstack/commit/b71d8b2575ec4ce13546f22dc8793827cfce2a22))
+
+
+### Bug Fixes
+
+* Broken streams after naming refactor ([64437b4](https://github.com/HyperTekOrg/hyperstack/commit/64437b4d80c3b2ec68468ce11bbeaab49678aa8b))
+* Clippy errors ([e36224f](https://github.com/HyperTekOrg/hyperstack/commit/e36224fa861e65225c5b1f5a55bacfd1d23dc14d))
+* Clippy errors/warnings ([e18fcd6](https://github.com/HyperTekOrg/hyperstack/commit/e18fcd66fb45ee33b0c6019ab65562d286c16eab))
+* **cli:** use rustls instead of native-tls for cross-compilation ([8bea03a](https://github.com/HyperTekOrg/hyperstack/commit/8bea03a28eecd68736ff7592c77b1de1127d03c8))
+* Display url in cli ([4b18925](https://github.com/HyperTekOrg/hyperstack/commit/4b189253e8a182674048044b7303ee1f8822ff30))
+* Naming issues in generated sdk ([179da1f](https://github.com/HyperTekOrg/hyperstack/commit/179da1f2f6c8c75f99c35c0fb90b38576ffc19e2))
+* Remove -c short flag from --crate-name to avoid conflict ([83e1e59](https://github.com/HyperTekOrg/hyperstack/commit/83e1e59255ce070b231ac662e7af5dab7814c625))
+* Update api url ([12b1be2](https://github.com/HyperTekOrg/hyperstack/commit/12b1be27f9a5117037398fd30ed137df4c788159))
+* Update typescript package name ([6267eae](https://github.com/HyperTekOrg/hyperstack/commit/6267eaeb19e00a3e1c1f76fca417f56170edafb9))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.15 to 0.4.0
+
 ## [0.3.15](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.14...hyperstack-cli-v0.3.15) (2026-01-31)
 
 
