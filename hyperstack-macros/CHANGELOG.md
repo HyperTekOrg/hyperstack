@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.15](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.3.14...hyperstack-macros-v0.3.15) (2026-01-31)
+
+
+### Bug Fixes
+
+* prefix unused variable with underscore to satisfy clippy ([06f1819](https://github.com/HyperTekOrg/hyperstack/commit/06f1819193721f48edd96723c4cc833745732070))
+* prevent entity field loss from partial patches in sorted cache ([1e3c8e6](https://github.com/HyperTekOrg/hyperstack/commit/1e3c8e6f25b2b7968e60754e8175c7a66f68c908))
+* Remove ast build log output ([67ebb21](https://github.com/HyperTekOrg/hyperstack/commit/67ebb21746b9142ef52c46caae5019a925db3a2b))
+
 ## [0.3.14](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.3.13...hyperstack-macros-v0.3.14) (2026-01-28)
 
 

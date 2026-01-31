@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.15](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.3.14...hyperstack-typescript-v0.3.15) (2026-01-31)
+
+
+### Features
+
+* **core:** Add instruction execution infrastructure ([057f05d](https://github.com/HyperTekOrg/hyperstack/commit/057f05d9e8660ae319eb20f1c45f6cafa7d33b67))
+* **typescript-sdk:** add WatchOptions and .use() method for streaming merged entities ([b5c68c1](https://github.com/HyperTekOrg/hyperstack/commit/b5c68c13b6c7e597539b67693cf294e6799c6845))
+
+
+### Bug Fixes
+
+* prevent entity field loss from partial patches in sorted cache ([1e3c8e6](https://github.com/HyperTekOrg/hyperstack/commit/1e3c8e6f25b2b7968e60754e8175c7a66f68c908))
+* **typescript-sdk:** support arbitrary view names in TypedViewGroup ([499eaa4](https://github.com/HyperTekOrg/hyperstack/commit/499eaa401d524782d2f61479ae6451d54f4c9212))
+
 ## [0.3.14](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.3.13...hyperstack-typescript-v0.3.14) (2026-01-28)
 
 
