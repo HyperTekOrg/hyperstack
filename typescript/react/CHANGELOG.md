@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.15](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.3.14...hyperstack-react-v0.3.15) (2026-01-31)
+
+
+### Bug Fixes
+
+* **react:** cache useSyncExternalStore snapshots to prevent infinite loops ([f8a9b4e](https://github.com/HyperTekOrg/hyperstack/commit/f8a9b4eaf1e52ddb08587f3f97ef5316ebb61b44))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-typescript bumped from ^0.3.14 to ^0.3.15
+
 ## [0.3.14](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.3.13...hyperstack-react-v0.3.14) (2026-01-28)
 
 

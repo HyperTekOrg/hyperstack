@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.15](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.14...hyperstack-cli-v0.3.15) (2026-01-31)
+
+
+### Features
+
+* add stop command for HYP-145 ([247625e](https://github.com/HyperTekOrg/hyperstack/commit/247625e64c646f8e883f3b8ef7d4b884949f248f))
+* **sdk:** update CLI SDK generation for new Stack trait pattern ([b71d8b2](https://github.com/HyperTekOrg/hyperstack/commit/b71d8b2575ec4ce13546f22dc8793827cfce2a22))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.3.14 to 0.3.15
+
 ## [0.3.14](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.3.13...hyperstack-cli-v0.3.14) (2026-01-28)
 
 
