@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-npm-v0.3.15...hyperstack-npm-v0.4.0) (2026-01-31)
+
+
+### Features
+
+* **cli:** add npm wrapper package for cross-platform distribution ([07e5080](https://github.com/HyperTekOrg/hyperstack/commit/07e5080b563e01dbcf8ba1879cc9ba10d708ea6f))
+
+
+### Bug Fixes
+
+* **cli:** register only hyperstack-cli command to avoid overwriting hs binary ([1a9a291](https://github.com/HyperTekOrg/hyperstack/commit/1a9a291ce83e03749593eda9c066b12696f887df))
+* NPM CLI looks at PATH ([bb8f2eb](https://github.com/HyperTekOrg/hyperstack/commit/bb8f2eb2c3a29e9b8bfbf589eb522a154e119188))
+
 ## [0.3.15](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-npm-v0.3.14...hyperstack-npm-v0.3.15) (2026-01-31)
 
 
