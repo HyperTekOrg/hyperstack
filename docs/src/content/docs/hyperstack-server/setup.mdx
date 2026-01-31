@@ -1,0 +1,155 @@
+---
+title: Running a Stack
+description: Step-by-step guide to running a stack with hyperstack-server.
+sidebar:
+  order: 2
+---
+
+This guide shows how to run your compiled stack as a WebSocket server using `hyperstack-server`.
+
+## 1. Set Environment Variables
+
+Before running, configure your Yellowstone connection:
+
+```bash
+export YELLOWSTONE_ENDPOINT="https://your-geyser-endpoint.com"
+export YELLOWSTONE_X_TOKEN="your-secret-token"
+```
+
+Or create a `.env` file in your project root:
+
+```bash title=".env"
+YELLOWSTONE_ENDPOINT=https://your-geyser-endpoint.com
+YELLOWSTONE_X_TOKEN=your-secret-token
+```
+
+:::tip
+Most Yellowstone providers (Triton, Helius, etc.) will give you both an endpoint URL and an authentication token when you sign up.
+:::
+
+## 2. Create the Server Binary
+
+Add dependencies to your `Cargo.toml`:
+
+```toml title="Cargo.toml"
+[dependencies]
+your-stack = { path = "../path/to/your/stack" }
+hyperstack-server = "{{VERSION}}"
+tokio = { version = "1.0", features = ["full"] }
+anyhow = "1.0"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dotenvy = "0.15"
+
+# Required for TLS
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+```
+
+Create your `main.rs`:
+
+```rust title="src/main.rs"
+use hyperstack_server::Server;
+use your_stack as my_stream;
+use std::net::SocketAddr;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Install TLS provider (required for gRPC)
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
+    // Load .env file if present
+    dotenvy::dotenv().ok();
+
+    // Initialize logging
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "info".into()),
+        )
+        .init();
+
+    // Get the spec from your stack
+    let spec = my_stream::spec();
+
+    // Start the server
+    Server::builder()
+        .spec(spec)
+        .websocket()
+        .bind("[::]:8877".parse::<SocketAddr>()?)
+        .health_monitoring()
+        .start()
+        .await?;
+
+    Ok(())
+}
+```
+
+## 3. Run the Server
+
+```bash
+cargo run --release
+```
+
+You should see output like:
+
+```
+INFO hyperstack_server: Starting WebSocket server on [::]:8877
+INFO hyperstack_server: Connected to Yellowstone gRPC
+INFO hyperstack_server: Health monitoring enabled
+```
+
+## 4. Connect Clients
+
+Once running, connect using any Hyperstack SDK:
+
+```typescript title="TypeScript"
+import { HyperStack } from "hyperstack-react";
+
+const stack = new HyperStack({
+  endpoint: "ws://localhost:8877",
+});
+```
+
+```rust title="Rust"
+use hyperstack_sdk::HyperStack;
+
+let stack = HyperStack::connect("ws://localhost:8877").await?;
+```
+
+## Production Tips
+
+### Health Endpoints
+
+Enable HTTP health checks for orchestrators like Kubernetes:
+
+```rust
+Server::builder()
+    .spec(spec)
+    .websocket()
+    .bind("[::]:8877".parse()?)
+    .health_monitoring()
+    .http_health()
+    .health_bind("0.0.0.0:8081".parse()?)
+    .start()
+    .await?;
+```
+
+### Metrics
+
+Enable OpenTelemetry for Prometheus metrics:
+
+```toml title="Cargo.toml"
+hyperstack-server = { version = "0.3", features = ["otel"] }
+```
+
+### Graceful Shutdown
+
+`hyperstack-server` handles `SIGINT` and `SIGTERM` automatically, ensuring clean disconnection from the Yellowstone stream.
+
+### Resource Considerations
+
+The Yellowstone gRPC stream is bandwidth-intensive. Ensure your environment has:
+- Sufficient network throughput
+- CPU capacity for block deserialization
+- Stable, low-latency connection to your Yellowstone provider

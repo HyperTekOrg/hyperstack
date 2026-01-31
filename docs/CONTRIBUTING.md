@@ -41,7 +41,7 @@ The documentation is organized into the following categories:
 | Stacks | `stacks/` | Documentation for specific stack components |
 | SDKs | `sdks/` | Language-specific SDK guides (Rust, TS, Python) |
 | CLI | `cli/` | Command-line interface reference |
-| Self-hosting | `self-hosting/` | Infrastructure and deployment guides |
+| hyperstack-server | `hyperstack-server/` | Running stacks with hyperstack-server |
 
 ## Writing Guidelines
 

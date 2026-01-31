@@ -72,8 +72,8 @@ export default defineConfig({
           autogenerate: { directory: "cli" },
         },
         {
-          label: "Self-Hosting",
-          autogenerate: { directory: "self-hosting" },
+          label: "hyperstack-server",
+          autogenerate: { directory: "hyperstack-server" },
         },
       ],
       // Enable search when content is ready

@@ -1,0 +1,342 @@
+---
+title: Configuration Reference
+description: Complete reference for hyperstack-server configuration options.
+sidebar:
+  order: 3
+---
+
+This page documents all configuration options available in `hyperstack-server`.
+
+## Server Builder API
+
+The server is configured using a fluent builder pattern:
+
+```rust
+use hyperstack_server::Server;
+
+Server::builder()
+    .spec(my_spec())           // Required: your stack specification
+    .websocket()               // Enable WebSocket server
+    .bind("[::]:8877".parse()?)
+    .yellowstone(config)       // Optional: manual Yellowstone config
+    .health_monitoring()       // Enable health monitoring
+    .http_health()             // Enable HTTP health endpoints
+    .reconnection()            // Enable auto-reconnection
+    .start()
+    .await?;
+```
+
+## Environment Variables
+
+These environment variables are read automatically by the generated parser code:
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `YELLOWSTONE_ENDPOINT` | Yes | — | Yellowstone gRPC endpoint URL |
+| `YELLOWSTONE_X_TOKEN` | Usually | — | Authentication token for the endpoint |
+| `RUST_LOG` | No | `info` | Log level filter (e.g., `debug`, `info,hyperstack_server=debug`) |
+
+## WebSocket Configuration
+
+### Basic Usage
+
+```rust
+// Enable with defaults (binds to [::]:8877)
+Server::builder()
+    .websocket()
+    .start()
+    .await?;
+
+// Or specify a custom bind address
+Server::builder()
+    .websocket()
+    .bind("[::]:9000".parse()?)
+    .start()
+    .await?;
+```
+
+### WebSocketConfig
+
+For full control, use `websocket_config()`:
+
+```rust
+use hyperstack_server::WebSocketConfig;
+
+let ws_config = WebSocketConfig {
+    bind_address: "[::]:8877".parse()?,
+};
+
+Server::builder()
+    .websocket_config(ws_config)
+    .start()
+    .await?;
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `bind_address` | `SocketAddr` | `[::]:8877` | Address and port for the WebSocket server |
+
+## Yellowstone Configuration
+
+The Yellowstone gRPC connection is typically configured via environment variables. However, you can also configure it programmatically:
+
+```rust
+use hyperstack_server::YellowstoneConfig;
+
+let yellowstone = YellowstoneConfig::new("https://your-endpoint.com")
+    .with_token("your-secret-token");
+
+Server::builder()
+    .yellowstone(yellowstone)
+    .start()
+    .await?;
+```
+
+### YellowstoneConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `endpoint` | `String` | — | Yellowstone gRPC endpoint URL |
+| `x_token` | `Option<String>` | `None` | Authentication token |
+
+### Builder Methods
+
+| Method | Description |
+|--------|-------------|
+| `YellowstoneConfig::new(endpoint)` | Create with endpoint |
+| `.with_token(token)` | Set authentication token |
+
+## Health Monitoring
+
+Health monitoring tracks stream connectivity and detects issues like stale connections.
+
+### Basic Usage
+
+```rust
+// Enable with defaults
+Server::builder()
+    .health_monitoring()
+    .start()
+    .await?;
+```
+
+### HealthConfig
+
+```rust
+use hyperstack_server::HealthConfig;
+use std::time::Duration;
+
+let health = HealthConfig::new()
+    .with_heartbeat_interval(Duration::from_secs(30))
+    .with_health_check_timeout(Duration::from_secs(10));
+
+Server::builder()
+    .health_config(health)
+    .start()
+    .await?;
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `heartbeat_interval` | `Duration` | 30s | How often to check stream health |
+| `health_check_timeout` | `Duration` | 10s | Timeout for health check operations |
+
+### Builder Methods
+
+| Method | Description |
+|--------|-------------|
+| `HealthConfig::new()` | Create with defaults |
+| `.with_heartbeat_interval(duration)` | Set heartbeat interval |
+| `.with_health_check_timeout(duration)` | Set health check timeout |
+
+## HTTP Health Server
+
+Exposes HTTP endpoints for orchestrators like Kubernetes to perform health checks.
+
+### Basic Usage
+
+```rust
+// Enable with defaults (binds to [::]:8081)
+Server::builder()
+    .http_health()
+    .start()
+    .await?;
+
+// Or specify a custom bind address
+Server::builder()
+    .http_health()
+    .health_bind("0.0.0.0:8081".parse()?)
+    .start()
+    .await?;
+```
+
+### HttpHealthConfig
+
+```rust
+use hyperstack_server::HttpHealthConfig;
+
+let http_health = HttpHealthConfig::new("0.0.0.0:9090".parse()?);
+
+Server::builder()
+    .http_health_config(http_health)
+    .start()
+    .await?;
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `bind_address` | `SocketAddr` | `[::]:8081` | Address and port for the HTTP health server |
+
+### Health Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` or `/healthz` | GET | Liveness check — returns `200 OK` if server is running |
+| `/ready` or `/readiness` | GET | Readiness check — returns `200 OK` if stream is healthy, `503` otherwise |
+| `/status` | GET | Detailed JSON status with health state and error count |
+
+#### Example `/status` Response
+
+```json
+{
+  "healthy": true,
+  "status": "Connected",
+  "error_count": 0
+}
+```
+
+## Reconnection Configuration
+
+Controls automatic reconnection behavior when the Yellowstone gRPC connection drops.
+
+### Basic Usage
+
+```rust
+// Enable with defaults
+Server::builder()
+    .reconnection()
+    .start()
+    .await?;
+```
+
+### ReconnectionConfig
+
+```rust
+use hyperstack_server::ReconnectionConfig;
+use std::time::Duration;
+
+let reconnect = ReconnectionConfig::new()
+    .with_initial_delay(Duration::from_millis(100))
+    .with_max_delay(Duration::from_secs(60))
+    .with_max_attempts(10)
+    .with_backoff_multiplier(2.0)
+    .with_http2_keep_alive_interval(Duration::from_secs(30));
+
+Server::builder()
+    .reconnection_config(reconnect)
+    .start()
+    .await?;
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `initial_delay` | `Duration` | 100ms | Delay before first reconnection attempt |
+| `max_delay` | `Duration` | 60s | Maximum delay between attempts (caps exponential backoff) |
+| `max_attempts` | `Option<u32>` | `None` (infinite) | Maximum reconnection attempts before giving up |
+| `backoff_multiplier` | `f64` | 2.0 | Multiplier for exponential backoff |
+| `http2_keep_alive_interval` | `Option<Duration>` | 30s | HTTP/2 keep-alive to prevent silent disconnects |
+
+### Builder Methods
+
+| Method | Description |
+|--------|-------------|
+| `ReconnectionConfig::new()` | Create with defaults |
+| `.with_initial_delay(duration)` | Set initial reconnection delay |
+| `.with_max_delay(duration)` | Set maximum backoff delay |
+| `.with_max_attempts(n)` | Limit reconnection attempts |
+| `.with_backoff_multiplier(m)` | Set exponential backoff multiplier |
+| `.with_http2_keep_alive_interval(duration)` | Set HTTP/2 keep-alive interval |
+
+## Feature Flags
+
+Enable optional features in your `Cargo.toml`:
+
+```toml
+[dependencies]
+hyperstack-server = { version = "{{VERSION}}", features = ["otel"] }
+```
+
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `otel` | No | OpenTelemetry integration for metrics and distributed tracing |
+
+### Using OpenTelemetry Metrics
+
+When the `otel` feature is enabled:
+
+```rust
+use hyperstack_server::Metrics;
+
+let metrics = Metrics::new();
+
+Server::builder()
+    .metrics(metrics)
+    .start()
+    .await?;
+```
+
+## Complete Example
+
+Here's a production-ready configuration combining all options:
+
+```rust
+use hyperstack_server::{
+    Server, HealthConfig, HttpHealthConfig, ReconnectionConfig
+};
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // TLS provider for gRPC
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
+    // Load environment variables
+    dotenvy::dotenv().ok();
+
+    // Initialize logging
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "info,hyperstack_server=debug".into()),
+        )
+        .init();
+
+    let spec = my_stack::spec();
+
+    Server::builder()
+        .spec(spec)
+        // WebSocket on port 8877
+        .websocket()
+        .bind("[::]:8877".parse()?)
+        // Health monitoring with custom intervals
+        .health_config(
+            HealthConfig::new()
+                .with_heartbeat_interval(Duration::from_secs(15))
+        )
+        // HTTP health endpoints on port 8081
+        .http_health()
+        .health_bind("0.0.0.0:8081".parse()?)
+        // Reconnection with limited attempts
+        .reconnection_config(
+            ReconnectionConfig::new()
+                .with_max_attempts(100)
+                .with_max_delay(Duration::from_secs(30))
+        )
+        .start()
+        .await?;
+
+    Ok(())
+}
+```

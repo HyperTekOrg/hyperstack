@@ -1,0 +1,48 @@
+---
+title: hyperstack-server
+description: Run your Hyperstack projections as a WebSocket server.
+sidebar:
+  order: 1
+---
+
+`hyperstack-server` is a Rust crate that lets you run your compiled stack as a standalone WebSocket server. It connects to a Yellowstone gRPC endpoint, processes Solana data through your projections, and streams the results to connected clients.
+
+## Prerequisites
+
+To run a stack with `hyperstack-server`, you need:
+
+| Requirement | Description |
+|-------------|-------------|
+| **Yellowstone gRPC Endpoint** | A URL to a Solana node running the [Yellowstone Geyser plugin](https://github.com/rpcpool/yellowstone-grpc). This is your source of blockchain data. |
+| **X-Token** | Authentication token for your Yellowstone provider (most providers require this). |
+| **Rust 1.75+** | Required to build the server binary. |
+| **A compiled stack** | Your stack crate with the `#[hyperstack(...)]` macro, which generates a `spec()` function. |
+
+:::caution[Yellowstone Access Required]
+You must have access to a Yellowstone gRPC endpoint. Options include:
+- Running your own Solana validator with the Yellowstone Geyser plugin
+- Using a provider like Triton, Helius, or similar that offers Yellowstone gRPC
+:::
+
+## Environment Variables
+
+`hyperstack-server` reads configuration from environment variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `YELLOWSTONE_ENDPOINT` | Yes | Your Yellowstone gRPC endpoint URL |
+| `YELLOWSTONE_X_TOKEN` | Usually | Authentication token for the endpoint |
+
+## When to Use hyperstack-server
+
+**Use hyperstack-server when:**
+- Developing and testing stacks locally
+- Running a single stack in your own infrastructure
+- You need full control over the server deployment
+- You already have Yellowstone gRPC access
+
+**Consider Hyperstack Cloud when:**
+- You need multi-stack orchestration
+- You want managed Yellowstone infrastructure
+- You need built-in authentication and API keys
+- You prefer zero-config deployment
