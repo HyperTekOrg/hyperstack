@@ -160,6 +160,10 @@ enum CreateCommands {
         /// Package name for TypeScript
         #[arg(short, long)]
         package_name: Option<String>,
+
+        /// WebSocket URL for the stack (overrides config)
+        #[arg(long)]
+        url: Option<String>,
     },
 
     /// Generate Rust SDK crate
@@ -178,6 +182,10 @@ enum CreateCommands {
         /// Generate as a module (mod.rs) instead of a standalone crate
         #[arg(long)]
         module: bool,
+
+        /// WebSocket URL for the stack (overrides config)
+        #[arg(long)]
+        url: Option<String>,
     },
 }
 
@@ -427,16 +435,18 @@ fn run(cli: Cli) -> anyhow::Result<()> {
                     stack_name,
                     output,
                     package_name,
+                    url,
                 } => {
-                    commands::sdk::create_typescript(&cli.config, &stack_name, output, package_name)
+                    commands::sdk::create_typescript(&cli.config, &stack_name, output, package_name, url)
                 }
                 CreateCommands::Rust {
                     stack_name,
                     output,
                     crate_name,
                     module,
+                    url,
                 } => {
-                    commands::sdk::create_rust(&cli.config, &stack_name, output, crate_name, module)
+                    commands::sdk::create_rust(&cli.config, &stack_name, output, crate_name, module, url)
                 }
             },
             SdkCommands::List => commands::sdk::list(&cli.config),

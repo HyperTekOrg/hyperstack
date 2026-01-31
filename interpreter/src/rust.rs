@@ -27,6 +27,8 @@ pub struct RustConfig {
     pub crate_name: String,
     pub sdk_version: String,
     pub module_mode: bool,
+    /// WebSocket URL for the stack. If None, generates a placeholder comment.
+    pub url: Option<String>,
 }
 
 impl Default for RustConfig {
@@ -35,6 +37,7 @@ impl Default for RustConfig {
             crate_name: "generated-stack".to_string(),
             sdk_version: "0.2".to_string(),
             module_mode: false,
+            url: None,
         }
     }
 }
@@ -113,16 +116,20 @@ serde_json = "1"
     }
 
     fn generate_lib_rs(&self) -> String {
+        let stack_name = self.derive_stack_name();
+        let entity_name = &self.entity_name;
+        
         format!(
-            r#"mod types;
-mod entity;
+            r#"mod entity;
+mod types;
 
+pub use entity::{{{stack_name}Stack, {stack_name}StackViews, {entity_name}EntityViews}};
 pub use types::*;
-pub use entity::{{{}Entity, {}Views}};
 
-pub use hyperstack_sdk::{{HyperStack, Entity, Update, ConnectionState, Views}};
+pub use hyperstack_sdk::{{ConnectionState, HyperStack, Stack, Update, Views}};
 "#,
-            self.entity_name, self.entity_name
+            stack_name = stack_name,
+            entity_name = entity_name
         )
     }
 
@@ -288,41 +295,67 @@ impl<T: Default> Default for EventWrapper<T> {
 
     fn generate_entity_rs(&self) -> String {
         let entity_name = &self.entity_name;
+        let stack_name = self.derive_stack_name();
+        let stack_name_kebab = to_kebab_case(entity_name);
+        let entity_snake = to_snake_case(entity_name);
+        
         let types_import = if self.config.module_mode {
             "super::types"
         } else {
             "crate::types"
         };
 
-        let views_struct = self.generate_views_struct();
+        // Generate URL line - either actual URL or placeholder comment
+        let url_impl = match &self.config.url {
+            Some(url) => format!(r#"fn url() -> &'static str {{
+        "{}"
+    }}"#, url),
+            None => r#"fn url() -> &'static str {
+        "" // TODO: Set URL after first deployment in hyperstack.toml
+    }"#.to_string(),
+        };
+
+        let entity_views = self.generate_entity_views_struct();
 
         format!(
-            r#"use hyperstack_sdk::{{Entity, StateView, ViewBuilder, ViewHandle, Views}};
-use {types_import}::{entity_name};
+            r#"use {types_import}::{entity_name};
+use hyperstack_sdk::{{Stack, StateView, ViewBuilder, ViewHandle, Views}};
 
-pub struct {entity_name}Entity;
+pub struct {stack_name}Stack;
 
-impl Entity for {entity_name}Entity {{
-    type Data = {entity_name};
-    
-    const NAME: &'static str = "{entity_name}";
-    
-    fn state_view() -> &'static str {{
-        "{entity_name}/state"
+impl Stack for {stack_name}Stack {{
+    type Views = {stack_name}StackViews;
+
+    fn name() -> &'static str {{
+        "{stack_name_kebab}"
     }}
-    
-    fn list_view() -> &'static str {{
-        "{entity_name}/list"
+
+    {url_impl}
+}}
+
+pub struct {stack_name}StackViews {{
+    pub {entity_snake}: {entity_name}EntityViews,
+}}
+
+impl Views for {stack_name}StackViews {{
+    fn from_builder(builder: ViewBuilder) -> Self {{
+        Self {{
+            {entity_snake}: {entity_name}EntityViews {{ builder }},
+        }}
     }}
 }}
-{views_struct}"#,
+{entity_views}"#,
             types_import = types_import,
             entity_name = entity_name,
-            views_struct = views_struct
+            stack_name = stack_name,
+            stack_name_kebab = stack_name_kebab,
+            entity_snake = entity_snake,
+            url_impl = url_impl,
+            entity_views = entity_views
         )
     }
 
-    fn generate_views_struct(&self) -> String {
+    fn generate_entity_views_struct(&self) -> String {
         let entity_name = &self.entity_name;
 
         let derived: Vec<_> = self
@@ -355,20 +388,11 @@ impl Entity for {entity_name}Entity {{
 
         format!(
             r#"
-
-pub struct {entity_name}Views {{
+pub struct {entity_name}EntityViews {{
     builder: ViewBuilder,
 }}
 
-impl Views for {entity_name}Views {{
-    type Entity = {entity_name}Entity;
-
-    fn from_builder(builder: ViewBuilder) -> Self {{
-        Self {{ builder }}
-    }}
-}}
-
-impl {entity_name}Views {{
+impl {entity_name}EntityViews {{
     pub fn state(&self) -> StateView<{entity_name}> {{
         StateView::new(
             self.builder.connection().clone(),
@@ -381,11 +405,28 @@ impl {entity_name}Views {{
     pub fn list(&self) -> ViewHandle<{entity_name}> {{
         self.builder.view("{entity_name}/list")
     }}
-{derived_methods}}}
-"#,
+{derived_methods}}}"#,
             entity_name = entity_name,
             derived_methods = derived_methods
         )
+    }
+
+    /// Derive stack name from entity name.
+    /// E.g., "OreRound" -> "Ore", "PumpfunToken" -> "Pumpfun"
+    fn derive_stack_name(&self) -> String {
+        let entity_name = &self.entity_name;
+        
+        // Common suffixes to strip
+        let suffixes = ["Round", "Token", "Game", "State", "Entity", "Data"];
+        
+        for suffix in suffixes {
+            if entity_name.ends_with(suffix) && entity_name.len() > suffix.len() {
+                return entity_name[..entity_name.len() - suffix.len()].to_string();
+            }
+        }
+        
+        // If no suffix matched, use the full entity name
+        entity_name.clone()
     }
 
     /// Generate Rust type for a field.
@@ -461,6 +502,21 @@ impl {entity_name}Views {{
             format!("Option<{}>", typed)
         }
     }
+}
+
+fn to_kebab_case(s: &str) -> String {
+    let mut result = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if c.is_uppercase() {
+            if i > 0 {
+                result.push('-');
+            }
+            result.push(c.to_lowercase().next().unwrap());
+        } else {
+            result.push(c);
+        }
+    }
+    result
 }
 
 fn to_pascal_case(s: &str) -> String {

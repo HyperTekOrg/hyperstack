@@ -76,6 +76,11 @@ pub struct StackConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rust_module: Option<bool>,
+
+    /// WebSocket URL for the deployed stack (e.g., wss://ore-round-abc123.stack.usehyperstack.com)
+    /// This is typically set after first deployment and used for SDK generation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
 }
 
 impl HyperstackConfig {

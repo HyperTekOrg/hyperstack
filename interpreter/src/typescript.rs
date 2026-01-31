@@ -25,6 +25,8 @@ pub struct TypeScriptConfig {
     pub generate_helpers: bool,
     pub interface_prefix: String,
     pub export_const_name: String,
+    /// WebSocket URL for the stack. If None, generates a placeholder comment.
+    pub url: Option<String>,
 }
 
 impl Default for TypeScriptConfig {
@@ -34,6 +36,7 @@ impl Default for TypeScriptConfig {
             generate_helpers: true,
             interface_prefix: "".to_string(),
             export_const_name: "STACK".to_string(),
+            url: None,
         }
     }
 }
@@ -426,6 +429,12 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
         let view_helpers = self.generate_view_helpers();
         let derived_views = self.generate_derived_view_entries();
 
+        // Generate URL line - either actual URL or placeholder comment
+        let url_line = match &self.config.url {
+            Some(url) => format!("  url: '{}',", url),
+            None => "  // url: 'wss://your-stack-url.stack.usehyperstack.com', // TODO: Set after first deployment".to_string(),
+        };
+
         format!(
             r#"{}
 
@@ -436,6 +445,7 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
 /** Stack definition for {} */
 export const {} = {{
   name: '{}',
+{}
   views: {{
     {}: {{
       state: stateView<{}>('{}/state'),
@@ -453,6 +463,7 @@ export default {};"#,
             entity_pascal,
             export_name,
             stack_name,
+            url_line,
             self.entity_name,
             entity_pascal,
             self.entity_name,

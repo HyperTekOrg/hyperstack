@@ -36,6 +36,10 @@ pub fn list(config_path: &str) -> Result<()> {
             if let Some(desc) = &stack.description {
                 println!("    Description: {}", desc);
             }
+            
+            if let Some(url) = &stack.url {
+                println!("    URL: {}", url.cyan());
+            }
 
             let ts_output = cfg.get_typescript_output_path(name, Some(stack), None);
             let rust_output = cfg.get_rust_output_path(name, Some(stack), None);
@@ -76,6 +80,7 @@ pub fn create_typescript(
     stack_name: &str,
     output_override: Option<String>,
     package_name_override: Option<String>,
+    url_override: Option<String>,
 ) -> Result<()> {
     println!(
         "{} Looking for stack '{}'...",
@@ -91,7 +96,7 @@ pub fn create_typescript(
         .unwrap_or(Path::new("."))
         .to_path_buf();
 
-    let (ast, output_path, package_name) = if let Some(ref cfg) = config {
+    let (ast, output_path, package_name, stack_url) = if let Some(ref cfg) = config {
         if let Some(stack_config) = cfg.find_stack(stack_name) {
             let ast = find_ast_file(&stack_config.ast, None)?.ok_or_else(|| {
                 anyhow::anyhow!(
@@ -115,12 +120,17 @@ pub fn create_typescript(
                 .or_else(|| cfg.sdk.as_ref().and_then(|s| s.typescript_package.clone()))
                 .unwrap_or_else(|| "hyperstack-react".to_string());
 
-            (ast, output, pkg)
+            // URL priority: override > config > None
+            let url = url_override.or_else(|| stack_config.url.clone());
+
+            (ast, output, pkg, url)
         } else {
-            find_stack_by_name(stack_name, output_override, package_name_override)?
+            let (ast, output, pkg) = find_stack_by_name(stack_name, output_override, package_name_override)?;
+            (ast, output, pkg, url_override)
         }
     } else {
-        find_stack_by_name(stack_name, output_override, package_name_override)?
+        let (ast, output, pkg) = find_stack_by_name(stack_name, output_override, package_name_override)?;
+        (ast, output, pkg, url_override)
     };
 
     println!(
@@ -133,6 +143,11 @@ pub fn create_typescript(
         println!("  Program ID: {}", pid);
     }
     println!("  Output: {}", output_path.display());
+    if let Some(url) = &stack_url {
+        println!("  URL: {}", url.cyan());
+    } else {
+        println!("  URL: {}", "(not configured - placeholder will be generated)".dimmed());
+    }
 
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent)
@@ -141,7 +156,7 @@ pub fn create_typescript(
 
     println!("\n{} Generating TypeScript SDK...", "→".blue().bold());
 
-    generate_sdk_from_ast(&ast, &output_path, &package_name)?;
+    generate_typescript_sdk_from_ast(&ast, &output_path, &package_name, stack_url)?;
 
     println!(
         "{} Successfully generated TypeScript SDK!",
@@ -176,10 +191,11 @@ fn find_stack_by_name(
     Ok((ast, output, pkg))
 }
 
-fn generate_sdk_from_ast(
+fn generate_typescript_sdk_from_ast(
     ast: &DiscoveredAst,
     output_path: &Path,
     package_name: &str,
+    url: Option<String>,
 ) -> Result<()> {
     println!(
         "{} Reading AST from {}...",
@@ -218,6 +234,7 @@ fn generate_sdk_from_ast(
         generate_helpers: true,
         interface_prefix: String::new(),
         export_const_name: "STACK".to_string(),
+        url,
     };
 
     let output = hyperstack_interpreter::typescript::compile_serializable_spec(
@@ -239,6 +256,7 @@ pub fn create_rust(
     output_override: Option<String>,
     crate_name_override: Option<String>,
     module_flag: bool,
+    url_override: Option<String>,
 ) -> Result<()> {
     println!(
         "{} Looking for stack '{}'...",
@@ -264,6 +282,9 @@ pub fn create_rust(
                 .unwrap_or(false)
         });
 
+    // URL priority: override > config > None
+    let stack_url = url_override.or_else(|| stack_config.and_then(|s| s.url.clone()));
+
     let (ast, raw_output_dir, crate_name) = find_stack_for_rust(
         stack_name,
         config.as_ref(),
@@ -286,10 +307,14 @@ pub fn create_rust(
     if let Some(pid) = &ast.program_id {
         println!("  Program ID: {}", pid);
     }
-
     println!("  Output: {}", output_dir.display());
     if as_module {
         println!("  Mode: module (mod.rs)");
+    }
+    if let Some(url) = &stack_url {
+        println!("  URL: {}", url.cyan());
+    } else {
+        println!("  URL: {}", "(not configured - placeholder will be generated)".dimmed());
     }
 
     println!("\n{} Generating Rust SDK...", "→".blue().bold());
@@ -304,6 +329,7 @@ pub fn create_rust(
         crate_name: crate_name.clone(),
         sdk_version: "0.2".to_string(),
         module_mode: as_module,
+        url: stack_url,
     };
 
     let output = hyperstack_interpreter::rust::compile_serializable_spec(
