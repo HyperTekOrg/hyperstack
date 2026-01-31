@@ -53,19 +53,14 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Connected! Streaming ORE rounds...\n");
 
-    // Access views directly - no turbofish needed
-    let mut stream = hs.views.ore_round.latest().watch();
+    // Access views directly
+    let mut stream = hs.views.ore_round.latest().listen();
 
     // Stream updates
-    while let Some(update) = stream.next().await {
-        match update {
-            Update::Upsert { data, .. } | Update::Patch { data, .. } => {
-                println!("Round # {:?}", data.id.round_id);
-                println!("  Motherlode: {:?}", data.state.motherlode);
-                println!("  Total difficulty: {:?}\n", data.state.total_difficulty);
-            }
-            Update::Delete { key } => println!("Round deleted: {}\n", key),
-        }
+    while let Some(round) = stream.next().await {
+        println!("Round # {:?}", round.id.round_id);
+        println!("  Motherlode: {:?}", round.state.motherlode);
+        println!("  Total difficulty: {:?}\n", round.state.total_difficulty);
     }
 
     Ok(())
@@ -111,27 +106,13 @@ use hyperstack_stacks::ore::{OreStack, OreRound};
 async fn main() -> anyhow::Result<()> {
     let hs = HyperStack::<OreStack>::connect().await?;
 
-    let mut stream = hs.views.ore_round.latest().watch();
+    let mut stream = hs.views.ore_round.latest().listen();
 
-    while let Some(update) = stream.next().await {
-        handle_update(update);
+    while let Some(round) = stream.next().await {
+        println!("Round: {:?}", round.id.round_id);
     }
 
     Ok(())
-}
-
-fn handle_update(update: Update<OreRound>) {
-    match update {
-        Update::Upsert { key, data } => {
-            println!("Upsert - Key: {:?}, Round: {:?}", key, data.id.round_id);
-        }
-        Update::Patch { key, data, .. } => {
-            println!("Patch - Key: {:?}, Round: {:?}", key, data.id.round_id);
-        }
-        Update::Delete { key } => {
-            println!("Delete - Key: {:?}", key);
-        }
-    }
 }
 ```
 
@@ -225,7 +206,7 @@ let hs = HyperStack::<OreStack>::builder()
 Views provide typed access to your stack's data. Access them directly through `hs.views`:
 
 ```rust
-// Direct field access - no turbofish needed!
+// Direct field access
 let rounds = hs.views.ore_round.latest().get().await;
 let all_rounds = hs.views.ore_round.list().get().await;
 let specific = hs.views.ore_round.state().get("round_key").await;
@@ -237,10 +218,8 @@ The `hyperstack-stacks` crate includes view definitions for popular protocols:
 
 ```rust
 use hyperstack_stacks::ore::OreStack;
-use hyperstack_stacks::pumpfun::PumpfunStack;
 
 let ore = HyperStack::<OreStack>::connect().await?;
-let pumpfun = HyperStack::<PumpfunStack>::connect().await?;
 ```
 
 ### Building Your Own Stack
@@ -544,55 +523,6 @@ hs sdk create rust settlement-game --crate-name game-sdk
 
 # Generate as a module instead of a standalone crate
 hs sdk create rust settlement-game --module --output ./src/stacks/game
-```
-
-### Generated Stack Structure
-
-The CLI generates a `Stack` trait implementation with entity-namespaced views:
-
-```rust
-// Generated code
-pub struct SettlementStack;
-
-impl Stack for SettlementStack {
-    type Views = SettlementStackViews;
-
-    fn name() -> &'static str {
-        "settlement-game"
-    }
-
-    fn url() -> &'static str {
-        "wss://settlement.stack.usehyperstack.com"
-    }
-}
-
-// Top-level views struct with entity namespaces
-pub struct SettlementStackViews {
-    pub game_state: GameStateEntityViews,
-    pub player_score: PlayerScoreEntityViews,
-}
-
-impl Views for SettlementStackViews {
-    fn from_builder(builder: ViewBuilder) -> Self {
-        Self {
-            game_state: GameStateEntityViews { builder: builder.clone() },
-            player_score: PlayerScoreEntityViews { builder },
-        }
-    }
-}
-
-// Entity-specific views
-pub struct GameStateEntityViews { builder: ViewBuilder }
-impl GameStateEntityViews {
-    pub fn state(&self) -> StateView<GameState> { /* ... */ }
-    pub fn list(&self) -> ViewHandle<GameState> { /* ... */ }
-}
-
-pub struct PlayerScoreEntityViews { builder: ViewBuilder }
-impl PlayerScoreEntityViews {
-    pub fn list(&self) -> ViewHandle<PlayerScore> { /* ... */ }
-    pub fn leaderboard(&self) -> ViewHandle<PlayerScore> { /* ... */ }
-}
 ```
 
 ### Crate vs Module Output
