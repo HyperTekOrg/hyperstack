@@ -197,11 +197,12 @@ enum ConfigCommands {
 
 #[derive(Subcommand)]
 enum AuthCommands {
-    /// Register a new account
-    Register,
-
-    /// Login to your account
-    Login,
+    /// Login with your API key
+    Login {
+        /// API key (prompts if not provided)
+        #[arg(short, long)]
+        key: Option<String>,
+    },
 
     /// Logout (remove stored credentials)
     Logout,
@@ -455,8 +456,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             ConfigCommands::Validate => commands::config::validate(&cli.config),
         },
         Commands::Auth(auth_cmd) => match auth_cmd {
-            AuthCommands::Register => commands::auth::register(),
-            AuthCommands::Login => commands::auth::login(),
+            AuthCommands::Login { key } => commands::auth::login(key),
             AuthCommands::Logout => commands::auth::logout(),
             AuthCommands::Status => commands::auth::status(),
             AuthCommands::Whoami => commands::auth::whoami(),

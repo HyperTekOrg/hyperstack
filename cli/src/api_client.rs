@@ -22,32 +22,6 @@ pub struct ApiClient {
 }
 
 // DTOs matching backend models
-#[derive(Debug, Serialize, Deserialize)]
-pub struct User {
-    pub id: i32,
-    pub username: String,
-    pub created_at: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LoginResponse {
-    pub api_key: Option<String>,
-    pub user: User,
-    pub message: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RegisterRequest {
-    pub username: String,
-    pub password: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LoginRequest {
-    pub username: String,
-    pub password: String,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Spec {
     pub id: i32,
@@ -313,40 +287,6 @@ impl ApiClient {
     pub fn with_api_key(mut self, api_key: String) -> Self {
         self.api_key = Some(api_key);
         self
-    }
-
-    // Authentication endpoints
-
-    pub fn register(&self, username: &str, password: &str) -> Result<LoginResponse> {
-        let req = RegisterRequest {
-            username: username.to_string(),
-            password: password.to_string(),
-        };
-
-        let response = self
-            .client
-            .post(format!("{}/api/auth/register", self.base_url))
-            .json(&req)
-            .send()
-            .context("Failed to send register request")?;
-
-        Self::handle_response(response)
-    }
-
-    pub fn login(&self, username: &str, password: &str) -> Result<LoginResponse> {
-        let req = LoginRequest {
-            username: username.to_string(),
-            password: password.to_string(),
-        };
-
-        let response = self
-            .client
-            .post(format!("{}/api/auth/login", self.base_url))
-            .json(&req)
-            .send()
-            .context("Failed to send login request")?;
-
-        Self::handle_response(response)
     }
 
     // Spec endpoints
