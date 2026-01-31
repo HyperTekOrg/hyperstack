@@ -26,12 +26,10 @@ No peer dependencies. Works anywhere JavaScript runs.
 
 ```typescript
 import { HyperStack } from "hyperstack-typescript";
-import { ORE_STACK, type OreRound } from "hyperstack-stacks/ore";
+import { OREROUND_STACK, type OreRound } from "hyperstack-stacks/ore";
 
-// Connect with a stack definition for typed views
-const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.xyz", {
-  stack: ORE_STACK,
-});
+// Connect using the stack (URL is embedded in the stack definition)
+const hs = await HyperStack.connect(OREROUND_STACK);
 
 // Stream entities with full type safety
 for await (const round of hs.views.OreRound.latest.use()) {
@@ -45,33 +43,41 @@ for await (const round of hs.views.OreRound.latest.use()) {
 
 ### Connect with Stack Definition
 
-Always connect with a stack definition to get typed views:
+Each stack definition includes its own URL, so connecting is simple:
 
 ```typescript
 import { HyperStack } from "hyperstack-typescript";
-import { ORE_STACK } from "hyperstack-stacks/ore";
+import { OREROUND_STACK } from "hyperstack-stacks/ore";
 
-const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.xyz", {
-  stack: ORE_STACK,
-});
+// Stack includes its URL - just pass the stack
+const hs = await HyperStack.connect(OREROUND_STACK);
 
 // Now you have fully typed views
 const rounds = await hs.views.OreRound.latest.get();
 ```
 
+### Override Stack URL
+
+You can override the stack's default URL if needed:
+
+```typescript
+const hs = await HyperStack.connect(OREROUND_STACK, {
+  url: "wss://custom.endpoint.com",
+});
+```
+
 ### Connection Options
 
 ```typescript
-const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.xyz", {
-  stack: ORE_STACK,
+const hs = await HyperStack.connect(OREROUND_STACK, {
   maxEntriesPerView: 5000, // Limit entries per view (default: 10000)
 });
 ```
 
-| Option              | Type              | Default     | Description                              |
-| ------------------- | ----------------- | ----------- | ---------------------------------------- |
-| `stack`             | `StackDefinition` | `undefined` | Stack definition for typed views         |
-| `maxEntriesPerView` | `number \| null`  | `10000`     | Max entries per view before LRU eviction |
+| Option              | Type             | Default        | Description                              |
+| ------------------- | ---------------- | -------------- | ---------------------------------------- |
+| `url`               | `string`         | `stack.url`    | Override the stack's default URL         |
+| `maxEntriesPerView` | `number \| null` | `10000`        | Max entries per view before LRU eviction |
 
 ### Connection State
 
@@ -333,8 +339,7 @@ Use `getSync()` in synchronous contexts like React render functions where you ca
 Each view maintains an in-memory store of entities. By default, stores are limited to 10,000 entries to prevent memory issues on long-running clients. When the limit is reached, oldest entries are evicted (LRU).
 
 ```typescript
-const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.xyz", {
-  stack: ORE_STACK,
+const hs = await HyperStack.connect(OREROUND_STACK, {
   maxEntriesPerView: 5000, // Custom limit
 });
 ```
@@ -342,8 +347,7 @@ const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.xyz", {
 To disable limiting (not recommended for production):
 
 ```typescript
-const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.xyz", {
-  stack: ORE_STACK,
+const hs = await HyperStack.connect(OREROUND_STACK, {
   maxEntriesPerView: null, // Unlimited
 });
 ```
@@ -440,11 +444,10 @@ for await (const update of hs.views.OreRound.latest.watch()) {
 
 ```typescript
 import { HyperStack, HyperStackError } from "hyperstack-typescript";
+import { OREROUND_STACK } from "hyperstack-stacks/ore";
 
 try {
-  const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.xyz", {
-    stack: ORE_STACK,
-  });
+  const hs = await HyperStack.connect(OREROUND_STACK);
 } catch (error) {
   if (error instanceof HyperStackError) {
     console.error("Hyperstack error:", error.message);
@@ -459,15 +462,15 @@ try {
 
 ## API Reference
 
-### `HyperStack.connect(url, options?)`
+### `HyperStack.connect(stack, options?)`
 
 Establishes a WebSocket connection to a Hyperstack stack.
 
 **Parameters:**
 
-- `url` — WebSocket URL of the deployed stack
-- `options.stack` — Stack definition for typed views
-- `options.maxEntriesPerView` — Max entries per view before LRU eviction
+- `stack` — Stack definition (includes URL and typed views)
+- `options.url` — Override the stack's default URL (optional)
+- `options.maxEntriesPerView` — Max entries per view before LRU eviction (optional)
 
 **Returns:** `Promise<HyperStack>`
 

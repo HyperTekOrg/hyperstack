@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-The Hyperstack Rust SDK is a high-performance, asynchronous client for consuming streaming data from Hyperstack. It is designed for backend services, trading bots, and CLI tools that require type-safe access to Solana state projections.
+The Hyperstack Rust SDK is an asynchronous client for consuming streaming data from Hyperstack. It is designed for backend services, trading bots, and CLI tools that require type-safe access to Solana state projections.
 
 ---
 
@@ -44,18 +44,17 @@ The SDK requires the [Tokio](https://tokio.rs/) runtime. Ensure you have it enab
 
 ```rust
 use hyperstack_sdk::prelude::*;
-use hyperstack_stacks::ore::OreRoundViews;
+use hyperstack_stacks::ore::{OreStack, OreRound};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Connect to the public ORE stack
-    let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
+    // Connect to the ORE stack (URL is defined in OreStack)
+    let hs = HyperStack::<OreStack>::connect().await?;
 
     println!("Connected! Streaming ORE rounds...\n");
 
-    // Get typed views
-    let views = hs.views::<OreRoundViews>();
-    let mut stream = views.latest().watch();
+    // Access views directly - no turbofish needed
+    let mut stream = hs.views.ore_round.latest().watch();
 
     // Stream updates
     while let Some(update) = stream.next().await {
@@ -106,14 +105,13 @@ futures = "0.3"
 ```rust
 // src/main.rs
 use hyperstack_sdk::prelude::*;
-use hyperstack_stacks::ore::OreRoundViews;
+use hyperstack_stacks::ore::{OreStack, OreRound};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
+    let hs = HyperStack::<OreStack>::connect().await?;
 
-    let views = hs.views::<OreRoundViews>();
-    let mut stream = views.latest().watch();
+    let mut stream = hs.views.ore_round.latest().watch();
 
     while let Some(update) = stream.next().await {
         handle_update(update);
@@ -143,24 +141,18 @@ fn handle_update(update: Update<OreRound>) {
 
 ### Basic Connection
 
+Each stack defines its own URL, so connection is simple:
+
 ```rust
-let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
+let hs = HyperStack::<OreStack>::connect().await?;
 ```
 
-### With Options
+### With Custom URL
+
+Override the default URL if needed:
 
 ```rust
-use hyperstack_sdk::ConnectionOptions;
-
-let options = ConnectionOptions {
-    max_entries_per_view: Some(5000),  // Limit memory usage
-    ..Default::default()
-};
-
-let hs = HyperStack::connect_with_options(
-    "wss://ore.stack.usehyperstack.com",
-    options
-).await?;
+let hs = HyperStack::<OreStack>::connect_url("wss://custom.endpoint.com").await?;
 ```
 
 ### Builder Pattern
@@ -170,8 +162,8 @@ Configure the client with custom reconnection logic and intervals:
 ```rust
 use std::time::Duration;
 
-let hs = HyperStack::builder()
-    .url("wss://ore.stack.usehyperstack.com")
+let hs = HyperStack::<OreStack>::builder()
+    .url("wss://custom.endpoint.com")  // Optional: override default
     .auto_reconnect(true)
     .max_reconnect_attempts(10)
     .reconnect_intervals(vec![
@@ -180,8 +172,8 @@ let hs = HyperStack::builder()
         Duration::from_secs(5),
     ])
     .ping_interval(Duration::from_secs(30))
-    .initial_data_timeout(Duration::from_secs(5))  // Timeout for get()/list()
-    .max_entries_per_view(5000)  // Limit entries per view (default: 10,000)
+    .initial_data_timeout(Duration::from_secs(5))
+    .max_entries_per_view(5000)
     .connect()
     .await?;
 ```
@@ -190,24 +182,20 @@ let hs = HyperStack::builder()
 
 ```rust
 // Check current state
-match hs.connection_state() {
+match hs.connection_state().await {
     ConnectionState::Connected => println!("Connected!"),
     ConnectionState::Connecting => println!("Connecting..."),
     ConnectionState::Disconnected => println!("Disconnected"),
-    ConnectionState::Reconnecting => println!("Reconnecting..."),
+    ConnectionState::Reconnecting { attempt } => println!("Reconnecting (attempt {})...", attempt),
+    ConnectionState::Error => println!("Error"),
 }
-
-// Listen for state changes
-hs.on_connection_state_change(|state| {
-    println!("Connection state changed: {:?}", state);
-});
 ```
 
 ### Disconnect
 
 ```rust
 // Graceful disconnect
-hs.disconnect().await?;
+hs.disconnect().await;
 ```
 
 ---
@@ -218,16 +206,14 @@ By default, each view is limited to 10,000 entries to prevent memory issues on l
 
 ```rust
 // Custom limit
-let hs = HyperStack::builder()
-    .url("wss://ore.stack.usehyperstack.com")
+let hs = HyperStack::<OreStack>::builder()
     .max_entries_per_view(5000)
     .connect()
     .await?;
 
 // Unlimited (not recommended for long-running clients)
-let hs = HyperStack::builder()
-    .url("wss://ore.stack.usehyperstack.com")
-    .max_entries_per_view(None)
+let hs = HyperStack::<OreStack>::builder()
+    .unlimited_entries()
     .connect()
     .await?;
 ```
@@ -236,108 +222,137 @@ let hs = HyperStack::builder()
 
 ## Views
 
-Views provide typed access to your stack's data. The `hyperstack-stacks` crate includes pre-built view definitions for popular protocols.
-
-### Using Pre-Built Views
+Views provide typed access to your stack's data. Access them directly through `hs.views`:
 
 ```rust
-use hyperstack_stacks::ore::OreRoundViews;
-
-let views = hs.views::<OreRoundViews>();
+// Direct field access - no turbofish needed!
+let rounds = hs.views.ore_round.latest().get().await;
+let all_rounds = hs.views.ore_round.list().get().await;
+let specific = hs.views.ore_round.state().get("round_key").await;
 ```
 
-### Custom Views
+### Pre-Built Stacks
 
-For your own stacks, define the view interface:
+The `hyperstack-stacks` crate includes view definitions for popular protocols:
 
 ```rust
-use hyperstack_sdk::{View, ListView, StateView};
+use hyperstack_stacks::ore::OreStack;
+use hyperstack_stacks::pumpfun::PumpfunStack;
 
-// Define your entity
-#[derive(Debug, Clone)]
-struct Token {
-    mint: String,
-    name: String,
-    symbol: String,
-    price: Option<u64>,
-}
-
-// Define views trait
-trait TokenViews {
-    fn all(&self) -> ListView<Token>;
-    fn by_mint(&self) -> StateView<Token>;
-}
-
-impl TokenViews for Views {
-    fn all(&self) -> ListView<Token> {
-        self.list_view("Token/list")
-    }
-
-    fn by_mint(&self) -> StateView<Token> {
-        self.state_view("Token/state")
-    }
-}
+let ore = HyperStack::<OreStack>::connect().await?;
+let pumpfun = HyperStack::<PumpfunStack>::connect().await?;
 ```
+
+### Building Your Own Stack
+
+To create views for your own Solana programs, you'll need to [build a stack](/building-stacks/workflow/). The CLI then generates typed view accessors for you automatically.
 
 ---
 
 ## Streaming Data
 
-### Watch a List View
+The SDK provides three streaming methods with different levels of detail:
 
-Stream all entities in a collection:
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.listen()` | `T` | Merged entity directly (simplest - filters out deletes) |
+| `.watch()` | `Update<T>` | Upsert/Patch/Delete events |
+| `.watch_rich()` | `RichUpdate<T>` | Before/after diffs for tracking changes |
+
+### Simple Streaming with `.listen()`
+
+The simplest API - emits merged entities directly, filtering out deletes:
 
 ```rust
-let views = hs.views::<OreRoundViews>();
-let mut stream = views.latest().watch();
+let mut stream = hs.views.ore_round.latest().listen();
+
+while let Some(round) = stream.next().await {
+    println!("Round: {:?}", round.id.round_id);
+}
+```
+
+### Watch with Event Types
+
+Stream all update types (upsert, patch, delete):
+
+```rust
+let mut stream = hs.views.ore_round.latest().watch();
 
 while let Some(update) = stream.next().await {
     match update {
         Update::Upsert { data, .. } => {
             println!("New/Updated round: {:?}", data.id.round_id);
         }
+        Update::Patch { data, .. } => {
+            println!("Patched round: {:?}", data.id.round_id);
+        }
         Update::Delete { key } => {
             println!("Removed round: {:?}", key);
         }
-        _ => {}
     }
 }
 ```
 
-### Watch a Single Entity
+### Rich Streaming with Before/After
 
-Stream updates for a specific entity:
+Track changes over time with before/after diffs:
+
+```rust
+let mut stream = hs.views.ore_round.latest().watch_rich();
+
+while let Some(update) = stream.next().await {
+    match update {
+        RichUpdate::Created { data, .. } => {
+            println!("Created: {:?}", data.id.round_id);
+        }
+        RichUpdate::Updated { before, after, .. } => {
+            println!("Updated from {:?} to {:?}",
+                before.state.motherlode,
+                after.state.motherlode);
+        }
+        RichUpdate::Deleted { key, last_known } => {
+            println!("Deleted: {:?}", key);
+        }
+    }
+}
+```
+
+### Watch a Specific Entity
+
+Stream updates for a specific key using state views:
 
 ```rust
 let specific_round = "some-round-key";
-let mut stream = views.latest().watch_by_key(specific_round);
+let mut stream = hs.views.ore_round.state().watch(specific_round);
 
 while let Some(update) = stream.next().await {
     println!("Round updated: {:?}", update);
 }
 ```
 
-### Limit Stream
+### Chainable Options
 
-Use standard stream adapters:
+All stream builders support server-side options:
 
 ```rust
-use futures::StreamExt;
+// Limit to top 10 items
+let mut stream = hs.views.ore_round.list().watch().take(10);
 
-// Take only the first 10 updates
-let mut stream = views.latest().watch().take(10);
+// Skip first 5, take next 10
+let mut stream = hs.views.ore_round.list().watch().skip(5).take(10);
 
-while let Some(update) = stream.next().await {
-    println!("Update: {:?}", update);
-}
+// Filter by field
+let mut stream = hs.views.ore_round.list().watch().filter("status", "active");
 ```
 
-### Filter While Streaming
+### Client-Side Filtering
+
+Use standard stream adapters for client-side filtering:
 
 ```rust
 use futures::StreamExt;
 
-let mut stream = views.latest().watch().filter(|update| {
+let mut stream = hs.views.ore_round.latest().watch().filter(|update| {
     futures::future::ready(matches!(update, Update::Upsert { .. }))
 });
 
@@ -347,7 +362,7 @@ while let Some(update) = stream.next().await {
 }
 ```
 
-### Lazy Streams with Chainable Operators
+### Lazy Streams
 
 Streams are **lazy** - calling `watch()` returns immediately without subscribing. The subscription happens automatically on first poll. This enables ergonomic method chaining:
 
@@ -356,8 +371,8 @@ use std::collections::HashSet;
 
 let watchlist: HashSet<String> = /* tokens to watch */;
 
-let mut price_alerts = hs
-    .watch_rich::<PumpfunTokenEntity>()
+let mut price_alerts = hs.views.ore_round.list()
+    .watch_rich()
     .filter(move |u| watchlist.contains(u.key()))
     .filter_map(|update| match update {
         RichUpdate::Updated { before, after, .. } => {
@@ -379,16 +394,6 @@ while let Some((name, pct)) = price_alerts.next().await {
 }
 ```
 
-#### Available Stream Operators
-
-| Operator             | Description                              |
-| -------------------- | ---------------------------------------- |
-| `.filter(predicate)` | Keep only updates matching the predicate |
-| `.filter_map(f)`     | Filter and transform in one step         |
-| `.map(f)`            | Transform each update                    |
-
-All operators are chainable and return streams that support the same operators.
-
 ---
 
 ## One-Shot Queries
@@ -396,32 +401,61 @@ All operators are chainable and return streams that support the same operators.
 Fetch current state without streaming:
 
 ```rust
-// Get all entities
-let rounds: Vec<OreRound> = views.latest().get_all().await?;
+// Get all items from a view
+let rounds: Vec<OreRound> = hs.views.ore_round.latest().get().await;
 println!("Found {} rounds", rounds.len());
 
-// Get a single entity
-let round: Option<OreRound> = views.latest().get_by_key("round-key").await?;
+// Get a specific entity by key
+let round: Option<OreRound> = hs.views.ore_round.state().get("round-key").await;
 if let Some(r) = round {
     println!("Round: {:?}", r.id.round_id);
 }
 ```
 
+### Synchronous Cache Access
+
+For hot paths where you can't await, use sync methods to read from cache:
+
+```rust
+// Synchronous - returns cached data immediately
+let cached_rounds = hs.views.ore_round.latest().get_sync();
+let cached_round = hs.views.ore_round.state().get_sync("round-key");
+```
+
+Note: Sync methods return empty/None if data hasn't been loaded yet.
+
 ---
 
-## Core Methods
+## Core Methods Reference
 
-| Method                     | Returns               | Description                              |
-| -------------------------- | --------------------- | ---------------------------------------- |
-| `get::<E>(key).await`      | `Option<T>`           | Get a single entity by key               |
-| `list::<E>().await`        | `Vec<T>`              | Get all entities of type E               |
-| `watch::<E>()`             | `EntityStream<T>`     | Stream all updates (lazy)                |
-| `watch_key::<E>(key)`      | `EntityStream<T>`     | Stream updates for a specific key (lazy) |
-| `watch_keys::<E>(&[keys])` | `EntityStream<T>`     | Stream updates for multiple keys (lazy)  |
-| `watch_rich::<E>()`        | `RichEntityStream<T>` | Stream with before/after values (lazy)   |
-| `watch_key_rich::<E>(key)` | `RichEntityStream<T>` | Rich stream for specific key (lazy)      |
-| `connection_state().await` | `ConnectionState`     | Get current connection state             |
-| `disconnect().await`       | `()`                  | Close the connection                     |
+### ViewHandle Methods (list/derived views)
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.get().await` | `Vec<T>` | Get all items |
+| `.get_sync()` | `Vec<T>` | Synchronous cache read |
+| `.listen()` | `Stream<T>` | Stream merged entities (no deletes) |
+| `.watch()` | `Stream<Update<T>>` | Stream all update types |
+| `.watch_rich()` | `Stream<RichUpdate<T>>` | Stream with before/after diffs |
+| `.watch_keys(&[keys])` | `Stream<Update<T>>` | Stream updates for specific keys |
+
+### StateView Methods (keyed access)
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.get(key).await` | `Option<T>` | Get entity by key |
+| `.get_sync(key)` | `Option<T>` | Synchronous cache read |
+| `.listen(key)` | `Stream<T>` | Stream merged entity values |
+| `.watch(key)` | `Stream<Update<T>>` | Stream updates for key |
+| `.watch_rich(key)` | `Stream<RichUpdate<T>>` | Stream with diffs for key |
+
+### Stream Builder Options
+
+| Method | Description |
+|--------|-------------|
+| `.take(n)` | Server-side limit to N items |
+| `.skip(n)` | Server-side offset |
+| `.filter(key, value)` | Server-side filter |
 
 ---
 
@@ -465,11 +499,11 @@ if update.has_patch_field("trading") {
 
 Generated entity types often have fields typed as `Option<Option<T>>`. This represents the **patch semantics** of HyperStack updates:
 
-| Value               | Meaning                                               |
-| ------------------- | ----------------------------------------------------- |
-| `None`              | Field was **not included** in this update (no change) |
-| `Some(None)`        | Field was **explicitly set to null**                  |
-| `Some(Some(value))` | Field has a **concrete value**                        |
+| Value | Meaning |
+|-------|---------|
+| `None` | Field was **not included** in this update (no change) |
+| `Some(None)` | Field was **explicitly set to null** |
+| `Some(Some(value))` | Field has a **concrete value** |
 
 This distinction matters for partial updates (patches). When the server sends a patch, only changed fields are included. An absent field means "keep the previous value", while an explicit `null` means "clear this field".
 
@@ -496,7 +530,7 @@ if before.trading.last_trade_price != after.trading.last_trade_price {
 
 ## Generating a Rust SDK
 
-Use the HyperStack CLI to generate a typed Rust SDK from your spec:
+Use the HyperStack CLI to generate a typed Rust SDK from your spec. See [CLI Commands](/cli/commands/) for the full reference and [Configuration](/building-stacks/configuration/) for `hyperstack.toml` options.
 
 ```bash
 # Generate SDK crate
@@ -512,6 +546,55 @@ hs sdk create rust settlement-game --crate-name game-sdk
 hs sdk create rust settlement-game --module --output ./src/stacks/game
 ```
 
+### Generated Stack Structure
+
+The CLI generates a `Stack` trait implementation with entity-namespaced views:
+
+```rust
+// Generated code
+pub struct SettlementStack;
+
+impl Stack for SettlementStack {
+    type Views = SettlementStackViews;
+
+    fn name() -> &'static str {
+        "settlement-game"
+    }
+
+    fn url() -> &'static str {
+        "wss://settlement.stack.usehyperstack.com"
+    }
+}
+
+// Top-level views struct with entity namespaces
+pub struct SettlementStackViews {
+    pub game_state: GameStateEntityViews,
+    pub player_score: PlayerScoreEntityViews,
+}
+
+impl Views for SettlementStackViews {
+    fn from_builder(builder: ViewBuilder) -> Self {
+        Self {
+            game_state: GameStateEntityViews { builder: builder.clone() },
+            player_score: PlayerScoreEntityViews { builder },
+        }
+    }
+}
+
+// Entity-specific views
+pub struct GameStateEntityViews { builder: ViewBuilder }
+impl GameStateEntityViews {
+    pub fn state(&self) -> StateView<GameState> { /* ... */ }
+    pub fn list(&self) -> ViewHandle<GameState> { /* ... */ }
+}
+
+pub struct PlayerScoreEntityViews { builder: ViewBuilder }
+impl PlayerScoreEntityViews {
+    pub fn list(&self) -> ViewHandle<PlayerScore> { /* ... */ }
+    pub fn leaderboard(&self) -> ViewHandle<PlayerScore> { /* ... */ }
+}
+```
+
 ### Crate vs Module Output
 
 By default, the CLI generates a **standalone crate** with its own `Cargo.toml`:
@@ -522,7 +605,7 @@ generated/settlement-game-stack/
 └── src/
     ├── lib.rs      # Re-exports
     ├── types.rs    # Data structs (with Option<Option<T>> for patchable fields)
-    └── entity.rs   # Entity trait implementations
+    └── entity.rs   # Stack and Views implementations
 ```
 
 With the `--module` flag, the CLI generates a **module** that can be embedded in an existing crate:
@@ -531,28 +614,7 @@ With the `--module` flag, the CLI generates a **module** that can be embedded in
 src/stacks/game/
 ├── mod.rs      # Re-exports
 ├── types.rs    # Data structs
-└── entity.rs   # Entity trait implementations
-```
-
-The module mode is useful for:
-
-- Monorepo setups where you want generated code alongside your source
-- Avoiding extra crate dependencies
-- Embedding multiple stacks within a single crate
-
-### Configuration
-
-You can set module mode as the default in `hyperstack.toml`:
-
-```toml
-[sdk]
-rust_module_mode = true  # Generate all Rust SDKs as modules
-
-# Or per-stack:
-[[stacks]]
-name = "game"
-ast = "SettlementGame"
-rust_module = true  # This stack generates as a module
+└── entity.rs   # Stack and Views implementations
 ```
 
 ### Using the Generated Code
@@ -563,6 +625,17 @@ Add the generated crate to your `Cargo.toml`:
 [dependencies]
 hyperstack-sdk = "0.2"
 settlement-game-stack = { path = "./generated/settlement-game-stack" }
+```
+
+Then use it:
+
+```rust
+use hyperstack_sdk::prelude::*;
+use settlement_game_stack::{SettlementStack, GameState};
+
+let hs = HyperStack::<SettlementStack>::connect().await?;
+let scores = hs.views.player_score.leaderboard().get().await;
+let game = hs.views.game_state.state().get("game-key").await;
 ```
 
 Or if using module mode, add to your `lib.rs`:
@@ -576,14 +649,14 @@ pub mod game;  // Points to src/game/mod.rs
 ## Error Handling
 
 ```rust
-use hyperstack_sdk::HyperstackError;
+use hyperstack_sdk::HyperStackError;
 
-match HyperStack::connect("wss://ore.stack.usehyperstack.com").await {
+match HyperStack::<OreStack>::connect().await {
     Ok(hs) => println!("Connected!"),
-    Err(HyperstackError::Connection(e)) => {
+    Err(HyperStackError::Connection(e)) => {
         eprintln!("Connection failed: {}", e);
     }
-    Err(HyperstackError::Authentication(e)) => {
+    Err(HyperStackError::Authentication(e)) => {
         eprintln!("Auth failed: {}", e);
     }
     Err(e) => {
@@ -599,8 +672,7 @@ match HyperStack::connect("wss://ore.stack.usehyperstack.com").await {
 The SDK automatically reconnects on connection loss with configurable backoff:
 
 ```rust
-let hs = HyperStack::builder()
-    .url("wss://ore.stack.usehyperstack.com")
+let hs = HyperStack::<OreStack>::builder()
     .auto_reconnect(true)
     .reconnect_intervals(vec![
         Duration::from_secs(1),
@@ -622,42 +694,39 @@ A full command-line app that streams ORE mining rounds:
 ```rust
 // src/main.rs
 use hyperstack_sdk::prelude::*;
-use hyperstack_stacks::ore::OreRoundViews;
+use hyperstack_stacks::ore::{OreStack, OreRound};
 use std::time::Duration;
 use tokio::time::timeout;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    println!("╭────────────────────────────────────╮");
-    println!("│  Hyperstack ORE Round Monitor     │");
-    println!("╰────────────────────────────────────╯\n");
+    println!("-----------------------------------");
+    println!("  Hyperstack ORE Round Monitor     ");
+    println!("-----------------------------------\n");
 
     // Connect with 10 second timeout
     let hs = match timeout(
         Duration::from_secs(10),
-        HyperStack::connect("wss://ore.stack.usehyperstack.com")
+        HyperStack::<OreStack>::connect()
     ).await {
         Ok(Ok(hs)) => {
-            println!("✓ Connected to ORE stack\n");
+            println!("Connected to ORE stack\n");
             hs
         }
         Ok(Err(e)) => {
-            eprintln!("✗ Connection error: {}", e);
+            eprintln!("Connection error: {}", e);
             return Err(e.into());
         }
         Err(_) => {
-            eprintln!("✗ Connection timeout");
+            eprintln!("Connection timeout");
             return Err(anyhow::anyhow!("Connection timeout"));
         }
     };
 
-    // Get views
-    let views = hs.views::<OreRoundViews>();
-
     // Stream with stats
     let mut round_count = 0;
     let mut update_count = 0;
-    let mut stream = views.latest().watch();
+    let mut stream = hs.views.ore_round.latest().watch();
 
     println!("Streaming live ORE rounds (press Ctrl+C to exit)...\n");
 
@@ -713,15 +782,13 @@ cargo run
 ```rust
 use futures::future::join;
 
-let views = hs.views::<OreRoundViews>();
-
 // Watch multiple views concurrently
-let latest_stream = views.latest().watch();
-let historical_stream = views.historical().watch();
+let latest_stream = hs.views.ore_round.latest().watch();
+let list_stream = hs.views.ore_round.list().watch();
 
-let (latest_result, historical_result) = join(
+let (latest_result, list_result) = join(
     process_stream(latest_stream),
-    process_stream(historical_stream)
+    process_stream(list_stream)
 ).await;
 ```
 
@@ -729,12 +796,11 @@ let (latest_result, historical_result) = join(
 
 ```rust
 loop {
-    match HyperStack::connect("wss://ore.stack.usehyperstack.com").await {
+    match HyperStack::<OreStack>::connect().await {
         Ok(hs) => {
             println!("Connected!");
 
-            let views = hs.views::<OreRoundViews>();
-            let mut stream = views.latest().watch();
+            let mut stream = hs.views.ore_round.latest().watch();
 
             while let Some(update) = stream.next().await {
                 process_update(update);
@@ -756,21 +822,17 @@ loop {
 ```rust
 use tokio::signal;
 
-let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
-let views = hs.views::<OreRoundViews>();
-let mut stream = views.latest().watch();
-
-// Handle Ctrl+C
-let ctrl_c = signal::ctrl_c();
+let hs = HyperStack::<OreStack>::connect().await?;
+let mut stream = hs.views.ore_round.latest().watch();
 
 loop {
     tokio::select! {
         Some(update) = stream.next() => {
             process_update(update);
         }
-        _ = ctrl_c => {
+        _ = signal::ctrl_c() => {
             println!("\nShutting down gracefully...");
-            hs.disconnect().await?;
+            hs.disconnect().await;
             break;
         }
     }
@@ -781,24 +843,21 @@ loop {
 
 ## Examples
 
-See the `examples/` directory for complete examples:
-
-- **flip/** - Flip game state tracking
-- **pump/** - Token launch and trade monitoring
-
-Run examples with:
+Scaffold a complete Rust example that streams ORE mining rounds:
 
 ```bash
-cargo run --example flip
-cargo run --example pump_new
-cargo run --example pump_trades
+hs create my-ore-app --template rust-ore
+cd my-ore-app
+cargo run
 ```
+
+Or run `hs create` interactively and select the `rust-ore` template.
 
 ---
 
 ## Next Steps
 
-- [TypeScript SDK](/sdks/typescript/) — Use Hyperstack in Node.js or browsers
-- [React SDK](/sdks/react/) — Build web apps with React hooks
-- [Build Your Own Stack](/building-stacks/workflow) — Create custom data streams for any Solana program
-- [CLI Reference](/cli/commands) — Deployment and management commands
+- [TypeScript SDK](/sdks/typescript/) - Use Hyperstack in Node.js or browsers
+- [React SDK](/sdks/react/) - Build web apps with React hooks
+- [Build Your Own Stack](/building-stacks/workflow) - Create custom data streams for any Solana program
+- [CLI Reference](/cli/commands) - Deployment and management commands
