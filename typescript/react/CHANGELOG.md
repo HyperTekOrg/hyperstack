@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.4.0...hyperstack-react-v0.4.1) (2026-02-01)
+
+
+### Bug Fixes
+
+* **react:** restore ZustandAdapter and frame buffering lost in thin-wrapper refactor ([f65de70](https://github.com/HyperTekOrg/hyperstack/commit/f65de707e6d40e1ef33a952943f96df545e65a80))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-typescript bumped from ^0.4.0 to ^0.4.1
+
 ## [0.4.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.3.15...hyperstack-react-v0.4.0) (2026-01-31)
 
 

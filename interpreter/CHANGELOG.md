@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.4.0...hyperstack-interpreter-v0.4.1) (2026-02-01)
+
+
+### Features
+
+* add bytemuck serialization support and fix lookup index key resolution ([b2dcd1f](https://github.com/HyperTekOrg/hyperstack/commit/b2dcd1fa881644d7d4fdc909216fa1ef2995dd7b))
+
+
+### Bug Fixes
+
+* flush queued account updates when lookup index is populated ([8a09279](https://github.com/HyperTekOrg/hyperstack/commit/8a09279c06a369d513c2b1d2f0cbf1560187db6f))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-macros bumped from 0.4.0 to 0.4.1
+
 ## [0.4.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.3.15...hyperstack-interpreter-v0.4.0) (2026-01-31)
 
 
