@@ -9,6 +9,7 @@
 use quote::{format_ident, quote};
 use syn::{Path, Type};
 
+use crate::ast::{ResolverHook, ResolverStrategy};
 use crate::parse;
 use crate::parse::idl as idl_parser;
 use crate::utils::{path_to_string, to_snake_case};
@@ -521,6 +522,42 @@ pub fn generate_pda_registration_functions(
                         }
                     }
                 });
+    }
+
+    quote! { #(#functions)* }
+}
+
+pub fn generate_auto_resolver_functions(hooks: &[ResolverHook]) -> proc_macro2::TokenStream {
+    let mut functions = Vec::new();
+
+    for hook in hooks {
+        let account_name = hook
+            .account_type
+            .strip_suffix("State")
+            .unwrap_or(&hook.account_type);
+        let fn_name = format_ident!("resolve_{}_key", to_snake_case(account_name));
+
+        match &hook.strategy {
+            ResolverStrategy::PdaReverseLookup {
+                queue_discriminators,
+                ..
+            } => {
+                let disc_bytes: Vec<u8> = queue_discriminators.iter().flatten().copied().collect();
+                functions.push(quote! {
+                    pub fn #fn_name(
+                        account_address: &str,
+                        _account_data: &hyperstack::runtime::serde_json::Value,
+                        ctx: &mut hyperstack::runtime::hyperstack_interpreter::resolvers::ResolveContext,
+                    ) -> hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution {
+                        if let Some(key) = ctx.pda_reverse_lookup(account_address) {
+                            return hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::Found(key);
+                        }
+                        hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(&[#(#disc_bytes),*])
+                    }
+                });
+            }
+            ResolverStrategy::DirectField { .. } => {}
+        }
     }
 
     quote! { #(#functions)* }

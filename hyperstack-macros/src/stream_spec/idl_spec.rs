@@ -18,6 +18,7 @@ use crate::parse::idl as idl_parser;
 use crate::utils::to_snake_case;
 
 use super::entity::process_entity_struct_with_idl;
+use super::handlers::generate_auto_resolver_functions;
 
 // ============================================================================
 // IDL Spec Processing
@@ -197,8 +198,7 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                 .unwrap_or_else(|| entity_struct.ident.to_string());
             entity_names.push(entity_name.clone());
 
-            // Process entity with IDL context (use empty proto_analyses)
-            let output = process_entity_struct_with_idl(
+            let result = process_entity_struct_with_idl(
                 entity_struct.clone(),
                 entity_name,
                 section_structs.clone(),
@@ -207,7 +207,34 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                 resolver_hooks.clone(),
                 pda_registrations.clone(),
             );
-            all_outputs.push(output);
+
+            for hook in &result.auto_resolver_hooks {
+                let account_name = hook
+                    .account_type
+                    .strip_suffix("State")
+                    .unwrap_or(&hook.account_type);
+                let fn_name = syn::Ident::new(
+                    &format!("resolve_{}_key", to_snake_case(account_name)),
+                    proc_macro2::Span::call_site(),
+                );
+                let fn_sig: syn::Signature = syn::parse_quote! {
+                    fn #fn_name(
+                        account_address: &str,
+                        _account_data: &serde_json::Value,
+                        ctx: &mut hyperstack_interpreter::resolvers::ResolveContext
+                    ) -> hyperstack_interpreter::resolvers::KeyResolution
+                };
+                let account_type_path: syn::Path = syn::parse_str(&hook.account_type)
+                    .unwrap_or_else(|_| syn::parse_quote!(#fn_name));
+                all_resolver_hooks.push(parse::ResolverHookSpec {
+                    kind: parse::ResolverHookKind::KeyResolver,
+                    account_type_path,
+                    fn_name,
+                    fn_sig,
+                });
+            }
+
+            all_outputs.push(result);
         }
 
         // Remove entity structs and transform impl blocks with resolver hooks
@@ -263,16 +290,23 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                 }
             }
 
-            // Add entity processing outputs
-            for output in all_outputs {
-                if let Ok(generated_items) = syn::parse::<syn::File>(output) {
+            // Add entity processing outputs and auto-generated resolver functions
+            for result in all_outputs {
+                if let Ok(generated_items) = syn::parse::<syn::File>(result.token_stream) {
                     for gen_item in generated_items.items {
                         items.push(gen_item);
                     }
                 }
+                if !result.auto_resolver_hooks.is_empty() {
+                    let auto_fns = generate_auto_resolver_functions(&result.auto_resolver_hooks);
+                    if let Ok(generated_items) = syn::parse::<syn::File>(auto_fns.into()) {
+                        for gen_item in generated_items.items {
+                            items.push(gen_item);
+                        }
+                    }
+                }
             }
 
-            // Generate multi-entity builder (without proto dependencies)
             let multi_entity_builder = generate_multi_entity_builder(&entity_names, &[], false);
             if let Ok(generated_items) = syn::parse::<syn::File>(multi_entity_builder.into()) {
                 for gen_item in generated_items.items {

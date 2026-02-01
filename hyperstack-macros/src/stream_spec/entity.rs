@@ -18,11 +18,26 @@ use std::collections::{HashMap, HashSet};
 use quote::{format_ident, quote};
 use syn::{Fields, ItemStruct, Type};
 
-use crate::ast::{EntitySection, FieldTypeInfo};
+use crate::ast::{EntitySection, FieldTypeInfo, ResolverHook};
 use crate::codegen;
 use crate::parse;
 use crate::parse::idl as idl_parser;
 use crate::utils::{path_to_string, to_pascal_case, to_snake_case};
+
+// ============================================================================
+// Process Entity Result
+// ============================================================================
+
+/// Result of processing an entity struct, containing both the generated code
+/// and any auto-generated resolver hooks that need to be threaded into the
+/// resolver registry.
+pub struct ProcessEntityResult {
+    pub token_stream: proc_macro::TokenStream,
+    /// Auto-generated resolver hooks (e.g., for lookup_index account types).
+    /// These come from the AST's `auto_generate_lookup_resolvers()` and need
+    /// to be converted to `ResolverHookSpec` entries in the IDL path.
+    pub auto_resolver_hooks: Vec<ResolverHook>,
+}
 
 use super::ast_writer::build_and_write_ast;
 use super::computed::{
@@ -42,7 +57,6 @@ use super::sections::{
 // Entity Processing
 // ============================================================================
 
-/// Process an entity struct without IDL context.
 pub fn process_entity_struct(
     input: ItemStruct,
     entity_name: String,
@@ -55,9 +69,10 @@ pub fn process_entity_struct(
         section_structs,
         skip_game_event,
         None,
-        Vec::new(), // No resolver_hooks in proto path
-        Vec::new(), // No pda_registrations in proto path
+        Vec::new(),
+        Vec::new(),
     )
+    .token_stream
 }
 
 /// Process an entity struct with optional IDL context.
@@ -75,7 +90,7 @@ pub fn process_entity_struct_with_idl(
     idl: Option<&idl_parser::IdlSpec>,
     resolver_hooks: Vec<parse::ResolveKeyAttribute>,
     pda_registrations: Vec<parse::RegisterPdaAttribute>,
-) -> proc_macro::TokenStream {
+) -> ProcessEntityResult {
     let name = syn::Ident::new(&entity_name, input.ident.span());
     let state_name = syn::Ident::new(&format!("{}State", entity_name), input.ident.span());
     let spec_fn_name = format_ident!("create_{}_spec", to_snake_case(&entity_name));
@@ -485,6 +500,25 @@ pub fn process_entity_struct_with_idl(
         views,
     );
 
+    let explicit_account_types: HashSet<String> = resolver_hooks
+        .iter()
+        .map(|h| {
+            let name = h
+                .account_path
+                .segments
+                .last()
+                .map(|seg| seg.ident.to_string())
+                .unwrap_or_default();
+            format!("{}State", name)
+        })
+        .collect();
+    let auto_resolver_hooks: Vec<ResolverHook> = ast
+        .resolver_hooks
+        .iter()
+        .filter(|h| !explicit_account_types.contains(&h.account_type))
+        .cloned()
+        .collect();
+
     // Generate handler functions using the shared codegen
     let (handler_fns, _handler_calls) =
         codegen::generate_handlers_from_specs(&ast.handlers, &entity_name, &state_name);
@@ -592,7 +626,10 @@ pub fn process_entity_struct_with_idl(
         #computed_fields_hook
     };
 
-    output.into()
+    ProcessEntityResult {
+        token_stream: output.into(),
+        auto_resolver_hooks,
+    }
 }
 
 // ============================================================================
