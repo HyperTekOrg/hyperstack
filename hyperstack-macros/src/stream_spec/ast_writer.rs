@@ -14,9 +14,9 @@ use crate::ast::writer::{
 };
 use crate::ast::{
     ComputedFieldSpec, ConditionExpr, EntitySection, FieldPath, HookAction, IdentitySpec,
-    InstructionHook, KeyResolutionStrategy, LookupIndexSpec, MappingSource, ResolverHook,
-    ResolverStrategy, SerializableFieldMapping, SerializableHandlerSpec, SerializableStreamSpec,
-    SourceSpec,
+    IdlSerializationSnapshot, InstructionHook, KeyResolutionStrategy, LookupIndexSpec,
+    MappingSource, ResolverHook, ResolverStrategy, SerializableFieldMapping,
+    SerializableHandlerSpec, SerializableStreamSpec, SourceSpec,
 };
 use crate::parse;
 use crate::parse::conditions as condition_parser;
@@ -78,7 +78,13 @@ pub fn build_ast(
         idl,
     );
 
-    let resolver_hooks_ast = build_resolver_hooks_ast(resolver_hooks, idl);
+    let mut resolver_hooks_ast = build_resolver_hooks_ast(resolver_hooks, idl);
+    resolver_hooks_ast.extend(auto_generate_lookup_resolvers(
+        &handlers,
+        &resolver_hooks_ast,
+        sources_by_type,
+        idl,
+    ));
     let instruction_hooks_ast = build_instruction_hooks_ast(
         pda_registrations,
         derive_from_mappings,
@@ -530,53 +536,44 @@ fn build_source_handler(
         KeyResolutionStrategy::Lookup {
             primary_field: FieldPath::new(&[join_field]),
         }
+    } else if !lookup_indexes.is_empty() && !is_instruction {
+        // Entity has lookup indexes and this is an account handler without an embedded
+        // primary key. Use Lookup strategy with __account_address so the VM can resolve
+        // the entity via the lookup index populated by instruction handlers.
+        // __resolved_primary_key from explicit resolvers takes precedence if set.
+        KeyResolutionStrategy::Lookup {
+            primary_field: FieldPath::new(&["__account_address"]),
+        }
     } else {
-        // Check if there's a lookup index configured for this account type
-        // If so, use Lookup strategy with __account_address to enable PDA reverse lookup
-        let account_has_lookup_index = lookup_indexes.iter().any(|(field_name, _)| {
-            // Extract the account type from the lookup index field name
-            // For example, "id.bonding_curve" -> check if this is "BondingCurve" account
-            field_name
-                .split('.')
-                .next_back()
-                .map(|last_part| {
-                    // Convert to account type name (e.g., "bonding_curve" -> "BondingCurve")
-                    let account_name = last_part
-                        .split('_')
-                        .map(|part| {
-                            let mut chars = part.chars();
-                            match chars.next() {
-                                None => String::new(),
-                                Some(first) => {
-                                    first.to_uppercase().collect::<String>() + chars.as_str()
-                                }
-                            }
-                        })
-                        .collect::<String>();
-                    account_name == account_type
-                })
-                .unwrap_or(false)
-        });
-
-        if account_has_lookup_index && !is_instruction {
-            // This is an account handler with a lookup index configured
-            // Use Lookup strategy with __account_address to enable PDA reverse lookup
-            KeyResolutionStrategy::Lookup {
-                primary_field: FieldPath::new(&["__account_address"]),
-            }
-        } else {
-            KeyResolutionStrategy::Embedded {
-                primary_field: FieldPath::new(&[]),
-            }
+        KeyResolutionStrategy::Embedded {
+            primary_field: FieldPath::new(&[]),
         }
     };
 
     let type_suffix = if is_instruction { "IxState" } else { "State" };
+    let serialization = if is_instruction {
+        None
+    } else {
+        idl.and_then(|idl| {
+            idl.types
+                .iter()
+                .find(|t| t.name == account_type)
+                .and_then(|t| t.serialization.as_ref())
+                .map(|s| match s {
+                    idl_parser::IdlSerialization::Borsh => IdlSerializationSnapshot::Borsh,
+                    idl_parser::IdlSerialization::Bytemuck => IdlSerializationSnapshot::Bytemuck,
+                    idl_parser::IdlSerialization::BytemuckUnsafe => {
+                        IdlSerializationSnapshot::BytemuckUnsafe
+                    }
+                })
+        })
+    };
     Some(SerializableHandlerSpec {
         source: SourceSpec::Source {
             program_id: None,
             discriminator: None,
             type_name: format!("{}{}", account_type, type_suffix),
+            serialization,
         },
         key_resolution,
         mappings: serializable_mappings,
@@ -772,6 +769,7 @@ fn build_event_handler(
             program_id: Some(program_id.to_string()),
             discriminator: None,
             type_name: format!("{}IxState", instruction_type_pascal),
+            serialization: None,
         },
         key_resolution,
         mappings: serializable_mappings,
@@ -830,6 +828,77 @@ fn build_resolver_hooks_ast(
             }
         })
         .collect()
+}
+
+fn auto_generate_lookup_resolvers(
+    handlers: &[SerializableHandlerSpec],
+    existing_resolvers: &[ResolverHook],
+    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    idl: Option<&idl_parser::IdlSpec>,
+) -> Vec<ResolverHook> {
+    let mut auto_hooks = Vec::new();
+
+    let account_types_needing_resolver: Vec<&str> = handlers
+        .iter()
+        .filter_map(|handler| {
+            if let KeyResolutionStrategy::Lookup { primary_field } = &handler.key_resolution {
+                if primary_field.segments.as_slice() == ["__account_address"] {
+                    let SourceSpec::Source { ref type_name, .. } = handler.source;
+                    if type_name.ends_with("State") && !type_name.ends_with("IxState") {
+                        return Some(type_name.as_str());
+                    }
+                }
+            }
+            None
+        })
+        .collect();
+
+    if account_types_needing_resolver.is_empty() {
+        return auto_hooks;
+    }
+
+    let mut queue_discriminators: Vec<Vec<u8>> = Vec::new();
+    if let Some(idl) = idl {
+        for mappings in sources_by_type.values() {
+            for mapping in mappings {
+                if mapping.is_instruction && mapping.is_lookup_index {
+                    let instr_name = mapping
+                        .source_type_path
+                        .segments
+                        .last()
+                        .map(|s| s.ident.to_string())
+                        .unwrap_or_default();
+                    let instr_snake = crate::utils::to_snake_case(&instr_name);
+
+                    if let Some(idl_instr) = idl.instructions.iter().find(|i| i.name == instr_snake)
+                    {
+                        let disc = idl_instr.get_discriminator();
+                        if !disc.is_empty() && !queue_discriminators.contains(&disc) {
+                            queue_discriminators.push(disc);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    for account_type in account_types_needing_resolver {
+        if existing_resolvers
+            .iter()
+            .any(|r| r.account_type == account_type)
+        {
+            continue;
+        }
+        auto_hooks.push(ResolverHook {
+            account_type: account_type.to_string(),
+            strategy: ResolverStrategy::PdaReverseLookup {
+                lookup_name: "default_pda_lookup".to_string(),
+                queue_discriminators: queue_discriminators.clone(),
+            },
+        });
+    }
+
+    auto_hooks
 }
 
 fn build_instruction_hooks_ast(

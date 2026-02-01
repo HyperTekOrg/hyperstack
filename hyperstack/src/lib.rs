@@ -59,19 +59,41 @@ pub use hyperstack_sdk as sdk;
 #[cfg(feature = "runtime")]
 #[doc(hidden)]
 pub mod runtime {
-    pub use ::anyhow;
-    pub use ::bs58;
-    pub use ::dotenvy;
-    pub use ::serde;
-    pub use ::serde_json;
-    pub use ::smallvec;
-    pub use ::tokio;
-    pub use ::tracing;
-    pub use ::yellowstone_vixen;
-    pub use ::yellowstone_vixen_core;
-    pub use ::yellowstone_vixen_yellowstone_grpc_source;
+    pub use anyhow;
+    pub use bs58;
+    pub use bytemuck;
+    pub use dotenvy;
     pub use hyperstack_interpreter;
     pub use hyperstack_server;
+    pub use serde;
+    pub use serde_json;
+    pub use smallvec;
+    pub use tokio;
+    pub use tracing;
+    pub use yellowstone_vixen;
+    pub use yellowstone_vixen_core;
+    pub use yellowstone_vixen_yellowstone_grpc_source;
+
+    pub mod serde_helpers {
+        pub mod pubkey_base58 {
+            use serde::{Deserialize, Deserializer, Serializer};
+
+            pub fn serialize<S: Serializer>(bytes: &[u8; 32], s: S) -> Result<S::Ok, S::Error> {
+                s.serialize_str(&bs58::encode(bytes).into_string())
+            }
+
+            pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 32], D::Error> {
+                let s = String::deserialize(d)?;
+                let bytes = bs58::decode(&s)
+                    .into_vec()
+                    .map_err(serde::de::Error::custom)?;
+                let arr: [u8; 32] = bytes.try_into().map_err(|v: Vec<u8>| {
+                    serde::de::Error::custom(format!("expected 32 bytes, got {}", v.len()))
+                })?;
+                Ok(arr)
+            }
+        }
+    }
 }
 
 /// Prelude module for convenient imports

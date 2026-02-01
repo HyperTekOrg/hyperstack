@@ -11,8 +11,8 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 use crate::ast::{
-    FieldPath, KeyResolutionStrategy, MappingSource, PopulationStrategy, SerializableFieldMapping,
-    SerializableHandlerSpec, SourceSpec, Transformation,
+    FieldPath, IdlSerializationSnapshot, KeyResolutionStrategy, MappingSource, PopulationStrategy,
+    SerializableFieldMapping, SerializableHandlerSpec, SourceSpec, Transformation,
 };
 
 /// Build handler code from a serializable handler spec.
@@ -90,6 +90,7 @@ fn build_source_spec_code(source: &SourceSpec) -> TokenStream {
             program_id,
             discriminator,
             type_name,
+            serialization,
         } => {
             let program_id_code = match program_id {
                 Some(id) => quote! { Some(#id.to_string()) },
@@ -104,11 +105,25 @@ fn build_source_spec_code(source: &SourceSpec) -> TokenStream {
                 None => quote! { None },
             };
 
+            let serialization_code = match serialization {
+                Some(IdlSerializationSnapshot::Borsh) => quote! {
+                    Some(hyperstack::runtime::hyperstack_interpreter::ast::IdlSerializationSnapshot::Borsh)
+                },
+                Some(IdlSerializationSnapshot::Bytemuck) => quote! {
+                    Some(hyperstack::runtime::hyperstack_interpreter::ast::IdlSerializationSnapshot::Bytemuck)
+                },
+                Some(IdlSerializationSnapshot::BytemuckUnsafe) => quote! {
+                    Some(hyperstack::runtime::hyperstack_interpreter::ast::IdlSerializationSnapshot::BytemuckUnsafe)
+                },
+                None => quote! { None },
+            };
+
             quote! {
                 hyperstack::runtime::hyperstack_interpreter::ast::SourceSpec::Source {
                     program_id: #program_id_code,
                     discriminator: #discriminator_code,
                     type_name: #type_name.to_string(),
+                    serialization: #serialization_code,
                 }
             }
         }

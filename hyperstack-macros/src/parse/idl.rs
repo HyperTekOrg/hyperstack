@@ -168,10 +168,33 @@ pub enum IdlTypeDefinedInner {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct IdlRepr {
+    pub kind: String,
+}
+
+/// Account serialization format as specified in the IDL.
+/// Defaults to Borsh when not specified.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum IdlSerialization {
+    #[default]
+    Borsh,
+    Bytemuck,
+    #[serde(alias = "bytemuckunsafe")]
+    BytemuckUnsafe,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IdlTypeDef {
     pub name: String,
     #[serde(default)]
     pub docs: Vec<String>,
+    /// Serialization format: "borsh" (default), "bytemuck", or "bytemuckunsafe"
+    #[serde(default)]
+    pub serialization: Option<IdlSerialization>,
+    /// Repr annotation for zero-copy types (e.g., {"kind": "c"})
+    #[serde(default)]
+    pub repr: Option<IdlRepr>,
     #[serde(rename = "type")]
     pub type_def: IdlTypeDefKind,
 }
@@ -322,6 +345,40 @@ impl IdlType {
             }
         }
     }
+
+    pub fn to_rust_type_string_bytemuck(&self) -> String {
+        match self {
+            IdlType::Simple(s) => map_simple_type_bytemuck(s),
+            IdlType::Array(arr) => {
+                if arr.array.len() == 2 {
+                    match (&arr.array[0], &arr.array[1]) {
+                        (IdlTypeArrayElement::Type(t), IdlTypeArrayElement::Size(size)) => {
+                            format!("[{}; {}]", map_simple_type_bytemuck(t), size)
+                        }
+                        (IdlTypeArrayElement::Nested(nested), IdlTypeArrayElement::Size(size)) => {
+                            let inner = nested.to_rust_type_string_bytemuck();
+                            format!("[{}; {}]", inner, size)
+                        }
+                        _ => "Vec<u8>".to_string(),
+                    }
+                } else {
+                    "Vec<u8>".to_string()
+                }
+            }
+            IdlType::Defined(def) => match &def.defined {
+                IdlTypeDefinedInner::Named { name } => name.clone(),
+                IdlTypeDefinedInner::Simple(s) => s.clone(),
+            },
+            IdlType::Option(opt) => {
+                let inner_type = opt.option.to_rust_type_string_bytemuck();
+                format!("Option<{}>", inner_type)
+            }
+            IdlType::Vec(vec) => {
+                let inner_type = vec.vec.to_rust_type_string_bytemuck();
+                format!("Vec<{}>", inner_type)
+            }
+        }
+    }
 }
 
 fn map_simple_type(idl_type: &str) -> String {
@@ -339,6 +396,28 @@ fn map_simple_type(idl_type: &str) -> String {
         "bool" => "bool".to_string(),
         "string" => "String".to_string(),
         "publicKey" | "pubkey" => "solana_pubkey::Pubkey".to_string(),
+        "bytes" => "Vec<u8>".to_string(),
+        _ => idl_type.to_string(),
+    }
+}
+
+fn map_simple_type_bytemuck(idl_type: &str) -> String {
+    match idl_type {
+        "u8" => "u8".to_string(),
+        "u16" => "u16".to_string(),
+        "u32" => "u32".to_string(),
+        "u64" => "u64".to_string(),
+        "u128" => "u128".to_string(),
+        "i8" => "i8".to_string(),
+        "i16" => "i16".to_string(),
+        "i32" => "i32".to_string(),
+        "i64" => "i64".to_string(),
+        "i128" => "i128".to_string(),
+        // bool is NOT Pod-safe in bytemuck (not all bit patterns are valid).
+        // Map to u8 instead: 0 = false, non-zero = true.
+        "bool" => "u8".to_string(),
+        "string" => "String".to_string(),
+        "publicKey" | "pubkey" => "[u8; 32]".to_string(),
         "bytes" => "Vec<u8>".to_string(),
         _ => idl_type.to_string(),
     }

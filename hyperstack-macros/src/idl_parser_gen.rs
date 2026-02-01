@@ -295,7 +295,7 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
                     let account_names: Vec<&str> = vec![#(#account_names),*];
                     let expected_count = #expected_count;
                     let actual_count = accounts.len();
-                    
+
                     // Warn if account count doesn't match IDL expectation
                     if actual_count != expected_count {
                         hyperstack::runtime::tracing::warn!(
@@ -305,7 +305,7 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
                             "Account count mismatch - IDL may be out of sync with program. Update your IDL to match the current program version."
                         );
                     }
-                    
+
                     let mut accounts_obj = hyperstack::runtime::serde_json::Map::new();
                     for (i, name) in account_names.iter().enumerate() {
                         if i < accounts.len() {

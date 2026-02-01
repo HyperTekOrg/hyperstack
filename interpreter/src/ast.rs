@@ -48,6 +48,17 @@ pub struct IdlAccountSnapshot {
     /// Documentation
     #[serde(default)]
     pub docs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub serialization: Option<IdlSerializationSnapshot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum IdlSerializationSnapshot {
+    Borsh,
+    Bytemuck,
+    #[serde(alias = "bytemuckunsafe")]
+    BytemuckUnsafe,
 }
 
 /// Instruction definition from IDL
@@ -169,6 +180,8 @@ pub struct IdlTypeDefSnapshot {
     /// Documentation
     #[serde(default)]
     pub docs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub serialization: Option<IdlSerializationSnapshot>,
     /// Type definition (struct or enum)
     #[serde(rename = "type")]
     pub type_def: IdlTypeDefKindSnapshot,
@@ -848,6 +861,8 @@ pub enum SourceSpec {
         program_id: Option<String>,
         discriminator: Option<Vec<u8>>,
         type_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        serialization: Option<IdlSerializationSnapshot>,
     },
 }
 

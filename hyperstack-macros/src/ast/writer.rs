@@ -73,6 +73,13 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
         .map(|typedef| IdlTypeDefSnapshot {
             name: typedef.name.clone(),
             docs: typedef.docs.clone(),
+            serialization: typedef.serialization.as_ref().map(|s| match s {
+                idl_parser::IdlSerialization::Borsh => IdlSerializationSnapshot::Borsh,
+                idl_parser::IdlSerialization::Bytemuck => IdlSerializationSnapshot::Bytemuck,
+                idl_parser::IdlSerialization::BytemuckUnsafe => {
+                    IdlSerializationSnapshot::BytemuckUnsafe
+                }
+            }),
             type_def: match &typedef.type_def {
                 idl_parser::IdlTypeDefKind::Struct { kind, fields } => {
                     IdlTypeDefKindSnapshot::Struct {
@@ -122,6 +129,7 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
                     types.push(IdlTypeDefSnapshot {
                         name: account.name.clone(),
                         docs: account.docs.clone(),
+                        serialization: None,
                         type_def: IdlTypeDefKindSnapshot::Struct {
                             kind: kind.clone(),
                             fields: fields
@@ -138,6 +146,7 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
                     types.push(IdlTypeDefSnapshot {
                         name: account.name.clone(),
                         docs: account.docs.clone(),
+                        serialization: None,
                         type_def: IdlTypeDefKindSnapshot::TupleStruct {
                             kind: kind.clone(),
                             fields: fields.iter().map(convert_idl_type).collect(),
@@ -148,6 +157,7 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
                     types.push(IdlTypeDefSnapshot {
                         name: account.name.clone(),
                         docs: account.docs.clone(),
+                        serialization: None,
                         type_def: IdlTypeDefKindSnapshot::Enum {
                             kind: kind.clone(),
                             variants: variants
@@ -178,10 +188,27 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
         accounts: idl
             .accounts
             .iter()
-            .map(|acc| IdlAccountSnapshot {
-                name: acc.name.clone(),
-                discriminator: acc.discriminator.clone(),
-                docs: acc.docs.clone(),
+            .map(|acc| {
+                let serialization = idl
+                    .types
+                    .iter()
+                    .find(|t| t.name == acc.name)
+                    .and_then(|t| t.serialization.as_ref())
+                    .map(|s| match s {
+                        idl_parser::IdlSerialization::Borsh => IdlSerializationSnapshot::Borsh,
+                        idl_parser::IdlSerialization::Bytemuck => {
+                            IdlSerializationSnapshot::Bytemuck
+                        }
+                        idl_parser::IdlSerialization::BytemuckUnsafe => {
+                            IdlSerializationSnapshot::BytemuckUnsafe
+                        }
+                    });
+                IdlAccountSnapshot {
+                    name: acc.name.clone(),
+                    discriminator: acc.discriminator.clone(),
+                    docs: acc.docs.clone(),
+                    serialization,
+                }
             })
             .collect(),
         instructions: idl
@@ -460,11 +487,31 @@ pub fn build_handlers_from_sources(
         };
 
         let type_suffix = if is_instruction { "IxState" } else { "State" };
+        let serialization = if is_instruction {
+            None
+        } else {
+            idl.and_then(|idl| {
+                idl.types
+                    .iter()
+                    .find(|t| t.name == account_type)
+                    .and_then(|t| t.serialization.as_ref())
+                    .map(|s| match s {
+                        idl_parser::IdlSerialization::Borsh => IdlSerializationSnapshot::Borsh,
+                        idl_parser::IdlSerialization::Bytemuck => {
+                            IdlSerializationSnapshot::Bytemuck
+                        }
+                        idl_parser::IdlSerialization::BytemuckUnsafe => {
+                            IdlSerializationSnapshot::BytemuckUnsafe
+                        }
+                    })
+            })
+        };
         handlers.push(SerializableHandlerSpec {
             source: SourceSpec::Source {
                 program_id: None,
                 discriminator: None,
                 type_name: format!("{}{}", account_type, type_suffix),
+                serialization,
             },
             key_resolution,
             mappings: serializable_mappings,

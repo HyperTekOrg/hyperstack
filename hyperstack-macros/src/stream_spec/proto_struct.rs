@@ -339,6 +339,7 @@ pub fn process_struct_with_context(
                         program_id: None,
                         discriminator: None,
                         type_name: format!("{}{}", #account_type, #type_suffix),
+                        serialization: None,
                     },
                     #key_resolution,
                     vec![
