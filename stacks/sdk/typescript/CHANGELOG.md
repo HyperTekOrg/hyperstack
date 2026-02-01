@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.4.0...hyperstack-stacks-v0.4.1) (2026-02-01)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-stacks:** Synchronize hyperstack versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * peerDependencies
+    * hyperstack-react bumped from >=0.2.0 to >=0.4.1
+    * hyperstack-typescript bumped from >=0.2.0 to >=0.4.1
+
 ## [0.4.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.3.15...hyperstack-stacks-v0.4.0) (2026-01-31)
 
 

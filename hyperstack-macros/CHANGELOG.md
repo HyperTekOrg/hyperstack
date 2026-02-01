@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.4.0...hyperstack-macros-v0.4.1) (2026-02-01)
+
+
+### Features
+
+* add bytemuck serialization support and fix lookup index key resolution ([b2dcd1f](https://github.com/HyperTekOrg/hyperstack/commit/b2dcd1fa881644d7d4fdc909216fa1ef2995dd7b))
+
+
+### Bug Fixes
+
+* flush queued account updates when lookup index is populated ([8a09279](https://github.com/HyperTekOrg/hyperstack/commit/8a09279c06a369d513c2b1d2f0cbf1560187db6f))
+* wire auto-generated lookup resolvers into IDL codegen path ([1175753](https://github.com/HyperTekOrg/hyperstack/commit/1175753d45a0cdf512e0f173df0964d9fddd889b))
+
 ## [0.4.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.3.15...hyperstack-macros-v0.4.0) (2026-01-31)
 
 

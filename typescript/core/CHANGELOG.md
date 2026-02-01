@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.4.0...hyperstack-typescript-v0.4.1) (2026-02-01)
+
+
+### Bug Fixes
+
+* **core:** ensure sorted views work with any storage adapter via SortedStorageDecorator ([d3ae37f](https://github.com/HyperTekOrg/hyperstack/commit/d3ae37faa214a0a944e7cb256e2fd366b3d3efe0))
+
 ## [0.4.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.3.15...hyperstack-typescript-v0.4.0) (2026-01-31)
 
 
