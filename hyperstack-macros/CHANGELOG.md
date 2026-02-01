@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.4.1...hyperstack-macros-v0.4.2) (2026-02-01)
+
+
+### Bug Fixes
+
+* Codegen correct path for bytemuck ([ae1d6b5](https://github.com/HyperTekOrg/hyperstack/commit/ae1d6b52a6c1c216542888a7516fcd33fb619054))
+
 ## [0.4.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.4.0...hyperstack-macros-v0.4.1) (2026-02-01)
 
 
