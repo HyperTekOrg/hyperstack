@@ -122,9 +122,17 @@ impl HyperstackConfig {
     }
 
     pub fn find_stack(&self, name: &str) -> Option<&StackConfig> {
-        self.stacks
-            .iter()
-            .find(|s| s.name.as_deref() == Some(name) || s.ast == name)
+        let name_lower = name.to_lowercase();
+        let name_kebab = to_kebab_case(name);
+
+        self.stacks.iter().find(|s| {
+            s.name.as_deref() == Some(name)
+                || s.ast == name
+                || s.name.as_deref().map(|n| n.to_lowercase()) == Some(name_lower.clone())
+                || s.ast.to_lowercase() == name_lower
+                || to_kebab_case(&s.ast) == name_kebab
+                || to_kebab_case(&s.ast) == name_lower
+        })
     }
 
     pub fn get_output_dir(&self) -> &str {
