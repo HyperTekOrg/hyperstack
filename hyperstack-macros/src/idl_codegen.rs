@@ -125,6 +125,7 @@ fn generate_account_type(account: &IdlAccount, types: &[IdlTypeDef]) -> TokenStr
     if use_bytemuck {
         quote! {
             #[derive(Debug, Copy, Clone, Serialize, Deserialize, hyperstack::runtime::bytemuck::Pod, hyperstack::runtime::bytemuck::Zeroable)]
+            #[bytemuck(crate = "hyperstack::runtime::bytemuck")]
             #[repr(C)]
             pub struct #name {
                 #(#fields),*
@@ -244,6 +245,7 @@ fn generate_custom_type(type_def: &IdlTypeDef) -> TokenStream {
             if use_bytemuck {
                 quote! {
                     #[derive(Debug, Copy, Clone, Serialize, Deserialize, hyperstack::runtime::bytemuck::Pod, hyperstack::runtime::bytemuck::Zeroable)]
+                    #[bytemuck(crate = "hyperstack::runtime::bytemuck")]
                     #[repr(C)]
                     pub struct #name {
                         #(#struct_fields),*
