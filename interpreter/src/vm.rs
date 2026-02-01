@@ -11,7 +11,6 @@ use std::num::NonZeroUsize;
 
 #[cfg(feature = "otel")]
 use tracing::instrument;
-
 /// Context metadata for blockchain updates (accounts and instructions)
 /// This structure is designed to be extended over time with additional metadata
 #[derive(Debug, Clone, Default)]
@@ -312,6 +311,7 @@ pub struct VmContext {
     warnings: Vec<String>,
     last_pda_lookup_miss: Option<String>,
     last_pda_registered: Option<String>,
+    last_lookup_index_keys: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -805,6 +805,7 @@ impl VmContext {
             warnings: Vec::new(),
             last_pda_lookup_miss: None,
             last_pda_registered: None,
+            last_lookup_index_keys: Vec::new(),
         };
         vm.states.insert(
             0,
@@ -841,6 +842,7 @@ impl VmContext {
             warnings: Vec::new(),
             last_pda_lookup_miss: None,
             last_pda_registered: None,
+            last_lookup_index_keys: Vec::new(),
         };
         vm.states.insert(
             0,
@@ -1148,6 +1150,35 @@ impl VmContext {
                                         entity_bytecode.computed_fields_evaluator.as_ref(),
                                     ) {
                                         all_mutations.extend(reprocessed_mutations);
+                                    }
+                                }
+                            }
+                        }
+
+                        let lookup_keys = self.take_last_lookup_index_keys();
+                        for lookup_key in lookup_keys {
+                            if let Ok(pending_updates) =
+                                self.flush_pending_updates(entity_bytecode.state_id, &lookup_key)
+                            {
+                                for pending in pending_updates {
+                                    if let Some(pending_handler) =
+                                        entity_bytecode.handlers.get(&pending.account_type)
+                                    {
+                                        self.current_context = Some(UpdateContext::new_account(
+                                            pending.slot,
+                                            pending.signature.clone(),
+                                            pending.write_version,
+                                        ));
+                                        if let Ok(reprocessed) = self.execute_handler(
+                                            pending_handler,
+                                            &pending.account_data,
+                                            &pending.account_type,
+                                            entity_bytecode.state_id,
+                                            entity_name,
+                                            entity_bytecode.computed_fields_evaluator.as_ref(),
+                                        ) {
+                                            all_mutations.extend(reprocessed);
+                                        }
                                     }
                                 }
                             }
@@ -1640,7 +1671,13 @@ impl VmContext {
                     let lookup_val = self.registers[*lookup_value].clone();
                     let pk_val = self.registers[*primary_key].clone();
 
-                    index.insert(lookup_val, pk_val);
+                    index.insert(lookup_val.clone(), pk_val);
+
+                    // Track lookup keys so process_event can flush queued account updates
+                    if let Some(key_str) = lookup_val.as_str() {
+                        self.last_lookup_index_keys.push(key_str.to_string());
+                    }
+
                     pc += 1;
                 }
                 OpCode::LookupIndex {
@@ -2671,6 +2708,10 @@ impl VmContext {
 
     pub fn take_last_pda_registered(&mut self) -> Option<String> {
         self.last_pda_registered.take()
+    }
+
+    pub fn take_last_lookup_index_keys(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.last_lookup_index_keys)
     }
 
     pub fn flush_pending_instruction_events(

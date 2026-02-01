@@ -224,8 +224,8 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                         ctx: &mut hyperstack_interpreter::resolvers::ResolveContext
                     ) -> hyperstack_interpreter::resolvers::KeyResolution
                 };
-                let account_type_path: syn::Path = syn::parse_str(&hook.account_type)
-                    .unwrap_or_else(|_| syn::parse_quote!(#fn_name));
+                let account_type_path: syn::Path =
+                    syn::parse_str(account_name).unwrap_or_else(|_| syn::parse_quote!(#fn_name));
                 all_resolver_hooks.push(parse::ResolverHookSpec {
                     kind: parse::ResolverHookKind::KeyResolver,
                     account_type_path,
