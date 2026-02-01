@@ -11,6 +11,7 @@ import { ConnectionManager } from './connection';
 import { FrameProcessor } from './frame-processor';
 import { MemoryAdapter } from './storage/memory-adapter';
 import type { StorageAdapter } from './storage/adapter';
+import { SortedStorageDecorator } from './storage/sorted-decorator';
 import { SubscriptionRegistry } from './subscription';
 import { createTypedViews } from './views';
 import type { Frame } from './frame';
@@ -25,12 +26,14 @@ export interface ConnectOptions {
   autoReconnect?: boolean;
   reconnectIntervals?: number[];
   maxReconnectAttempts?: number;
+  flushIntervalMs?: number;
 }
 
 /** @deprecated Use ConnectOptions instead */
 export interface HyperStackOptionsWithStorage<TStack extends StackDefinition> extends HyperStackOptions<TStack> {
   storage?: StorageAdapter;
   maxEntriesPerView?: number | null;
+  flushIntervalMs?: number;
 }
 
 export interface InstructionExecutorOptions extends Omit<ExecuteOptions, 'wallet'> {
@@ -61,9 +64,10 @@ export class HyperStack<TStack extends StackDefinition> {
     options: HyperStackOptionsWithStorage<TStack>
   ) {
     this.stack = options.stack;
-    this.storage = options.storage ?? new MemoryAdapter();
+    this.storage = new SortedStorageDecorator(options.storage ?? new MemoryAdapter());
     this.processor = new FrameProcessor(this.storage, {
       maxEntriesPerView: options.maxEntriesPerView,
+      flushIntervalMs: options.flushIntervalMs,
     });
     this.connection = new ConnectionManager({
       websocketUrl: url,
@@ -108,6 +112,7 @@ export class HyperStack<TStack extends StackDefinition> {
       stack,
       storage: options?.storage,
       maxEntriesPerView: options?.maxEntriesPerView,
+      flushIntervalMs: options?.flushIntervalMs,
       autoReconnect: options?.autoReconnect,
       reconnectIntervals: options?.reconnectIntervals,
       maxReconnectAttempts: options?.maxReconnectAttempts,
