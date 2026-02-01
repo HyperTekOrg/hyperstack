@@ -15,7 +15,7 @@ import type {
   ViewGroup,
   UseHyperstackOptions
 } from './types';
-import type { HyperStackStore } from './zustand-adapter';
+import { ZustandAdapter, type HyperStackStore } from './zustand-adapter';
 import type { InstructionHandler, InstructionExecutor } from 'hyperstack-typescript';
 import type { HyperStack } from 'hyperstack-typescript';
 
@@ -147,7 +147,7 @@ export function useHyperstack<TStack extends StackDefinition>(
   return {
     views: views as BuildViewInterface<TStack['views']>,
     instructions: instructions as BuildInstructionInterface<TStack['instructions']>,
-    zustandStore: client?.store as unknown as UseBoundStore<StoreApi<HyperStackStore>>,
+    zustandStore: (client?.store as ZustandAdapter | undefined)?.store as UseBoundStore<StoreApi<HyperStackStore>>,
     client: client!,
     isLoading,
     error

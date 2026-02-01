@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useRef, ReactNode, useSyncExternalStore, useCallback } from 'react';
 import { HyperStack, type ConnectionState, type StackDefinition } from 'hyperstack-typescript';
 import type { HyperstackConfig } from './types';
+import { DEFAULT_FLUSH_INTERVAL_MS } from './types';
+import { ZustandAdapter } from './zustand-adapter';
 
 interface ClientEntry {
   client: HyperStack<any>;
@@ -39,13 +41,21 @@ export function HyperstackProvider({
       return connecting as Promise<HyperStack<TStack>>;
     }
 
+    const adapter = new ZustandAdapter();
     const connectionPromise = HyperStack.connect(stack, {
       url: urlOverride,
+      storage: adapter,
       autoReconnect: config.autoConnect,
       reconnectIntervals: config.reconnectIntervals,
       maxReconnectAttempts: config.maxReconnectAttempts,
       maxEntriesPerView: config.maxEntriesPerView,
+      flushIntervalMs: config.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS,
     }).then((client) => {
+      client.onConnectionStateChange((state, error) => {
+        adapter.setConnectionState(state, error);
+      });
+      adapter.setConnectionState(client.connectionState);
+
       clientsRef.current.set(cacheKey, {
         client,
         disconnect: () => client.disconnect()
