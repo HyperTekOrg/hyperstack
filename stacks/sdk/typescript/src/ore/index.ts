@@ -189,12 +189,12 @@ export const ORE_STREAM_STACK = {
       latest: listView<OreRound>('OreRound/latest'),
     },
     OreTreasury: {
-      list: listView<OreTreasury>('OreTreasury/list'),
       state: stateView<OreTreasury>('OreTreasury/state'),
+      list: listView<OreTreasury>('OreTreasury/list'),
     },
     OreMiner: {
-      list: listView<OreMiner>('OreMiner/list'),
       state: stateView<OreMiner>('OreMiner/state'),
+      list: listView<OreMiner>('OreMiner/list'),
     },
   },
 } as const;

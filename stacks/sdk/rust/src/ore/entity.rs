@@ -1,13 +1,13 @@
-use super::types::{OreMiner, OreRound, OreTreasury};
+use super::types::{OreRound, OreTreasury, OreMiner};
 use hyperstack_sdk::{Stack, StateView, ViewBuilder, ViewHandle, Views};
 
-pub struct OreStack;
+pub struct OreStreamStack;
 
-impl Stack for OreStack {
-    type Views = OreStackViews;
+impl Stack for OreStreamStack {
+    type Views = OreStreamStackViews;
 
     fn name() -> &'static str {
-        "ore-round"
+        "ore-stream"
     }
 
     fn url() -> &'static str {
@@ -15,22 +15,18 @@ impl Stack for OreStack {
     }
 }
 
-pub struct OreStackViews {
+pub struct OreStreamStackViews {
     pub ore_round: OreRoundEntityViews,
     pub ore_treasury: OreTreasuryEntityViews,
     pub ore_miner: OreMinerEntityViews,
 }
 
-impl Views for OreStackViews {
+impl Views for OreStreamStackViews {
     fn from_builder(builder: ViewBuilder) -> Self {
         Self {
-            ore_round: OreRoundEntityViews {
-                builder: builder.clone(),
-            },
-            ore_treasury: OreTreasuryEntityViews {
-                builder: builder.clone(),
-            },
-            ore_miner: OreMinerEntityViews { builder },
+            ore_round: OreRoundEntityViews { builder: builder.clone() },
+            ore_treasury: OreTreasuryEntityViews { builder: builder.clone() },
+            ore_miner: OreMinerEntityViews { builder: builder },
         }
     }
 }
@@ -70,6 +66,10 @@ impl OreTreasuryEntityViews {
             "OreTreasury/state".to_string(),
             self.builder.initial_data_timeout(),
         )
+    }
+
+    pub fn list(&self) -> ViewHandle<OreTreasury> {
+        self.builder.view("OreTreasury/list")
     }
 }
 

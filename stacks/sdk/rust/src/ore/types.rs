@@ -64,6 +64,38 @@ pub struct OreRound {
     pub round_snapshot: Option<Option<serde_json::Value>>,
 }
 
+
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Round {
+    #[serde(default)]
+    pub id: Option<u64>,
+    #[serde(default)]
+    pub deployed: Option<Vec<u64>>,
+    #[serde(default)]
+    pub slot_hash: Option<Vec<i64>>,
+    #[serde(default)]
+    pub count: Option<Vec<u64>>,
+    #[serde(default)]
+    pub expires_at: Option<u64>,
+    #[serde(default)]
+    pub motherlode: Option<u64>,
+    #[serde(default)]
+    pub rent_payer: Option<String>,
+    #[serde(default)]
+    pub top_miner: Option<String>,
+    #[serde(default)]
+    pub top_miner_reward: Option<u64>,
+    #[serde(default)]
+    pub total_deployed: Option<u64>,
+    #[serde(default)]
+    pub total_miners: Option<u64>,
+    #[serde(default)]
+    pub total_vaulted: Option<u64>,
+    #[serde(default)]
+    pub total_winnings: Option<u64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OreTreasuryId {
     #[serde(default)]
@@ -92,6 +124,30 @@ pub struct OreTreasury {
     pub state: OreTreasuryState,
     #[serde(default)]
     pub treasury_snapshot: Option<Option<serde_json::Value>>,
+}
+
+
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Treasury {
+    #[serde(default)]
+    pub balance: Option<u64>,
+    #[serde(default)]
+    pub buffer_a: Option<u64>,
+    #[serde(default)]
+    pub motherlode: Option<u64>,
+    #[serde(default)]
+    pub miner_rewards_factor: Option<serde_json::Value>,
+    #[serde(default)]
+    pub stake_rewards_factor: Option<serde_json::Value>,
+    #[serde(default)]
+    pub buffer_b: Option<u64>,
+    #[serde(default)]
+    pub total_refined: Option<u64>,
+    #[serde(default)]
+    pub total_staked: Option<u64>,
+    #[serde(default)]
+    pub total_unclaimed: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -168,35 +224,62 @@ pub struct OreMiner {
     pub automation_snapshot: Option<Option<serde_json::Value>>,
 }
 
+
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct Round {
+pub struct Miner {
     #[serde(default)]
-    pub id: Option<u64>,
+    pub authority: Option<String>,
     #[serde(default)]
     pub deployed: Option<Vec<u64>>,
     #[serde(default)]
-    pub slot_hash: Option<Vec<i64>>,
+    pub cumulative: Option<Vec<u64>>,
     #[serde(default)]
-    pub count: Option<Vec<u64>>,
+    pub checkpoint_fee: Option<u64>,
     #[serde(default)]
-    pub expires_at: Option<u64>,
+    pub checkpoint_id: Option<u64>,
     #[serde(default)]
-    pub motherlode: Option<u64>,
+    pub last_claim_ore_at: Option<i64>,
     #[serde(default)]
-    pub rent_payer: Option<String>,
+    pub last_claim_sol_at: Option<i64>,
     #[serde(default)]
-    pub top_miner: Option<String>,
+    pub rewards_factor: Option<serde_json::Value>,
     #[serde(default)]
-    pub top_miner_reward: Option<u64>,
+    pub rewards_sol: Option<u64>,
     #[serde(default)]
-    pub total_deployed: Option<u64>,
+    pub rewards_ore: Option<u64>,
     #[serde(default)]
-    pub total_miners: Option<u64>,
+    pub refined_ore: Option<u64>,
     #[serde(default)]
-    pub total_vaulted: Option<u64>,
+    pub round_id: Option<u64>,
     #[serde(default)]
-    pub total_winnings: Option<u64>,
+    pub lifetime_rewards_sol: Option<u64>,
+    #[serde(default)]
+    pub lifetime_rewards_ore: Option<u64>,
+    #[serde(default)]
+    pub lifetime_deployed: Option<u64>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Automation {
+    #[serde(default)]
+    pub amount: Option<u64>,
+    #[serde(default)]
+    pub authority: Option<String>,
+    #[serde(default)]
+    pub balance: Option<u64>,
+    #[serde(default)]
+    pub executor: Option<String>,
+    #[serde(default)]
+    pub fee: Option<u64>,
+    #[serde(default)]
+    pub strategy: Option<u64>,
+    #[serde(default)]
+    pub mask: Option<u64>,
+    #[serde(default)]
+    pub reload: Option<u64>,
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventWrapper<T> {
