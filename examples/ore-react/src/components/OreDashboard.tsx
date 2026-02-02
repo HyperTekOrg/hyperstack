@@ -1,10 +1,20 @@
 import { useHyperstack, useConnectionState } from 'hyperstack-react';
-import { OREROUND_STACK, OreRound } from 'hyperstack-stacks/ore';
+import {
+  ORE_STREAM_STACK,
+  type OreRound,
+  type OreTreasury,
+  type OreMiner,
+} from 'hyperstack-stacks/ore';
 
 export function OreDashboard() {
-  const stack = useHyperstack(OREROUND_STACK);
+  const stack = useHyperstack(ORE_STREAM_STACK, { url: 'ws://localhost:8878' });
   const { data: latestRounds } = stack.views.OreRound.latest.use({ take: 5 });
+  // const treasuryAddress = "45db2FSR4mcXdSVVZbKbwojU6uYDpMyhpEi7cC8nHaWG";
+  // const { data: treasury } = stack.views.OreTreasury.state.use({ key: treasuryAddress });
+  // console.log(treasury);
+  // const { data: miner } = stack.views.OreMiner.list.use({ take: 1 });
   const connectionState = useConnectionState();
+  console.log(connectionState);
   const isConnected = connectionState === 'connected';
 
   return (

@@ -17,16 +17,16 @@ pub fn create(
     let client = ApiClient::new()?;
 
     if let Some(ast_path) = ast_file {
-        println!("{} Loading AST from file...", "→".blue().bold());
+        println!("{} Loading stack file...", "→".blue().bold());
         let ast_json = fs::read_to_string(ast_path)
-            .with_context(|| format!("Failed to read AST file: {}", ast_path))?;
+            .with_context(|| format!("Failed to read stack file: {}", ast_path))?;
 
         let ast_payload: serde_json::Value = serde_json::from_str(&ast_json)
-            .with_context(|| format!("Failed to parse AST JSON: {}", ast_path))?;
+            .with_context(|| format!("Failed to parse stack JSON: {}", ast_path))?;
 
         let spec_id = client.get_spec_by_name(stack_name)?.map(|s| s.id);
 
-        println!("{} Creating build from AST file...", "→".blue().bold());
+        println!("{} Creating build from stack file...", "→".blue().bold());
         let req = CreateBuildRequest {
             spec_id,
             spec_version_id: None,
@@ -121,20 +121,23 @@ pub fn create(
         }
         (None, _) => {
             println!(
-                "{} Stack not found remotely, searching for local AST...",
+                "{} Stack not found remotely, searching for local stack file...",
                 "!".yellow().bold()
             );
 
             if let Some(ast) = find_ast_file(stack_name, None)? {
                 println!(
-                    "{} Found local AST: {}",
+                    "{} Found local stack file: {}",
                     "✓".green().bold(),
                     ast.path.display()
                 );
 
                 let ast_payload = ast.load_ast()?;
 
-                println!("{} Creating build from local AST...", "→".blue().bold());
+                println!(
+                    "{} Creating build from local stack file...",
+                    "→".blue().bold()
+                );
                 let req = CreateBuildRequest {
                     spec_id: None,
                     spec_version_id: None,
@@ -165,9 +168,9 @@ pub fn create(
             }
 
             bail!(
-                "Stack '{}' not found remotely and no local AST file found.\n\n\
+                "Stack '{}' not found remotely and no local stack file found.\n\n\
                  To fix this:\n\
-                 1. Build your stack crate to generate the AST file: cargo build\n\
+                 1. Build your stack crate to generate the stack file: cargo build\n\
                  2. Push your stack: hs stack push {}\n\
                  3. Then create a build: hs build create {}",
                 stack_name,

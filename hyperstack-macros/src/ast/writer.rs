@@ -35,6 +35,23 @@ pub fn write_ast_to_file(spec: &SerializableStreamSpec, entity_name: &str) -> st
     Ok(())
 }
 
+/// Write a SerializableStackSpec to a JSON file.
+/// The file is written to `.hyperstack/{stack_name}.stack.json` relative to CARGO_MANIFEST_DIR.
+pub fn write_stack_to_file(
+    spec: &super::types::SerializableStackSpec,
+    stack_name: &str,
+) -> std::io::Result<()> {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e.to_string()))?;
+    let ast_dir = std::path::Path::new(&manifest_dir).join(".hyperstack");
+    std::fs::create_dir_all(&ast_dir)?;
+    let stack_file = ast_dir.join(format!("{}.stack.json", stack_name));
+    let json = serde_json::to_string_pretty(spec)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+    std::fs::write(&stack_file, json)?;
+    Ok(())
+}
+
 /// Helper function to parse transformation string to enum
 pub fn parse_transformation(transform_str: &str) -> Option<Transformation> {
     match transform_str {

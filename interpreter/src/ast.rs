@@ -1227,6 +1227,48 @@ impl SerializableStreamSpec {
 }
 
 // ============================================================================
+// Stack Spec — Unified multi-entity AST format
+// ============================================================================
+
+/// A unified stack specification containing all entities.
+/// Written to `.hyperstack/{StackName}.stack.json`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SerializableStackSpec {
+    /// Stack name (PascalCase, derived from module ident)
+    pub stack_name: String,
+    /// Shared program ID (all entities share the same program)
+    #[serde(default)]
+    pub program_id: Option<String>,
+    /// Shared IDL snapshot (stored once, not duplicated per entity)
+    #[serde(default)]
+    pub idl: Option<IdlSnapshot>,
+    /// All entity specifications in this stack
+    pub entities: Vec<SerializableStreamSpec>,
+    /// Deterministic content hash of the entire stack
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_hash: Option<String>,
+}
+
+impl SerializableStackSpec {
+    /// Compute deterministic content hash (SHA256 of canonical JSON).
+    pub fn compute_content_hash(&self) -> String {
+        use sha2::{Digest, Sha256};
+        let mut spec_for_hash = self.clone();
+        spec_for_hash.content_hash = None;
+        let json = serde_json::to_string(&spec_for_hash)
+            .expect("Failed to serialize stack spec for hashing");
+        let mut hasher = Sha256::new();
+        hasher.update(json.as_bytes());
+        hex::encode(hasher.finalize())
+    }
+
+    pub fn with_content_hash(mut self) -> Self {
+        self.content_hash = Some(self.compute_content_hash());
+        self
+    }
+}
+
+// ============================================================================
 // View Pipeline Types - Composable View Definitions
 // ============================================================================
 

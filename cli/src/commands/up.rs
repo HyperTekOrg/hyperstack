@@ -82,8 +82,8 @@ fn show_dry_run(stacks: &[crate::config::DiscoveredAst], branch: Option<&str>) -
             ui::symbols::BULLET.dimmed(),
             ast.stack_name.green().bold()
         );
-        println!("    Entity: {}", ast.entity_name);
-        println!("    AST: {}", ast.path.display());
+        println!("    Stack: {}", ast.stack_id);
+        println!("    Stack: {}", ast.path.display());
         if let Some(pid) = &ast.program_id {
             println!("    Program ID: {}", pid);
         }
@@ -174,7 +174,7 @@ fn deploy_single_stack(
         let spinner = ui::create_spinner("Creating stack...");
         let req = crate::api_client::CreateSpecRequest {
             name: ast.stack_name.clone(),
-            entity_name: ast.entity_name.clone(),
+            entity_name: ast.stack_id.clone(),
             crate_name: String::new(),
             module_path: String::new(),
             description: None,
@@ -186,7 +186,7 @@ fn deploy_single_stack(
         new_spec.id
     };
 
-    let spinner = ui::create_spinner("Uploading AST...");
+    let spinner = ui::create_spinner("Uploading stack...");
     let ast_payload = ast.load_ast()?;
     let version_response = client.create_spec_version(spec_id, ast_payload)?;
 

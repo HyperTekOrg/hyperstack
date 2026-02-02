@@ -9,13 +9,14 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Item, ItemMod};
 
+use crate::ast::SerializableStackSpec;
 use crate::codegen::generate_multi_entity_builder;
 use crate::idl_codegen;
 use crate::idl_parser_gen;
 use crate::idl_vixen_gen;
 use crate::parse;
 use crate::parse::idl as idl_parser;
-use crate::utils::to_snake_case;
+use crate::utils::{to_pascal_case, to_snake_case};
 
 use super::entity::process_entity_struct_with_idl;
 use super::handlers::generate_auto_resolver_functions;
@@ -58,6 +59,8 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
     // Generate IDL SDK types and parsers first
     let sdk_types = idl_codegen::generate_sdk_types(&idl);
     let parsers = idl_parser_gen::generate_parsers(&idl, program_id);
+
+    let stack_name = to_pascal_case(&module.ident.to_string());
 
     // Now process entity structs (similar to proto path)
     let mut section_structs = HashMap::new();
@@ -203,6 +206,7 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                 entity_name,
                 section_structs.clone(),
                 has_game_event,
+                &stack_name,
                 Some(&idl),
                 resolver_hooks.clone(),
                 pda_registrations.clone(),
@@ -291,8 +295,8 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
             }
 
             // Add entity processing outputs and auto-generated resolver functions
-            for result in all_outputs {
-                if let Ok(generated_items) = syn::parse::<syn::File>(result.token_stream) {
+            for result in &all_outputs {
+                if let Ok(generated_items) = syn::parse::<syn::File>(result.token_stream.clone()) {
                     for gen_item in generated_items.items {
                         items.push(gen_item);
                     }
@@ -307,7 +311,32 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                 }
             }
 
-            let multi_entity_builder = generate_multi_entity_builder(&entity_names, &[], false);
+            let entity_asts: Vec<crate::ast::SerializableStreamSpec> = all_outputs
+                .iter()
+                .filter_map(|result| result.ast_spec.clone())
+                .collect();
+
+            let stack_spec = SerializableStackSpec {
+                stack_name: stack_name.clone(),
+                program_id: Some(program_id.to_string()),
+                idl: entity_asts.first().and_then(|e| e.idl.clone()),
+                entities: entity_asts
+                    .into_iter()
+                    .map(|mut e| {
+                        e.idl = None;
+                        e
+                    })
+                    .collect(),
+                content_hash: None,
+            }
+            .with_content_hash();
+
+            if let Err(e) = crate::ast::writer::write_stack_to_file(&stack_spec, &stack_name) {
+                eprintln!("Warning: Failed to write stack AST: {}", e);
+            }
+
+            let multi_entity_builder =
+                generate_multi_entity_builder(&entity_names, &[], false, &stack_name);
             if let Ok(generated_items) = syn::parse::<syn::File>(multi_entity_builder.into()) {
                 for gen_item in generated_items.items {
                     items.push(gen_item);

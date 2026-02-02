@@ -1,5 +1,3 @@
-
-
 export interface OreRoundId {
   round_address?: string | null;
   round_id?: number | null;
@@ -53,6 +51,107 @@ export interface Round {
   total_winnings?: number;
 }
 
+export interface OreTreasuryId {
+  address?: string | null;
+}
+
+export interface OreTreasuryState {
+  balance?: number | null;
+  motherlode?: number | null;
+  total_refined?: number | null;
+  total_staked?: number | null;
+  total_unclaimed?: number | null;
+}
+
+export interface OreTreasury {
+  id?: OreTreasuryId;
+  state?: OreTreasuryState;
+  treasury_snapshot?: Treasury | null;
+}
+
+export interface Treasury {
+  balance?: number;
+  buffer_a?: number;
+  motherlode?: number;
+  miner_rewards_factor?: Record<string, any>;
+  stake_rewards_factor?: Record<string, any>;
+  buffer_b?: number;
+  total_refined?: number;
+  total_staked?: number;
+  total_unclaimed?: number;
+}
+
+export interface OreMinerAutomation {
+  amount?: number | null;
+  balance?: number | null;
+  executor?: string | null;
+  fee?: number | null;
+  mask?: number | null;
+  reload?: number | null;
+  strategy?: number | null;
+}
+
+export interface OreMinerId {
+  authority?: string | null;
+  automation_address?: string | null;
+  miner_address?: string | null;
+}
+
+export interface OreMinerRewards {
+  lifetime_deployed?: number | null;
+  lifetime_rewards_ore?: number | null;
+  lifetime_rewards_sol?: number | null;
+  refined_ore?: number | null;
+  rewards_ore?: number | null;
+  rewards_sol?: number | null;
+}
+
+export interface OreMinerState {
+  checkpoint_fee?: number | null;
+  checkpoint_id?: number | null;
+  last_claim_ore_at?: number | null;
+  last_claim_sol_at?: number | null;
+  round_id?: number | null;
+}
+
+export interface OreMiner {
+  automation?: OreMinerAutomation;
+  id?: OreMinerId;
+  rewards?: OreMinerRewards;
+  state?: OreMinerState;
+  miner_snapshot?: Miner | null;
+  automation_snapshot?: Automation | null;
+}
+
+export interface Miner {
+  authority?: string;
+  deployed?: number[];
+  cumulative?: number[];
+  checkpoint_fee?: number;
+  checkpoint_id?: number;
+  last_claim_ore_at?: number;
+  last_claim_sol_at?: number;
+  rewards_factor?: Record<string, any>;
+  rewards_sol?: number;
+  rewards_ore?: number;
+  refined_ore?: number;
+  round_id?: number;
+  lifetime_rewards_sol?: number;
+  lifetime_rewards_ore?: number;
+  lifetime_deployed?: number;
+}
+
+export interface Automation {
+  amount?: number;
+  authority?: string;
+  balance?: number;
+  executor?: string;
+  fee?: number;
+  strategy?: number;
+  mask?: number;
+  reload?: number;
+}
+
 // ============================================================================
 // View Definition Types (framework-agnostic)
 // ============================================================================
@@ -79,9 +178,9 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
 // Stack Definition
 // ============================================================================
 
-/** Stack definition for OreRound */
-export const OREROUND_STACK = {
-  name: 'ore-round',
+/** Stack definition for OreStream with 3 entities */
+export const ORE_STREAM_STACK = {
+  name: 'ore-stream',
   url: 'wss://ore.stack.usehyperstack.com',
   views: {
     OreRound: {
@@ -89,11 +188,22 @@ export const OREROUND_STACK = {
       list: listView<OreRound>('OreRound/list'),
       latest: listView<OreRound>('OreRound/latest'),
     },
+    OreTreasury: {
+      list: listView<OreTreasury>('OreTreasury/list'),
+      state: stateView<OreTreasury>('OreTreasury/state'),
+    },
+    OreMiner: {
+      list: listView<OreMiner>('OreMiner/list'),
+      state: stateView<OreMiner>('OreMiner/state'),
+    },
   },
 } as const;
 
 /** Type alias for the stack */
-export type OreRoundStack = typeof OREROUND_STACK;
+export type OreStreamStack = typeof ORE_STREAM_STACK;
+
+/** Entity types in this stack */
+export type OreStreamEntity = OreRound | OreTreasury | OreMiner;
 
 /** Default export for convenience */
-export default OREROUND_STACK;
+export default ORE_STREAM_STACK;

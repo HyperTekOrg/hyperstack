@@ -12,7 +12,6 @@ use syn::{Fields, ItemStruct, Type};
 use crate::parse;
 use crate::utils::{path_to_string, to_snake_case};
 
-use super::ast_writer::write_ast_at_compile_time;
 use super::entity::process_map_attribute;
 use super::handlers::{convert_event_to_map_attributes, determine_event_instruction};
 use super::sections::{is_primitive_or_wrapper, process_nested_struct};
@@ -388,22 +387,6 @@ pub fn process_struct_with_context(
             }
         })
         .collect();
-
-    write_ast_at_compile_time(
-        &name.to_string(),
-        &primary_keys,
-        &lookup_indexes,
-        &sources_by_type,
-        &events_by_instruction,
-        &[],
-        &[],
-        &HashMap::new(),
-        &HashMap::new(),
-        &[],
-        &[],
-        None,
-        Vec::new(),
-    );
 
     let output = quote! {
         #[derive(Debug, Clone, hyperstack::runtime::serde::Serialize, hyperstack::runtime::serde::Deserialize)]

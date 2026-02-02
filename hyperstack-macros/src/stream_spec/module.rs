@@ -9,10 +9,12 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Item, ItemMod};
 
+use crate::ast::SerializableStackSpec;
 use crate::codegen::generate_multi_entity_builder;
 use crate::parse;
 use crate::parse::proto as proto_parser;
 use crate::proto_codegen;
+use crate::utils::to_pascal_case;
 
 use super::entity::process_entity_struct;
 use super::proto_struct::process_struct_with_context;
@@ -77,6 +79,7 @@ pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
     }
 
     if !entity_structs.is_empty() {
+        let stack_name = to_pascal_case(&module.ident.to_string());
         let mut all_outputs = Vec::new();
         let mut entity_names = Vec::new();
 
@@ -89,6 +92,7 @@ pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
                 entity_name,
                 section_structs.clone(),
                 has_game_event,
+                &stack_name,
             );
             all_outputs.push(output);
         }
@@ -113,16 +117,38 @@ pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
                 }
             }
 
-            for output in all_outputs {
-                if let Ok(generated_items) = syn::parse::<syn::File>(output) {
+            for output in &all_outputs {
+                if let Ok(generated_items) = syn::parse::<syn::File>(output.token_stream.clone()) {
                     for gen_item in generated_items.items {
                         items.push(gen_item);
                     }
                 }
             }
 
-            let multi_entity_builder =
-                generate_multi_entity_builder(&entity_names, &proto_analyses, skip_decoders);
+            let entity_asts: Vec<crate::ast::SerializableStreamSpec> = all_outputs
+                .iter()
+                .filter_map(|result| result.ast_spec.clone())
+                .collect();
+
+            let stack_spec = SerializableStackSpec {
+                stack_name: stack_name.clone(),
+                program_id: None,
+                idl: None,
+                entities: entity_asts,
+                content_hash: None,
+            }
+            .with_content_hash();
+
+            if let Err(e) = crate::ast::writer::write_stack_to_file(&stack_spec, &stack_name) {
+                eprintln!("Warning: Failed to write stack AST: {}", e);
+            }
+
+            let multi_entity_builder = generate_multi_entity_builder(
+                &entity_names,
+                &proto_analyses,
+                skip_decoders,
+                &stack_name,
+            );
             if let Ok(generated_items) = syn::parse::<syn::File>(multi_entity_builder.into()) {
                 for gen_item in generated_items.items {
                     items.push(gen_item);

@@ -65,6 +65,110 @@ pub struct OreRound {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OreTreasuryId {
+    #[serde(default)]
+    pub address: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OreTreasuryState {
+    #[serde(default)]
+    pub balance: Option<Option<u64>>,
+    #[serde(default)]
+    pub motherlode: Option<Option<u64>>,
+    #[serde(default)]
+    pub total_refined: Option<Option<u64>>,
+    #[serde(default)]
+    pub total_staked: Option<Option<u64>>,
+    #[serde(default)]
+    pub total_unclaimed: Option<Option<u64>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OreTreasury {
+    #[serde(default)]
+    pub id: OreTreasuryId,
+    #[serde(default)]
+    pub state: OreTreasuryState,
+    #[serde(default)]
+    pub treasury_snapshot: Option<Option<serde_json::Value>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OreMinerId {
+    #[serde(default)]
+    pub authority: Option<String>,
+    #[serde(default)]
+    pub miner_address: Option<String>,
+    #[serde(default)]
+    pub automation_address: Option<Option<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OreMinerRewards {
+    #[serde(default)]
+    pub rewards_sol: Option<Option<u64>>,
+    #[serde(default)]
+    pub rewards_ore: Option<Option<u64>>,
+    #[serde(default)]
+    pub refined_ore: Option<Option<u64>>,
+    #[serde(default)]
+    pub lifetime_rewards_sol: Option<Option<u64>>,
+    #[serde(default)]
+    pub lifetime_rewards_ore: Option<Option<u64>>,
+    #[serde(default)]
+    pub lifetime_deployed: Option<Option<u64>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OreMinerState {
+    #[serde(default)]
+    pub round_id: Option<Option<u64>>,
+    #[serde(default)]
+    pub checkpoint_id: Option<Option<u64>>,
+    #[serde(default)]
+    pub checkpoint_fee: Option<Option<u64>>,
+    #[serde(default)]
+    pub last_claim_ore_at: Option<Option<i64>>,
+    #[serde(default)]
+    pub last_claim_sol_at: Option<Option<i64>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OreMinerAutomation {
+    #[serde(default)]
+    pub amount: Option<Option<u64>>,
+    #[serde(default)]
+    pub balance: Option<Option<u64>>,
+    #[serde(default)]
+    pub executor: Option<Option<String>>,
+    #[serde(default)]
+    pub fee: Option<Option<u64>>,
+    #[serde(default)]
+    pub strategy: Option<Option<u64>>,
+    #[serde(default)]
+    pub mask: Option<Option<u64>>,
+    #[serde(default)]
+    pub reload: Option<Option<u64>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OreMiner {
+    #[serde(default)]
+    pub id: OreMinerId,
+    #[serde(default)]
+    pub rewards: OreMinerRewards,
+    #[serde(default)]
+    pub state: OreMinerState,
+    #[serde(default)]
+    pub automation: OreMinerAutomation,
+    #[serde(default)]
+    pub miner_snapshot: Option<Option<serde_json::Value>>,
+    #[serde(default)]
+    pub automation_snapshot: Option<Option<serde_json::Value>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Round {
     #[serde(default)]
     pub id: Option<u64>,

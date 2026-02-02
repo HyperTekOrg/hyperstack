@@ -81,7 +81,7 @@ enum Commands {
         skip_install: bool,
     },
 
-    /// Initialize a new Hyperstack project (auto-detects AST files)
+    /// Initialize a new Hyperstack project (auto-detects stack files)
     Init,
 
     /// Deploy a stack: push, build, and watch until completion
@@ -219,7 +219,7 @@ enum StackCommands {
     /// List all stacks with their deployment status
     List,
 
-    /// Push local stacks with their AST to remote
+    /// Push local stacks with their stack file to remote
     Push {
         /// Name of specific stack to push (pushes all if not specified)
         stack_name: Option<String>,
@@ -321,7 +321,7 @@ enum BuildCommands {
         #[arg(short, long)]
         version: Option<i32>,
 
-        /// Use local AST file directly instead of stack version
+        /// Use local stack file directly instead of stack version
         #[arg(long)]
         ast_file: Option<String>,
 
@@ -437,18 +437,27 @@ fn run(cli: Cli) -> anyhow::Result<()> {
                     output,
                     package_name,
                     url,
-                } => {
-                    commands::sdk::create_typescript(&cli.config, &stack_name, output, package_name, url)
-                }
+                } => commands::sdk::create_typescript(
+                    &cli.config,
+                    &stack_name,
+                    output,
+                    package_name,
+                    url,
+                ),
                 CreateCommands::Rust {
                     stack_name,
                     output,
                     crate_name,
                     module,
                     url,
-                } => {
-                    commands::sdk::create_rust(&cli.config, &stack_name, output, crate_name, module, url)
-                }
+                } => commands::sdk::create_rust(
+                    &cli.config,
+                    &stack_name,
+                    output,
+                    crate_name,
+                    module,
+                    url,
+                ),
             },
             SdkCommands::List => commands::sdk::list(&cli.config),
         },

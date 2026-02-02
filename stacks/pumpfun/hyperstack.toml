@@ -3,7 +3,7 @@ name = "pumpfun"
 
 [[stacks]]
 name = "pumpfun-token"
-ast = "PumpfunToken"
+stack = "PumpfunToken"
 url = "wss://pumpfun.stack.usehyperstack.com"
 typescript_output_file = "../sdk/typescript/src/pumpfun/index.ts"
 rust_output_crate = "../sdk/rust/src/pumpfun"

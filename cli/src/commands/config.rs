@@ -18,19 +18,23 @@ pub fn init(config_path: &str) -> Result<()> {
 
     println!("{} Initializing Hyperstack project...\n", "→".blue().bold());
 
-    println!("{} Scanning for AST files...", "→".blue().bold());
+    println!("{} Scanning for stack files...", "→".blue().bold());
     let discovered = discover_ast_files(None)?;
 
     if discovered.is_empty() {
-        println!("  {}", "No AST files found.".yellow());
-        println!("  Build your stack crate first to generate .hyperstack/*.ast.json files.\n");
+        println!("  {}", "No stack files found.".yellow());
+        println!("  Build your stack crate first to generate .hyperstack/*.stack.json files.\n");
     } else {
-        println!("  {} Found {} AST file(s):", "✓".green(), discovered.len());
+        println!(
+            "  {} Found {} stack file(s):",
+            "✓".green(),
+            discovered.len()
+        );
         for ast in &discovered {
             println!(
                 "    {} {} ({})",
                 "•".dimmed(),
-                ast.entity_name,
+                ast.stack_id,
                 ast.path.display()
             );
         }
@@ -43,7 +47,7 @@ pub fn init(config_path: &str) -> Result<()> {
         .iter()
         .map(|ast| StackConfig {
             name: Some(ast.stack_name.clone()),
-            ast: ast.entity_name.clone(),
+            stack: ast.stack_id.clone(),
             description: None,
             typescript_output_file: None,
             rust_output_crate: None,
@@ -141,8 +145,13 @@ pub fn validate(config_path: &str) -> Result<()> {
     } else {
         println!("  {} Stacks ({}):", "•".dimmed(), config.stacks.len());
         for stack in &config.stacks {
-            let name = stack.name.as_deref().unwrap_or(&stack.ast);
-            println!("    {} {} (ast: {})", "•".dimmed(), name.bold(), stack.ast);
+            let name = stack.name.as_deref().unwrap_or(&stack.stack);
+            println!(
+                "    {} {} (stack: {})",
+                "•".dimmed(),
+                name.bold(),
+                stack.stack
+            );
         }
     }
 

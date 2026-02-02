@@ -11,7 +11,7 @@
 //! 1. Parse macro attributes into data structures
 //! 2. Build `SerializableStreamSpec` via `ast_writer::build_and_write_ast`
 //! 3. Generate handler code via `codegen::generate_handlers_from_specs`
-//! 4. Write AST to disk for cloud compilation via `#[ast_spec]`
+//! 4. Return AST for unified stack file writing
 
 use std::collections::{HashMap, HashSet};
 
@@ -37,6 +37,8 @@ pub struct ProcessEntityResult {
     /// These come from the AST's `auto_generate_lookup_resolvers()` and need
     /// to be converted to `ResolverHookSpec` entries in the IDL path.
     pub auto_resolver_hooks: Vec<ResolverHook>,
+    /// The built AST spec for this entity (used to build the unified stack file).
+    pub ast_spec: Option<crate::ast::SerializableStreamSpec>,
 }
 
 use super::ast_writer::build_and_write_ast;
@@ -62,17 +64,18 @@ pub fn process_entity_struct(
     entity_name: String,
     section_structs: HashMap<String, ItemStruct>,
     skip_game_event: bool,
-) -> proc_macro::TokenStream {
+    stack_name: &str,
+) -> ProcessEntityResult {
     process_entity_struct_with_idl(
         input,
         entity_name,
         section_structs,
         skip_game_event,
+        stack_name,
         None,
         Vec::new(),
         Vec::new(),
     )
-    .token_stream
 }
 
 /// Process an entity struct with optional IDL context.
@@ -87,11 +90,12 @@ pub fn process_entity_struct_with_idl(
     entity_name: String,
     section_structs: HashMap<String, ItemStruct>,
     skip_game_event: bool,
+    stack_name: &str,
     idl: Option<&idl_parser::IdlSpec>,
     resolver_hooks: Vec<parse::ResolveKeyAttribute>,
     pda_registrations: Vec<parse::RegisterPdaAttribute>,
 ) -> ProcessEntityResult {
-    let name = syn::Ident::new(&entity_name, input.ident.span());
+    let _name = syn::Ident::new(&entity_name, input.ident.span());
     let state_name = syn::Ident::new(&format!("{}State", entity_name), input.ident.span());
     let spec_fn_name = format_ident!("create_{}_spec", to_snake_case(&entity_name));
 
@@ -587,6 +591,7 @@ pub fn process_entity_struct_with_idl(
     let field_accessors = codegen::generate_field_accessors(&section_specs);
 
     let module_name = format_ident!("{}", to_snake_case(&entity_name));
+    let stack_file_name = format!("{}.stack.json", stack_name);
 
     let output = quote! {
         #[derive(Debug, Clone, hyperstack::runtime::serde::Serialize, hyperstack::runtime::serde::Deserialize)]
@@ -601,20 +606,30 @@ pub fn process_entity_struct_with_idl(
             use super::*;
 
             #(#accessor_defs)*
+
+            #field_accessors
+
+            #computed_fields_hook
         }
 
-        #field_accessors
-
         pub fn #spec_fn_name() -> hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec<#state_name> {
-            // Load AST file at compile time (includes instruction_hooks!)
-            let ast_json = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/.hyperstack/", stringify!(#name), ".ast.json"));
+            let stack_json = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/.hyperstack/", #stack_file_name));
+            let stack_spec: hyperstack::runtime::hyperstack_interpreter::ast::SerializableStackSpec =
+                hyperstack::runtime::serde_json::from_str(stack_json)
+                    .expect("Failed to parse stack AST file");
 
-            // Deserialize the AST
-            let serializable_spec: hyperstack::runtime::hyperstack_interpreter::ast::SerializableStreamSpec = hyperstack::runtime::serde_json::from_str(ast_json)
-                .expect(&format!("Failed to parse AST file for {}", stringify!(#name)));
+            let entity_spec = stack_spec
+                .entities
+                .iter()
+                .find(|e| e.state_name == #entity_name)
+                .expect(&format!("Entity {} not found in stack AST", #entity_name));
 
-            // Convert to typed spec (this preserves instruction_hooks and all other fields!)
-            hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec::from_serializable(serializable_spec)
+            let mut spec = entity_spec.clone();
+            if spec.idl.is_none() {
+                spec.idl = stack_spec.idl.clone();
+            }
+
+            hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec::from_serializable(spec)
         }
 
         // Generated from declarative PDA macros
@@ -622,13 +637,12 @@ pub fn process_entity_struct_with_idl(
         #pda_registration_fns
 
         #(#handler_fns)*
-
-        #computed_fields_hook
     };
 
     ProcessEntityResult {
         token_stream: output.into(),
         auto_resolver_hooks,
+        ast_spec: Some(ast),
     }
 }
 

@@ -175,61 +175,10 @@ pub fn build_ast(
 }
 
 // ============================================================================
-// AST Writing
+// AST Building (no file writing — unified stack file is written at module level)
 // ============================================================================
 
-/// Write AST to JSON file at compile time (during macro expansion).
-///
-/// This function calls `build_ast` and writes the result to disk.
-/// The AST file can be used by `#[ast_spec]` for cloud compilation.
-#[allow(clippy::too_many_arguments)]
-pub fn write_ast_at_compile_time(
-    entity_name: &str,
-    primary_keys: &[String],
-    lookup_indexes: &[(String, Option<String>)],
-    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
-    events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
-    resolver_hooks: &[parse::ResolveKeyAttribute],
-    pda_registrations: &[parse::RegisterPdaAttribute],
-    derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
-    aggregate_conditions: &HashMap<String, String>,
-    computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
-    section_specs: &[EntitySection],
-    idl: Option<&idl_parser::IdlSpec>,
-    views: Vec<crate::ast::ViewDef>,
-) {
-    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        let ast_dir = std::path::Path::new(&manifest_dir).join(".hyperstack");
-
-        if std::fs::create_dir_all(&ast_dir).is_err() {
-            return;
-        }
-
-        let ast_file = ast_dir.join(format!("{}.ast.json", entity_name));
-
-        let ast = build_ast(
-            entity_name,
-            primary_keys,
-            lookup_indexes,
-            sources_by_type,
-            events_by_instruction,
-            resolver_hooks,
-            pda_registrations,
-            derive_from_mappings,
-            aggregate_conditions,
-            computed_fields,
-            section_specs,
-            idl,
-            views,
-        );
-
-        if let Ok(json) = serde_json::to_string_pretty(&ast) {
-            let _ = std::fs::write(&ast_file, json);
-        }
-    }
-}
-
-/// Build AST and write to disk, returning the AST for code generation.
+/// Build AST, returning the AST for code generation.
 #[allow(clippy::too_many_arguments)]
 pub fn build_and_write_ast(
     entity_name: &str,
@@ -246,7 +195,7 @@ pub fn build_and_write_ast(
     idl: Option<&idl_parser::IdlSpec>,
     views: Vec<crate::ast::ViewDef>,
 ) -> SerializableStreamSpec {
-    let ast = build_ast(
+    build_ast(
         entity_name,
         primary_keys,
         lookup_indexes,
@@ -260,20 +209,7 @@ pub fn build_and_write_ast(
         section_specs,
         idl,
         views,
-    );
-
-    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        let ast_dir = std::path::Path::new(&manifest_dir).join(".hyperstack");
-
-        if std::fs::create_dir_all(&ast_dir).is_ok() {
-            let ast_file = ast_dir.join(format!("{}.ast.json", entity_name));
-            if let Ok(json) = serde_json::to_string_pretty(&ast) {
-                let _ = std::fs::write(&ast_file, json);
-            }
-        }
-    }
-
-    ast
+    )
 }
 
 // ============================================================================

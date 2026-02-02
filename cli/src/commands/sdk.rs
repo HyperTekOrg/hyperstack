@@ -20,7 +20,7 @@ pub fn list(config_path: &str) -> Result<()> {
         println!("{}", "No stacks found.".yellow());
         println!();
         println!("To add stacks:");
-        println!("  1. Build your stack crate to generate .hyperstack/*.ast.json files");
+        println!("  1. Build your stack crate to generate .hyperstack/*.stack.json files");
         println!("  2. Run {} to create a configuration", "hs init".cyan());
         return Ok(());
     }
@@ -29,14 +29,14 @@ pub fn list(config_path: &str) -> Result<()> {
 
     if let Some(ref cfg) = config {
         for stack in &cfg.stacks {
-            let name = stack.name.as_deref().unwrap_or(&stack.ast);
+            let name = stack.name.as_deref().unwrap_or(&stack.stack);
             println!("  {}", name.green().bold());
-            println!("    AST: {}", stack.ast);
+            println!("    Stack: {}", stack.stack);
 
             if let Some(desc) = &stack.description {
                 println!("    Description: {}", desc);
             }
-            
+
             if let Some(url) = &stack.url {
                 println!("    URL: {}", url.cyan());
             }
@@ -51,13 +51,13 @@ pub fn list(config_path: &str) -> Result<()> {
 
     let config_asts: std::collections::HashSet<_> = config
         .as_ref()
-        .map(|c| c.stacks.iter().map(|s| s.ast.clone()).collect())
+        .map(|c| c.stacks.iter().map(|s| s.stack.clone()).collect())
         .unwrap_or_default();
 
     for ast in discovered {
-        if !config_asts.contains(&ast.entity_name) {
+        if !config_asts.contains(&ast.stack_id) {
             println!("  {} {}", "•".dimmed(), ast.stack_name.green().bold());
-            println!("    Entity: {}", ast.entity_name);
+            println!("    Stack: {}", ast.stack_id);
             println!("    Path: {}", ast.path.display());
             if let Some(pid) = &ast.program_id {
                 println!("    Program ID: {}", pid);
@@ -98,14 +98,14 @@ pub fn create_typescript(
 
     let (ast, output_path, package_name, stack_url) = if let Some(ref cfg) = config {
         if let Some(stack_config) = cfg.find_stack(stack_name) {
-            let ast = find_ast_file(&stack_config.ast, None)?.ok_or_else(|| {
+            let ast = find_ast_file(&stack_config.stack, None)?.ok_or_else(|| {
                 anyhow::anyhow!(
-                    "AST file not found for '{}'. Build your stack crate first.",
-                    stack_config.ast
+                    "Stack file not found for '{}'. Build your stack crate first.",
+                    stack_config.stack
                 )
             })?;
 
-            let name = stack_config.name.as_deref().unwrap_or(&stack_config.ast);
+            let name = stack_config.name.as_deref().unwrap_or(&stack_config.stack);
             let raw_output =
                 cfg.get_typescript_output_path(name, Some(stack_config), output_override.clone());
 
@@ -125,18 +125,20 @@ pub fn create_typescript(
 
             (ast, output, pkg, url)
         } else {
-            let (ast, output, pkg) = find_stack_by_name(stack_name, output_override, package_name_override)?;
+            let (ast, output, pkg) =
+                find_stack_by_name(stack_name, output_override, package_name_override)?;
             (ast, output, pkg, url_override)
         }
     } else {
-        let (ast, output, pkg) = find_stack_by_name(stack_name, output_override, package_name_override)?;
+        let (ast, output, pkg) =
+            find_stack_by_name(stack_name, output_override, package_name_override)?;
         (ast, output, pkg, url_override)
     };
 
     println!(
         "{} Found stack: {}",
         "✓".green().bold(),
-        ast.entity_name.bold()
+        ast.stack_id.bold()
     );
     println!("  Path: {}", ast.path.display());
     if let Some(pid) = &ast.program_id {
@@ -146,7 +148,10 @@ pub fn create_typescript(
     if let Some(url) = &stack_url {
         println!("  URL: {}", url.cyan());
     } else {
-        println!("  URL: {}", "(not configured - placeholder will be generated)".dimmed());
+        println!(
+            "  URL: {}",
+            "(not configured - placeholder will be generated)".dimmed()
+        );
     }
 
     if let Some(parent) = output_path.parent() {
@@ -177,7 +182,7 @@ fn find_stack_by_name(
     let ast = find_ast_file(stack_name, None)?.ok_or_else(|| {
         anyhow::anyhow!(
             "Stack '{}' not found.\n\
-             Make sure you've built your stack crate to generate .hyperstack/*.ast.json files.",
+             Make sure you've built your stack crate to generate .hyperstack/*.stack.json files.",
             stack_name
         )
     })?;
@@ -197,57 +202,66 @@ fn generate_typescript_sdk_from_ast(
     package_name: &str,
     url: Option<String>,
 ) -> Result<()> {
-    println!(
-        "{} Reading AST from {}...",
-        "→".blue().bold(),
-        ast.path.display()
-    );
+    let stack_spec = load_stack_spec(ast)?;
 
-    let ast_json = fs::read_to_string(&ast.path)
-        .with_context(|| format!("Failed to read AST file: {}", ast.path.display()))?;
-
-    let spec: hyperstack_interpreter::ast::SerializableStreamSpec =
-        match serde_json::from_str(&ast_json) {
-            Ok(s) => s,
-            Err(e) => {
-                return Err(anyhow::anyhow!(
-                    "Failed to deserialize AST from {}: {}",
-                    ast.path.display(),
-                    e
-                ));
-            }
-        };
+    let entity_count = stack_spec.entities.len();
+    let total_views: usize = stack_spec.entities.iter().map(|e| e.views.len()).sum();
 
     println!(
-        "{} Deserialized {} views from AST",
+        "{} {} entities, {} views total",
         "→".blue().bold(),
-        spec.views.len()
+        entity_count,
+        total_views,
     );
-    for view in &spec.views {
-        println!("   View: {}", view.id);
+    for entity in &stack_spec.entities {
+        let view_ids: Vec<&str> = entity.views.iter().map(|v| v.id.as_str()).collect();
+        println!(
+            "   Entity: {} (views: {})",
+            entity.state_name,
+            view_ids.join(", ")
+        );
     }
 
-    println!("{} Compiling TypeScript from AST...", "→".blue().bold());
+    println!("{} Compiling TypeScript from stack...", "→".blue().bold());
 
-    let config = hyperstack_interpreter::typescript::TypeScriptConfig {
+    let config = hyperstack_interpreter::typescript::TypeScriptStackConfig {
         package_name: package_name.to_string(),
         generate_helpers: true,
-        interface_prefix: String::new(),
         export_const_name: "STACK".to_string(),
         url,
     };
 
-    let output = hyperstack_interpreter::typescript::compile_serializable_spec(
-        spec,
-        ast.entity_name.clone(),
-        Some(config),
-    )
-    .map_err(|e| anyhow::anyhow!("Failed to compile TypeScript: {}", e))?;
+    let output = hyperstack_interpreter::typescript::compile_stack_spec(stack_spec, Some(config))
+        .map_err(|e| anyhow::anyhow!("Failed to compile TypeScript: {}", e))?;
 
-    hyperstack_interpreter::typescript::write_typescript_to_file(&output, output_path)
+    hyperstack_interpreter::typescript::write_stack_typescript_to_file(&output, output_path)
         .with_context(|| format!("Failed to write TypeScript to {}", output_path.display()))?;
 
     Ok(())
+}
+
+fn load_stack_spec(
+    ast: &DiscoveredAst,
+) -> Result<hyperstack_interpreter::ast::SerializableStackSpec> {
+    let ast_json = fs::read_to_string(&ast.path)
+        .with_context(|| format!("Failed to read stack file: {}", ast.path.display()))?;
+
+    let stack_spec: hyperstack_interpreter::ast::SerializableStackSpec =
+        serde_json::from_str(&ast_json).with_context(|| {
+            format!(
+                "Failed to deserialize stack AST from {}",
+                ast.path.display()
+            )
+        })?;
+
+    if stack_spec.entities.is_empty() {
+        return Err(anyhow::anyhow!(
+            "Stack AST contains no entities: {}",
+            ast.path.display()
+        ));
+    }
+
+    Ok(stack_spec)
 }
 
 pub fn create_rust(
@@ -301,7 +315,7 @@ pub fn create_rust(
     println!(
         "{} Found stack: {}",
         "✓".green().bold(),
-        ast.entity_name.bold()
+        ast.stack_id.bold()
     );
     println!("  Path: {}", ast.path.display());
     if let Some(pid) = &ast.program_id {
@@ -314,30 +328,31 @@ pub fn create_rust(
     if let Some(url) = &stack_url {
         println!("  URL: {}", url.cyan());
     } else {
-        println!("  URL: {}", "(not configured - placeholder will be generated)".dimmed());
+        println!(
+            "  URL: {}",
+            "(not configured - placeholder will be generated)".dimmed()
+        );
     }
 
     println!("\n{} Generating Rust SDK...", "→".blue().bold());
 
-    let ast_json = fs::read_to_string(&ast.path)
-        .with_context(|| format!("Failed to read AST file: {}", ast.path.display()))?;
+    let stack_spec = load_stack_spec(&ast)?;
 
-    let spec: hyperstack_interpreter::ast::SerializableStreamSpec = serde_json::from_str(&ast_json)
-        .with_context(|| format!("Failed to deserialize AST from {}", ast.path.display()))?;
+    println!(
+        "{} {} entities in stack",
+        "→".blue().bold(),
+        stack_spec.entities.len()
+    );
 
-    let rust_config = hyperstack_interpreter::rust::RustConfig {
+    let rust_config = hyperstack_interpreter::rust::RustStackConfig {
         crate_name: crate_name.clone(),
         sdk_version: "0.2".to_string(),
         module_mode: as_module,
         url: stack_url,
     };
 
-    let output = hyperstack_interpreter::rust::compile_serializable_spec(
-        spec,
-        ast.entity_name.clone(),
-        Some(rust_config),
-    )
-    .map_err(|e| anyhow::anyhow!("Failed to compile Rust: {}", e))?;
+    let output = hyperstack_interpreter::rust::compile_stack_spec(stack_spec, Some(rust_config))
+        .map_err(|e| anyhow::anyhow!("Failed to compile Rust: {}", e))?;
 
     if as_module {
         hyperstack_interpreter::rust::write_rust_module(&output, &output_dir)
@@ -378,10 +393,10 @@ fn find_stack_for_rust(
 ) -> Result<(DiscoveredAst, std::path::PathBuf, String)> {
     let (ast, stack_config) = if let Some(cfg) = config {
         if let Some(stack_config) = cfg.find_stack(stack_name) {
-            let ast = find_ast_file(&stack_config.ast, None)?.ok_or_else(|| {
+            let ast = find_ast_file(&stack_config.stack, None)?.ok_or_else(|| {
                 anyhow::anyhow!(
-                    "AST file not found for '{}'. Build your stack crate first.",
-                    stack_config.ast
+                    "Stack file not found for '{}'. Build your stack crate first.",
+                    stack_config.stack
                 )
             })?;
             (ast, Some(stack_config))
@@ -389,7 +404,7 @@ fn find_stack_for_rust(
             let ast = find_ast_file(stack_name, None)?.ok_or_else(|| {
                 anyhow::anyhow!(
                     "Stack '{}' not found.\n\
-                     Make sure you've built your stack crate to generate .hyperstack/*.ast.json files.",
+                     Make sure you've built your stack crate to generate .hyperstack/*.stack.json files.",
                     stack_name
                 )
             })?;
@@ -399,7 +414,7 @@ fn find_stack_for_rust(
         let ast = find_ast_file(stack_name, None)?.ok_or_else(|| {
             anyhow::anyhow!(
                 "Stack '{}' not found.\n\
-                 Make sure you've built your stack crate to generate .hyperstack/*.ast.json files.",
+                 Make sure you've built your stack crate to generate .hyperstack/*.stack.json files.",
                 stack_name
             )
         })?;

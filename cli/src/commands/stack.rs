@@ -17,7 +17,7 @@ pub fn push(config_path: &str, stack_name: Option<&str>) -> Result<()> {
 
     if config.is_none() && stack_name.is_none() {
         println!(
-            "{} No hyperstack.toml found, auto-discovering AST files...",
+            "{} No hyperstack.toml found, auto-discovering stack files...",
             "→".blue().bold()
         );
     } else if config.is_some() {
@@ -29,7 +29,7 @@ pub fn push(config_path: &str, stack_name: Option<&str>) -> Result<()> {
     if stacks_to_push.is_empty() {
         println!("{}", "No stacks found to push.".yellow());
         println!("\n{}", "To push stacks, either:".dimmed());
-        println!("  1. Build your stack crate to generate .hyperstack/*.ast.json files");
+        println!("  1. Build your stack crate to generate .hyperstack/*.stack.json files");
         println!("  2. Create a hyperstack.toml with your stack configuration");
         return Ok(());
     }
@@ -730,7 +730,10 @@ pub fn stop(stack_name: &str, branch: Option<&str>, force: bool) -> Result<()> {
             stack_name
         );
         println!("  Branch: {}", branch_display);
-        println!("  Current status: {}", format_deployment_status(deployment.status));
+        println!(
+            "  Current status: {}",
+            format_deployment_status(deployment.status)
+        );
         println!();
         println!("  This will stop the running deployment.");
         println!("  You can restart it later with 'hs up'.");
@@ -802,13 +805,13 @@ fn load_and_upload_ast(
 }
 
 fn stack_needs_update(local: &DiscoveredAst, remote: &ApiSpec) -> bool {
-    local.entity_name != remote.entity_name
+    local.stack_id != remote.entity_name
 }
 
 fn create_remote_stack(client: &ApiClient, ast: &DiscoveredAst) -> Result<ApiSpec> {
     let req = CreateSpecRequest {
         name: ast.stack_name.clone(),
-        entity_name: ast.entity_name.clone(),
+        entity_name: ast.stack_id.clone(),
         crate_name: String::new(),
         module_path: String::new(),
         description: None,
@@ -822,7 +825,7 @@ fn create_remote_stack(client: &ApiClient, ast: &DiscoveredAst) -> Result<ApiSpe
 fn update_remote_stack(client: &ApiClient, spec_id: i32, ast: &DiscoveredAst) -> Result<ApiSpec> {
     let req = crate::api_client::UpdateSpecRequest {
         name: Some(ast.stack_name.clone()),
-        entity_name: Some(ast.entity_name.clone()),
+        entity_name: Some(ast.stack_id.clone()),
         crate_name: None,
         module_path: None,
         description: None,

@@ -1205,6 +1205,285 @@ pub fn compile_serializable_spec(
     Ok(compiler.compile())
 }
 
+#[derive(Debug, Clone)]
+pub struct TypeScriptStackConfig {
+    pub package_name: String,
+    pub generate_helpers: bool,
+    pub export_const_name: String,
+    pub url: Option<String>,
+}
+
+impl Default for TypeScriptStackConfig {
+    fn default() -> Self {
+        Self {
+            package_name: "hyperstack-react".to_string(),
+            generate_helpers: true,
+            export_const_name: "STACK".to_string(),
+            url: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TypeScriptStackOutput {
+    pub interfaces: String,
+    pub stack_definition: String,
+    pub imports: String,
+}
+
+impl TypeScriptStackOutput {
+    pub fn full_file(&self) -> String {
+        let mut parts = Vec::new();
+        if !self.imports.is_empty() {
+            parts.push(self.imports.as_str());
+        }
+        if !self.interfaces.is_empty() {
+            parts.push(self.interfaces.as_str());
+        }
+        if !self.stack_definition.is_empty() {
+            parts.push(self.stack_definition.as_str());
+        }
+        parts.join("\n\n")
+    }
+}
+
+/// Compile a full SerializableStackSpec (multi-entity) into a single TypeScript file.
+///
+/// Generates:
+/// - Interfaces for ALL entities (OreRound, OreTreasury, OreMiner, etc.)
+/// - A single unified stack definition with nested views per entity
+/// - View helpers (stateView, listView)
+pub fn compile_stack_spec(
+    stack_spec: SerializableStackSpec,
+    config: Option<TypeScriptStackConfig>,
+) -> Result<TypeScriptStackOutput, String> {
+    let config = config.unwrap_or_default();
+    let stack_name = &stack_spec.stack_name;
+    let stack_kebab = to_kebab_case(stack_name);
+
+    // 1. Compile each entity's interfaces using existing per-entity compiler
+    let mut all_interfaces = Vec::new();
+    let mut entity_names = Vec::new();
+
+    for entity_spec in &stack_spec.entities {
+        let mut spec = entity_spec.clone();
+        // Inject stack-level IDL if entity doesn't have its own
+        if spec.idl.is_none() {
+            spec.idl = stack_spec.idl.clone();
+        }
+        let entity_name = spec.state_name.clone();
+        entity_names.push(entity_name.clone());
+
+        let per_entity_config = TypeScriptConfig {
+            package_name: config.package_name.clone(),
+            generate_helpers: false,
+            interface_prefix: String::new(),
+            export_const_name: config.export_const_name.clone(),
+            url: config.url.clone(),
+        };
+
+        let output = compile_serializable_spec(spec, entity_name, Some(per_entity_config))?;
+
+        // Only take the interfaces part (not the stack_definition — we generate our own)
+        if !output.interfaces.is_empty() {
+            all_interfaces.push(output.interfaces);
+        }
+    }
+
+    let interfaces = all_interfaces.join("\n\n");
+
+    // 2. Generate unified stack definition with all entity views
+    let stack_definition = generate_stack_definition_multi(
+        stack_name,
+        &stack_kebab,
+        &stack_spec.entities,
+        &entity_names,
+        &config,
+    );
+
+    Ok(TypeScriptStackOutput {
+        imports: String::new(),
+        interfaces,
+        stack_definition,
+    })
+}
+
+/// Write stack-level TypeScript output to a file
+pub fn write_stack_typescript_to_file(
+    output: &TypeScriptStackOutput,
+    path: &std::path::Path,
+) -> Result<(), std::io::Error> {
+    std::fs::write(path, output.full_file())
+}
+
+/// Generate a unified stack definition for multiple entities.
+///
+/// Produces something like:
+/// ```typescript
+/// export const ORE_STACK = {
+///   name: 'ore',
+///   url: 'wss://ore.stack.usehyperstack.com',
+///   views: {
+///     OreRound: {
+///       state: stateView<OreRound>('OreRound/state'),
+///       list: listView<OreRound>('OreRound/list'),
+///       latest: listView<OreRound>('OreRound/latest'),
+///     },
+///     OreTreasury: {
+///       state: stateView<OreTreasury>('OreTreasury/state'),
+///     },
+///     OreMiner: {
+///       state: stateView<OreMiner>('OreMiner/state'),
+///       list: listView<OreMiner>('OreMiner/list'),
+///     },
+///   },
+/// } as const;
+/// ```
+fn generate_stack_definition_multi(
+    stack_name: &str,
+    stack_kebab: &str,
+    entities: &[SerializableStreamSpec],
+    entity_names: &[String],
+    config: &TypeScriptStackConfig,
+) -> String {
+    let export_name = format!(
+        "{}_{}",
+        to_screaming_snake_case(stack_name),
+        config.export_const_name
+    );
+
+    let view_helpers = generate_view_helpers_static();
+
+    let url_line = match &config.url {
+        Some(url) => format!("  url: '{}',", url),
+        None => "  // url: 'wss://your-stack-url.stack.usehyperstack.com', // TODO: Set after first deployment".to_string(),
+    };
+
+    // Generate views block for each entity
+    let mut entity_view_blocks = Vec::new();
+    for (i, entity_spec) in entities.iter().enumerate() {
+        let entity_name = &entity_names[i];
+        let entity_pascal = to_pascal_case(entity_name);
+
+        let mut view_entries = Vec::new();
+
+        // Always include state view
+        view_entries.push(format!(
+            "      state: stateView<{entity}>('{}'),",
+            format!("{}/state", entity_name),
+            entity = entity_pascal
+        ));
+
+        // Include list view if the entity has one in its views
+        let has_list_view = entity_spec.views.iter().any(|v| v.id.ends_with("/list"));
+        if has_list_view {
+            view_entries.push(format!(
+                "      list: listView<{entity}>('{}'),",
+                format!("{}/list", entity_name),
+                entity = entity_pascal
+            ));
+        }
+
+        // Include derived views
+        for view in &entity_spec.views {
+            if !view.id.ends_with("/state")
+                && !view.id.ends_with("/list")
+                && view.id.starts_with(entity_name)
+            {
+                let view_name = view.id.split('/').nth(1).unwrap_or("unknown");
+                view_entries.push(format!(
+                    "      {}: listView<{entity}>('{}'),",
+                    view_name,
+                    view.id,
+                    entity = entity_pascal
+                ));
+            }
+        }
+
+        entity_view_blocks.push(format!(
+            "    {}: {{\n{}\n    }},",
+            entity_name,
+            view_entries.join("\n")
+        ));
+    }
+
+    let views_body = entity_view_blocks.join("\n");
+
+    // Generate entity type union for convenience
+    let entity_types: Vec<String> = entity_names.iter().map(|n| to_pascal_case(n)).collect();
+
+    format!(
+        r#"{view_helpers}
+
+// ============================================================================
+// Stack Definition
+// ============================================================================
+
+/** Stack definition for {stack_name} with {entity_count} entities */
+export const {export_name} = {{
+  name: '{stack_kebab}',
+{url_line}
+  views: {{
+{views_body}
+  }},
+}} as const;
+
+/** Type alias for the stack */
+export type {stack_name}Stack = typeof {export_name};
+
+/** Entity types in this stack */
+export type {stack_name}Entity = {entity_union};
+
+/** Default export for convenience */
+export default {export_name};"#,
+        view_helpers = view_helpers,
+        stack_name = stack_name,
+        entity_count = entities.len(),
+        export_name = export_name,
+        stack_kebab = stack_kebab,
+        url_line = url_line,
+        views_body = views_body,
+        entity_union = entity_types.join(" | "),
+    )
+}
+
+fn generate_view_helpers_static() -> String {
+    r#"// ============================================================================
+// View Definition Types (framework-agnostic)
+// ============================================================================
+
+/** View definition with embedded entity type */
+export interface ViewDef<T, TMode extends 'state' | 'list'> {
+  readonly mode: TMode;
+  readonly view: string;
+  /** Phantom field for type inference - not present at runtime */
+  readonly _entity?: T;
+}
+
+/** Helper to create typed state view definitions (keyed lookups) */
+function stateView<T>(view: string): ViewDef<T, 'state'> {
+  return { mode: 'state', view } as const;
+}
+
+/** Helper to create typed list view definitions (collections) */
+function listView<T>(view: string): ViewDef<T, 'list'> {
+  return { mode: 'list', view } as const;
+}"#
+    .to_string()
+}
+
+/// Convert PascalCase to SCREAMING_SNAKE_CASE (e.g., "OreStream" -> "ORE_STREAM")
+fn to_screaming_snake_case(s: &str) -> String {
+    let mut result = String::new();
+    for (i, ch) in s.chars().enumerate() {
+        if ch.is_uppercase() && i > 0 {
+            result.push('_');
+        }
+        result.push(ch.to_uppercase().next().unwrap());
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
