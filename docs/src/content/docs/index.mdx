@@ -19,18 +19,18 @@ Connect to the public ORE mining rounds stack — anyone can use it, no account 
 <TabItem label="React">
 ```tsx
 import { HyperstackProvider, useHyperstack } from 'hyperstack-react';
-import { OREROUND_STACK, OreRound } from 'hyperstack-stacks/ore';
+import { ORE_STREAM_STACK, type OreRound } from 'hyperstack-stacks/ore';
 
 function App() {
   return (
-    <HyperstackProvider websocketUrl="wss://ore.stack.usehyperstack.com">
+    <HyperstackProvider>
       <LatestRounds />
     </HyperstackProvider>
   );
 }
 
 function LatestRounds() {
-  const stack = useHyperstack(OREROUND_STACK);
+  const stack = useHyperstack(ORE_STREAM_STACK);
   const { data: rounds, isLoading } = stack.views.OreRound.latest.use({ take: 5 });
 
   if (isLoading) return <div>Connecting...</div>;
@@ -50,11 +50,10 @@ function LatestRounds() {
 <TabItem label="TypeScript">
 ```typescript
 import { HyperStack } from 'hyperstack-typescript';
-import { OREROUND_STACK, OreRound } from 'hyperstack-stacks/ore';
+import { ORE_STREAM_STACK, type OreRound } from 'hyperstack-stacks/ore';
 
-const hs = await HyperStack.connect('wss://ore.stack.usehyperstack.com', {
-  stack: OREROUND_STACK,
-});
+// Connect using the stack (URL is embedded in the stack definition)
+const hs = await HyperStack.connect(ORE_STREAM_STACK);
 
 for await (const update of hs.views.OreRound.latest.watch({ take: 1 })) {
   if (update.type === 'upsert') {
@@ -67,23 +66,17 @@ for await (const update of hs.views.OreRound.latest.watch({ take: 1 })) {
 <TabItem label="Rust">
 ```rust
 use hyperstack_sdk::prelude::*;
-use hyperstack_stacks::ore::OreRoundViews;
+use hyperstack_stacks::ore::{OreStack, OreRound};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
+    let hs = HyperStack::<OreStack>::connect().await?;
 
-    let views = hs.views::<OreRoundViews>();
-    let mut stream = views.latest().watch().take(1);
+    let mut stream = hs.views.ore_round.latest().listen().take(1);
 
-    while let Some(update) = stream.next().await {
-        match update {
-            Update::Upsert { data, .. } | Update::Patch { data, .. } => {
-                println!("Round # {:?}", data.id.round_id);
-                println!("Motherlode: {:?}", data.state.motherlode);
-            }
-            _ => {}
-        }
+    while let Some(round) = stream.next().await {
+        println!("Round # {:?}", round.id.round_id);
+        println!("Motherlode: {:?}", round.state.motherlode);
     }
 
     Ok(())

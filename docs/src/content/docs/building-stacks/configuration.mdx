@@ -20,7 +20,7 @@ hs init
 This command:
 
 - Creates `hyperstack.toml` with a project name based on your directory
-- Auto-discovers stacks from `.hyperstack/*.ast.json` files
+- Auto-discovers stacks from `.hyperstack/*.stack.json` files
 - Creates a `.hyperstack/` directory if it doesn't exist
 
 You can then customize the generated file for your needs.
@@ -46,7 +46,7 @@ For most projects, you only need a project name:
 name = "my-stack"
 ```
 
-The CLI auto-discovers stacks from `.hyperstack/*.ast.json` files created during `cargo build`.
+The CLI auto-discovers stacks from `.hyperstack/*.stack.json` files created during `cargo build`.
 
 ---
 
@@ -73,7 +73,7 @@ watch_by_default = true
 # Stack definitions (auto-discovered by default, but can be explicit)
 [[stacks]]
 name = "my-game"
-ast = "SettlementGame"                                 # Entity name or path to .ast.json
+stack = "SettlementGame"                               # Stack name or path to .stack.json
 description = "Settlement game tracking"
 typescript_output_file = "./src/generated/game.ts"    # Per-stack TypeScript output path
 rust_output_crate = "./crates/game-stack"             # Per-stack Rust output path
@@ -112,12 +112,12 @@ rust_module = true                                     # Per-stack: generate as 
 
 ### `[[stacks]]` — Stack Definitions
 
-Define stacks explicitly for custom naming or per-stack overrides. If not defined, stacks are auto-discovered from `.hyperstack/*.ast.json` files.
+Define stacks explicitly for custom naming or per-stack overrides. If not defined, stacks are auto-discovered from `.hyperstack/*.stack.json` files.
 
-| Option                   | Type    | Required | Description                                                 |
-| ------------------------ | ------- | -------- | ----------------------------------------------------------- |
-| `name`                   | string  | Yes      | Stack name (used for SDK generation and CLI commands)       |
-| `ast`                    | string  | Yes      | Entity name from your Rust code or path to `.ast.json` file |
+| Option                   | Type    | Required | Description                                                   |
+| ------------------------ | ------- | -------- | ------------------------------------------------------------- |
+| `name`                   | string  | Yes      | Stack name (used for SDK generation and CLI commands)         |
+| `stack`                  | string  | Yes      | Stack name from your Rust code or path to `.stack.json` file  |
 | `description`            | string  | No       | Stack description                                           |
 | `typescript_output_file` | string  | No       | Per-stack TypeScript output file path                       |
 | `rust_output_crate`      | string  | No       | Per-stack Rust output crate/module directory                |
@@ -129,18 +129,20 @@ Define stacks explicitly for custom naming or per-stack overrides. If not define
 
 ### Multiple Stacks in One Project
 
+Each stack is a separate `#[hyperstack]` module that can contain multiple entities. Use multiple `[[stacks]]` entries when you have separate programs or data sources:
+
 ```toml
 [project]
 name = "my-defi-protocol"
 
 [[stacks]]
 name = "lending"
-ast = "LendingMarket"
+stack = "LendingMarket"
 description = "Lending pool positions and interest rates"
 
 [[stacks]]
 name = "dex"
-ast = "DexPool"
+stack = "DexPool"
 description = "DEX liquidity pools and swaps"
 ```
 
@@ -180,7 +182,7 @@ Or per-stack:
 ```toml
 [[stacks]]
 name = "my-game"
-ast = "SettlementGame"
+stack = "SettlementGame"
 rust_module = true
 rust_output_crate = "./src/generated"  # Will create mod.rs here
 ```
@@ -190,7 +192,7 @@ rust_output_crate = "./src/generated"  # Will create mod.rs here
 ```toml
 [[stacks]]
 name = "game"
-ast = "GameState"
+stack = "GameState"
 typescript_output_file = "./src/game.ts"
 ```
 
@@ -241,7 +243,7 @@ This checks:
 
 - Required fields are present
 - File paths are valid
-- Stack references resolve to valid `.ast.json` files
+- Stack references resolve to valid `.stack.json` files
 - No conflicting settings
 
 ---

@@ -84,26 +84,25 @@ for await (const token of hs.views.Token.list.use({
 
 ```rust
 use hyperstack_sdk::prelude::*;
-use hyperstack_stacks::token::TokenViews;
+use hyperstack_stacks::token::{TokenStack, Token};
 
-let hs = HyperStack::connect("wss://token.stack.usehyperstack.com").await?;
-let views = hs.views::<TokenViews>();
+let hs = HyperStack::<TokenStack>::connect().await?;
 
 // Get first 10 entities
-let mut stream = views.list()
-    .take(10)
-    .watch();
+let mut stream = hs.views.token.list()
+    .listen()
+    .take(10);
 
 // Get page 3 (skip 20, take 10)
 let page = 3;
 let page_size = 10;
-let mut stream = views.list()
+let mut stream = hs.views.token.list()
+    .listen()
     .skip((page - 1) * page_size)
-    .take(page_size)
-    .watch();
+    .take(page_size);
 
-while let Some(update) = stream.next().await {
-    println!("Token: {:?}", update.data.id.mint);
+while let Some(token) = stream.next().await {
+    println!("Token: {:?}", token.id.mint);
 }
 ```
 
@@ -205,10 +204,10 @@ Custom views appear alongside the default views in your SDK:
 
 ```typescript
 import { useHyperStack } from "hyperstack-react";
-import { OREROUND_STACK } from "hyperstack-stacks/ore";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
 
 function LatestRounds() {
-  const hs = useHyperStack(OREROUND_STACK);
+  const hs = useHyperStack(ORE_STREAM_STACK);
 
   // Default views
   const { data: allRounds } = hs.views.OreRound.list.use();
@@ -226,10 +225,10 @@ function LatestRounds() {
 
 ```typescript
 import { HyperStack } from "hyperstack-typescript";
-import { OREROUND_STACK } from "hyperstack-stacks/ore";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
 
 const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
-  stack: OREROUND_STACK,
+  stack: ORE_STREAM_STACK,
 });
 
 // Default views
@@ -247,20 +246,20 @@ for await (const round of hs.views.OreRound.latest.use()) {
 
 ```rust
 use hyperstack_sdk::prelude::*;
-use hyperstack_stacks::ore::OreRoundViews;
+use hyperstack_stacks::ore::{OreStack, OreRound};
 
-let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
-let views = hs.views::<OreRoundViews>();
+let hs = HyperStack::<OreStack>::connect().await?;
 
 // Default views
-let mut list_stream = views.list().watch();
-let mut state_stream = views.state(round_address).watch();
+let mut list_stream = hs.views.ore_round.list().listen();
+let round_address = "some-round-address";
+let mut state_stream = hs.views.ore_round.state().listen(round_address);
 
 // Custom view - sorted by round_id desc
-let mut latest_stream = views.latest().watch();
+let mut latest_stream = hs.views.ore_round.latest().listen();
 
-while let Some(update) = latest_stream.next().await {
-    println!("Round: {:?}", update.data.id.round_id);
+while let Some(round) = latest_stream.next().await {
+    println!("Round: {:?}", round.id.round_id);
 }
 ```
 
@@ -335,10 +334,10 @@ Filter data as it streams using standard JavaScript:
 
 ```typescript
 import { HyperStack } from "hyperstack-typescript";
-import { OREROUND_STACK } from "hyperstack-stacks/ore";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
 
 const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
-  stack: OREROUND_STACK,
+  stack: ORE_STREAM_STACK,
 });
 
 // Filter in the streaming loop
@@ -357,22 +356,21 @@ Use iterator adapters to filter streams:
 
 ```rust
 use hyperstack_sdk::prelude::*;
-use hyperstack_stacks::ore::OreRoundViews;
+use hyperstack_stacks::ore::{OreStack, OreRound};
 use futures::StreamExt;
 
-let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
-let views = hs.views::<OreRoundViews>();
+let hs = HyperStack::<OreStack>::connect().await?;
 
 // Filter using stream adapters
-let mut stream = views.latest()
-    .watch()
-    .filter(|update| {
-        let high_value = update.data.state.motherlode.unwrap_or(0) >= 1_000_000_000;
-        async move { high_value }
+let mut stream = hs.views.ore_round.latest()
+    .listen()
+    .filter(|round| {
+        let high_value = round.state.motherlode.flatten().unwrap_or(0) >= 1_000_000_000;
+        futures::future::ready(high_value)
     });
 
-while let Some(update) = stream.next().await {
-    println!("High-value round: {:?}", update.data.id.round_id);
+while let Some(round) = stream.next().await {
+    println!("High-value round: {:?}", round.id.round_id);
 }
 ```
 

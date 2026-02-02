@@ -65,10 +65,10 @@ my-stack/
 ├── src/lib.rs
 ├── Cargo.toml
 └── .hyperstack/
-    └── Token.ast.json    # Generated pipeline specification
+    └── OreStack.stack.json    # Generated stack specification
 ```
 
-This specification contains everything Hyperstack needs to execute your pipeline: field mappings, aggregation logic, key resolution rules, and more.
+The `.stack.json` file contains everything Hyperstack needs to execute your pipeline: all entities, field mappings, aggregation logic, key resolution rules, and more. A single stack file can contain multiple entities.
 
 ---
 
@@ -121,23 +121,23 @@ hs sdk create rust ore
 </TabItem>
 </Tabs>
 
-This creates a package containing the `ORE_STACK` definition that tells the Hyperstack client how to interact with your feed. Import it in your application:
+This creates a package containing the stack definition that tells the Hyperstack client how to interact with your feed, including all entities and their views. Import it in your application:
 
 <Tabs>
 <TabItem label="React">
 
 ```tsx
 import { HyperstackProvider, useHyperstack } from "hyperstack-react";
-import { ORE_STACK } from "hyperstack-stacks/ore"; // Generated in Step 4
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore"; // Generated in Step 4
 
 // Wrap your app
-<HyperstackProvider websocketUrl="wss://ore.stack.usehyperstack.com">
+<HyperstackProvider>
   <App />
 </HyperstackProvider>;
 
 // In your component
-const stack = useHyperstack(ORE_STACK);
-const { data: rounds } = stack.views.rounds.list.use();
+const stack = useHyperstack(ORE_STREAM_STACK);
+const { data: rounds } = stack.views.OreRound.list.use();
 ```
 
 </TabItem>
@@ -145,14 +145,12 @@ const { data: rounds } = stack.views.rounds.list.use();
 
 ```typescript
 import { HyperStack } from "hyperstack-typescript";
-import { ORE_STACK } from "hyperstack-stacks/ore"; // Generated in Step 4
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore"; // Generated in Step 4
 
-const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
-  stack: ORE_STACK,
-});
+const hs = await HyperStack.connect(ORE_STREAM_STACK);
 
-for await (const update of hs.views.rounds.list.watch()) {
-  console.log("Round updated:", update.data);
+for await (const round of hs.views.OreRound.list.use()) {
+  console.log("Round updated:", round);
 }
 ```
 
@@ -161,26 +159,19 @@ for await (const update of hs.views.rounds.list.watch()) {
 
 ```rust
 use hyperstack_sdk::prelude::*;
-use ore_stack::OreRoundViews;  // Generated in Step 4
+use ore_stack::{OreStack, OreRound};  // Generated in Step 4
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Connect to your deployed stack
-    let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
+    let hs = HyperStack::<OreStack>::connect().await?;
 
-    // Get typed views
-    let views = hs.views::<OreRoundViews>();
-    let mut stream = views.rounds().watch();
+    // Stream updates via typed views
+    let mut stream = hs.views.ore_round.latest().listen();
 
-    // Stream updates
-    while let Some(update) = stream.next().await {
-        match update {
-            Update::Upsert { data, .. } => {
-                println!("Round #{}: motherlode={}",
-                    data.round_id, data.motherlode);
-            }
-            Update::Delete { key } => println!("Round deleted: {}", key),
-        }
+    while let Some(round) = stream.next().await {
+        println!("Round #{:?}: motherlode={:?}",
+            round.id.round_id, round.state.motherlode);
     }
 
     Ok(())

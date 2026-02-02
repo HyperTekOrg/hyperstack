@@ -88,7 +88,7 @@ Initialize a new Hyperstack project.
 hs init
 ```
 
-Creates `hyperstack.toml` with auto-discovered stacks from `.hyperstack/*.ast.json`.
+Creates `hyperstack.toml` with auto-discovered stacks from `.hyperstack/*.stack.json`.
 
 ### hs config validate
 
@@ -401,11 +401,11 @@ rust_module_mode = false                               # Generate Rust SDKs as m
 watch_by_default = true
 
 # Stack definitions
-# Auto-discovered from .hyperstack/*.ast.json
+# Auto-discovered from .hyperstack/*.stack.json
 # Define explicitly for custom naming or per-stack overrides:
 [[stacks]]
 name = "my-game"
-ast = "SettlementGame"                                 # Entity name or path to .ast.json
+stack = "SettlementGame"                               # Stack name or path to .stack.json
 description = "Settlement game tracking"
 typescript_output_file = "./src/generated/game.ts"    # Per-stack TypeScript output path
 rust_output_crate = "./crates/game-stack"             # Per-stack Rust output path
@@ -432,7 +432,7 @@ For most projects, you only need:
 name = "my-project"
 ```
 
-The CLI auto-discovers stacks from `.hyperstack/*.ast.json` files.
+The CLI auto-discovers stacks from `.hyperstack/*.stack.json` files.
 
 ---
 
@@ -561,7 +561,7 @@ hs telemetry disable
 | -------------------- | ------------------------------------------ |
 | `Not authenticated`  | Run `hs auth login`                        |
 | `Stack not found`    | Check `hs stack list` for available stacks |
-| `AST file not found` | Run `cargo build` to generate AST          |
+| `Stack file not found` | Run `cargo build` to generate stack spec  |
 | `Build failed`       | Try again                                  |
 | `Config invalid`     | Run `hs config validate`                   |
 

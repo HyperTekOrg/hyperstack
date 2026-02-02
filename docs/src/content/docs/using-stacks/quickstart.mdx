@@ -172,10 +172,10 @@ export default function App() {
 ```tsx
 // components/OreDashboard.tsx
 import { useHyperstack, useConnectionState } from "hyperstack-react";
-import { OREROUND_STACK } from "hyperstack-stacks/ore";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
 
 export function OreDashboard() {
-  const stack = useHyperstack(OREROUND_STACK);
+  const stack = useHyperstack(ORE_STREAM_STACK);
   const { data: rounds } = stack.views.OreRound.latest.use({ take: 5 });
 
   return (
@@ -198,10 +198,10 @@ The TypeScript template uses `hyperstack-typescript` with typed views:
 ```typescript
 // main.ts
 import { HyperStack } from "hyperstack-typescript";
-import { OREROUND_STACK, type OreRound } from "hyperstack-stacks/ore";
+import { ORE_STREAM_STACK, type OreRound } from "hyperstack-stacks/ore";
 
 const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
-  stack: OREROUND_STACK,
+  stack: ORE_STREAM_STACK,
 });
 
 for await (const update of hs.views.OreRound.latest.watch({ take: 1 })) {
@@ -220,23 +220,17 @@ The Rust template uses `hyperstack-sdk` with typed views:
 ```rust
 // main.rs
 use hyperstack_sdk::prelude::*;
-use hyperstack_stacks::ore::OreRoundViews;
+use hyperstack_stacks::ore::{OreStack, OreRound};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
+    let hs = HyperStack::<OreStack>::connect().await?;
 
-    let views = hs.views::<OreRoundViews>();
-    let mut stream = views.latest().watch();
+    let mut stream = hs.views.ore_round.latest().listen();
 
-    while let Some(update) = stream.next().await {
-        match update {
-            Update::Upsert { data, .. } | Update::Patch { data, .. } => {
-                println!("Round # {:?}", data.id.round_id);
-                println!("Motherlode: {:?}", data.state.motherlode);
-            }
-            Update::Delete { key } => println!("Deleted: {}", key),
-        }
+    while let Some(round) = stream.next().await {
+        println!("Round # {:?}", round.id.round_id);
+        println!("Motherlode: {:?}", round.state.motherlode);
     }
     Ok(())
 }

@@ -113,16 +113,16 @@ pub mod ore_stream {
 }
 ```
 
-### 5. Build to generate AST
+### 5. Build to generate the stack file
 
-Hyperstack uses **AST serialization**. When you compile your code, it automatically generates a `.hyperstack/ore_stream.ast.json` file.
+When you compile your code, Hyperstack macros automatically generate a `.hyperstack/OreStream.stack.json` file containing all entities in your stack.
 
 ```bash
 cargo build
 ```
 
 :::tip[Checkpoint]
-Verify that the file `.hyperstack/ore_stream.ast.json` exists in your project root. This JSON file contains the compiled logic of your stream.
+Verify that the file `.hyperstack/OreStream.stack.json` exists in your project root. This JSON file contains the compiled specification for your stack, including all entities and their field mappings.
 :::
 
 ---
@@ -137,7 +137,7 @@ Hyperstack is currently in closed beta. You'll need an API key to deploy. [Conta
 
 ### 1. Initialize your project
 
-This creates a `hyperstack.toml` file that links your local AST to the cloud.
+This creates a `hyperstack.toml` file that links your local stack to the cloud.
 
 ```bash
 hs init
@@ -145,7 +145,7 @@ hs init
 
 ### 2. Push and Deploy
 
-The `up` command is a shortcut that pushes your AST, builds the container, and deploys it to a global cluster.
+The `up` command is a shortcut that pushes your stack, builds the container, and deploys it to a global cluster.
 
 ```bash
 hs up
@@ -337,9 +337,9 @@ npx tsx src/index.ts
 
 ## Troubleshooting
 
-### "AST file not found"
+### "Stack file not found"
 
-Ensure you ran `cargo build` in your Rust project. The `#[hyperstack]` macro generates the AST file during compilation.
+Ensure you ran `cargo build` in your Rust project. The `#[hyperstack]` macro generates the `.stack.json` file during compilation.
 
 ### WebSocket connection fails
 

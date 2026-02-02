@@ -35,10 +35,10 @@ npm install hyperstack-react zustand
 ```tsx
 // App.tsx
 import { HyperstackProvider, useHyperstack } from "hyperstack-react";
-import { OREROUND_STACK } from "hyperstack-stacks/ore";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
 
 function OreRounds() {
-  const stack = useHyperstack(OREROUND_STACK);
+  const stack = useHyperstack(ORE_STREAM_STACK);
   const { data: rounds, isLoading } = stack.views.OreRound.latest.use({
     take: 5,
   });
@@ -88,13 +88,13 @@ npm install hyperstack-typescript
 ```typescript
 // stream.ts
 import { HyperStack } from "hyperstack-typescript";
-import { OREROUND_STACK, type OreRound } from "hyperstack-stacks/ore";
+import { ORE_STREAM_STACK, type OreRound } from "hyperstack-stacks/ore";
 
 async function main() {
   console.log("Connecting to ORE stack...\n");
 
   const hs = await HyperStack.connect("wss://ore.stack.usehyperstack.com", {
-    stack: OREROUND_STACK,
+    stack: ORE_STREAM_STACK,
   });
 
   console.log("Connected! Streaming live ORE rounds:\n");
@@ -136,27 +136,21 @@ hyperstack-stacks = "{{VERSION}}"
 ```rust
 // src/main.rs
 use hyperstack_sdk::prelude::*;
-use hyperstack_stacks::ore::OreRoundViews;
+use hyperstack_stacks::ore::{OreStack, OreRound};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("Connecting to ORE stack...\n");
 
-    let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
+    let hs = HyperStack::<OreStack>::connect().await?;
 
     println!("Connected! Streaming live ORE rounds:\n");
 
-    let views = hs.views::<OreRoundViews>();
-    let mut stream = views.latest().watch();
+    let mut stream = hs.views.ore_round.latest().listen();
 
-    while let Some(update) = stream.next().await {
-        match update {
-            Update::Upsert { data, .. } | Update::Patch { data, .. } => {
-                println!("Round #{:?}", data.id.round_id);
-                println!("  Motherlode: {:?}", data.state.motherlode);
-            }
-            Update::Delete { key } => println!("Deleted: {}", key),
-        }
+    while let Some(round) = stream.next().await {
+        println!("Round #{:?}", round.id.round_id);
+        println!("  Motherlode: {:?}", round.state.motherlode);
     }
 
     Ok(())
@@ -297,7 +291,7 @@ npm install hyperstack-stacks
 ```
 
 ```typescript
-import { OREROUND_STACK } from "hyperstack-stacks/ore";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
 ```
 
 **Option 2: Generate from your own stack**

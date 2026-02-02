@@ -26,10 +26,10 @@ No peer dependencies. Works anywhere JavaScript runs.
 
 ```typescript
 import { HyperStack } from "hyperstack-typescript";
-import { OREROUND_STACK, type OreRound } from "hyperstack-stacks/ore";
+import { ORE_STREAM_STACK, type OreRound } from "hyperstack-stacks/ore";
 
 // Connect using the stack (URL is embedded in the stack definition)
-const hs = await HyperStack.connect(OREROUND_STACK);
+const hs = await HyperStack.connect(ORE_STREAM_STACK);
 
 // Stream entities with full type safety
 for await (const round of hs.views.OreRound.latest.use()) {
@@ -47,10 +47,10 @@ Each stack definition includes its own URL, so connecting is simple:
 
 ```typescript
 import { HyperStack } from "hyperstack-typescript";
-import { OREROUND_STACK } from "hyperstack-stacks/ore";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
 
 // Stack includes its URL - just pass the stack
-const hs = await HyperStack.connect(OREROUND_STACK);
+const hs = await HyperStack.connect(ORE_STREAM_STACK);
 
 // Now you have fully typed views
 const rounds = await hs.views.OreRound.latest.get();
@@ -61,7 +61,7 @@ const rounds = await hs.views.OreRound.latest.get();
 You can override the stack's default URL if needed:
 
 ```typescript
-const hs = await HyperStack.connect(OREROUND_STACK, {
+const hs = await HyperStack.connect(ORE_STREAM_STACK, {
   url: "wss://custom.endpoint.com",
 });
 ```
@@ -69,7 +69,7 @@ const hs = await HyperStack.connect(OREROUND_STACK, {
 ### Connection Options
 
 ```typescript
-const hs = await HyperStack.connect(OREROUND_STACK, {
+const hs = await HyperStack.connect(ORE_STREAM_STACK, {
   maxEntriesPerView: 5000, // Limit entries per view (default: 10000)
 });
 ```
@@ -339,7 +339,7 @@ Use `getSync()` in synchronous contexts like React render functions where you ca
 Each view maintains an in-memory store of entities. By default, stores are limited to 10,000 entries to prevent memory issues on long-running clients. When the limit is reached, oldest entries are evicted (LRU).
 
 ```typescript
-const hs = await HyperStack.connect(OREROUND_STACK, {
+const hs = await HyperStack.connect(ORE_STREAM_STACK, {
   maxEntriesPerView: 5000, // Custom limit
 });
 ```
@@ -347,7 +347,7 @@ const hs = await HyperStack.connect(OREROUND_STACK, {
 To disable limiting (not recommended for production):
 
 ```typescript
-const hs = await HyperStack.connect(OREROUND_STACK, {
+const hs = await HyperStack.connect(ORE_STREAM_STACK, {
   maxEntriesPerView: null, // Unlimited
 });
 ```
@@ -444,10 +444,10 @@ for await (const update of hs.views.OreRound.latest.watch()) {
 
 ```typescript
 import { HyperStack, HyperStackError } from "hyperstack-typescript";
-import { OREROUND_STACK } from "hyperstack-stacks/ore";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
 
 try {
-  const hs = await HyperStack.connect(OREROUND_STACK);
+  const hs = await HyperStack.connect(ORE_STREAM_STACK);
 } catch (error) {
   if (error instanceof HyperStackError) {
     console.error("Hyperstack error:", error.message);

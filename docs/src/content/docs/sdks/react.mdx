@@ -16,7 +16,7 @@ See the [TypeScript SDK](/sdks/typescript/) for the framework-agnostic core SDK.
 
 ```tsx
 import { HyperstackProvider, useHyperstack } from "hyperstack-react";
-import { OREROUND_STACK } from "hyperstack-stacks/ore";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
 
 function App() {
   return (
@@ -27,7 +27,7 @@ function App() {
 }
 
 function Dashboard() {
-  const stack = useHyperstack(OREROUND_STACK);
+  const stack = useHyperstack(ORE_STREAM_STACK);
   const { data: rounds, isLoading } = stack.views.OreRound.latest.use();
 
   if (isLoading) return <p>Loading...</p>;
@@ -104,7 +104,7 @@ npm install hyperstack-stacks
 ```
 
 ```typescript
-import { OREROUND_STACK } from "hyperstack-stacks/ore";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
 ```
 
 Each stack includes its default URL (e.g., `wss://ore.stack.usehyperstack.com`).
@@ -133,10 +133,10 @@ Access your stack's typed interface:
 
 ```tsx
 import { useHyperstack } from "hyperstack-react";
-import { OREROUND_STACK } from "hyperstack-stacks/ore";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
 
 function RoundList() {
-  const stack = useHyperstack(OREROUND_STACK);
+  const stack = useHyperstack(ORE_STREAM_STACK);
   const { data: rounds, isLoading, error } = stack.views.OreRound.list.use();
 
   if (isLoading) return <p>Loading...</p>;
@@ -158,7 +158,7 @@ function RoundList() {
 
 ```tsx
 function RoundList() {
-  const stack = useHyperstack(OREROUND_STACK);
+  const stack = useHyperstack(ORE_STREAM_STACK);
   const { data: rounds, isLoading, error } = stack.views.OreRound.list.use();
 
   if (isLoading) return <div>Connecting...</div>;
@@ -180,7 +180,7 @@ function RoundList() {
 
 ```tsx
 function RoundDetail({ roundAddress }: { roundAddress: string }) {
-  const stack = useHyperstack(OREROUND_STACK);
+  const stack = useHyperstack(ORE_STREAM_STACK);
   const { data: round, isLoading } = stack.views.OreRound.state.use({
     key: roundAddress,
   });
@@ -369,7 +369,7 @@ function ConnectionStatus() {
 Returns a typed interface to your stack's views. The stack definition includes its URL, so the connection is established automatically.
 
 ```typescript
-const stack = useHyperstack(OREROUND_STACK);
+const stack = useHyperstack(ORE_STREAM_STACK);
 // stack.views.OreRound.list.use()
 // stack.views.OreRound.state.use({ key })
 // stack.views.OreRound.latest.use()  // Custom view
@@ -425,10 +425,10 @@ A full React component combining everything:
 ```tsx
 // src/App.tsx
 import { useHyperstack, useConnectionState } from "hyperstack-react";
-import { OREROUND_STACK } from "hyperstack-stacks/ore";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
 
 function OreDashboard() {
-  const stack = useHyperstack(OREROUND_STACK);
+  const stack = useHyperstack(ORE_STREAM_STACK);
   const connectionState = useConnectionState();
 
   const {

@@ -24,7 +24,7 @@ Building data pipelines for Solana typically involves manual account parsing, co
 
 ## Anatomy of a Stack Definition
 
-A Hyperstack definition is a Rust module annotated with `#[hyperstack]`. Inside this module, you define **Entities**—the structured data objects your application will consume.
+A Hyperstack definition is a Rust module annotated with `#[hyperstack]`. Inside this module, you define **Entities**—the structured data objects your application will consume. A single module can contain multiple `#[entity]` structs, all packaged into one stack.
 
 ```rust
 use hyperstack::prelude::*;

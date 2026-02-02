@@ -99,7 +99,7 @@ Think of it as a "live query" against Solana — you define what data you want, 
 
 ### Entities
 
-An **Entity** is a structured object representing on-chain state. Each entity has:
+An **Entity** is a structured object representing on-chain state. A stack can contain multiple entities — for example, a DeFi stack might have separate entities for pools, positions, and trades. Each entity has:
 
 - **Primary key** - Unique identifier (usually a pubkey)
 - **Fields** - Data attributes with population strategies
@@ -178,9 +178,9 @@ You can share generated SDKs with your team or publish them to npm/crates.io.
 ### Specification Time
 
 1. Write stream definition using Rust macros
-2. Build generates AST (`.hyperstack/*.ast.json`)
+2. Build generates stack spec (`.hyperstack/*.stack.json`)
 3. Deploy with `hs up`
-4. Cloud compiles AST to bytecode
+4. Cloud compiles spec to bytecode
 
 ### Client
 
