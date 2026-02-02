@@ -1373,15 +1373,12 @@ fn generate_stack_definition_multi(
             entity = entity_pascal
         ));
 
-        // Include list view if the entity has one in its views
-        let has_list_view = entity_spec.views.iter().any(|v| v.id.ends_with("/list"));
-        if has_list_view {
-            view_entries.push(format!(
-                "      list: listView<{entity}>('{}'),",
-                format!("{}/list", entity_name),
-                entity = entity_pascal
-            ));
-        }
+        // Always include list view (built-in view, like state)
+        view_entries.push(format!(
+            "      list: listView<{entity}>('{}'),",
+            format!("{}/list", entity_name),
+            entity = entity_pascal
+        ));
 
         // Include derived views
         for view in &entity_spec.views {

@@ -746,8 +746,6 @@ fn generate_stack_entity_rs(
     for (i, entity_name) in entity_names.iter().enumerate() {
         let spec = &entity_specs[i];
 
-        let has_list_view = spec.views.iter().any(|v| v.id.ends_with("/list"));
-
         let derived: Vec<_> = spec
             .views
             .iter()
@@ -773,16 +771,14 @@ fn generate_stack_entity_rs(
             entity = entity_name
         ));
 
-        // list() method — only if entity has a list view
-        if has_list_view {
-            methods.push(format!(
-                r#"
+        // Always include list view (built-in view, like state)
+        methods.push(format!(
+            r#"
     pub fn list(&self) -> ViewHandle<{entity}> {{
         self.builder.view("{entity}/list")
     }}"#,
-                entity = entity_name
-            ));
-        }
+            entity = entity_name
+        ));
 
         // Derived view methods
         for view in &derived {
