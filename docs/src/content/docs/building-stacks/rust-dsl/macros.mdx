@@ -25,7 +25,7 @@ pub mod my_stream {
 
 | Argument        | Type                | Required | Description                                                                  |
 | --------------- | ------------------- | -------- | ---------------------------------------------------------------------------- |
-| `idl`           | `string`            | No\*     | Path to an Anchor IDL JSON file relative to `Cargo.toml`.                    |
+| `idl`           | `string` \| `array` | No\*     | Path(s) to Anchor IDL JSON file(s) relative to `Cargo.toml`. Use an array for multi-program stacks: `idl = ["ore.json", "entropy.json"]`. |
 | `proto`         | `string` \| `array` | No\*     | Path(s) to `.proto` files for Protobuf-based streams.                        |
 | `skip_decoders` | `bool`              | No       | If true, skips generating instruction decoders (useful for manual decoding). |
 
@@ -63,9 +63,11 @@ These macros are applied to fields within an `#[entity]` struct to define how da
 Maps a field from a Solana account directly to an entity field.
 
 ```rust
-#[map(BondingCurve::virtual_sol_reserves, strategy = LastWrite)]
+#[map(pump_sdk::accounts::BondingCurve::virtual_sol_reserves, strategy = LastWrite)]
 pub reserves: u64,
 ```
+
+The path prefix (`pump_sdk::accounts::`) is derived from the IDL's program name. See [Stack Definitions](/building-stacks/stack-definitions) for the naming convention.
 
 **Arguments:**
 

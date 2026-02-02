@@ -44,14 +44,14 @@ pub mod my_stream {
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct TokenId {
         /// The primary key (mint address)
-        #[map(generated_sdk::accounts::BondingCurve::mint, primary_key, strategy = SetOnce)]
+        #[map(pump_sdk::accounts::BondingCurve::mint, primary_key, strategy = SetOnce)]
         pub mint: String,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct TokenState {
         /// Live reserves mapped from account state
-        #[map(generated_sdk::accounts::BondingCurve::reserves, strategy = LastWrite)]
+        #[map(pump_sdk::accounts::BondingCurve::reserves, strategy = LastWrite)]
         pub reserves: Option<u64>,
 
         /// Computed field derived from existing fields
@@ -62,15 +62,19 @@ pub mod my_stream {
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct TokenMetrics {
         /// Total volume aggregated from individual trade events
-        #[aggregate(from = generated_sdk::instructions::Trade, field = amount, strategy = Sum, lookup_by = accounts::mint)]
+        #[aggregate(from = pump_sdk::instructions::Trade, field = amount, strategy = Sum, lookup_by = accounts::mint)]
         pub total_volume: Option<u64>,
     }
 }
 ```
 
+:::note[SDK Module Naming]
+Hyperstack derives the program name from the IDL metadata and generates a typed SDK module named `{name}_sdk`. For example, an IDL for the "pump" program produces `pump_sdk::accounts::*` and `pump_sdk::instructions::*`. All `#[map]` and `#[aggregate]` paths use this prefix.
+:::
+
 ### Key Components
 
-1.  **`#[hyperstack]` Module**: The container for your definition. It links to your data sources (IDL or Protobuf files).
+1.  **`#[hyperstack]` Module**: The container for your definition. It links to your data sources (IDL or Protobuf files). The `idl` argument also accepts an array for multi-program stacks: `idl = ["pump.json", "raydium.json"]`.
 2.  **`#[entity]` Struct**: Defines a projection of on-chain data. Each entity represents a collection of related data that will be streamed as a single unit. Entities compose nested structs—they do NOT use `#[derive(Stream)]`.
 3.  **`#[derive(Stream)]` Structs**: Nested structs that contain the actual field mappings. These derive `Stream` along with `Debug`, `Clone`, `Serialize`, and `Deserialize`.
 4.  **Primary Key**: Every entity must have a primary key (usually a `Pubkey` or `String`). This is how Hyperstack tracks individual instances of an entity.

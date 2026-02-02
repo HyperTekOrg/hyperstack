@@ -29,11 +29,11 @@ pub mod my_stream {
     #[entity]
     pub struct Token {
         // Map account fields directly
-        #[map(TokenAccount::balance, strategy = LastWrite)]
+        #[map(my_program_sdk::accounts::TokenAccount::balance, strategy = LastWrite)]
         pub balance: u64,
 
         // Aggregate events into metrics
-        #[aggregate(from = Trade, field = amount, strategy = Sum)]
+        #[aggregate(from = my_program_sdk::instructions::Trade, field = amount, strategy = Sum)]
         pub total_volume: u64,
 
         // Derive computed values
@@ -42,6 +42,10 @@ pub mod my_stream {
     }
 }
 ```
+
+:::note
+Field paths use the `{name}_sdk::accounts::` and `{name}_sdk::instructions::` prefix, where the name is derived from the IDL's program metadata. For example, an IDL named "my_program" generates `my_program_sdk::accounts::*` and `my_program_sdk::instructions::*`.
+:::
 
 ---
 

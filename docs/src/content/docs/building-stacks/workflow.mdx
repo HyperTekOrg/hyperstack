@@ -46,6 +46,10 @@ pub mod ore_stack {
 
 The Rust code is purely declarative—you're describing **what** data you want, not **how** to fetch it. Hyperstack handles all the account parsing, event processing, and state management.
 
+:::note
+In practice, field paths use fully qualified names with the generated SDK module: e.g., `ore_sdk::accounts::RoundState::round_id`. The module name (`ore_sdk`) is derived from the IDL's program metadata. The example above is simplified for clarity.
+:::
+
 → [Stack Definitions](/building-stacks/stack-definitions) — Learn the full DSL syntax
 
 ---

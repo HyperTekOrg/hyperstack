@@ -54,6 +54,10 @@ curl -o idl/ore.json https://docs.usehyperstack.com/ore.json
 The IDL (Interface Definition Language) describes the Solana program's account structures and instructions. Hyperstack uses it to generate type-safe code for accessing on-chain data.
 :::
 
+:::tip[Generated SDK Naming]
+When you point to an IDL (e.g., `ore.json`), Hyperstack reads the program name from the IDL metadata and generates a typed SDK module named `{name}_sdk` — so `ore.json` produces `ore_sdk::accounts::*` and `ore_sdk::instructions::*`. All `#[map]` and `#[aggregate]` paths use this prefix.
+:::
+
 ### 4. Write your stack definition
 
 Open `src/lib.rs` and define your projection. We'll create a simplified version of the ORE mining round tracker:
@@ -79,23 +83,23 @@ pub mod ore_stream {
     // Round identification with primary key
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct RoundId {
-        #[map(generated_sdk::accounts::Round::id, primary_key, strategy = SetOnce)]
+        #[map(ore_sdk::accounts::Round::id, primary_key, strategy = SetOnce)]
         pub round_id: u64,
 
-        #[map(generated_sdk::accounts::Round::__account_address, lookup_index, strategy = SetOnce)]
+        #[map(ore_sdk::accounts::Round::__account_address, lookup_index, strategy = SetOnce)]
         pub round_address: String,
     }
 
     // Round state fields - updated on every change
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct RoundState {
-        #[map(generated_sdk::accounts::Round::expires_at, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Round::expires_at, strategy = LastWrite)]
         pub expires_at: Option<u64>,
 
-        #[map(generated_sdk::accounts::Round::total_deployed, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Round::total_deployed, strategy = LastWrite)]
         pub total_deployed: Option<u64>,
 
-        #[map(generated_sdk::accounts::Round::total_winnings, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Round::total_winnings, strategy = LastWrite)]
         pub total_winnings: Option<u64>,
     }
 
@@ -103,11 +107,11 @@ pub mod ore_stream {
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct RoundMetrics {
         // Count of deploy instructions for this round
-        #[aggregate(from = generated_sdk::instructions::Deploy, strategy = Count, lookup_by = accounts::round)]
+        #[aggregate(from = ore_sdk::instructions::Deploy, strategy = Count, lookup_by = accounts::round)]
         pub deploy_count: Option<u64>,
 
         // Sum of all deployed SOL amounts
-        #[aggregate(from = generated_sdk::instructions::Deploy, field = amount, strategy = Sum, lookup_by = accounts::round)]
+        #[aggregate(from = ore_sdk::instructions::Deploy, field = amount, strategy = Sum, lookup_by = accounts::round)]
         pub total_deployed_sol: Option<u64>,
     }
 }
