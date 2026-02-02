@@ -38,6 +38,7 @@
 
 // Public modules - AST types needed for SDK generation
 pub(crate) mod ast;
+pub(crate) mod event_type_helpers;
 
 // Internal modules - not exposed publicly
 mod codegen;

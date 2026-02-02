@@ -18,6 +18,7 @@ use crate::ast::{
     MappingSource, ResolverHook, ResolverStrategy, SerializableFieldMapping,
     SerializableHandlerSpec, SerializableStreamSpec, SourceSpec,
 };
+use crate::event_type_helpers::{find_idl_for_type, program_name_for_type, IdlLookup};
 use crate::parse;
 use crate::parse::conditions as condition_parser;
 use crate::parse::idl as idl_parser;
@@ -65,40 +66,39 @@ pub fn build_ast(
     aggregate_conditions: &HashMap<String, String>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     section_specs: &[EntitySection],
-    idl: Option<&idl_parser::IdlSpec>,
+    idls: IdlLookup,
     views: Vec<crate::ast::ViewDef>,
 ) -> SerializableStreamSpec {
-    // Build handlers from sources and events
+    let idl = idls.first().map(|(_, idl)| *idl);
     let handlers = build_handlers(
         sources_by_type,
         events_by_instruction,
         primary_keys,
         lookup_indexes,
         aggregate_conditions,
-        idl,
+        idls,
     );
 
-    let mut resolver_hooks_ast = build_resolver_hooks_ast(resolver_hooks, idl);
+    let mut resolver_hooks_ast = build_resolver_hooks_ast(resolver_hooks, idls);
     resolver_hooks_ast.extend(auto_generate_lookup_resolvers(
         &handlers,
         &resolver_hooks_ast,
         sources_by_type,
-        idl,
+        idls,
     ));
     let instruction_hooks_ast = build_instruction_hooks_ast(
         pda_registrations,
         derive_from_mappings,
         aggregate_conditions,
         sources_by_type,
+        idls,
     );
 
-    // Keep field paths in snake_case to match IDL - SDK generators handle case conversion
     let computed_field_paths: Vec<String> = computed_fields
         .iter()
         .map(|(path, _, _)| path.clone())
         .collect();
 
-    // Extract program_id and convert IDL to snapshot for embedding
     let program_id = idl.and_then(|i| {
         i.address.clone().or_else(|| {
             i.metadata
@@ -192,7 +192,7 @@ pub fn build_and_write_ast(
     aggregate_conditions: &HashMap<String, String>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     section_specs: &[EntitySection],
-    idl: Option<&idl_parser::IdlSpec>,
+    idls: IdlLookup,
     views: Vec<crate::ast::ViewDef>,
 ) -> SerializableStreamSpec {
     build_ast(
@@ -207,7 +207,7 @@ pub fn build_and_write_ast(
         aggregate_conditions,
         computed_fields,
         section_specs,
-        idl,
+        idls,
         views,
     )
 }
@@ -222,7 +222,7 @@ fn build_handlers(
     primary_keys: &[String],
     lookup_indexes: &[(String, Option<String>)],
     aggregate_conditions: &HashMap<String, String>,
-    idl: Option<&idl_parser::IdlSpec>,
+    idls: IdlLookup,
 ) -> Vec<SerializableHandlerSpec> {
     let mut handlers = Vec::new();
 
@@ -239,7 +239,6 @@ fn build_handlers(
         }
     }
 
-    // Process account sources
     for ((source_type, join_key), mappings) in &sources_by_type_and_join {
         if let Some(handler) = build_source_handler(
             source_type,
@@ -248,7 +247,7 @@ fn build_handlers(
             aggregate_conditions,
             primary_keys,
             lookup_indexes,
-            idl,
+            idls,
         ) {
             handlers.push(handler);
         }
@@ -271,7 +270,6 @@ fn build_handlers(
         }
     }
 
-    // Process event sources
     for ((instruction, join_key), event_mappings) in &events_by_instruction_and_join {
         if let Some(handler) = build_event_handler(
             instruction,
@@ -279,7 +277,7 @@ fn build_handlers(
             event_mappings,
             primary_keys,
             lookup_indexes,
-            idl,
+            idls,
         ) {
             handlers.push(handler);
         }
@@ -295,9 +293,11 @@ fn build_source_handler(
     aggregate_conditions: &HashMap<String, String>,
     primary_keys: &[String],
     lookup_indexes: &[(String, Option<String>)],
-    idl: Option<&idl_parser::IdlSpec>,
+    idls: IdlLookup,
 ) -> Option<SerializableHandlerSpec> {
     let account_type = source_type.split("::").last().unwrap_or(source_type);
+    let idl = find_idl_for_type(source_type, idls);
+    let program_name = program_name_for_type(source_type, idls);
     let is_instruction = mappings.iter().any(|m| m.is_instruction);
 
     // Skip event-derived mappings
@@ -504,11 +504,17 @@ fn build_source_handler(
                 })
         })
     };
+    let type_name = if let Some(program_name) = program_name {
+        format!("{}::{}{}", program_name, account_type, type_suffix)
+    } else {
+        format!("{}{}", account_type, type_suffix)
+    };
+
     Some(SerializableHandlerSpec {
         source: SourceSpec::Source {
             program_id: None,
             discriminator: None,
-            type_name: format!("{}{}", account_type, type_suffix),
+            type_name,
             serialization,
         },
         key_resolution,
@@ -524,8 +530,26 @@ fn build_event_handler(
     event_mappings: &[(String, parse::EventAttribute, syn::Type)],
     primary_keys: &[String],
     lookup_indexes: &[(String, Option<String>)],
-    idl: Option<&idl_parser::IdlSpec>,
+    idls: IdlLookup,
 ) -> Option<SerializableHandlerSpec> {
+    let instruction_path_str = event_mappings
+        .first()
+        .and_then(|(_, attr, _)| {
+            attr.from_instruction
+                .as_ref()
+                .or(attr.inferred_instruction.as_ref())
+        })
+        .map(|p| path_to_string(p));
+    let (idl, program_name) = match &instruction_path_str {
+        Some(path_str) => (
+            find_idl_for_type(path_str, idls),
+            program_name_for_type(path_str, idls),
+        ),
+        None => (
+            idls.first().map(|(_, idl)| *idl),
+            idls.first().map(|(_, idl)| idl.get_name()),
+        ),
+    };
     let parts: Vec<&str> = instruction.split("::").collect();
     if parts.len() != 2 {
         return None;
@@ -700,11 +724,17 @@ fn build_event_handler(
         }
     };
 
+    let type_name = if let Some(program_name) = program_name {
+        format!("{}::{}IxState", program_name, instruction_type_pascal)
+    } else {
+        format!("{}IxState", instruction_type_pascal)
+    };
+
     Some(SerializableHandlerSpec {
         source: SourceSpec::Source {
             program_id: Some(program_id.to_string()),
             discriminator: None,
-            type_name: format!("{}IxState", instruction_type_pascal),
+            type_name,
             serialization: None,
         },
         key_resolution,
@@ -720,13 +750,20 @@ fn build_event_handler(
 
 fn build_resolver_hooks_ast(
     resolver_hooks: &[parse::ResolveKeyAttribute],
-    idl: Option<&idl_parser::IdlSpec>,
+    idls: IdlLookup,
 ) -> Vec<ResolverHook> {
     resolver_hooks
         .iter()
         .map(|hook| {
             let account_type = path_to_string(&hook.account_path);
-            let account_type_state = format!("{}State", account_type.split("::").last().unwrap());
+            let account_base = account_type.split("::").last().unwrap();
+            let program_name = program_name_for_type(&account_type, idls);
+            let idl = find_idl_for_type(&account_type, idls);
+            let account_type_state = if let Some(program_name) = program_name {
+                format!("{}::{}State", program_name, account_base)
+            } else {
+                format!("{}State", account_base)
+            };
 
             let strategy = match hook.strategy.as_str() {
                 "pda_reverse_lookup" => {
@@ -770,7 +807,7 @@ fn auto_generate_lookup_resolvers(
     handlers: &[SerializableHandlerSpec],
     existing_resolvers: &[ResolverHook],
     sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
-    idl: Option<&idl_parser::IdlSpec>,
+    idls: IdlLookup,
 ) -> Vec<ResolverHook> {
     let mut auto_hooks = Vec::new();
 
@@ -794,10 +831,12 @@ fn auto_generate_lookup_resolvers(
     }
 
     let mut queue_discriminators: Vec<Vec<u8>> = Vec::new();
-    if let Some(idl) = idl {
-        for mappings in sources_by_type.values() {
-            for mapping in mappings {
-                if mapping.is_instruction && mapping.is_lookup_index {
+    for mappings in sources_by_type.values() {
+        for mapping in mappings {
+            if mapping.is_instruction && mapping.is_lookup_index {
+                let source_path_str = path_to_string(&mapping.source_type_path);
+                let idl = find_idl_for_type(&source_path_str, idls);
+                if let Some(idl) = idl {
                     let instr_name = mapping
                         .source_type_path
                         .segments
@@ -842,14 +881,19 @@ fn build_instruction_hooks_ast(
     derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    idls: IdlLookup,
 ) -> Vec<InstructionHook> {
-    // Use BTreeMap for deterministic ordering in the final output
     let mut instruction_hooks_map: BTreeMap<String, InstructionHook> = BTreeMap::new();
 
-    // Process PDA registrations
     for registration in pda_registrations {
         let instr_type = path_to_string(&registration.instruction_path);
-        let instr_type_state = format!("{}IxState", instr_type.split("::").last().unwrap());
+        let instr_base = instr_type.split("::").last().unwrap();
+        let program_name = program_name_for_type(&instr_type, idls);
+        let instr_type_state = if let Some(program_name) = program_name {
+            format!("{}::{}IxState", program_name, instr_base)
+        } else {
+            format!("{}IxState", instr_base)
+        };
 
         let action = HookAction::RegisterPdaMapping {
             pda_field: FieldPath::new(&["accounts", &registration.pda_field.ident.to_string()]),
@@ -871,11 +915,16 @@ fn build_instruction_hooks_ast(
             .push(action);
     }
 
-    // Process derive_from mappings (sorted for deterministic output)
     let mut sorted_derive_from: Vec<_> = derive_from_mappings.iter().collect();
     sorted_derive_from.sort_by_key(|(k, _)| *k);
     for (instruction_type, derive_attrs) in sorted_derive_from {
-        let instr_type_state = format!("{}IxState", instruction_type.split("::").last().unwrap());
+        let instr_base = instruction_type.split("::").last().unwrap();
+        let program_name = program_name_for_type(instruction_type, idls);
+        let instr_type_state = if let Some(program_name) = program_name {
+            format!("{}::{}IxState", program_name, instr_base)
+        } else {
+            format!("{}IxState", instr_base)
+        };
 
         for derive_attr in derive_attrs {
             let source = if derive_attr.field.ident.to_string().starts_with("__") {
@@ -939,7 +988,6 @@ fn build_instruction_hooks_ast(
         }
     }
 
-    // Process aggregate conditions (sorted for deterministic output)
     let mut sorted_aggregate_conditions: Vec<_> = aggregate_conditions.iter().collect();
     sorted_aggregate_conditions.sort_by_key(|(k, _)| *k);
     let mut sorted_sources: Vec<_> = sources_by_type.iter().collect();
@@ -954,8 +1002,13 @@ fn build_instruction_hooks_ast(
                         "Sum" | "Count" | "Min" | "Max" | "UniqueCount"
                     )
                 {
-                    let instr_type_state =
-                        format!("{}IxState", source_type.split("::").last().unwrap());
+                    let instr_base = source_type.split("::").last().unwrap();
+                    let program_name = program_name_for_type(source_type, idls);
+                    let instr_type_state = if let Some(program_name) = program_name {
+                        format!("{}::{}IxState", program_name, instr_base)
+                    } else {
+                        format!("{}IxState", instr_base)
+                    };
 
                     let condition = ConditionExpr {
                         expression: condition_str.clone(),

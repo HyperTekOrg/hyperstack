@@ -1,7 +1,8 @@
 //! IDL-based stream processing.
 //!
 //! This module handles processing of `#[hyperstack(idl = "...")]` modules,
-//! which generate SDK types, parsers, and entity processing from an Anchor IDL file.
+//! which generate SDK types, parsers, and entity processing from Anchor IDL files.
+//! Supports multiple IDLs for multi-program stacks.
 
 use std::collections::HashMap;
 
@@ -21,48 +22,78 @@ use crate::utils::{to_pascal_case, to_snake_case};
 use super::entity::process_entity_struct_with_idl;
 use super::handlers::generate_auto_resolver_functions;
 
-// ============================================================================
-// IDL Spec Processing
-// ============================================================================
+struct IdlInfo {
+    idl: idl_parser::IdlSpec,
+    program_id: String,
+    program_name: String,
+    sdk_module_name: String,
+    parser_module_name: String,
+}
 
-/// Process a module with IDL-based spec.
-///
-/// This handles:
-/// - Parsing the IDL file
-/// - Generating SDK types from IDL accounts/instructions
-/// - Generating Vixen parsers
-/// - Processing entity structs with IDL context
-/// - Generating resolver registries and runtime functions
-pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
+pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStream {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let full_path = std::path::Path::new(&manifest_dir).join(idl_path);
 
-    let idl = match idl_parser::parse_idl_file(&full_path) {
-        Ok(idl) => idl,
-        Err(e) => {
-            let error_msg = format!("Failed to parse IDL file {}: {}", idl_path, e);
-            return quote! {
-                compile_error!(#error_msg);
+    let mut idl_infos: Vec<IdlInfo> = Vec::new();
+
+    for idl_path in idl_paths {
+        let full_path = std::path::Path::new(&manifest_dir).join(idl_path);
+
+        let idl = match idl_parser::parse_idl_file(&full_path) {
+            Ok(idl) => idl,
+            Err(e) => {
+                let error_msg = format!("Failed to parse IDL file {}: {}", idl_path, e);
+                return quote! {
+                    compile_error!(#error_msg);
+                }
+                .into();
             }
-            .into();
-        }
-    };
+        };
 
-    // Get program ID from IDL address or metadata
-    let program_id = idl
-        .address
-        .as_ref()
-        .or_else(|| idl.metadata.as_ref().and_then(|m| m.address.as_ref()))
-        .map(|s| s.as_str())
-        .unwrap_or("11111111111111111111111111111111");
+        let program_id = idl
+            .address
+            .as_ref()
+            .or_else(|| idl.metadata.as_ref().and_then(|m| m.address.as_ref()))
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "11111111111111111111111111111111".to_string());
 
-    // Generate IDL SDK types and parsers first
-    let sdk_types = idl_codegen::generate_sdk_types(&idl);
-    let parsers = idl_parser_gen::generate_parsers(&idl, program_id);
+        let program_name = idl.get_name().to_string();
+        let sdk_module_name = format!("{}_sdk", program_name);
+
+        let parser_module_name = if idl_paths.len() == 1 {
+            "parsers".to_string()
+        } else {
+            format!("{}_parsers", program_name)
+        };
+
+        idl_infos.push(IdlInfo {
+            idl,
+            program_id,
+            program_name,
+            sdk_module_name,
+            parser_module_name,
+        });
+    }
+
+    let primary = &idl_infos[0];
+
+    let mut all_sdk_tokens: Vec<proc_macro2::TokenStream> = Vec::new();
+    let mut all_parser_tokens: Vec<proc_macro2::TokenStream> = Vec::new();
+
+    for info in &idl_infos {
+        let sdk_types = idl_codegen::generate_sdk_types(&info.idl, &info.sdk_module_name);
+        all_sdk_tokens.push(sdk_types);
+
+        let parsers = idl_parser_gen::generate_named_parsers(
+            &info.idl,
+            &info.program_id,
+            &info.sdk_module_name,
+            &info.parser_module_name,
+        );
+        all_parser_tokens.push(parsers);
+    }
 
     let stack_name = to_pascal_case(&module.ident.to_string());
 
-    // Now process entity structs (similar to proto path)
     let mut section_structs = HashMap::new();
     let mut entity_structs = Vec::new();
     let mut impl_blocks = Vec::new();
@@ -92,20 +123,17 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                     section_structs.insert(item_struct.ident.to_string(), item_struct.clone());
                 }
             } else if let Item::Impl(impl_item) = item {
-                // Collect impl blocks for resolver hook processing
                 impl_blocks.push(impl_item.clone());
             }
         }
     }
 
-    // Extract resolver hooks from impl blocks and standalone functions
     let mut all_resolver_hooks = Vec::new();
     for impl_block in &impl_blocks {
         let hooks = parse::extract_resolver_hooks(impl_block);
         all_resolver_hooks.extend(hooks);
     }
 
-    // Also extract hooks from standalone functions
     if let Some((_, items)) = &module.content {
         for item in items {
             if let Item::Fn(item_fn) = item {
@@ -115,21 +143,17 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
         }
     }
 
-    // Scan module items for declarative #[resolve_key] and #[register_pda] marker structs
     let mut resolver_hooks: Vec<parse::ResolveKeyAttribute> = Vec::new();
     let mut pda_registrations: Vec<parse::RegisterPdaAttribute> = Vec::new();
 
     if let Some((_, items)) = &module.content {
         for item in items {
             if let Item::Struct(item_struct) = item {
-                // Check each struct for our declarative attributes
                 for attr in &item_struct.attrs {
-                    // Parse #[resolve_key(...)]
                     if let Ok(Some(resolve_attr)) = parse::parse_resolve_key_attribute(attr) {
                         resolver_hooks.push(resolve_attr);
                     }
 
-                    // Parse #[register_pda(...)]
                     if let Ok(Some(register_attr)) = parse::parse_register_pda_attribute(attr) {
                         pda_registrations.push(register_attr);
                     }
@@ -138,10 +162,7 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
         }
     }
 
-    // Convert declarative #[resolve_key] attributes to ResolverHookSpec entries
-    // so they get included in the resolver registry used by get_resolver_for_account_type
     for resolve_attr in &resolver_hooks {
-        // Extract account type name from path (e.g., generated_sdk::accounts::BondingCurve -> BondingCurve)
         let account_name = resolve_attr
             .account_path
             .segments
@@ -153,7 +174,6 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
             proc_macro2::Span::call_site(),
         );
 
-        // Create a dummy signature for the resolver function
         let fn_sig: syn::Signature = syn::parse_quote! {
             fn #fn_name(
                 account_address: &str,
@@ -170,15 +190,12 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
         });
     }
 
-    // Convert declarative #[register_pda] attributes to ResolverHookSpec entries
-    // so they get included in the instruction hook registry used by get_instruction_hooks
     for (i, pda_attr) in pda_registrations.iter().enumerate() {
         let fn_name = syn::Ident::new(
             &format!("register_pda_{}", i),
             proc_macro2::Span::call_site(),
         );
 
-        // Create a signature for the PDA registration function
         let fn_sig: syn::Signature = syn::parse_quote! {
             fn #fn_name(ctx: &mut hyperstack_interpreter::resolvers::InstructionContext)
         };
@@ -191,10 +208,14 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
         });
     }
 
-    // Process entities and generate StreamSpec + bytecode
     if !entity_structs.is_empty() {
         let mut all_outputs = Vec::new();
         let mut entity_names = Vec::new();
+
+        let idl_lookup: Vec<(String, &idl_parser::IdlSpec)> = idl_infos
+            .iter()
+            .map(|info| (info.sdk_module_name.clone(), &info.idl))
+            .collect();
 
         for entity_struct in &entity_structs {
             let entity_name = parse::parse_entity_name(&entity_struct.attrs)
@@ -207,16 +228,14 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                 section_structs.clone(),
                 has_game_event,
                 &stack_name,
-                Some(&idl),
+                &idl_lookup,
                 resolver_hooks.clone(),
                 pda_registrations.clone(),
             );
 
             for hook in &result.auto_resolver_hooks {
-                let account_name = hook
-                    .account_type
-                    .strip_suffix("State")
-                    .unwrap_or(&hook.account_type);
+                let account_name =
+                    crate::event_type_helpers::strip_event_type_suffix(&hook.account_type);
                 let fn_name = syn::Ident::new(
                     &format!("resolve_{}_key", to_snake_case(account_name)),
                     proc_macro2::Span::call_site(),
@@ -241,16 +260,12 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
             all_outputs.push(result);
         }
 
-        // Remove entity structs and transform impl blocks with resolver hooks
         if let Some((_brace, items)) = &mut module.content {
-            // First pass: remove entity structs and marker structs with declarative attributes
             items.retain(|item| {
                 if let Item::Struct(s) = item {
-                    // Remove entity structs
                     if parse::has_entity_attribute(&s.attrs) {
                         return false;
                     }
-                    // Remove marker structs with #[resolve_key] or #[register_pda]
                     let has_declarative_attr = s.attrs.iter().any(|attr| {
                         attr.path().is_ident("resolve_key") || attr.path().is_ident("register_pda")
                     });
@@ -260,12 +275,10 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                 }
             });
 
-            // Second pass: transform impl blocks and functions to remove resolver hook attributes
             for item in items.iter_mut() {
                 if let Item::Impl(impl_item) = item {
                     for impl_item_inner in &mut impl_item.items {
                         if let syn::ImplItem::Fn(method) = impl_item_inner {
-                            // Remove #[resolve_key_for] and #[after_instruction] attributes
                             method.attrs.retain(|attr| {
                                 !attr.path().is_ident("resolve_key_for")
                                     && !attr.path().is_ident("after_instruction")
@@ -273,7 +286,6 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                         }
                     }
                 } else if let Item::Fn(item_fn) = item {
-                    // Remove #[resolve_key_for] and #[after_instruction] attributes from standalone functions
                     item_fn.attrs.retain(|attr| {
                         !attr.path().is_ident("resolve_key_for")
                             && !attr.path().is_ident("after_instruction")
@@ -281,20 +293,22 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                 }
             }
 
-            // Add SDK types and parsers first
-            if let Ok(generated_items) = syn::parse::<syn::File>(sdk_types.into()) {
-                for gen_item in generated_items.items {
-                    items.push(gen_item);
+            for sdk_tokens in &all_sdk_tokens {
+                if let Ok(generated_items) = syn::parse::<syn::File>(sdk_tokens.clone().into()) {
+                    for gen_item in generated_items.items {
+                        items.push(gen_item);
+                    }
                 }
             }
 
-            if let Ok(generated_items) = syn::parse::<syn::File>(parsers.into()) {
-                for gen_item in generated_items.items {
-                    items.push(gen_item);
+            for parser_tokens in &all_parser_tokens {
+                if let Ok(generated_items) = syn::parse::<syn::File>(parser_tokens.clone().into()) {
+                    for gen_item in generated_items.items {
+                        items.push(gen_item);
+                    }
                 }
             }
 
-            // Add entity processing outputs and auto-generated resolver functions
             for result in &all_outputs {
                 if let Ok(generated_items) = syn::parse::<syn::File>(result.token_stream.clone()) {
                     for gen_item in generated_items.items {
@@ -316,10 +330,21 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                 .filter_map(|result| result.ast_spec.clone())
                 .collect();
 
+            let all_program_ids: Vec<String> = idl_infos
+                .iter()
+                .map(|info| info.program_id.clone())
+                .collect();
+
+            let all_idl_snapshots: Vec<_> = entity_asts
+                .first()
+                .and_then(|e| e.idl.clone())
+                .into_iter()
+                .collect();
+
             let stack_spec = SerializableStackSpec {
                 stack_name: stack_name.clone(),
-                program_id: Some(program_id.to_string()),
-                idl: entity_asts.first().and_then(|e| e.idl.clone()),
+                program_ids: all_program_ids,
+                idls: all_idl_snapshots,
                 entities: entity_asts
                     .into_iter()
                     .map(|mut e| {
@@ -343,18 +368,28 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
                 }
             }
 
-            // Generate resolver registries (used by spec function)
-            let resolver_registries =
-                idl_vixen_gen::generate_resolver_registries(&all_resolver_hooks);
+            let resolver_registries = idl_vixen_gen::generate_resolver_registries(
+                &all_resolver_hooks,
+                &primary.program_name,
+            );
             if let Ok(generated_items) = syn::parse::<syn::File>(resolver_registries.into()) {
                 for gen_item in generated_items.items {
                     items.push(gen_item);
                 }
             }
 
-            // Generate spec function for hyperstack-server integration
-            let spec_function =
-                idl_vixen_gen::generate_spec_function_without_registries(&idl, program_id);
+            let spec_function = idl_vixen_gen::generate_multi_idl_spec_function(
+                &idl_infos
+                    .iter()
+                    .map(|info| {
+                        (
+                            &info.idl,
+                            info.program_id.as_str(),
+                            info.parser_module_name.as_str(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            );
             if let Ok(generated_items) = syn::parse::<syn::File>(spec_function.into()) {
                 for gen_item in generated_items.items {
                     items.push(gen_item);
@@ -362,17 +397,20 @@ pub fn process_idl_spec(mut module: ItemMod, idl_path: &str) -> TokenStream {
             }
         }
     } else {
-        // No entities - just add SDK and parsers
         if let Some((_brace, items)) = &mut module.content {
-            if let Ok(generated_items) = syn::parse::<syn::File>(sdk_types.into()) {
-                for gen_item in generated_items.items {
-                    items.push(gen_item);
+            for sdk_tokens in &all_sdk_tokens {
+                if let Ok(generated_items) = syn::parse::<syn::File>(sdk_tokens.clone().into()) {
+                    for gen_item in generated_items.items {
+                        items.push(gen_item);
+                    }
                 }
             }
 
-            if let Ok(generated_items) = syn::parse::<syn::File>(parsers.into()) {
-                for gen_item in generated_items.items {
-                    items.push(gen_item);
+            for parser_tokens in &all_parser_tokens {
+                if let Ok(generated_items) = syn::parse::<syn::File>(parser_tokens.clone().into()) {
+                    for gen_item in generated_items.items {
+                        items.push(gen_item);
+                    }
                 }
             }
         }

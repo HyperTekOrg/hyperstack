@@ -45,13 +45,14 @@ fn generate_bytemuck_field(field: &IdlField) -> TokenStream {
     }
 }
 
-pub fn generate_sdk_types(idl: &IdlSpec) -> TokenStream {
+pub fn generate_sdk_types(idl: &IdlSpec, module_name: &str) -> TokenStream {
     let account_types = generate_account_types(&idl.accounts, &idl.types);
     let instruction_types = generate_instruction_types(&idl.instructions, &idl.types);
     let custom_types = generate_custom_types(&idl.types);
+    let module_ident = format_ident!("{}", module_name);
 
     quote! {
-        pub mod generated_sdk {
+        pub mod #module_ident {
             use serde::{Deserialize, Serialize};
             use borsh::{BorshDeserialize, BorshSerialize};
 
@@ -373,7 +374,7 @@ mod tests {
     #[test]
     fn test_bytemuck_codegen_produces_pod_derives() {
         let idl = minimal_bytemuck_idl();
-        let output = generate_sdk_types(&idl);
+        let output = generate_sdk_types(&idl, "generated_sdk");
         let code = output.to_string();
 
         assert!(code.contains("Pod"), "bytemuck account should derive Pod");
@@ -390,7 +391,7 @@ mod tests {
     #[test]
     fn test_bytemuck_maps_pubkey_to_byte_array() {
         let idl = minimal_bytemuck_idl();
-        let output = generate_sdk_types(&idl);
+        let output = generate_sdk_types(&idl, "generated_sdk");
         let code = output.to_string();
 
         assert!(
@@ -403,7 +404,7 @@ mod tests {
     #[test]
     fn test_bytemuck_maps_bool_to_u8() {
         let idl = minimal_bytemuck_idl();
-        let output = generate_sdk_types(&idl);
+        let output = generate_sdk_types(&idl, "generated_sdk");
         let code = output.to_string();
 
         assert!(
@@ -420,7 +421,7 @@ mod tests {
     #[test]
     fn test_bytemuck_pubkey_gets_serde_base58() {
         let idl = minimal_bytemuck_idl();
-        let output = generate_sdk_types(&idl);
+        let output = generate_sdk_types(&idl, "generated_sdk");
         let code = output.to_string();
 
         assert!(
@@ -433,7 +434,7 @@ mod tests {
     #[test]
     fn test_regular_account_uses_borsh() {
         let idl = minimal_bytemuck_idl();
-        let output = generate_sdk_types(&idl);
+        let output = generate_sdk_types(&idl, "generated_sdk");
         let code = output.to_string();
 
         assert!(
@@ -445,7 +446,7 @@ mod tests {
     #[test]
     fn test_regular_account_keeps_bool_as_bool() {
         let idl = minimal_bytemuck_idl();
-        let output = generate_sdk_types(&idl);
+        let output = generate_sdk_types(&idl, "generated_sdk");
         let code = output.to_string();
 
         assert!(
@@ -458,7 +459,7 @@ mod tests {
     #[test]
     fn test_bytemuck_try_from_bytes_uses_bytemuck() {
         let idl = minimal_bytemuck_idl();
-        let output = generate_sdk_types(&idl);
+        let output = generate_sdk_types(&idl, "generated_sdk");
         let code = output.to_string();
 
         assert!(
@@ -470,7 +471,7 @@ mod tests {
     #[test]
     fn test_regular_try_from_bytes_uses_borsh() {
         let idl = minimal_bytemuck_idl();
-        let output = generate_sdk_types(&idl);
+        let output = generate_sdk_types(&idl, "generated_sdk");
         let code = output.to_string();
 
         assert!(

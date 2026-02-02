@@ -13,6 +13,9 @@ use std::marker::PhantomData;
 pub struct IdlSnapshot {
     /// Program name (e.g., "pump")
     pub name: String,
+    /// Program ID this IDL belongs to
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_id: Option<String>,
     /// Program version
     pub version: String,
     /// Account type definitions
@@ -1236,12 +1239,12 @@ impl SerializableStreamSpec {
 pub struct SerializableStackSpec {
     /// Stack name (PascalCase, derived from module ident)
     pub stack_name: String,
-    /// Shared program ID (all entities share the same program)
+    /// Program IDs (one per IDL, in order)
     #[serde(default)]
-    pub program_id: Option<String>,
-    /// Shared IDL snapshot (stored once, not duplicated per entity)
+    pub program_ids: Vec<String>,
+    /// IDL snapshots (one per program)
     #[serde(default)]
-    pub idl: Option<IdlSnapshot>,
+    pub idls: Vec<IdlSnapshot>,
     /// All entity specifications in this stack
     pub entities: Vec<SerializableStreamSpec>,
     /// Deterministic content hash of the entire stack

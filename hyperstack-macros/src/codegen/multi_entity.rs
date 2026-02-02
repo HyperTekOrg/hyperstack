@@ -108,7 +108,7 @@ pub fn generate_entity_spec_loader(entity_name: &str, stack_name: &str) -> Token
 
             let mut spec = entity_spec.clone();
             if spec.idl.is_none() {
-                spec.idl = stack_spec.idl.clone();
+                spec.idl = stack_spec.idls.first().cloned();
             }
 
             hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec::from_serializable(spec)

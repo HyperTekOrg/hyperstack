@@ -13,23 +13,36 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Path;
 
-fn path_to_event_type(path: &Path, is_instruction: bool) -> String {
+fn path_to_event_type(path: &Path, is_instruction: bool, default_program_name: &str) -> String {
     let type_name = path
         .segments
         .last()
         .map(|seg| seg.ident.to_string())
         .unwrap_or_default();
+    let suffix = if is_instruction { "IxState" } else { "State" };
 
-    if is_instruction {
-        format!("{}IxState", type_name)
+    // Derive program name from path's first segment if it ends with _sdk
+    let program_name = if path.segments.len() >= 2 {
+        let first_seg = path.segments.first().unwrap().ident.to_string();
+        if let Some(stripped) = first_seg.strip_suffix("_sdk") {
+            stripped.to_string()
+        } else {
+            default_program_name.to_string()
+        }
     } else {
-        format!("{}State", type_name)
-    }
+        default_program_name.to_string()
+    };
+
+    format!("{}::{}{}", program_name, type_name, suffix)
 }
 
-pub fn generate_resolver_registries(resolver_hooks: &[ResolverHookSpec]) -> TokenStream {
-    let resolver_registry = generate_resolver_registry(resolver_hooks);
-    let instruction_hook_registry = generate_instruction_hook_registry(resolver_hooks);
+pub fn generate_resolver_registries(
+    resolver_hooks: &[ResolverHookSpec],
+    program_name: &str,
+) -> TokenStream {
+    let resolver_registry = generate_resolver_registry(resolver_hooks, program_name);
+    let instruction_hook_registry =
+        generate_instruction_hook_registry(resolver_hooks, program_name);
 
     quote! {
         #resolver_registry
@@ -37,7 +50,10 @@ pub fn generate_resolver_registries(resolver_hooks: &[ResolverHookSpec]) -> Toke
     }
 }
 
-fn generate_resolver_registry(resolver_hooks: &[ResolverHookSpec]) -> TokenStream {
+fn generate_resolver_registry(
+    resolver_hooks: &[ResolverHookSpec],
+    program_name: &str,
+) -> TokenStream {
     let key_resolvers: Vec<_> = resolver_hooks
         .iter()
         .filter(|hook| matches!(hook.kind, ResolverHookKind::KeyResolver))
@@ -52,7 +68,7 @@ fn generate_resolver_registry(resolver_hooks: &[ResolverHookSpec]) -> TokenStrea
     }
 
     let resolver_arms = key_resolvers.iter().map(|hook| {
-        let event_type = path_to_event_type(&hook.account_type_path, false);
+        let event_type = path_to_event_type(&hook.account_type_path, false, program_name);
         let fn_name = &hook.fn_name;
 
         quote! {
@@ -72,7 +88,10 @@ fn generate_resolver_registry(resolver_hooks: &[ResolverHookSpec]) -> TokenStrea
     }
 }
 
-fn generate_instruction_hook_registry(resolver_hooks: &[ResolverHookSpec]) -> TokenStream {
+fn generate_instruction_hook_registry(
+    resolver_hooks: &[ResolverHookSpec],
+    program_name: &str,
+) -> TokenStream {
     let instruction_hooks: Vec<_> = resolver_hooks
         .iter()
         .filter(|hook| matches!(hook.kind, ResolverHookKind::AfterInstruction))
@@ -90,7 +109,7 @@ fn generate_instruction_hook_registry(resolver_hooks: &[ResolverHookSpec]) -> To
     let mut hooks_by_instruction: StdHashMap<String, Vec<&syn::Ident>> = StdHashMap::new();
 
     for hook in &instruction_hooks {
-        let event_type = path_to_event_type(&hook.account_type_path, true);
+        let event_type = path_to_event_type(&hook.account_type_path, true, program_name);
         hooks_by_instruction
             .entry(event_type)
             .or_default()
@@ -120,7 +139,8 @@ pub fn generate_spec_function(
     program_id: &str,
     resolver_hooks: &[ResolverHookSpec],
 ) -> TokenStream {
-    let registries = generate_resolver_registries(resolver_hooks);
+    let program_name = idl.get_name();
+    let registries = generate_resolver_registries(resolver_hooks, program_name);
     let spec_fn = generate_spec_function_without_registries(idl, program_id);
 
     quote! {
@@ -148,6 +168,56 @@ pub fn generate_spec_function_without_registries(idl: &IdlSpec, _program_id: &st
 
     quote! {
         #vm_handler
+        #spec_fn
+    }
+}
+
+pub fn generate_multi_idl_spec_function(idls: &[(&IdlSpec, &str, &str)]) -> TokenStream {
+    let config = RuntimeGenConfig::for_idl();
+
+    let vm_handler_struct = vixen_runtime::generate_vm_handler_struct();
+
+    let handler_impls: Vec<TokenStream> = idls
+        .iter()
+        .map(|(idl, _program_id, parser_module_name)| {
+            let program_name = idl.get_name();
+            let state_enum_name = format!("{}State", to_pascal_case(program_name));
+            let instruction_enum_name = format!("{}Instruction", to_pascal_case(program_name));
+
+            let account_impl =
+                vixen_runtime::generate_account_handler_impl(parser_module_name, &state_enum_name);
+            let instruction_impl = vixen_runtime::generate_instruction_handler_impl(
+                parser_module_name,
+                &instruction_enum_name,
+                program_name,
+            );
+
+            quote! {
+                #account_impl
+                #instruction_impl
+            }
+        })
+        .collect();
+
+    let pipeline_infos: Vec<vixen_runtime::PipelineInfo> = idls
+        .iter()
+        .map(|(idl, program_id, parser_module_name)| {
+            let program_name = idl.get_name();
+            vixen_runtime::PipelineInfo {
+                parser_module_name: parser_module_name.to_string(),
+                program_name: program_name.to_string(),
+                program_id: program_id.to_string(),
+                state_enum_name: format!("{}State", to_pascal_case(program_name)),
+                instruction_enum_name: format!("{}Instruction", to_pascal_case(program_name)),
+            }
+        })
+        .collect();
+
+    let spec_fn = vixen_runtime::generate_multi_pipeline_spec_function(&pipeline_infos, &config);
+
+    quote! {
+        #vm_handler_struct
+        #(#handler_impls)*
         #spec_fn
     }
 }

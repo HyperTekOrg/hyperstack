@@ -33,7 +33,7 @@ fn generate_resolver_registry(resolver_hooks: &[ResolverHook]) -> TokenStream {
     let resolver_arms = resolver_hooks.iter().map(|hook| {
         let event_type = hook.account_type.clone();
         
-        let account_type_base = event_type.strip_suffix("State").unwrap_or(&event_type);
+        let account_type_base = crate::event_type_helpers::strip_event_type_suffix(&event_type);
         let _fn_name = format_ident!("resolve_{}_key", to_snake_case(account_type_base));
 
         match &hook.strategy {
@@ -109,10 +109,8 @@ fn generate_instruction_hook_registry(
             .iter()
             .enumerate()
             .map(|(idx, hook)| {
-                let instruction_base = hook
-                    .instruction_type
-                    .strip_suffix("IxState")
-                    .unwrap_or(&hook.instruction_type);
+                let instruction_base =
+                    crate::event_type_helpers::strip_event_type_suffix(&hook.instruction_type);
                 let fn_name = format_ident!("hook_{}_{}", to_snake_case(instruction_base), idx);
                 let actions = generate_hook_actions(&hook.actions, &hook.lookup_by);
 

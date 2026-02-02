@@ -205,6 +205,7 @@ pub fn find_field_in_instruction(
 pub fn determine_event_instruction(
     event_attr: &mut parse::EventAttribute,
     field_type: &Type,
+    program_name: Option<&str>,
 ) -> Option<(Path, String)> {
     // Priority 1: Explicit `from = ...`
     if let Some(ref path) = event_attr.from_instruction {
@@ -240,7 +241,11 @@ pub fn determine_event_instruction(
         if parts.len() == 2 {
             let instruction_name = parts[1];
             // Construct a simple path - this is a best-effort approach
-            let path_str = format!("generated_sdk::instructions::{}", instruction_name);
+            let path_str = if let Some(program_name) = program_name {
+                format!("{}_sdk::instructions::{}", program_name, instruction_name)
+            } else {
+                format!("generated_sdk::instructions::{}", instruction_name)
+            };
             if let Ok(path) = syn::parse_str::<Path>(&path_str) {
                 return Some((path, event_attr.instruction.clone()));
             }
@@ -531,10 +536,7 @@ pub fn generate_auto_resolver_functions(hooks: &[ResolverHook]) -> proc_macro2::
     let mut functions = Vec::new();
 
     for hook in hooks {
-        let account_name = hook
-            .account_type
-            .strip_suffix("State")
-            .unwrap_or(&hook.account_type);
+        let account_name = crate::event_type_helpers::strip_event_type_suffix(&hook.account_type);
         let fn_name = format_ident!("resolve_{}_key", to_snake_case(account_name));
 
         match &hook.strategy {

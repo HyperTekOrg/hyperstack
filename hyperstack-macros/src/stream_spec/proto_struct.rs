@@ -103,7 +103,7 @@ pub fn process_struct_with_context(
 
                     // Determine instruction path (type-safe or legacy)
                     if let Some((_instruction_path, instruction_str)) =
-                        determine_event_instruction(&mut event_attr, field_type)
+                        determine_event_instruction(&mut event_attr, field_type, None)
                     {
                         events_by_instruction
                             .entry(instruction_str)
@@ -148,6 +148,7 @@ pub fn process_struct_with_context(
                                 &mut computed_fields,
                                 &mut derive_from_mappings,
                                 &mut aggregate_conditions,
+                                None,
                             );
                         }
                     }

@@ -816,10 +816,9 @@ export default {};"#,
     fn extract_instruction_name(&self, source: &serde_json::Value) -> Option<String> {
         if let Some(source_obj) = source.get("Source") {
             if let Some(type_name) = source_obj.get("type_name").and_then(|t| t.as_str()) {
-                // Extract "CreateGame" from "CreateGameIxState"
-                if let Some(instruction_part) = type_name.strip_suffix("IxState") {
-                    return Some(instruction_part.to_string());
-                }
+                let instruction_part =
+                    crate::event_type_helpers::strip_event_type_suffix(type_name);
+                return Some(instruction_part.to_string());
             }
         }
         None
@@ -1269,7 +1268,7 @@ pub fn compile_stack_spec(
         let mut spec = entity_spec.clone();
         // Inject stack-level IDL if entity doesn't have its own
         if spec.idl.is_none() {
-            spec.idl = stack_spec.idl.clone();
+            spec.idl = stack_spec.idls.first().cloned();
         }
         let entity_name = spec.state_name.clone();
         entity_names.push(entity_name.clone());

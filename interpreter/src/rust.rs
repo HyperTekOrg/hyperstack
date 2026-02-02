@@ -551,7 +551,7 @@ pub fn compile_stack_spec(
 
     for mut spec in stack_spec.entities {
         if spec.idl.is_none() {
-            spec.idl = stack_spec.idl.clone();
+            spec.idl = stack_spec.idls.first().cloned();
         }
         entity_names.push(spec.state_name.clone());
         entity_specs.push(spec);

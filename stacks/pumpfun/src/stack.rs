@@ -26,30 +26,30 @@ pub mod pumpfun_stream {
         // - ToString: Converts any value to string representation
         // - ToNumber: Converts string representations to numbers
         #[snapshot(strategy = LastWrite, transforms = [(creator, HexEncode)])]
-        pub bonding_curve_snapshot: Option<generated_sdk::accounts::BondingCurve>,
+        pub bonding_curve_snapshot: Option<pump_sdk::accounts::BondingCurve>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct TokenId {
-        #[from_instruction([generated_sdk::instructions::Create::mint, generated_sdk::instructions::CreateV2::mint], primary_key, strategy = SetOnce)]
+        #[from_instruction([pump_sdk::instructions::Create::mint, pump_sdk::instructions::CreateV2::mint], primary_key, strategy = SetOnce)]
         pub mint: String,
 
-        #[from_instruction([generated_sdk::instructions::Create::bonding_curve, generated_sdk::instructions::CreateV2::bonding_curve], lookup_index, strategy = SetOnce)]
+        #[from_instruction([pump_sdk::instructions::Create::bonding_curve, pump_sdk::instructions::CreateV2::bonding_curve], lookup_index, strategy = SetOnce)]
         pub bonding_curve: String,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct TokenInfo {
-        #[from_instruction([generated_sdk::instructions::Create::name, generated_sdk::instructions::CreateV2::name], strategy = SetOnce)]
+        #[from_instruction([pump_sdk::instructions::Create::name, pump_sdk::instructions::CreateV2::name], strategy = SetOnce)]
         pub name: Option<String>,
 
-        #[from_instruction([generated_sdk::instructions::Create::symbol, generated_sdk::instructions::CreateV2::symbol], strategy = SetOnce)]
+        #[from_instruction([pump_sdk::instructions::Create::symbol, pump_sdk::instructions::CreateV2::symbol], strategy = SetOnce)]
         pub symbol: Option<String>,
 
-        #[from_instruction([generated_sdk::instructions::Create::uri, generated_sdk::instructions::CreateV2::uri], strategy = SetOnce)]
+        #[from_instruction([pump_sdk::instructions::Create::uri, pump_sdk::instructions::CreateV2::uri], strategy = SetOnce)]
         pub uri: Option<String>,
 
-        #[map(generated_sdk::accounts::BondingCurve::complete, strategy = LastWrite)]
+        #[map(pump_sdk::accounts::BondingCurve::complete, strategy = LastWrite)]
         pub is_complete: Option<bool>,
     }
 
@@ -58,19 +58,19 @@ pub mod pumpfun_stream {
     // the BondingCurve PDA address back to the mint primary key
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct ReserveState {
-        #[map(generated_sdk::accounts::BondingCurve::virtual_token_reserves, strategy = LastWrite)]
+        #[map(pump_sdk::accounts::BondingCurve::virtual_token_reserves, strategy = LastWrite)]
         pub virtual_token_reserves: Option<u64>,
 
-        #[map(generated_sdk::accounts::BondingCurve::virtual_sol_reserves, strategy = LastWrite)]
+        #[map(pump_sdk::accounts::BondingCurve::virtual_sol_reserves, strategy = LastWrite)]
         pub virtual_sol_reserves: Option<u64>,
 
-        #[map(generated_sdk::accounts::BondingCurve::real_token_reserves, strategy = LastWrite)]
+        #[map(pump_sdk::accounts::BondingCurve::real_token_reserves, strategy = LastWrite)]
         pub real_token_reserves: Option<u64>,
 
-        #[map(generated_sdk::accounts::BondingCurve::real_sol_reserves, strategy = LastWrite)]
+        #[map(pump_sdk::accounts::BondingCurve::real_sol_reserves, strategy = LastWrite)]
         pub real_sol_reserves: Option<u64>,
 
-        #[map(generated_sdk::accounts::BondingCurve::token_total_supply, strategy = LastWrite)]
+        #[map(pump_sdk::accounts::BondingCurve::token_total_supply, strategy = LastWrite)]
         pub token_total_supply: Option<u64>,
 
         pub current_price_sol: Option<f64>,
@@ -79,26 +79,26 @@ pub mod pumpfun_stream {
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct TradingMetrics {
-        #[aggregate(from = generated_sdk::instructions::Buy, field = amount, strategy = Sum, lookup_by = accounts::mint)]
+        #[aggregate(from = pump_sdk::instructions::Buy, field = amount, strategy = Sum, lookup_by = accounts::mint)]
         pub total_buy_volume: Option<u64>,
 
-        #[aggregate(from = generated_sdk::instructions::Sell, field = amount, strategy = Sum, lookup_by = accounts::mint)]
+        #[aggregate(from = pump_sdk::instructions::Sell, field = amount, strategy = Sum, lookup_by = accounts::mint)]
         pub total_sell_volume: Option<u64>,
 
-        #[aggregate(from = generated_sdk::instructions::BuyExactSolIn, field = spendable_sol_in, strategy = Sum, lookup_by = accounts::mint)]
+        #[aggregate(from = pump_sdk::instructions::BuyExactSolIn, field = spendable_sol_in, strategy = Sum, lookup_by = accounts::mint)]
         pub total_buy_exact_sol_volume: Option<u64>,
 
-        #[aggregate(from = [generated_sdk::instructions::Buy, generated_sdk::instructions::BuyExactSolIn, generated_sdk::instructions::Sell], strategy = Count, lookup_by = accounts::mint)]
+        #[aggregate(from = [pump_sdk::instructions::Buy, pump_sdk::instructions::BuyExactSolIn, pump_sdk::instructions::Sell], strategy = Count, lookup_by = accounts::mint)]
         pub total_trades: Option<u64>,
 
-        #[aggregate(from = [generated_sdk::instructions::Buy, generated_sdk::instructions::BuyExactSolIn], strategy = Count, lookup_by = accounts::mint)]
+        #[aggregate(from = [pump_sdk::instructions::Buy, pump_sdk::instructions::BuyExactSolIn], strategy = Count, lookup_by = accounts::mint)]
         pub buy_count: Option<u64>,
 
-        #[aggregate(from = generated_sdk::instructions::Sell, strategy = Count, lookup_by = accounts::mint)]
+        #[aggregate(from = pump_sdk::instructions::Sell, strategy = Count, lookup_by = accounts::mint)]
         pub sell_count: Option<u64>,
 
         #[aggregate(
-            from = [generated_sdk::instructions::Buy, generated_sdk::instructions::BuyExactSolIn, generated_sdk::instructions::Sell],
+            from = [pump_sdk::instructions::Buy, pump_sdk::instructions::BuyExactSolIn, pump_sdk::instructions::Sell],
             field = user,
             strategy = UniqueCount,
             transform = ToString,
@@ -107,7 +107,7 @@ pub mod pumpfun_stream {
         pub unique_traders: Option<u64>,
 
         #[aggregate(
-            from = [generated_sdk::instructions::Buy, generated_sdk::instructions::Sell],
+            from = [pump_sdk::instructions::Buy, pump_sdk::instructions::Sell],
             field = amount,
             strategy = Max,
             lookup_by = accounts::mint
@@ -115,7 +115,7 @@ pub mod pumpfun_stream {
         pub largest_trade: Option<u64>,
 
         #[aggregate(
-            from = [generated_sdk::instructions::Buy, generated_sdk::instructions::Sell],
+            from = [pump_sdk::instructions::Buy, pump_sdk::instructions::Sell],
             field = amount,
             strategy = Min,
             lookup_by = accounts::mint
@@ -123,7 +123,7 @@ pub mod pumpfun_stream {
         pub smallest_trade: Option<u64>,
 
         #[derive_from(
-            from = [generated_sdk::instructions::Buy, generated_sdk::instructions::BuyExactSolIn, generated_sdk::instructions::Sell],
+            from = [pump_sdk::instructions::Buy, pump_sdk::instructions::BuyExactSolIn, pump_sdk::instructions::Sell],
             field = __timestamp,
             lookup_by = accounts::mint
         )]
@@ -133,7 +133,7 @@ pub mod pumpfun_stream {
         pub last_trade_price: Option<f64>,
 
         #[aggregate(
-            from = [generated_sdk::instructions::Buy, generated_sdk::instructions::Sell],
+            from = [pump_sdk::instructions::Buy, pump_sdk::instructions::Sell],
             field = amount,
             strategy = Count,
             lookup_by = accounts::mint,
@@ -142,7 +142,7 @@ pub mod pumpfun_stream {
         pub whale_trade_count: Option<u64>,
 
         #[derive_from(
-            from = [generated_sdk::instructions::Buy, generated_sdk::instructions::Sell],
+            from = [pump_sdk::instructions::Buy, pump_sdk::instructions::Sell],
             field = accounts::user,
             lookup_by = accounts::mint,
             condition = "data.amount > 1_000_000_000_000"
@@ -170,7 +170,7 @@ pub mod pumpfun_stream {
     // - `signature`: Option<String> - Transaction signature (from UpdateContext)
     //
     // For example:
-    // - `pub buys: Vec<generated_sdk::instructions::Buy>` in spec
+    // - `pub buys: Vec<pump_sdk::instructions::Buy>` in spec
     // - Runtime type: `Vec<EventWrapper<{ amount, max_sol_cost, user }>>`
     // - Output: `[{ timestamp: 123, data: { amount: 100, ... }, slot: 456, signature: "..." }]`
     //
@@ -215,30 +215,30 @@ pub mod pumpfun_stream {
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct TokenEvents {
         #[event(strategy = SetOnce, lookup_by = accounts::mint)]
-        pub create: Option<generated_sdk::instructions::Create>,
+        pub create: Option<pump_sdk::instructions::Create>,
 
         #[event(strategy = SetOnce, lookup_by = accounts::mint)]
-        pub create_v2: Option<generated_sdk::instructions::CreateV2>,
+        pub create_v2: Option<pump_sdk::instructions::CreateV2>,
 
         #[event(
             strategy = Append,
             lookup_by = accounts::mint,
             fields = [data::amount, data::max_sol_cost, accounts::user]
         )]
-        pub buys: Vec<generated_sdk::instructions::Buy>,
+        pub buys: Vec<pump_sdk::instructions::Buy>,
 
         #[event(
             strategy = Append,
             lookup_by = accounts::mint,
             fields = [data::spendable_sol_in, data::min_tokens_out, accounts::user]
         )]
-        pub buys_exact_sol: Vec<generated_sdk::instructions::BuyExactSolIn>,
+        pub buys_exact_sol: Vec<pump_sdk::instructions::BuyExactSolIn>,
 
         #[event(
             strategy = Append,
             lookup_by = accounts::mint
         )]
-        pub sells: Vec<generated_sdk::instructions::Sell>,
+        pub sells: Vec<pump_sdk::instructions::Sell>,
     }
 
     // ========================================================================
@@ -247,48 +247,48 @@ pub mod pumpfun_stream {
     // Declarative syntax replaces imperative #[resolve_key_for] and #[after_instruction] hooks
 
     #[resolve_key(
-        account = generated_sdk::accounts::BondingCurve,
+        account = pump_sdk::accounts::BondingCurve,
         strategy = "pda_reverse_lookup",
         queue_until = [
-            generated_sdk::instructions::Create,
-            generated_sdk::instructions::CreateV2,
-            generated_sdk::instructions::Buy,
-            generated_sdk::instructions::BuyExactSolIn,
-            generated_sdk::instructions::Sell
+            pump_sdk::instructions::Create,
+            pump_sdk::instructions::CreateV2,
+            pump_sdk::instructions::Buy,
+            pump_sdk::instructions::BuyExactSolIn,
+            pump_sdk::instructions::Sell
         ]
     )]
     struct BondingCurveResolver;
 
     #[register_pda(
-        instruction = generated_sdk::instructions::Create,
+        instruction = pump_sdk::instructions::Create,
         pda_field = accounts::bonding_curve,
         primary_key = accounts::mint
     )]
     struct CreatePdaRegistration;
 
     #[register_pda(
-        instruction = generated_sdk::instructions::CreateV2,
+        instruction = pump_sdk::instructions::CreateV2,
         pda_field = accounts::bonding_curve,
         primary_key = accounts::mint
     )]
     struct CreateV2PdaRegistration;
 
     #[register_pda(
-        instruction = generated_sdk::instructions::Buy,
+        instruction = pump_sdk::instructions::Buy,
         pda_field = accounts::bonding_curve,
         primary_key = accounts::mint
     )]
     struct BuyPdaRegistration;
 
     #[register_pda(
-        instruction = generated_sdk::instructions::BuyExactSolIn,
+        instruction = pump_sdk::instructions::BuyExactSolIn,
         pda_field = accounts::bonding_curve,
         primary_key = accounts::mint
     )]
     struct BuyExactSolInPdaRegistration;
 
     #[register_pda(
-        instruction = generated_sdk::instructions::Sell,
+        instruction = pump_sdk::instructions::Sell,
         pda_field = accounts::bonding_curve,
         primary_key = accounts::mint
     )]

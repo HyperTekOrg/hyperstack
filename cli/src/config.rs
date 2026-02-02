@@ -199,7 +199,7 @@ impl HyperstackConfig {
 pub struct DiscoveredAst {
     pub path: PathBuf,
     pub stack_id: String,
-    pub program_id: Option<String>,
+    pub program_ids: Vec<String>,
     pub stack_name: String,
 }
 
@@ -218,15 +218,26 @@ impl DiscoveredAst {
                 anyhow::anyhow!("Stack file missing 'stack_name' field: {}", path.display())
             })?;
 
-        let program_id = ast
-            .get("program_id")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+        let program_ids = ast
+            .get("program_ids")
+            .and_then(|v| v.as_array())
+            .map(|ids| {
+                ids.iter()
+                    .filter_map(|id| id.as_str().map(|s| s.to_string()))
+                    .collect::<Vec<String>>()
+            })
+            .filter(|ids| !ids.is_empty())
+            .or_else(|| {
+                ast.get("program_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| vec![s.to_string()])
+            })
+            .unwrap_or_default();
 
         Ok(Self {
             path,
             stack_id: stack_name.to_string(),
-            program_id,
+            program_ids,
             stack_name: to_kebab_case(stack_name),
         })
     }

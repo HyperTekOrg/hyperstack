@@ -87,7 +87,7 @@ pub type ParserSetupFn = Arc<
 /// Contains bytecode, parsers, and program information
 pub struct Spec {
     pub bytecode: hyperstack_interpreter::compiler::MultiEntityBytecode,
-    pub program_id: String,
+    pub program_ids: Vec<String>,
     pub parser_setup: Option<ParserSetupFn>,
     pub views: Vec<ViewDef>,
 }
@@ -99,7 +99,7 @@ impl Spec {
     ) -> Self {
         Self {
             bytecode,
-            program_id: program_id.into(),
+            program_ids: vec![program_id.into()],
             parser_setup: None,
             views: Vec::new(),
         }
@@ -148,7 +148,7 @@ impl ServerBuilder {
         }
     }
 
-    /// Set the specification (bytecode, parsers, program_id)
+    /// Set the specification (bytecode, parsers, program_ids)
     pub fn spec(mut self, spec: Spec) -> Self {
         self.spec = Some(spec);
         self
@@ -372,6 +372,6 @@ mod tests {
     fn test_spec_creation() {
         let bytecode = hyperstack_interpreter::compiler::MultiEntityBytecode::new().build();
         let spec = Spec::new(bytecode, "test_program");
-        assert_eq!(spec.program_id, "test_program");
+        assert_eq!(spec.program_ids.first().map(String::as_str), Some("test_program"));
     }
 }

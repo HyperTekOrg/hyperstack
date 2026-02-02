@@ -11,6 +11,7 @@ use quote::quote;
 use syn::{Fields, ItemStruct, Type};
 
 use crate::ast::{BaseType, EntitySection, FieldTypeInfo, ResolvedField, ResolvedStructType};
+use crate::event_type_helpers::{find_idl_for_type, IdlLookup};
 use crate::parse;
 use crate::parse::idl::{IdlSpec, IdlType, IdlTypeDefKind};
 use crate::utils::path_to_string;
@@ -28,15 +29,14 @@ pub fn extract_section_from_struct(
     item_struct: &ItemStruct,
     parent_field: Option<String>,
 ) -> EntitySection {
-    extract_section_from_struct_with_idl(section_name, item_struct, parent_field, None)
+    extract_section_from_struct_with_idl(section_name, item_struct, parent_field, &[])
 }
 
-/// Extract section information from a struct definition with optional IDL for type resolution.
 pub fn extract_section_from_struct_with_idl(
     section_name: &str,
     item_struct: &ItemStruct,
     parent_field: Option<String>,
-    idl: Option<&IdlSpec>,
+    idls: IdlLookup,
 ) -> EntitySection {
     let mut fields = Vec::new();
 
@@ -47,7 +47,7 @@ pub fn extract_section_from_struct_with_idl(
                 let field_ty = &field.ty;
                 let rust_type_name = quote::quote!(#field_ty).to_string();
                 let field_type_info =
-                    analyze_field_type_with_idl(&field_name, &rust_type_name, idl);
+                    analyze_field_type_with_idl(&field_name, &rust_type_name, idls);
                 fields.push(field_type_info);
             }
         }
@@ -68,22 +68,21 @@ pub fn extract_section_from_struct_with_idl(
 /// Analyze a Rust type string and extract field type information.
 #[allow(dead_code)]
 pub fn analyze_field_type(field_name: &str, rust_type: &str) -> FieldTypeInfo {
-    analyze_field_type_with_idl(field_name, rust_type, None)
+    analyze_field_type_with_idl(field_name, rust_type, &[])
 }
 
 /// Analyze a Rust type string with IDL support for resolving complex types.
 pub fn analyze_field_type_with_idl(
     field_name: &str,
     rust_type: &str,
-    idl: Option<&IdlSpec>,
+    idls: IdlLookup,
 ) -> FieldTypeInfo {
     let type_str = rust_type.trim();
 
-    // Handle Option<T>
     if let Some(inner) = extract_generic_inner_type(type_str, "Option") {
         let inner_info = analyze_inner_type(&inner);
         let resolved_type = if inner_info.0 == BaseType::Object {
-            resolve_complex_type(&inner, idl)
+            resolve_complex_type(&inner, idls)
         } else {
             None
         };
@@ -100,11 +99,10 @@ pub fn analyze_field_type_with_idl(
         };
     }
 
-    // Handle Vec<T>
     if let Some(inner) = extract_generic_inner_type(type_str, "Vec") {
         let inner_base_type = analyze_simple_type(&inner);
         let resolved_type = if inner_base_type == BaseType::Object {
-            resolve_complex_type(&inner, idl)
+            resolve_complex_type(&inner, idls)
         } else {
             None
         };
@@ -121,10 +119,9 @@ pub fn analyze_field_type_with_idl(
         };
     }
 
-    // Handle primitive types
     let base_type = analyze_simple_type(type_str);
     let resolved_type = if base_type == BaseType::Object {
-        resolve_complex_type(type_str, idl)
+        resolve_complex_type(type_str, idls)
     } else {
         None
     };
@@ -279,6 +276,7 @@ pub fn process_nested_struct(
     computed_fields: &mut Vec<(String, proc_macro2::TokenStream, Type)>,
     derive_from_mappings: &mut HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &mut HashMap<String, String>,
+    program_name: Option<&str>,
 ) {
     let section_name = section_field_name.to_string();
 
@@ -350,7 +348,7 @@ pub fn process_nested_struct(
 
                     // Determine instruction path (type-safe or legacy)
                     if let Some((_instruction_path, instruction_str)) =
-                        determine_event_instruction(&mut event_attr, field_type)
+                        determine_event_instruction(&mut event_attr, field_type, program_name)
                     {
                         events_by_instruction
                             .entry(instruction_str)
@@ -523,37 +521,32 @@ pub fn process_nested_struct(
 // IDL Type Resolution
 // ============================================================================
 
-/// Resolve a complex type (instruction, account, or custom type) from the IDL
-fn resolve_complex_type(type_str: &str, idl: Option<&IdlSpec>) -> Option<ResolvedStructType> {
-    let idl_ref = idl?;
+fn resolve_complex_type(type_str: &str, idls: IdlLookup) -> Option<ResolvedStructType> {
+    let idl_ref = find_idl_for_type(type_str, idls)?;
 
     // Extract the simple type name from patterns like "generated_sdk :: instructions :: Buy"
     let type_name = extract_type_name(type_str);
     let type_name_lower = type_name.to_lowercase();
 
     // Check if it's an instruction (case-insensitive match)
+    let idl = Some(idl_ref);
+
     for instruction in &idl_ref.instructions {
         if instruction.name.to_lowercase() == type_name_lower {
             return Some(resolve_instruction_type(instruction, idl));
         }
     }
 
-    // Check if it's an account (case-insensitive match)
-    // First check if the account has an embedded type definition
     for account in &idl_ref.accounts {
         if account.name.to_lowercase() == type_name_lower {
             let resolved = resolve_account_type(account, idl);
-            // If the account had fields or is an enum, return it
             if !resolved.fields.is_empty() || resolved.is_enum {
                 return Some(resolved);
             }
-            // Otherwise, fall through to check types array
             break;
         }
     }
 
-    // Check if it's a custom type (case-insensitive match)
-    // This also handles accounts that don't have embedded type definitions
     for type_def in &idl_ref.types {
         if type_def.name.to_lowercase() == type_name_lower {
             return Some(resolve_custom_type(type_def, idl));
@@ -849,7 +842,10 @@ fn analyze_idl_type_with_resolution(
             };
 
             // Try to resolve this defined type from IDL (including enums)
-            let resolved_type = resolve_complex_type(&type_name, idl);
+            // Convert Option<&IdlSpec> into a temporary IdlLookup slice for resolve_complex_type
+            let temp_idl_lookup: Vec<(String, &IdlSpec)> =
+                idl.into_iter().map(|i| (String::new(), i)).collect();
+            let resolved_type = resolve_complex_type(&type_name, &temp_idl_lookup);
 
             (type_name, BaseType::Object, false, false, resolved_type)
         }

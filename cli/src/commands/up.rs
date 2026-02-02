@@ -84,8 +84,8 @@ fn show_dry_run(stacks: &[crate::config::DiscoveredAst], branch: Option<&str>) -
         );
         println!("    Stack: {}", ast.stack_id);
         println!("    Stack: {}", ast.path.display());
-        if let Some(pid) = &ast.program_id {
-            println!("    Program ID: {}", pid);
+        if !ast.program_ids.is_empty() {
+            println!("    Program IDs: {}", ast.program_ids.join(", "));
         }
 
         let url = get_expected_url(&client, &ast.stack_name, branch);

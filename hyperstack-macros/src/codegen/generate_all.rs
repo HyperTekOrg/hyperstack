@@ -99,14 +99,15 @@ pub fn generate_all_from_spec(
     );
 
     // Generate each component based on config
+    let sdk_module_name = format!("{}_sdk", program_name);
     let sdk_types = if config.sdk_types {
-        generate_sdk_from_idl(ctx.idl)
+        generate_sdk_from_idl(ctx.idl, &sdk_module_name)
     } else {
         quote! {}
     };
 
     let parsers = if config.parsers {
-        generate_parsers_from_idl(ctx.idl, ctx.program_id)
+        generate_parsers_from_idl(ctx.idl, ctx.program_id, &sdk_module_name)
     } else {
         quote! {}
     };
@@ -206,14 +207,15 @@ pub fn generate_components_from_spec(
         crate::parse::idl::to_pascal_case(program_name)
     );
 
+    let sdk_module_name = format!("{}_sdk", program_name);
     GeneratedComponents {
         sdk_types: if config.sdk_types {
-            generate_sdk_from_idl(ctx.idl)
+            generate_sdk_from_idl(ctx.idl, &sdk_module_name)
         } else {
             quote! {}
         },
         parsers: if config.parsers {
-            generate_parsers_from_idl(ctx.idl, ctx.program_id)
+            generate_parsers_from_idl(ctx.idl, ctx.program_id, &sdk_module_name)
         } else {
             quote! {}
         },

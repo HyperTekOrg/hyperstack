@@ -198,9 +198,14 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
         .iter()
         .any(|ix| ix.discriminant.is_some() && ix.discriminator.is_empty());
     let discriminant_size: usize = if uses_steel_discriminant { 1 } else { 8 };
+    let program_id = idl
+        .address
+        .clone()
+        .or_else(|| idl.metadata.as_ref().and_then(|m| m.address.clone()));
 
     IdlSnapshot {
         name: idl.get_name().to_string(),
+        program_id,
         version: idl.get_version().to_string(),
         accounts: idl
             .accounts
@@ -325,6 +330,7 @@ pub fn build_handlers_from_sources(
     aggregate_conditions: &HashMap<String, String>,
     idl: Option<&idl_parser::IdlSpec>,
 ) -> Vec<SerializableHandlerSpec> {
+    let program_name = idl.map(|idl| idl.get_name());
     let mut handlers = Vec::new();
 
     // Group sources by type and join key (same logic as handler generation)
@@ -523,11 +529,16 @@ pub fn build_handlers_from_sources(
                     })
             })
         };
+        let type_name = if let Some(program_name) = program_name {
+            format!("{}::{}{}", program_name, account_type, type_suffix)
+        } else {
+            format!("{}{}", account_type, type_suffix)
+        };
         handlers.push(SerializableHandlerSpec {
             source: SourceSpec::Source {
                 program_id: None,
                 discriminator: None,
-                type_name: format!("{}{}", account_type, type_suffix),
+                type_name,
                 serialization,
             },
             key_resolution,
@@ -545,11 +556,17 @@ pub fn build_resolver_hooks(
     resolver_hooks: &[parse::ResolveKeyAttribute],
     idl: Option<&idl_parser::IdlSpec>,
 ) -> Vec<ResolverHook> {
+    let program_name = idl.map(|idl| idl.get_name());
     resolver_hooks
         .iter()
         .map(|hook| {
             let account_type = path_to_string(&hook.account_path);
-            let account_type_state = format!("{}State", account_type.split("::").last().unwrap());
+            let account_base = account_type.split("::").last().unwrap();
+            let account_type_state = if let Some(program_name) = program_name {
+                format!("{}::{}State", program_name, account_base)
+            } else {
+                format!("{}State", account_base)
+            };
 
             let strategy = match hook.strategy.as_str() {
                 "pda_reverse_lookup" => {
@@ -595,6 +612,7 @@ pub fn build_instruction_hooks(
     derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    program_name: Option<&str>,
 ) -> Vec<InstructionHook> {
     // Use BTreeMap for deterministic ordering in the final output
     let mut instruction_hooks_map: BTreeMap<String, InstructionHook> = BTreeMap::new();
@@ -602,7 +620,12 @@ pub fn build_instruction_hooks(
     // Process PDA registrations
     for registration in pda_registrations {
         let instr_type = path_to_string(&registration.instruction_path);
-        let instr_type_state = format!("{}IxState", instr_type.split("::").last().unwrap());
+        let instr_base = instr_type.split("::").last().unwrap();
+        let instr_type_state = if let Some(program_name) = program_name {
+            format!("{}::{}IxState", program_name, instr_base)
+        } else {
+            format!("{}IxState", instr_base)
+        };
 
         let action = HookAction::RegisterPdaMapping {
             pda_field: FieldPath::new(&["accounts", &registration.pda_field.ident.to_string()]),
@@ -628,7 +651,12 @@ pub fn build_instruction_hooks(
     let mut sorted_derive_from: Vec<_> = derive_from_mappings.iter().collect();
     sorted_derive_from.sort_by_key(|(k, _)| *k);
     for (instruction_type, derive_attrs) in sorted_derive_from {
-        let instr_type_state = format!("{}IxState", instruction_type.split("::").last().unwrap());
+        let instr_base = instruction_type.split("::").last().unwrap();
+        let instr_type_state = if let Some(program_name) = program_name {
+            format!("{}::{}IxState", program_name, instr_base)
+        } else {
+            format!("{}IxState", instr_base)
+        };
 
         for derive_attr in derive_attrs {
             let source = if derive_attr.field.ident.to_string().starts_with("__") {
@@ -707,8 +735,12 @@ pub fn build_instruction_hooks(
                         "Sum" | "Count" | "Min" | "Max" | "UniqueCount"
                     )
                 {
-                    let instr_type_state =
-                        format!("{}IxState", source_type.split("::").last().unwrap());
+                    let instr_base = source_type.split("::").last().unwrap();
+                    let instr_type_state = if let Some(program_name) = program_name {
+                        format!("{}::{}IxState", program_name, instr_base)
+                    } else {
+                        format!("{}IxState", instr_base)
+                    };
 
                     let condition = ConditionExpr {
                         expression: condition_str.clone(),

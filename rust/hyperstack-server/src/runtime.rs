@@ -160,14 +160,18 @@ impl Runtime {
 
         let parser_handle = if let Some(spec) = self.spec {
             if let Some(parser_setup) = spec.parser_setup {
+                let program_id = spec
+                    .program_ids
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "unknown".to_string());
                 info!(
                     "Starting Vixen parser runtime for program: {}",
-                    spec.program_id
+                    program_id
                 );
                 let tx = mutations_tx.clone();
                 let health = health_monitor.clone();
                 let reconnection_config = self.config.reconnection.clone().unwrap_or_default();
-                let program_id = spec.program_id.clone();
                 Some(tokio::spawn(
                     async move {
                         if let Err(e) = parser_setup(tx, health, reconnection_config).await {

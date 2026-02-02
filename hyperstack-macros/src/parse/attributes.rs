@@ -941,20 +941,20 @@ pub fn parse_entity_name(attrs: &[Attribute]) -> Option<String> {
 #[derive(Debug, Clone)]
 pub struct StreamSpecAttribute {
     pub proto_files: Vec<String>,
-    pub idl_file: String,
+    pub idl_files: Vec<String>,
     pub skip_decoders: bool,
 }
 
 struct StreamSpecAttributeArgs {
     proto_files: Vec<String>,
-    idl_file: Option<String>,
+    idl_files: Vec<String>,
     skip_decoders: bool,
 }
 
 impl Parse for StreamSpecAttributeArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut proto_files = Vec::new();
-        let mut idl_file = None;
+        let mut idl_files = Vec::new();
         let mut skip_decoders = false;
 
         while !input.is_empty() {
@@ -984,8 +984,27 @@ impl Parse for StreamSpecAttributeArgs {
                 }
             } else if ident_str == "idl" {
                 input.parse::<Token![=]>()?;
-                let lit: syn::LitStr = input.parse()?;
-                idl_file = Some(lit.value());
+
+                if input.peek(syn::LitStr) {
+                    let lit: syn::LitStr = input.parse()?;
+                    idl_files.push(lit.value());
+                } else if input.peek(syn::token::Bracket) {
+                    let content;
+                    syn::bracketed!(content in input);
+
+                    while !content.is_empty() {
+                        let file_lit: syn::LitStr = content.parse()?;
+                        idl_files.push(file_lit.value());
+
+                        if !content.is_empty() {
+                            content.parse::<Token![,]>()?;
+                        }
+                    }
+                } else {
+                    return Err(
+                        input.error("Expected string literal or array of string literals for idl")
+                    );
+                }
             } else if ident_str == "skip_decoders" {
                 skip_decoders = true;
             } else {
@@ -1002,7 +1021,7 @@ impl Parse for StreamSpecAttributeArgs {
 
         Ok(StreamSpecAttributeArgs {
             proto_files,
-            idl_file,
+            idl_files,
             skip_decoders,
         })
     }
@@ -1014,7 +1033,7 @@ pub fn parse_stream_spec_attribute(
     if attr.is_empty() {
         return Ok(StreamSpecAttribute {
             proto_files: Vec::new(),
-            idl_file: String::new(),
+            idl_files: Vec::new(),
             skip_decoders: false,
         });
     }
@@ -1023,7 +1042,7 @@ pub fn parse_stream_spec_attribute(
 
     Ok(StreamSpecAttribute {
         proto_files: args.proto_files,
-        idl_file: args.idl_file.unwrap_or_default(),
+        idl_files: args.idl_files,
         skip_decoders: args.skip_decoders,
     })
 }

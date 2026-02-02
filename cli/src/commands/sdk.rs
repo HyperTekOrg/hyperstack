@@ -59,8 +59,8 @@ pub fn list(config_path: &str) -> Result<()> {
             println!("  {} {}", "•".dimmed(), ast.stack_name.green().bold());
             println!("    Stack: {}", ast.stack_id);
             println!("    Path: {}", ast.path.display());
-            if let Some(pid) = &ast.program_id {
-                println!("    Program ID: {}", pid);
+            if !ast.program_ids.is_empty() {
+                println!("    Program IDs: {}", ast.program_ids.join(", "));
             }
             println!("    {}", "(auto-discovered, not in config)".dimmed());
             println!();
@@ -141,8 +141,8 @@ pub fn create_typescript(
         ast.stack_id.bold()
     );
     println!("  Path: {}", ast.path.display());
-    if let Some(pid) = &ast.program_id {
-        println!("  Program ID: {}", pid);
+    if !ast.program_ids.is_empty() {
+        println!("  Program IDs: {}", ast.program_ids.join(", "));
     }
     println!("  Output: {}", output_path.display());
     if let Some(url) = &stack_url {
@@ -318,8 +318,8 @@ pub fn create_rust(
         ast.stack_id.bold()
     );
     println!("  Path: {}", ast.path.display());
-    if let Some(pid) = &ast.program_id {
-        println!("  Program ID: {}", pid);
+    if !ast.program_ids.is_empty() {
+        println!("  Program IDs: {}", ast.program_ids.join(", "));
     }
     println!("  Output: {}", output_dir.display());
     if as_module {

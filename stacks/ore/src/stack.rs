@@ -18,48 +18,48 @@ pub mod ore_stream {
         // - rent_payer: Base58Encode - Converts the pubkey to readable base58 string
         // - top_miner: Base58Encode - Converts the pubkey to readable base58 string
         #[snapshot(strategy = LastWrite, transforms = [(rent_payer, Base58Encode), (top_miner, Base58Encode)])]
-        pub round_snapshot: Option<generated_sdk::accounts::Round>,
+        pub round_snapshot: Option<ore_sdk::accounts::Round>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct RoundId {
-        #[map(generated_sdk::accounts::Round::id, primary_key, strategy = SetOnce)]
+        #[map(ore_sdk::accounts::Round::id, primary_key, strategy = SetOnce)]
         pub round_id: u64,
 
-        #[map(generated_sdk::accounts::Round::__account_address, lookup_index, strategy = SetOnce)]
+        #[map(ore_sdk::accounts::Round::__account_address, lookup_index, strategy = SetOnce)]
         pub round_address: String,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct RoundState {
-        #[map(generated_sdk::accounts::Round::expires_at, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Round::expires_at, strategy = LastWrite)]
         pub expires_at: Option<u64>,
 
-        #[map(generated_sdk::accounts::Round::motherlode, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Round::motherlode, strategy = LastWrite)]
         pub motherlode: Option<u64>,
 
-        #[map(generated_sdk::accounts::Round::total_deployed, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Round::total_deployed, strategy = LastWrite)]
         pub total_deployed: Option<u64>,
 
-        #[map(generated_sdk::accounts::Round::total_vaulted, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Round::total_vaulted, strategy = LastWrite)]
         pub total_vaulted: Option<u64>,
 
-        #[map(generated_sdk::accounts::Round::total_winnings, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Round::total_winnings, strategy = LastWrite)]
         pub total_winnings: Option<u64>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct RoundResults {
-        #[map(generated_sdk::accounts::Round::top_miner, strategy = LastWrite, transform = Base58Encode)]
+        #[map(ore_sdk::accounts::Round::top_miner, strategy = LastWrite, transform = Base58Encode)]
         pub top_miner: Option<String>,
 
-        #[map(generated_sdk::accounts::Round::top_miner_reward, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Round::top_miner_reward, strategy = LastWrite)]
         pub top_miner_reward: Option<u64>,
 
-        #[map(generated_sdk::accounts::Round::rent_payer, strategy = LastWrite, transform = Base58Encode)]
+        #[map(ore_sdk::accounts::Round::rent_payer, strategy = LastWrite, transform = Base58Encode)]
         pub rent_payer: Option<String>,
 
-        #[map(generated_sdk::accounts::Round::slot_hash, strategy = LastWrite, transform = Base58Encode)]
+        #[map(ore_sdk::accounts::Round::slot_hash, strategy = LastWrite, transform = Base58Encode)]
         pub slot_hash: Option<String>,
 
         // Computed field: Calculate RNG from slot_hash bytes
@@ -92,15 +92,15 @@ pub mod ore_stream {
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct RoundMetrics {
         // Count of deploy instructions for this round
-        #[aggregate(from = generated_sdk::instructions::Deploy, strategy = Count, lookup_by = accounts::round)]
+        #[aggregate(from = ore_sdk::instructions::Deploy, strategy = Count, lookup_by = accounts::round)]
         pub deploy_count: Option<u64>,
 
         // Sum of all deployed SOL amounts
-        #[aggregate(from = generated_sdk::instructions::Deploy, field = amount, strategy = Sum, lookup_by = accounts::round)]
+        #[aggregate(from = ore_sdk::instructions::Deploy, field = amount, strategy = Sum, lookup_by = accounts::round)]
         pub total_deployed_sol: Option<u64>,
 
         // Count of checkpoint instructions for this round
-        #[aggregate(from = generated_sdk::instructions::Checkpoint, strategy = Count, lookup_by = accounts::round)]
+        #[aggregate(from = ore_sdk::instructions::Checkpoint, strategy = Count, lookup_by = accounts::round)]
         pub checkpoint_count: Option<u64>,
     }
 
@@ -114,30 +114,30 @@ pub mod ore_stream {
         pub state: TreasuryState,
 
         #[snapshot(strategy = LastWrite)]
-        pub treasury_snapshot: Option<generated_sdk::accounts::Treasury>,
+        pub treasury_snapshot: Option<ore_sdk::accounts::Treasury>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct TreasuryId {
-        #[map(generated_sdk::accounts::Treasury::__account_address, primary_key, strategy = SetOnce)]
+        #[map(ore_sdk::accounts::Treasury::__account_address, primary_key, strategy = SetOnce)]
         pub address: String,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct TreasuryState {
-        #[map(generated_sdk::accounts::Treasury::balance, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Treasury::balance, strategy = LastWrite)]
         pub balance: Option<u64>,
 
-        #[map(generated_sdk::accounts::Treasury::motherlode, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Treasury::motherlode, strategy = LastWrite)]
         pub motherlode: Option<u64>,
 
-        #[map(generated_sdk::accounts::Treasury::total_refined, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Treasury::total_refined, strategy = LastWrite)]
         pub total_refined: Option<u64>,
 
-        #[map(generated_sdk::accounts::Treasury::total_staked, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Treasury::total_staked, strategy = LastWrite)]
         pub total_staked: Option<u64>,
 
-        #[map(generated_sdk::accounts::Treasury::total_unclaimed, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Treasury::total_unclaimed, strategy = LastWrite)]
         pub total_unclaimed: Option<u64>,
     }
 
@@ -153,85 +153,85 @@ pub mod ore_stream {
         pub automation: MinerAutomation,
 
         #[snapshot(strategy = LastWrite, transforms = [(authority, Base58Encode)])]
-        pub miner_snapshot: Option<generated_sdk::accounts::Miner>,
+        pub miner_snapshot: Option<ore_sdk::accounts::Miner>,
 
         #[snapshot(strategy = LastWrite, transforms = [(authority, Base58Encode), (executor, Base58Encode)])]
-        pub automation_snapshot: Option<generated_sdk::accounts::Automation>,
+        pub automation_snapshot: Option<ore_sdk::accounts::Automation>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct MinerId {
         // Both Miner and Automation accounts share authority as the identity key
-        #[map([generated_sdk::accounts::Miner::authority, generated_sdk::accounts::Automation::authority], primary_key, strategy = SetOnce, transform = Base58Encode)]
+        #[map([ore_sdk::accounts::Miner::authority, ore_sdk::accounts::Automation::authority], primary_key, strategy = SetOnce, transform = Base58Encode)]
         pub authority: String,
 
-        #[map(generated_sdk::accounts::Miner::__account_address, lookup_index, strategy = SetOnce)]
+        #[map(ore_sdk::accounts::Miner::__account_address, lookup_index, strategy = SetOnce)]
         pub miner_address: String,
 
-        #[map(generated_sdk::accounts::Automation::__account_address, strategy = SetOnce)]
+        #[map(ore_sdk::accounts::Automation::__account_address, strategy = SetOnce)]
         pub automation_address: Option<String>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct MinerRewards {
-        #[map(generated_sdk::accounts::Miner::rewards_sol, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Miner::rewards_sol, strategy = LastWrite)]
         pub rewards_sol: Option<u64>,
 
-        #[map(generated_sdk::accounts::Miner::rewards_ore, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Miner::rewards_ore, strategy = LastWrite)]
         pub rewards_ore: Option<u64>,
 
-        #[map(generated_sdk::accounts::Miner::refined_ore, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Miner::refined_ore, strategy = LastWrite)]
         pub refined_ore: Option<u64>,
 
-        #[map(generated_sdk::accounts::Miner::lifetime_rewards_sol, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Miner::lifetime_rewards_sol, strategy = LastWrite)]
         pub lifetime_rewards_sol: Option<u64>,
 
-        #[map(generated_sdk::accounts::Miner::lifetime_rewards_ore, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Miner::lifetime_rewards_ore, strategy = LastWrite)]
         pub lifetime_rewards_ore: Option<u64>,
 
-        #[map(generated_sdk::accounts::Miner::lifetime_deployed, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Miner::lifetime_deployed, strategy = LastWrite)]
         pub lifetime_deployed: Option<u64>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct MinerState {
-        #[map(generated_sdk::accounts::Miner::round_id, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Miner::round_id, strategy = LastWrite)]
         pub round_id: Option<u64>,
 
-        #[map(generated_sdk::accounts::Miner::checkpoint_id, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Miner::checkpoint_id, strategy = LastWrite)]
         pub checkpoint_id: Option<u64>,
 
-        #[map(generated_sdk::accounts::Miner::checkpoint_fee, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Miner::checkpoint_fee, strategy = LastWrite)]
         pub checkpoint_fee: Option<u64>,
 
-        #[map(generated_sdk::accounts::Miner::last_claim_ore_at, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Miner::last_claim_ore_at, strategy = LastWrite)]
         pub last_claim_ore_at: Option<i64>,
 
-        #[map(generated_sdk::accounts::Miner::last_claim_sol_at, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Miner::last_claim_sol_at, strategy = LastWrite)]
         pub last_claim_sol_at: Option<i64>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct MinerAutomation {
-        #[map(generated_sdk::accounts::Automation::amount, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Automation::amount, strategy = LastWrite)]
         pub amount: Option<u64>,
 
-        #[map(generated_sdk::accounts::Automation::balance, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Automation::balance, strategy = LastWrite)]
         pub balance: Option<u64>,
 
-        #[map(generated_sdk::accounts::Automation::executor, strategy = LastWrite, transform = Base58Encode)]
+        #[map(ore_sdk::accounts::Automation::executor, strategy = LastWrite, transform = Base58Encode)]
         pub executor: Option<String>,
 
-        #[map(generated_sdk::accounts::Automation::fee, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Automation::fee, strategy = LastWrite)]
         pub fee: Option<u64>,
 
-        #[map(generated_sdk::accounts::Automation::strategy, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Automation::strategy, strategy = LastWrite)]
         pub strategy: Option<u64>,
 
-        #[map(generated_sdk::accounts::Automation::mask, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Automation::mask, strategy = LastWrite)]
         pub mask: Option<u64>,
 
-        #[map(generated_sdk::accounts::Automation::reload, strategy = LastWrite)]
+        #[map(ore_sdk::accounts::Automation::reload, strategy = LastWrite)]
         pub reload: Option<u64>,
     }
 }

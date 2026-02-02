@@ -1,1511 +1,198 @@
 {
   "stack_name": "OreStream",
-  "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
-  "idl": {
-    "name": "ore",
-    "version": "3.7.22",
-    "accounts": [
-      {
-        "name": "Automation",
-        "discriminator": [
-          100,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Automation parameters for automated mining deployments."
-        ]
-      },
-      {
-        "name": "Board",
-        "discriminator": [
-          105,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Global round tracking for the mining game."
-        ]
-      },
-      {
-        "name": "Config",
-        "discriminator": [
-          101,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Program configuration state."
-        ]
-      },
-      {
-        "name": "Miner",
-        "discriminator": [
-          103,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Tracks a miner's deployed SOL and reward balances."
-        ]
-      },
-      {
-        "name": "Round",
-        "discriminator": [
-          109,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "State for a single mining round."
-        ]
-      },
-      {
-        "name": "Stake",
-        "discriminator": [
-          108,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "State for a staking participant."
-        ]
-      },
-      {
-        "name": "Treasury",
-        "discriminator": [
-          104,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Singleton treasury account tracking protocol balances."
-        ]
-      }
-    ],
-    "instructions": [
-      {
-        "name": "automate",
-        "discriminator": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Configures or closes a miner automation account.",
-          "Automation PDA seeds: [\"automation\", signer].",
-          "Miner PDA seeds: [\"miner\", signer]."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": true,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "automation",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "executor",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "miner",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          }
-        ],
-        "args": [
-          {
-            "name": "amount",
-            "type": "u64"
-          },
-          {
-            "name": "deposit",
-            "type": "u64"
-          },
-          {
-            "name": "fee",
-            "type": "u64"
-          },
-          {
-            "name": "mask",
-            "type": "u64"
-          },
-          {
-            "name": "strategy",
-            "type": "u8"
-          },
-          {
-            "name": "reload",
-            "type": "u64"
-          }
-        ]
-      },
-      {
-        "name": "checkpoint",
-        "discriminator": [
-          2,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Settles miner rewards for a completed round.",
-          "Treasury PDA seeds: [\"treasury\"]."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": true,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "board",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "miner",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "round",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "treasury",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          }
-        ],
-        "args": []
-      },
-      {
-        "name": "claimSol",
-        "discriminator": [
-          3,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Claims SOL rewards from the miner account."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": true,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "miner",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          }
-        ],
-        "args": []
-      },
-      {
-        "name": "claimOre",
-        "discriminator": [
-          4,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Claims ORE token rewards from the treasury vault."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": true,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "miner",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "mint",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
-            "docs": []
-          },
-          {
-            "name": "recipient",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "treasury",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "treasuryTokens",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          },
-          {
-            "name": "tokenProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-            "docs": []
-          },
-          {
-            "name": "associatedTokenProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
-            "docs": []
-          }
-        ],
-        "args": []
-      },
-      {
-        "name": "close",
-        "discriminator": [
-          5,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Closes an expired round account and returns rent to the payer.",
-          "Round PDA seeds: [\"round\", round_id].",
-          "Treasury PDA seeds: [\"treasury\"]."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": false,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "board",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "rentPayer",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "round",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "treasury",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          }
-        ],
-        "args": []
-      },
-      {
-        "name": "deploy",
-        "discriminator": [
-          6,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Deploys SOL to selected squares for the current round.",
-          "Automation PDA seeds: [\"automation\", authority].",
-          "Config PDA seeds: [\"config\"].",
-          "Miner PDA seeds: [\"miner\", authority].",
-          "Round PDA seeds: [\"round\", board.round_id]."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": true,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "authority",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "automation",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "board",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "config",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "miner",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "round",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          },
-          {
-            "name": "oreProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
-            "docs": []
-          },
-          {
-            "name": "entropyVar",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "entropyProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X",
-            "docs": []
-          }
-        ],
-        "args": [
-          {
-            "name": "amount",
-            "type": "u64"
-          },
-          {
-            "name": "squares",
-            "type": "u32"
-          }
-        ]
-      },
-      {
-        "name": "log",
-        "discriminator": [
-          8,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Emits an arbitrary log message from the board PDA.",
-          "Bytes following the discriminator are logged verbatim."
-        ],
-        "accounts": [
-          {
-            "name": "board",
-            "writable": false,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          }
-        ],
-        "args": []
-      },
-      {
-        "name": "reset",
-        "discriminator": [
-          9,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Finalizes the current round, mints rewards, and opens the next round.",
-          "Board PDA seeds: [\"board\"].",
-          "Treasury PDA seeds: [\"treasury\"].",
-          "Round PDA seeds: [\"round\", board.round_id] and [\"round\", board.round_id + 1]."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": true,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "board",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "config",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "feeCollector",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "mint",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
-            "docs": []
-          },
-          {
-            "name": "round",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "roundNext",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "topMiner",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "treasury",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "treasuryTokens",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          },
-          {
-            "name": "tokenProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-            "docs": []
-          },
-          {
-            "name": "oreProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
-            "docs": []
-          },
-          {
-            "name": "slotHashesSysvar",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "SysvarS1otHashes111111111111111111111111111",
-            "docs": []
-          },
-          {
-            "name": "entropyVar",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "entropyProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X",
-            "docs": []
-          }
-        ],
-        "args": []
-      },
-      {
-        "name": "deposit",
-        "discriminator": [
-          10,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Deposits ORE into a staking account.",
-          "Stake PDA seeds: [\"stake\", signer]."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": true,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "payer",
-            "writable": true,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "mint",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
-            "docs": []
-          },
-          {
-            "name": "sender",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "stake",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "stakeTokens",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "treasury",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          },
-          {
-            "name": "tokenProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-            "docs": []
-          },
-          {
-            "name": "associatedTokenProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
-            "docs": []
-          }
-        ],
-        "args": [
-          {
-            "name": "amount",
-            "type": "u64"
-          },
-          {
-            "name": "compound_fee",
-            "type": "u64"
-          }
-        ]
-      },
-      {
-        "name": "withdraw",
-        "discriminator": [
-          11,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Withdraws ORE from a staking account.",
-          "Stake PDA seeds: [\"stake\", signer]."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": true,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "mint",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
-            "docs": []
-          },
-          {
-            "name": "recipient",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "stake",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "stakeTokens",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "treasury",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          },
-          {
-            "name": "tokenProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-            "docs": []
-          },
-          {
-            "name": "associatedTokenProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
-            "docs": []
-          }
-        ],
-        "args": [
-          {
-            "name": "amount",
-            "type": "u64"
-          }
-        ]
-      },
-      {
-        "name": "claimYield",
-        "discriminator": [
-          12,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Claims accrued staking rewards.",
-          "Stake PDA seeds: [\"stake\", signer].",
-          "Treasury PDA seeds: [\"treasury\"]."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": true,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "mint",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
-            "docs": []
-          },
-          {
-            "name": "recipient",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "stake",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "treasury",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "treasuryTokens",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          },
-          {
-            "name": "tokenProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-            "docs": []
-          },
-          {
-            "name": "associatedTokenProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
-            "docs": []
-          }
-        ],
-        "args": [
-          {
-            "name": "amount",
-            "type": "u64"
-          }
-        ]
-      },
-      {
-        "name": "buyback",
-        "discriminator": [
-          13,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Buys back ORE from the market."
-        ],
-        "accounts": [],
-        "args": []
-      },
-      {
-        "name": "bury",
-        "discriminator": [
-          24,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Swaps vaulted SOL for ORE via a CPI and burns the proceeds.",
-          "Treasury PDA seeds: [\"treasury\"].",
-          "Additional swap accounts are passed through as remaining accounts."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": false,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "board",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "config",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "mint",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
-            "docs": []
-          },
-          {
-            "name": "treasury",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "treasuryOre",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "treasurySol",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "tokenProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-            "docs": []
-          },
-          {
-            "name": "oreProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
-            "docs": []
-          }
-        ],
-        "args": [
-          {
-            "name": "amount",
-            "type": "u64"
-          }
-        ]
-      },
-      {
-        "name": "wrap",
-        "discriminator": [
-          14,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Wraps SOL held by the treasury into WSOL for swapping.",
-          "Treasury PDA seeds: [\"treasury\"]."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": false,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "config",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "treasury",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "treasurySol",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          }
-        ],
-        "args": [
-          {
-            "name": "amount",
-            "type": "u64"
-          }
-        ]
-      },
-      {
-        "name": "setAdmin",
-        "discriminator": [
-          15,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Updates the program admin address."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": false,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "config",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          }
-        ],
-        "args": [
-          {
-            "name": "admin",
-            "type": "publicKey"
-          }
-        ]
-      },
-      {
-        "name": "newVar",
-        "discriminator": [
-          19,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Creates a new entropy var account through the entropy program."
-        ],
-        "accounts": [
-          {
-            "name": "signer",
-            "writable": false,
-            "signer": true,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "board",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "config",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "provider",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "var",
-            "writable": true,
-            "signer": false,
-            "optional": false,
-            "address": null,
-            "docs": []
-          },
-          {
-            "name": "systemProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "11111111111111111111111111111111",
-            "docs": []
-          },
-          {
-            "name": "entropyProgram",
-            "writable": false,
-            "signer": false,
-            "optional": false,
-            "address": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X",
-            "docs": []
-          }
-        ],
-        "args": [
-          {
-            "name": "id",
-            "type": "u64"
-          },
-          {
-            "name": "commit",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "samples",
-            "type": "u64"
-          }
-        ]
-      },
-      {
-        "name": "reloadSol",
-        "discriminator": [
-          21,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Reloads SOL into the automation account."
-        ],
-        "accounts": [],
-        "args": []
-      },
-      {
-        "name": "compoundYield",
-        "discriminator": [
-          22,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Compounds staking yield."
-        ],
-        "accounts": [],
-        "args": []
-      },
-      {
-        "name": "liq",
-        "discriminator": [
-          25,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": [
-          "Liquidation instruction."
-        ],
-        "accounts": [],
-        "args": []
-      }
-    ],
-    "types": [
-      {
-        "name": "Numeric",
-        "docs": [
-          "Fixed-point helper backed by I80F48 from the steel crate."
-        ],
-        "type": {
-          "kind": "struct",
-          "fields": [
-            {
-              "name": "bits",
-              "type": {
-                "array": [
-                  "u8",
-                  16
-                ]
-              }
-            }
+  "program_ids": [
+    "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv"
+  ],
+  "idls": [
+    {
+      "name": "ore",
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "version": "3.7.22",
+      "accounts": [
+        {
+          "name": "Automation",
+          "discriminator": [
+            100,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Automation parameters for automated mining deployments."
+          ]
+        },
+        {
+          "name": "Board",
+          "discriminator": [
+            105,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Global round tracking for the mining game."
+          ]
+        },
+        {
+          "name": "Config",
+          "discriminator": [
+            101,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Program configuration state."
+          ]
+        },
+        {
+          "name": "Miner",
+          "discriminator": [
+            103,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Tracks a miner's deployed SOL and reward balances."
+          ]
+        },
+        {
+          "name": "Round",
+          "discriminator": [
+            109,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "State for a single mining round."
+          ]
+        },
+        {
+          "name": "Stake",
+          "discriminator": [
+            108,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "State for a staking participant."
+          ]
+        },
+        {
+          "name": "Treasury",
+          "discriminator": [
+            104,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Singleton treasury account tracking protocol balances."
           ]
         }
-      },
-      {
-        "name": "Automation",
-        "docs": [
-          "Automation parameters for automated mining deployments."
-        ],
-        "type": {
-          "kind": "struct",
-          "fields": [
+      ],
+      "instructions": [
+        {
+          "name": "automate",
+          "discriminator": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Configures or closes a miner automation account.",
+            "Automation PDA seeds: [\"automation\", signer].",
+            "Miner PDA seeds: [\"miner\", signer]."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "automation",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "executor",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "miner",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "systemProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "11111111111111111111111111111111",
+              "docs": []
+            }
+          ],
+          "args": [
             {
               "name": "amount",
               "type": "u64"
             },
             {
-              "name": "authority",
-              "type": "publicKey"
-            },
-            {
-              "name": "balance",
+              "name": "deposit",
               "type": "u64"
-            },
-            {
-              "name": "executor",
-              "type": "publicKey"
             },
             {
               "name": "fee",
-              "type": "u64"
-            },
-            {
-              "name": "strategy",
               "type": "u64"
             },
             {
@@ -1513,180 +200,1197 @@
               "type": "u64"
             },
             {
+              "name": "strategy",
+              "type": "u8"
+            },
+            {
               "name": "reload",
               "type": "u64"
             }
           ]
-        }
-      },
-      {
-        "name": "Board",
-        "docs": [
-          "Global round tracking for the mining game."
-        ],
-        "type": {
-          "kind": "struct",
-          "fields": [
+        },
+        {
+          "name": "checkpoint",
+          "discriminator": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Settles miner rewards for a completed round.",
+            "Treasury PDA seeds: [\"treasury\"]."
+          ],
+          "accounts": [
             {
-              "name": "round_id",
+              "name": "signer",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "board",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "miner",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "round",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "treasury",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "systemProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "11111111111111111111111111111111",
+              "docs": []
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "claimSol",
+          "discriminator": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Claims SOL rewards from the miner account."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "miner",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "systemProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "11111111111111111111111111111111",
+              "docs": []
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "claimOre",
+          "discriminator": [
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Claims ORE token rewards from the treasury vault."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "miner",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "mint",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
+              "docs": []
+            },
+            {
+              "name": "recipient",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "treasury",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "treasuryTokens",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "systemProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "11111111111111111111111111111111",
+              "docs": []
+            },
+            {
+              "name": "tokenProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+              "docs": []
+            },
+            {
+              "name": "associatedTokenProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+              "docs": []
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "close",
+          "discriminator": [
+            5,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Closes an expired round account and returns rent to the payer.",
+            "Round PDA seeds: [\"round\", round_id].",
+            "Treasury PDA seeds: [\"treasury\"]."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": false,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "board",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "rentPayer",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "round",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "treasury",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "systemProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "11111111111111111111111111111111",
+              "docs": []
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "deploy",
+          "discriminator": [
+            6,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Deploys SOL to selected squares for the current round.",
+            "Automation PDA seeds: [\"automation\", authority].",
+            "Config PDA seeds: [\"config\"].",
+            "Miner PDA seeds: [\"miner\", authority].",
+            "Round PDA seeds: [\"round\", board.round_id]."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "authority",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "automation",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "board",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "config",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "miner",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "round",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "systemProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "11111111111111111111111111111111",
+              "docs": []
+            },
+            {
+              "name": "oreProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+              "docs": []
+            },
+            {
+              "name": "entropyVar",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "entropyProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X",
+              "docs": []
+            }
+          ],
+          "args": [
+            {
+              "name": "amount",
               "type": "u64"
             },
             {
-              "name": "start_slot",
+              "name": "squares",
+              "type": "u32"
+            }
+          ]
+        },
+        {
+          "name": "log",
+          "discriminator": [
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Emits an arbitrary log message from the board PDA.",
+            "Bytes following the discriminator are logged verbatim."
+          ],
+          "accounts": [
+            {
+              "name": "board",
+              "writable": false,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "reset",
+          "discriminator": [
+            9,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Finalizes the current round, mints rewards, and opens the next round.",
+            "Board PDA seeds: [\"board\"].",
+            "Treasury PDA seeds: [\"treasury\"].",
+            "Round PDA seeds: [\"round\", board.round_id] and [\"round\", board.round_id + 1]."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "board",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "config",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "feeCollector",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "mint",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
+              "docs": []
+            },
+            {
+              "name": "round",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "roundNext",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "topMiner",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "treasury",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "treasuryTokens",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "systemProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "11111111111111111111111111111111",
+              "docs": []
+            },
+            {
+              "name": "tokenProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+              "docs": []
+            },
+            {
+              "name": "oreProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+              "docs": []
+            },
+            {
+              "name": "slotHashesSysvar",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "SysvarS1otHashes111111111111111111111111111",
+              "docs": []
+            },
+            {
+              "name": "entropyVar",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "entropyProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X",
+              "docs": []
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "deposit",
+          "discriminator": [
+            10,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Deposits ORE into a staking account.",
+            "Stake PDA seeds: [\"stake\", signer]."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "payer",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "mint",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
+              "docs": []
+            },
+            {
+              "name": "sender",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "stake",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "stakeTokens",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "treasury",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "systemProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "11111111111111111111111111111111",
+              "docs": []
+            },
+            {
+              "name": "tokenProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+              "docs": []
+            },
+            {
+              "name": "associatedTokenProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+              "docs": []
+            }
+          ],
+          "args": [
+            {
+              "name": "amount",
               "type": "u64"
             },
             {
-              "name": "end_slot",
-              "type": "u64"
-            },
-            {
-              "name": "epoch_id",
+              "name": "compound_fee",
               "type": "u64"
             }
           ]
-        }
-      },
-      {
-        "name": "Config",
-        "docs": [
-          "Program configuration state."
-        ],
-        "type": {
-          "kind": "struct",
-          "fields": [
+        },
+        {
+          "name": "withdraw",
+          "discriminator": [
+            11,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Withdraws ORE from a staking account.",
+            "Stake PDA seeds: [\"stake\", signer]."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "mint",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
+              "docs": []
+            },
+            {
+              "name": "recipient",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "stake",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "stakeTokens",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "treasury",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "systemProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "11111111111111111111111111111111",
+              "docs": []
+            },
+            {
+              "name": "tokenProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+              "docs": []
+            },
+            {
+              "name": "associatedTokenProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+              "docs": []
+            }
+          ],
+          "args": [
+            {
+              "name": "amount",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "claimYield",
+          "discriminator": [
+            12,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Claims accrued staking rewards.",
+            "Stake PDA seeds: [\"stake\", signer].",
+            "Treasury PDA seeds: [\"treasury\"]."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "mint",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
+              "docs": []
+            },
+            {
+              "name": "recipient",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "stake",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "treasury",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "treasuryTokens",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "systemProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "11111111111111111111111111111111",
+              "docs": []
+            },
+            {
+              "name": "tokenProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+              "docs": []
+            },
+            {
+              "name": "associatedTokenProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+              "docs": []
+            }
+          ],
+          "args": [
+            {
+              "name": "amount",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "buyback",
+          "discriminator": [
+            13,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Buys back ORE from the market."
+          ],
+          "accounts": [],
+          "args": []
+        },
+        {
+          "name": "bury",
+          "discriminator": [
+            24,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Swaps vaulted SOL for ORE via a CPI and burns the proceeds.",
+            "Treasury PDA seeds: [\"treasury\"].",
+            "Additional swap accounts are passed through as remaining accounts."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": false,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "board",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "config",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "mint",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
+              "docs": []
+            },
+            {
+              "name": "treasury",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "treasuryOre",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "treasurySol",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "tokenProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+              "docs": []
+            },
+            {
+              "name": "oreProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+              "docs": []
+            }
+          ],
+          "args": [
+            {
+              "name": "amount",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "wrap",
+          "discriminator": [
+            14,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Wraps SOL held by the treasury into WSOL for swapping.",
+            "Treasury PDA seeds: [\"treasury\"]."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": false,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "config",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "treasury",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "treasurySol",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "systemProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "11111111111111111111111111111111",
+              "docs": []
+            }
+          ],
+          "args": [
+            {
+              "name": "amount",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "setAdmin",
+          "discriminator": [
+            15,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Updates the program admin address."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": false,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "config",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "systemProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "11111111111111111111111111111111",
+              "docs": []
+            }
+          ],
+          "args": [
             {
               "name": "admin",
               "type": "publicKey"
-            },
-            {
-              "name": "buffer_a",
-              "type": "publicKey"
-            },
-            {
-              "name": "buffer_b",
-              "type": "publicKey"
-            },
-            {
-              "name": "buffer_c",
-              "type": "publicKey"
-            },
-            {
-              "name": "buffer_d",
-              "type": "publicKey"
-            },
-            {
-              "name": "buffer_e",
-              "type": "u64"
             }
           ]
-        }
-      },
-      {
-        "name": "Miner",
-        "docs": [
-          "Tracks a miner's deployed SOL and reward balances."
-        ],
-        "type": {
-          "kind": "struct",
-          "fields": [
+        },
+        {
+          "name": "newVar",
+          "discriminator": [
+            19,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Creates a new entropy var account through the entropy program."
+          ],
+          "accounts": [
             {
-              "name": "authority",
-              "type": "publicKey"
+              "name": "signer",
+              "writable": false,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
             },
             {
-              "name": "deployed",
-              "type": {
-                "array": [
-                  "u64",
-                  25
-                ]
-              }
+              "name": "board",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
             },
             {
-              "name": "cumulative",
-              "type": {
-                "array": [
-                  "u64",
-                  25
-                ]
-              }
+              "name": "config",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
             },
             {
-              "name": "checkpoint_fee",
-              "type": "u64"
+              "name": "provider",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
             },
             {
-              "name": "checkpoint_id",
-              "type": "u64"
+              "name": "var",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
             },
             {
-              "name": "last_claim_ore_at",
-              "type": "i64"
+              "name": "systemProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "11111111111111111111111111111111",
+              "docs": []
             },
             {
-              "name": "last_claim_sol_at",
-              "type": "i64"
-            },
-            {
-              "name": "rewards_factor",
-              "type": {
-                "defined": "Numeric"
-              }
-            },
-            {
-              "name": "rewards_sol",
-              "type": "u64"
-            },
-            {
-              "name": "rewards_ore",
-              "type": "u64"
-            },
-            {
-              "name": "refined_ore",
-              "type": "u64"
-            },
-            {
-              "name": "round_id",
-              "type": "u64"
-            },
-            {
-              "name": "lifetime_rewards_sol",
-              "type": "u64"
-            },
-            {
-              "name": "lifetime_rewards_ore",
-              "type": "u64"
-            },
-            {
-              "name": "lifetime_deployed",
-              "type": "u64"
+              "name": "entropyProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X",
+              "docs": []
             }
-          ]
-        }
-      },
-      {
-        "name": "Round",
-        "docs": [
-          "State for a single mining round."
-        ],
-        "type": {
-          "kind": "struct",
-          "fields": [
+          ],
+          "args": [
             {
               "name": "id",
               "type": "u64"
             },
             {
-              "name": "deployed",
-              "type": {
-                "array": [
-                  "u64",
-                  25
-                ]
-              }
-            },
-            {
-              "name": "slot_hash",
+              "name": "commit",
               "type": {
                 "array": [
                   "u8",
@@ -1695,246 +1399,547 @@
               }
             },
             {
-              "name": "count",
-              "type": {
-                "array": [
-                  "u64",
-                  25
-                ]
-              }
-            },
-            {
-              "name": "expires_at",
-              "type": "u64"
-            },
-            {
-              "name": "motherlode",
-              "type": "u64"
-            },
-            {
-              "name": "rent_payer",
-              "type": "publicKey"
-            },
-            {
-              "name": "top_miner",
-              "type": "publicKey"
-            },
-            {
-              "name": "top_miner_reward",
-              "type": "u64"
-            },
-            {
-              "name": "total_deployed",
-              "type": "u64"
-            },
-            {
-              "name": "total_miners",
-              "type": "u64"
-            },
-            {
-              "name": "total_vaulted",
-              "type": "u64"
-            },
-            {
-              "name": "total_winnings",
+              "name": "samples",
               "type": "u64"
             }
           ]
+        },
+        {
+          "name": "reloadSol",
+          "discriminator": [
+            21,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Reloads SOL into the automation account."
+          ],
+          "accounts": [],
+          "args": []
+        },
+        {
+          "name": "compoundYield",
+          "discriminator": [
+            22,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Compounds staking yield."
+          ],
+          "accounts": [],
+          "args": []
+        },
+        {
+          "name": "liq",
+          "discriminator": [
+            25,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Liquidation instruction."
+          ],
+          "accounts": [],
+          "args": []
         }
-      },
-      {
-        "name": "Stake",
-        "docs": [
-          "State for a staking participant."
-        ],
-        "type": {
-          "kind": "struct",
-          "fields": [
-            {
-              "name": "authority",
-              "type": "publicKey"
-            },
-            {
-              "name": "balance",
-              "type": "u64"
-            },
-            {
-              "name": "buffer_a",
-              "type": "u64"
-            },
-            {
-              "name": "buffer_b",
-              "type": "u64"
-            },
-            {
-              "name": "buffer_c",
-              "type": "u64"
-            },
-            {
-              "name": "buffer_d",
-              "type": "u64"
-            },
-            {
-              "name": "compound_fee_reserve",
-              "type": "u64"
-            },
-            {
-              "name": "last_claim_at",
-              "type": "i64"
-            },
-            {
-              "name": "last_deposit_at",
-              "type": "i64"
-            },
-            {
-              "name": "last_withdraw_at",
-              "type": "i64"
-            },
-            {
-              "name": "rewards_factor",
-              "type": {
-                "defined": "Numeric"
+      ],
+      "types": [
+        {
+          "name": "Numeric",
+          "docs": [
+            "Fixed-point helper backed by I80F48 from the steel crate."
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "bits",
+                "type": {
+                  "array": [
+                    "u8",
+                    16
+                  ]
+                }
               }
-            },
-            {
-              "name": "rewards",
-              "type": "u64"
-            },
-            {
-              "name": "lifetime_rewards",
-              "type": "u64"
-            },
-            {
-              "name": "buffer_f",
-              "type": "u64"
-            }
-          ]
+            ]
+          }
+        },
+        {
+          "name": "Automation",
+          "docs": [
+            "Automation parameters for automated mining deployments."
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "amount",
+                "type": "u64"
+              },
+              {
+                "name": "authority",
+                "type": "publicKey"
+              },
+              {
+                "name": "balance",
+                "type": "u64"
+              },
+              {
+                "name": "executor",
+                "type": "publicKey"
+              },
+              {
+                "name": "fee",
+                "type": "u64"
+              },
+              {
+                "name": "strategy",
+                "type": "u64"
+              },
+              {
+                "name": "mask",
+                "type": "u64"
+              },
+              {
+                "name": "reload",
+                "type": "u64"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Board",
+          "docs": [
+            "Global round tracking for the mining game."
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "round_id",
+                "type": "u64"
+              },
+              {
+                "name": "start_slot",
+                "type": "u64"
+              },
+              {
+                "name": "end_slot",
+                "type": "u64"
+              },
+              {
+                "name": "epoch_id",
+                "type": "u64"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Config",
+          "docs": [
+            "Program configuration state."
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "admin",
+                "type": "publicKey"
+              },
+              {
+                "name": "buffer_a",
+                "type": "publicKey"
+              },
+              {
+                "name": "buffer_b",
+                "type": "publicKey"
+              },
+              {
+                "name": "buffer_c",
+                "type": "publicKey"
+              },
+              {
+                "name": "buffer_d",
+                "type": "publicKey"
+              },
+              {
+                "name": "buffer_e",
+                "type": "u64"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Miner",
+          "docs": [
+            "Tracks a miner's deployed SOL and reward balances."
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "authority",
+                "type": "publicKey"
+              },
+              {
+                "name": "deployed",
+                "type": {
+                  "array": [
+                    "u64",
+                    25
+                  ]
+                }
+              },
+              {
+                "name": "cumulative",
+                "type": {
+                  "array": [
+                    "u64",
+                    25
+                  ]
+                }
+              },
+              {
+                "name": "checkpoint_fee",
+                "type": "u64"
+              },
+              {
+                "name": "checkpoint_id",
+                "type": "u64"
+              },
+              {
+                "name": "last_claim_ore_at",
+                "type": "i64"
+              },
+              {
+                "name": "last_claim_sol_at",
+                "type": "i64"
+              },
+              {
+                "name": "rewards_factor",
+                "type": {
+                  "defined": "Numeric"
+                }
+              },
+              {
+                "name": "rewards_sol",
+                "type": "u64"
+              },
+              {
+                "name": "rewards_ore",
+                "type": "u64"
+              },
+              {
+                "name": "refined_ore",
+                "type": "u64"
+              },
+              {
+                "name": "round_id",
+                "type": "u64"
+              },
+              {
+                "name": "lifetime_rewards_sol",
+                "type": "u64"
+              },
+              {
+                "name": "lifetime_rewards_ore",
+                "type": "u64"
+              },
+              {
+                "name": "lifetime_deployed",
+                "type": "u64"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Round",
+          "docs": [
+            "State for a single mining round."
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "id",
+                "type": "u64"
+              },
+              {
+                "name": "deployed",
+                "type": {
+                  "array": [
+                    "u64",
+                    25
+                  ]
+                }
+              },
+              {
+                "name": "slot_hash",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              },
+              {
+                "name": "count",
+                "type": {
+                  "array": [
+                    "u64",
+                    25
+                  ]
+                }
+              },
+              {
+                "name": "expires_at",
+                "type": "u64"
+              },
+              {
+                "name": "motherlode",
+                "type": "u64"
+              },
+              {
+                "name": "rent_payer",
+                "type": "publicKey"
+              },
+              {
+                "name": "top_miner",
+                "type": "publicKey"
+              },
+              {
+                "name": "top_miner_reward",
+                "type": "u64"
+              },
+              {
+                "name": "total_deployed",
+                "type": "u64"
+              },
+              {
+                "name": "total_miners",
+                "type": "u64"
+              },
+              {
+                "name": "total_vaulted",
+                "type": "u64"
+              },
+              {
+                "name": "total_winnings",
+                "type": "u64"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Stake",
+          "docs": [
+            "State for a staking participant."
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "authority",
+                "type": "publicKey"
+              },
+              {
+                "name": "balance",
+                "type": "u64"
+              },
+              {
+                "name": "buffer_a",
+                "type": "u64"
+              },
+              {
+                "name": "buffer_b",
+                "type": "u64"
+              },
+              {
+                "name": "buffer_c",
+                "type": "u64"
+              },
+              {
+                "name": "buffer_d",
+                "type": "u64"
+              },
+              {
+                "name": "compound_fee_reserve",
+                "type": "u64"
+              },
+              {
+                "name": "last_claim_at",
+                "type": "i64"
+              },
+              {
+                "name": "last_deposit_at",
+                "type": "i64"
+              },
+              {
+                "name": "last_withdraw_at",
+                "type": "i64"
+              },
+              {
+                "name": "rewards_factor",
+                "type": {
+                  "defined": "Numeric"
+                }
+              },
+              {
+                "name": "rewards",
+                "type": "u64"
+              },
+              {
+                "name": "lifetime_rewards",
+                "type": "u64"
+              },
+              {
+                "name": "buffer_f",
+                "type": "u64"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Treasury",
+          "docs": [
+            "Singleton treasury account tracking protocol balances."
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "balance",
+                "type": "u64"
+              },
+              {
+                "name": "buffer_a",
+                "type": "u64"
+              },
+              {
+                "name": "motherlode",
+                "type": "u64"
+              },
+              {
+                "name": "miner_rewards_factor",
+                "type": {
+                  "defined": "Numeric"
+                }
+              },
+              {
+                "name": "stake_rewards_factor",
+                "type": {
+                  "defined": "Numeric"
+                }
+              },
+              {
+                "name": "buffer_b",
+                "type": "u64"
+              },
+              {
+                "name": "total_refined",
+                "type": "u64"
+              },
+              {
+                "name": "total_staked",
+                "type": "u64"
+              },
+              {
+                "name": "total_unclaimed",
+                "type": "u64"
+              }
+            ]
+          }
         }
-      },
-      {
-        "name": "Treasury",
-        "docs": [
-          "Singleton treasury account tracking protocol balances."
-        ],
-        "type": {
-          "kind": "struct",
-          "fields": [
-            {
-              "name": "balance",
-              "type": "u64"
-            },
-            {
-              "name": "buffer_a",
-              "type": "u64"
-            },
-            {
-              "name": "motherlode",
-              "type": "u64"
-            },
-            {
-              "name": "miner_rewards_factor",
-              "type": {
-                "defined": "Numeric"
-              }
-            },
-            {
-              "name": "stake_rewards_factor",
-              "type": {
-                "defined": "Numeric"
-              }
-            },
-            {
-              "name": "buffer_b",
-              "type": "u64"
-            },
-            {
-              "name": "total_refined",
-              "type": "u64"
-            },
-            {
-              "name": "total_staked",
-              "type": "u64"
-            },
-            {
-              "name": "total_unclaimed",
-              "type": "u64"
-            }
-          ]
+      ],
+      "events": [
+        {
+          "name": "ResetEvent",
+          "discriminator": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": []
+        },
+        {
+          "name": "BuryEvent",
+          "discriminator": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": []
+        },
+        {
+          "name": "DeployEvent",
+          "discriminator": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": []
+        },
+        {
+          "name": "LiqEvent",
+          "discriminator": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": []
         }
-      }
-    ],
-    "events": [
-      {
-        "name": "ResetEvent",
-        "discriminator": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": []
-      },
-      {
-        "name": "BuryEvent",
-        "discriminator": [
-          1,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": []
-      },
-      {
-        "name": "DeployEvent",
-        "discriminator": [
-          2,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": []
-      },
-      {
-        "name": "LiqEvent",
-        "discriminator": [
-          3,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
-        "docs": []
-      }
-    ],
-    "errors": [
-      {
-        "code": 0,
-        "name": "AmountTooSmall",
-        "msg": "Amount too small"
-      },
-      {
-        "code": 1,
-        "name": "NotAuthorized",
-        "msg": "Not authorized"
-      }
-    ],
-    "discriminant_size": 1
-  },
+      ],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "discriminant_size": 1
+    }
+  ],
   "entities": [
     {
       "state_name": "OreRound",
@@ -1957,7 +1962,7 @@
             "Source": {
               "program_id": null,
               "discriminator": null,
-              "type_name": "RoundState"
+              "type_name": "ore::RoundState"
             }
           },
           "key_resolution": {
@@ -2180,7 +2185,7 @@
             "Source": {
               "program_id": null,
               "discriminator": null,
-              "type_name": "CheckpointIxState"
+              "type_name": "ore::CheckpointIxState"
             }
           },
           "key_resolution": {
@@ -2221,7 +2226,7 @@
             "Source": {
               "program_id": null,
               "discriminator": null,
-              "type_name": "DeployIxState"
+              "type_name": "ore::DeployIxState"
             }
           },
           "key_resolution": {
@@ -2480,11 +2485,11 @@
           "fields": [
             {
               "field_name": "round_snapshot",
-              "rust_type_name": "Option < generated_sdk :: accounts :: Round >",
+              "rust_type_name": "Option < ore_sdk :: accounts :: Round >",
               "base_type": "Object",
               "is_optional": true,
               "is_array": false,
-              "inner_type": "generated_sdk :: accounts :: Round",
+              "inner_type": "ore_sdk :: accounts :: Round",
               "source_path": null,
               "resolved_type": {
                 "type_name": "Round",
@@ -2716,11 +2721,11 @@
         },
         "round_snapshot": {
           "field_name": "round_snapshot",
-          "rust_type_name": "Option < generated_sdk :: accounts :: Round >",
+          "rust_type_name": "Option < ore_sdk :: accounts :: Round >",
           "base_type": "Object",
           "is_optional": true,
           "is_array": false,
-          "inner_type": "generated_sdk :: accounts :: Round",
+          "inner_type": "ore_sdk :: accounts :: Round",
           "source_path": null,
           "resolved_type": {
             "type_name": "Round",
@@ -3234,7 +3239,7 @@
           "result_type": "Option < bool >"
         }
       ],
-      "content_hash": "8a0895d4f90e59d84c546a3c6ee60cd80f22ca02efe318d7462df6f7542499af",
+      "content_hash": "35817f5513f04cc2cdfc8230bde4e34aa6b03ae4157e7214de59082c25d4b907",
       "views": [
         {
           "id": "OreRound/latest",
@@ -3277,7 +3282,7 @@
             "Source": {
               "program_id": null,
               "discriminator": null,
-              "type_name": "TreasuryState"
+              "type_name": "ore::TreasuryState"
             }
           },
           "key_resolution": {
@@ -3488,11 +3493,11 @@
           "fields": [
             {
               "field_name": "treasury_snapshot",
-              "rust_type_name": "Option < generated_sdk :: accounts :: Treasury >",
+              "rust_type_name": "Option < ore_sdk :: accounts :: Treasury >",
               "base_type": "Object",
               "is_optional": true,
               "is_array": false,
-              "inner_type": "generated_sdk :: accounts :: Treasury",
+              "inner_type": "ore_sdk :: accounts :: Treasury",
               "source_path": null,
               "resolved_type": {
                 "type_name": "Treasury",
@@ -3636,11 +3641,11 @@
         },
         "treasury_snapshot": {
           "field_name": "treasury_snapshot",
-          "rust_type_name": "Option < generated_sdk :: accounts :: Treasury >",
+          "rust_type_name": "Option < ore_sdk :: accounts :: Treasury >",
           "base_type": "Object",
           "is_optional": true,
           "is_array": false,
-          "inner_type": "generated_sdk :: accounts :: Treasury",
+          "inner_type": "ore_sdk :: accounts :: Treasury",
           "source_path": null,
           "resolved_type": {
             "type_name": "Treasury",
@@ -3721,7 +3726,7 @@
       "instruction_hooks": [],
       "computed_fields": [],
       "computed_field_specs": [],
-      "content_hash": "643dc3e1b48cc94a89b6a4c86fa35d670ca4dd76180ee6919e67af2c67834f5c",
+      "content_hash": "2ee9928d91b0f58da7d27aa1234e42b8efd10194028be3600646868a36ceebeb",
       "views": []
     },
     {
@@ -3746,7 +3751,7 @@
             "Source": {
               "program_id": null,
               "discriminator": null,
-              "type_name": "AutomationState"
+              "type_name": "ore::AutomationState"
             }
           },
           "key_resolution": {
@@ -3935,7 +3940,7 @@
             "Source": {
               "program_id": null,
               "discriminator": null,
-              "type_name": "MinerState"
+              "type_name": "ore::MinerState"
             }
           },
           "key_resolution": {
@@ -4431,11 +4436,11 @@
           "fields": [
             {
               "field_name": "miner_snapshot",
-              "rust_type_name": "Option < generated_sdk :: accounts :: Miner >",
+              "rust_type_name": "Option < ore_sdk :: accounts :: Miner >",
               "base_type": "Object",
               "is_optional": true,
               "is_array": false,
-              "inner_type": "generated_sdk :: accounts :: Miner",
+              "inner_type": "ore_sdk :: accounts :: Miner",
               "source_path": null,
               "resolved_type": {
                 "type_name": "Miner",
@@ -4555,11 +4560,11 @@
             },
             {
               "field_name": "automation_snapshot",
-              "rust_type_name": "Option < generated_sdk :: accounts :: Automation >",
+              "rust_type_name": "Option < ore_sdk :: accounts :: Automation >",
               "base_type": "Object",
               "is_optional": true,
               "is_array": false,
-              "inner_type": "generated_sdk :: accounts :: Automation",
+              "inner_type": "ore_sdk :: accounts :: Automation",
               "source_path": null,
               "resolved_type": {
                 "type_name": "Automation",
@@ -4706,11 +4711,11 @@
         },
         "automation_snapshot": {
           "field_name": "automation_snapshot",
-          "rust_type_name": "Option < generated_sdk :: accounts :: Automation >",
+          "rust_type_name": "Option < ore_sdk :: accounts :: Automation >",
           "base_type": "Object",
           "is_optional": true,
           "is_array": false,
-          "inner_type": "generated_sdk :: accounts :: Automation",
+          "inner_type": "ore_sdk :: accounts :: Automation",
           "source_path": null,
           "resolved_type": {
             "type_name": "Automation",
@@ -4811,11 +4816,11 @@
         },
         "miner_snapshot": {
           "field_name": "miner_snapshot",
-          "rust_type_name": "Option < generated_sdk :: accounts :: Miner >",
+          "rust_type_name": "Option < ore_sdk :: accounts :: Miner >",
           "base_type": "Object",
           "is_optional": true,
           "is_array": false,
-          "inner_type": "generated_sdk :: accounts :: Miner",
+          "inner_type": "ore_sdk :: accounts :: Miner",
           "source_path": null,
           "resolved_type": {
             "type_name": "Miner",
@@ -5048,9 +5053,9 @@
       "instruction_hooks": [],
       "computed_fields": [],
       "computed_field_specs": [],
-      "content_hash": "68d2b9cdbe19afcc996c338cbf1fd8f33d0d9665b9fe58b061fd475c02508ef9",
+      "content_hash": "0f6ab01b53b2c7cc96c9962e4e0f4f41c9d760a3e57e0c95d318e6fad75c1799",
       "views": []
     }
   ],
-  "content_hash": "483363c411a8434878f49e33dc781b7cfdb9286beb36905c8651ff7245baabf8"
+  "content_hash": "90a49ae66b6185f9f7d856c7ffdf516253531a3e12d781b4669ef15a09941b1a"
 }

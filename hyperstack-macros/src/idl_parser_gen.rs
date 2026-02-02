@@ -6,13 +6,24 @@ use crate::parse::idl::*;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-pub fn generate_parsers(idl: &IdlSpec, program_id: &str) -> TokenStream {
+pub fn generate_parsers(idl: &IdlSpec, program_id: &str, sdk_module_name: &str) -> TokenStream {
+    generate_named_parsers(idl, program_id, sdk_module_name, "parsers")
+}
+
+pub fn generate_named_parsers(
+    idl: &IdlSpec,
+    program_id: &str,
+    sdk_module_name: &str,
+    parser_module_name: &str,
+) -> TokenStream {
     let account_parser = generate_account_parser(idl, program_id);
     let instruction_parser = generate_instruction_parser(idl, program_id);
+    let sdk_module_ident = format_ident!("{}", sdk_module_name);
+    let parser_module_ident = format_ident!("{}", parser_module_name);
 
     quote! {
-        pub mod parsers {
-            use super::generated_sdk::*;
+        pub mod #parser_module_ident {
+            use super::#sdk_module_ident::*;
             use hyperstack::runtime::serde::{Deserialize, Serialize};
 
             #account_parser
@@ -45,7 +56,7 @@ fn generate_account_parser(idl: &IdlSpec, program_id: &str) -> TokenStream {
 
     let convert_to_json_arms = idl.accounts.iter().map(|acc| {
         let variant_name = format_ident!("{}", acc.name);
-        let type_name = format!("{}State", acc.name);
+        let type_name = format!("{}::{}State", program_name, acc.name);
 
         quote! {
             #state_enum_name::#variant_name(data) => {
@@ -59,7 +70,7 @@ fn generate_account_parser(idl: &IdlSpec, program_id: &str) -> TokenStream {
 
     let type_name_arms = idl.accounts.iter().map(|acc| {
         let variant_name = format_ident!("{}", acc.name);
-        let type_name = format!("{}State", acc.name);
+        let type_name = format!("{}::{}State", program_name, acc.name);
 
         quote! {
             #state_enum_name::#variant_name(_) => #type_name
@@ -260,7 +271,7 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
 
     let type_name_arms = idl.instructions.iter().map(|ix| {
         let variant_name = format_ident!("{}", to_pascal_case(&ix.name));
-        let type_name = format!("{}IxState", to_pascal_case(&ix.name));
+        let type_name = format!("{}::{}IxState", program_name, to_pascal_case(&ix.name));
 
         quote! {
             #ix_enum_name::#variant_name(_) => #type_name

@@ -20,8 +20,8 @@ use syn::{Fields, ItemStruct, Type};
 
 use crate::ast::{EntitySection, FieldTypeInfo, ResolverHook};
 use crate::codegen;
+use crate::event_type_helpers::IdlLookup;
 use crate::parse;
-use crate::parse::idl as idl_parser;
 use crate::utils::{path_to_string, to_pascal_case, to_snake_case};
 
 // ============================================================================
@@ -72,7 +72,7 @@ pub fn process_entity_struct(
         section_structs,
         skip_game_event,
         stack_name,
-        None,
+        &[],
         Vec::new(),
         Vec::new(),
     )
@@ -91,15 +91,13 @@ pub fn process_entity_struct_with_idl(
     section_structs: HashMap<String, ItemStruct>,
     skip_game_event: bool,
     stack_name: &str,
-    idl: Option<&idl_parser::IdlSpec>,
+    idls: IdlLookup,
     resolver_hooks: Vec<parse::ResolveKeyAttribute>,
     pda_registrations: Vec<parse::RegisterPdaAttribute>,
 ) -> ProcessEntityResult {
     let _name = syn::Ident::new(&entity_name, input.ident.span());
     let state_name = syn::Ident::new(&format!("{}State", entity_name), input.ident.span());
     let spec_fn_name = format_ident!("create_{}_spec", to_snake_case(&entity_name));
-
-    // We'll collect data for compile-time AST writing
 
     let mut field_mappings = Vec::new();
     let mut primary_keys = Vec::new();
@@ -112,6 +110,9 @@ pub fn process_entity_struct_with_idl(
         String,
         Vec<(String, parse::EventAttribute, syn::Type)>,
     > = HashMap::new();
+    // Derive primary IDL and program_name from the first entry (backward compat)
+    let idl = idls.first().map(|(_, idl)| *idl);
+    let program_name = idl.map(|idl| idl.get_name());
     let mut has_events = false;
     let mut computed_fields: Vec<(String, proc_macro2::TokenStream, syn::Type)> = Vec::new();
 
@@ -156,16 +157,15 @@ pub fn process_entity_struct_with_idl(
                             let section = extract_section_from_struct_with_idl(
                                 &field_name,
                                 section_struct,
-                                None, // Top-level section, no parent
-                                idl,
+                                None,
+                                idls,
                             );
                             section_specs.push(section);
                         } else {
-                            // It's a non-section field (like capture fields) - add to root
                             let field_type_info = sections::analyze_field_type_with_idl(
                                 &field_name,
                                 &rust_type_name,
-                                idl,
+                                idls,
                             );
                             root_fields.push(field_type_info);
                         }
@@ -175,7 +175,7 @@ pub fn process_entity_struct_with_idl(
                 // Even if it's a "wrapper", we might want its type info if it's not truly primitive
                 // For example, Option<ComplexType> should be included
                 let field_type_info =
-                    sections::analyze_field_type_with_idl(&field_name, &rust_type_name, idl);
+                    sections::analyze_field_type_with_idl(&field_name, &rust_type_name, idls);
                 // Only add if it has a resolved_type (meaning it's a complex type from IDL)
                 if field_type_info.resolved_type.is_some()
                     || field_type_info.base_type == crate::ast::BaseType::Object
@@ -251,7 +251,7 @@ pub fn process_entity_struct_with_idl(
 
                     // Determine instruction path (type-safe or legacy)
                     if let Some((_instruction_path, instruction_str)) =
-                        determine_event_instruction(&mut event_attr, field_type)
+                        determine_event_instruction(&mut event_attr, field_type, program_name)
                     {
                         events_by_instruction
                             .entry(instruction_str)
@@ -435,6 +435,7 @@ pub fn process_entity_struct_with_idl(
                                 &mut computed_fields,
                                 &mut derive_from_mappings,
                                 &mut aggregate_conditions,
+                                program_name,
                             );
                         }
                     }
@@ -500,7 +501,7 @@ pub fn process_entity_struct_with_idl(
         &aggregate_conditions,
         &computed_fields,
         &section_specs,
-        idl,
+        idls,
         views,
     );
 
@@ -513,7 +514,11 @@ pub fn process_entity_struct_with_idl(
                 .last()
                 .map(|seg| seg.ident.to_string())
                 .unwrap_or_default();
-            format!("{}State", name)
+            if let Some(program_name) = program_name {
+                format!("{}::{}State", program_name, name)
+            } else {
+                format!("{}State", name)
+            }
         })
         .collect();
     let auto_resolver_hooks: Vec<ResolverHook> = ast
@@ -626,7 +631,7 @@ pub fn process_entity_struct_with_idl(
 
             let mut spec = entity_spec.clone();
             if spec.idl.is_none() {
-                spec.idl = stack_spec.idl.clone();
+                spec.idl = stack_spec.idls.first().cloned();
             }
 
             hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec::from_serializable(spec)
