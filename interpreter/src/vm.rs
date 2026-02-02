@@ -1689,13 +1689,8 @@ impl VmContext {
                     let actual_state_id = override_state_id;
                     let lookup_val = self.registers[*lookup_value].clone();
 
-                    let result = {
-                        let state = self
-                            .states
-                            .get(&actual_state_id)
-                            .ok_or("State table not found")?;
-
-                        if let Some(index) = state.lookup_indexes.get(index_name) {
+                    let final_result = if let Some(state) = self.states.get(&actual_state_id) {
+                        let result = if let Some(index) = state.lookup_indexes.get(index_name) {
                             let found = index.lookup(&lookup_val).unwrap_or(Value::Null);
                             #[cfg(feature = "otel")]
                             if found.is_null() {
@@ -1706,34 +1701,35 @@ impl VmContext {
                             found
                         } else {
                             Value::Null
-                        }
-                    };
+                        };
 
-                    let final_result = if result.is_null() {
-                        if let Some(pda_str) = lookup_val.as_str() {
-                            let state = self
-                                .states
-                                .get_mut(&actual_state_id)
-                                .ok_or("State table not found")?;
-
-                            if let Some(pda_lookup) =
-                                state.pda_reverse_lookups.get_mut("default_pda_lookup")
-                            {
-                                if let Some(resolved) = pda_lookup.lookup(pda_str) {
-                                    Value::String(resolved)
+                        if result.is_null() {
+                            if let Some(pda_str) = lookup_val.as_str() {
+                                if let Some(state) = self.states.get_mut(&actual_state_id) {
+                                    if let Some(pda_lookup) =
+                                        state.pda_reverse_lookups.get_mut("default_pda_lookup")
+                                    {
+                                        if let Some(resolved) = pda_lookup.lookup(pda_str) {
+                                            Value::String(resolved)
+                                        } else {
+                                            self.last_pda_lookup_miss = Some(pda_str.to_string());
+                                            Value::Null
+                                        }
+                                    } else {
+                                        self.last_pda_lookup_miss = Some(pda_str.to_string());
+                                        Value::Null
+                                    }
                                 } else {
-                                    self.last_pda_lookup_miss = Some(pda_str.to_string());
                                     Value::Null
                                 }
                             } else {
-                                self.last_pda_lookup_miss = Some(pda_str.to_string());
                                 Value::Null
                             }
                         } else {
-                            Value::Null
+                            result
                         }
                     } else {
-                        result
+                        Value::Null
                     };
 
                     self.registers[*dest] = final_result;

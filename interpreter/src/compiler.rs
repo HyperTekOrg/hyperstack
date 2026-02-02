@@ -561,18 +561,24 @@ impl<S> TypedCompiler<S> {
 
         ops.extend(self.compile_key_loading(&spec.key_resolution, key_reg, &spec.mappings));
 
-        ops.extend(self.compile_temporal_index_update(
-            &spec.key_resolution,
-            key_reg,
-            &spec.mappings,
-        ));
-
         ops.push(OpCode::ReadOrInitState {
             state_id: self.state_id,
             key: key_reg,
             default: serde_json::json!({}),
             dest: state_reg,
         });
+
+        // Index updates must come AFTER ReadOrInitState so the state table exists.
+        // ReadOrInitState lazily creates the state table via entry().or_insert_with(),
+        // but index opcodes (UpdateLookupIndex, UpdateTemporalIndex, UpdatePdaReverseLookup)
+        // use get_mut() which fails if the table doesn't exist yet.
+        // This ordering also means stale/duplicate updates (caught by ReadOrInitState's
+        // recency check) correctly skip index updates too.
+        ops.extend(self.compile_temporal_index_update(
+            &spec.key_resolution,
+            key_reg,
+            &spec.mappings,
+        ));
 
         for mapping in &spec.mappings {
             ops.extend(self.compile_mapping(mapping, state_reg));
