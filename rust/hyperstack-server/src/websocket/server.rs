@@ -577,14 +577,30 @@ async fn attach_client_to_bus(
     match view_spec.mode {
         Mode::State => {
             let key = subscription.key.as_deref().unwrap_or("");
+
             let mut rx = ctx.bus_manager.get_or_create_state_bus(view_id, key).await;
 
-            if !rx.borrow().is_empty() {
-                let data = rx.borrow().clone();
+            if let Some(cached_entity) = ctx.entity_cache.get(view_id, key).await {
+                let snapshot_entities = vec![SnapshotEntity {
+                    key: key.to_string(),
+                    data: cached_entity,
+                }];
+                let batch_config = ctx.entity_cache.snapshot_config();
+                let _ = send_snapshot_batches(
+                    ctx.client_id,
+                    &snapshot_entities,
+                    view_spec.mode,
+                    view_id,
+                    ctx.client_manager,
+                    &batch_config,
+                    #[cfg(feature = "otel")]
+                    ctx.metrics.as_ref(),
+                )
+                .await;
+                rx.borrow_and_update();
+            } else if !rx.borrow().is_empty() {
+                let data = rx.borrow_and_update().clone();
                 let _ = ctx.client_manager.send_to_client(ctx.client_id, data);
-                if let Some(ref m) = ctx.metrics {
-                    m.record_ws_message_sent();
-                }
             }
 
             let client_id = ctx.client_id;
@@ -927,10 +943,27 @@ async fn attach_client_to_bus(
     match view_spec.mode {
         Mode::State => {
             let key = subscription.key.as_deref().unwrap_or("");
+
             let mut rx = ctx.bus_manager.get_or_create_state_bus(view_id, key).await;
 
-            if !rx.borrow().is_empty() {
-                let data = rx.borrow().clone();
+            if let Some(cached_entity) = ctx.entity_cache.get(view_id, key).await {
+                let snapshot_entities = vec![SnapshotEntity {
+                    key: key.to_string(),
+                    data: cached_entity,
+                }];
+                let batch_config = ctx.entity_cache.snapshot_config();
+                let _ = send_snapshot_batches(
+                    ctx.client_id,
+                    &snapshot_entities,
+                    view_spec.mode,
+                    view_id,
+                    ctx.client_manager,
+                    &batch_config,
+                )
+                .await;
+                rx.borrow_and_update();
+            } else if !rx.borrow().is_empty() {
+                let data = rx.borrow_and_update().clone();
                 let _ = ctx.client_manager.send_to_client(ctx.client_id, data);
             }
 
