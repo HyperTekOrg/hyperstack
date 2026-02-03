@@ -34,7 +34,15 @@ pub mod pumpfun_stream {
         #[from_instruction([pump_sdk::instructions::Create::mint, pump_sdk::instructions::CreateV2::mint], primary_key, strategy = SetOnce)]
         pub mint: String,
 
-        #[from_instruction([pump_sdk::instructions::Create::bonding_curve, pump_sdk::instructions::CreateV2::bonding_curve], lookup_index, strategy = SetOnce)]
+        #[map(pump_sdk::accounts::BondingCurve::__account_address, lookup_index(
+            register_from = [
+                (pump_sdk::instructions::Create, accounts::bonding_curve, accounts::mint),
+                (pump_sdk::instructions::CreateV2, accounts::bonding_curve, accounts::mint),
+                (pump_sdk::instructions::Buy, accounts::bonding_curve, accounts::mint),
+                (pump_sdk::instructions::BuyExactSolIn, accounts::bonding_curve, accounts::mint),
+                (pump_sdk::instructions::Sell, accounts::bonding_curve, accounts::mint)
+            ]
+        ), strategy = SetOnce)]
         pub bonding_curve: String,
     }
 
@@ -240,57 +248,4 @@ pub mod pumpfun_stream {
         )]
         pub sells: Vec<pump_sdk::instructions::Sell>,
     }
-
-    // ========================================================================
-    // PDA Resolution - Declarative (Level 1)
-    // ========================================================================
-    // Declarative syntax replaces imperative #[resolve_key_for] and #[after_instruction] hooks
-
-    #[resolve_key(
-        account = pump_sdk::accounts::BondingCurve,
-        strategy = "pda_reverse_lookup",
-        queue_until = [
-            pump_sdk::instructions::Create,
-            pump_sdk::instructions::CreateV2,
-            pump_sdk::instructions::Buy,
-            pump_sdk::instructions::BuyExactSolIn,
-            pump_sdk::instructions::Sell
-        ]
-    )]
-    struct BondingCurveResolver;
-
-    #[register_pda(
-        instruction = pump_sdk::instructions::Create,
-        pda_field = accounts::bonding_curve,
-        primary_key = accounts::mint
-    )]
-    struct CreatePdaRegistration;
-
-    #[register_pda(
-        instruction = pump_sdk::instructions::CreateV2,
-        pda_field = accounts::bonding_curve,
-        primary_key = accounts::mint
-    )]
-    struct CreateV2PdaRegistration;
-
-    #[register_pda(
-        instruction = pump_sdk::instructions::Buy,
-        pda_field = accounts::bonding_curve,
-        primary_key = accounts::mint
-    )]
-    struct BuyPdaRegistration;
-
-    #[register_pda(
-        instruction = pump_sdk::instructions::BuyExactSolIn,
-        pda_field = accounts::bonding_curve,
-        primary_key = accounts::mint
-    )]
-    struct BuyExactSolInPdaRegistration;
-
-    #[register_pda(
-        instruction = pump_sdk::instructions::Sell,
-        pda_field = accounts::bonding_curve,
-        primary_key = accounts::mint
-    )]
-    struct SellPdaRegistration;
 }
