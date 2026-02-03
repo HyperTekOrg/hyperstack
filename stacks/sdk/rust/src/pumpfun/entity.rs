@@ -1,13 +1,13 @@
-use super::types::PumpfunToken;
+use super::types::{PumpfunToken};
 use hyperstack_sdk::{Stack, StateView, ViewBuilder, ViewHandle, Views};
 
-pub struct PumpfunStack;
+pub struct PumpfunStreamStack;
 
-impl Stack for PumpfunStack {
-    type Views = PumpfunStackViews;
+impl Stack for PumpfunStreamStack {
+    type Views = PumpfunStreamStackViews;
 
     fn name() -> &'static str {
-        "pumpfun-token"
+        "pumpfun-stream"
     }
 
     fn url() -> &'static str {
@@ -15,14 +15,14 @@ impl Stack for PumpfunStack {
     }
 }
 
-pub struct PumpfunStackViews {
+pub struct PumpfunStreamStackViews {
     pub pumpfun_token: PumpfunTokenEntityViews,
 }
 
-impl Views for PumpfunStackViews {
+impl Views for PumpfunStreamStackViews {
     fn from_builder(builder: ViewBuilder) -> Self {
         Self {
-            pumpfun_token: PumpfunTokenEntityViews { builder },
+            pumpfun_token: PumpfunTokenEntityViews { builder: builder },
         }
     }
 }

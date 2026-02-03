@@ -102,6 +102,8 @@ pub struct PumpfunToken {
     pub bonding_curve_snapshot: Option<Option<serde_json::Value>>,
 }
 
+
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Create {
     #[serde(default)]
@@ -239,6 +241,7 @@ pub struct BondingCurve {
     #[serde(default)]
     pub is_mayhem_mode: Option<bool>,
 }
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventWrapper<T> {

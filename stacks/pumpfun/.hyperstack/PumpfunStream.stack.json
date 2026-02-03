@@ -4323,10 +4323,6 @@
           {
             "field_name": "id.bonding_curve",
             "temporal_field": null
-          },
-          {
-            "field_name": "id.bonding_curve",
-            "temporal_field": null
           }
         ]
       },
@@ -4350,6 +4346,23 @@
             }
           },
           "mappings": [
+            {
+              "target_path": "id.bonding_curve",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "__account_address"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": null
+                }
+              },
+              "transform": null,
+              "population": "SetOnce"
+            },
             {
               "target_path": "info.is_complete",
               "source": {
@@ -4731,24 +4744,6 @@
               "population": "SetOnce"
             },
             {
-              "target_path": "id.bonding_curve",
-              "source": {
-                "FromSource": {
-                  "path": {
-                    "segments": [
-                      "accounts",
-                      "bonding_curve"
-                    ],
-                    "offsets": null
-                  },
-                  "default": null,
-                  "transform": null
-                }
-              },
-              "transform": null,
-              "population": "SetOnce"
-            },
-            {
               "target_path": "info.name",
               "source": {
                 "FromSource": {
@@ -4834,24 +4829,6 @@
                     "segments": [
                       "accounts",
                       "mint"
-                    ],
-                    "offsets": null
-                  },
-                  "default": null,
-                  "transform": null
-                }
-              },
-              "transform": null,
-              "population": "SetOnce"
-            },
-            {
-              "target_path": "id.bonding_curve",
-              "source": {
-                "FromSource": {
-                  "path": {
-                    "segments": [
-                      "accounts",
-                      "bonding_curve"
                     ],
                     "offsets": null
                   },
@@ -7431,9 +7408,9 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "8e3c83baa489941decbafe0ce17ff91b573f166d344073d3b48197e9f8a4a548",
+      "content_hash": "a97bf14e72730914cb052af6954399cc8bd87307b3c9ae4fe100a4291ccc7f5d",
       "views": []
     }
   ],
-  "content_hash": "2297aefa18e3fa45dd28e34a7257714ab03cd5490faddee5a6213657eb2d6d46"
+  "content_hash": "f923e60a9f46a7b8b51c7fd526a48f373aab40e4ff8252f422ed741480b8b2e3"
 }

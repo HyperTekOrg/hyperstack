@@ -1,5 +1,3 @@
-
-
 export interface PumpfunTokenEvents {
   buys?: EventWrapper<Buy>[] | null;
   buys_exact_sol?: any[] | null;
@@ -189,9 +187,9 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
 // Stack Definition
 // ============================================================================
 
-/** Stack definition for PumpfunToken */
-export const PUMPFUNTOKEN_STACK = {
-  name: 'pumpfun-token',
+/** Stack definition for PumpfunStream with 1 entities */
+export const PUMPFUN_STREAM_STACK = {
+  name: 'pumpfun-stream',
   url: 'wss://pumpfun.stack.usehyperstack.com',
   views: {
     PumpfunToken: {
@@ -202,7 +200,10 @@ export const PUMPFUNTOKEN_STACK = {
 } as const;
 
 /** Type alias for the stack */
-export type PumpfunTokenStack = typeof PUMPFUNTOKEN_STACK;
+export type PumpfunStreamStack = typeof PUMPFUN_STREAM_STACK;
+
+/** Entity types in this stack */
+export type PumpfunStreamEntity = PumpfunToken;
 
 /** Default export for convenience */
-export default PUMPFUNTOKEN_STACK;
+export default PUMPFUN_STREAM_STACK;
