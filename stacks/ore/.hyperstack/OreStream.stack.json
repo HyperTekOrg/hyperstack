@@ -1,7 +1,8 @@
 {
   "stack_name": "OreStream",
   "program_ids": [
-    "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv"
+    "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+    "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X"
   ],
   "idls": [
     {
@@ -1938,6 +1939,382 @@
         }
       ],
       "discriminant_size": 1
+    },
+    {
+      "name": "entropy",
+      "program_id": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X",
+      "version": "0.1.5",
+      "accounts": [
+        {
+          "name": "Var",
+          "discriminator": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "An entropy variable account that stores randomness generation state."
+          ]
+        }
+      ],
+      "instructions": [
+        {
+          "name": "open",
+          "discriminator": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Creates a new entropy var account.",
+            "Var PDA seeds: [\"var\", authority, id]."
+          ],
+          "accounts": [
+            {
+              "name": "authority",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "payer",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "provider",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "var",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "systemProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "11111111111111111111111111111111",
+              "docs": []
+            }
+          ],
+          "args": [
+            {
+              "name": "id",
+              "type": "u64"
+            },
+            {
+              "name": "commit",
+              "type": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            },
+            {
+              "name": "isAuto",
+              "type": "u64"
+            },
+            {
+              "name": "samples",
+              "type": "u64"
+            },
+            {
+              "name": "endAt",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "close",
+          "discriminator": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Closes an entropy var account and returns rent to the authority."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "var",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "systemProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "11111111111111111111111111111111",
+              "docs": []
+            }
+          ],
+          "args": []
+        },
+        {
+          "name": "next",
+          "discriminator": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Updates the var for the next random value sample.",
+            "Resets the commit to the previous seed and clears slot_hash, seed, and value."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "var",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            }
+          ],
+          "args": [
+            {
+              "name": "endAt",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "reveal",
+          "discriminator": [
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Reveals the seed and finalizes the random value.",
+            "The seed must hash to the commit stored in the var account."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "var",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            }
+          ],
+          "args": [
+            {
+              "name": "seed",
+              "type": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "sample",
+          "discriminator": [
+            5,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "docs": [
+            "Samples the slot hash at the end_at slot.",
+            "Must be called after the end_at slot has passed."
+          ],
+          "accounts": [
+            {
+              "name": "signer",
+              "writable": true,
+              "signer": true,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "var",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "slotHashesSysvar",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "SysvarS1otHashes111111111111111111111111111",
+              "docs": []
+            }
+          ],
+          "args": []
+        }
+      ],
+      "types": [
+        {
+          "name": "Var",
+          "docs": [
+            "An entropy variable account that stores randomness generation state."
+          ],
+          "type": {
+            "kind": "struct",
+            "fields": [
+              {
+                "name": "authority",
+                "type": "publicKey"
+              },
+              {
+                "name": "id",
+                "type": "u64"
+              },
+              {
+                "name": "provider",
+                "type": "publicKey"
+              },
+              {
+                "name": "commit",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              },
+              {
+                "name": "seed",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              },
+              {
+                "name": "slot_hash",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              },
+              {
+                "name": "value",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              },
+              {
+                "name": "samples",
+                "type": "u64"
+              },
+              {
+                "name": "is_auto",
+                "type": "u64"
+              },
+              {
+                "name": "start_at",
+                "type": "u64"
+              },
+              {
+                "name": "end_at",
+                "type": "u64"
+              }
+            ]
+          }
+        }
+      ],
+      "events": [],
+      "errors": [
+        {
+          "code": 0,
+          "name": "IncompleteDigest",
+          "msg": "Incomplete digest"
+        },
+        {
+          "code": 1,
+          "name": "InvalidSeed",
+          "msg": "Invalid seed"
+        }
+      ],
+      "discriminant_size": 1
     }
   ],
   "entities": [
@@ -1957,6 +2334,148 @@
         ]
       },
       "handlers": [
+        {
+          "source": {
+            "Source": {
+              "program_id": null,
+              "discriminator": null,
+              "type_name": "entropy::VarState"
+            }
+          },
+          "key_resolution": {
+            "Lookup": {
+              "primary_field": {
+                "segments": [
+                  "__account_address"
+                ],
+                "offsets": null
+              }
+            }
+          },
+          "mappings": [
+            {
+              "target_path": "entropy.entropy_value",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "value"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": "Base58Encode"
+                }
+              },
+              "transform": null,
+              "population": "LastWrite"
+            },
+            {
+              "target_path": "entropy.entropy_seed",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "seed"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": "Base58Encode"
+                }
+              },
+              "transform": null,
+              "population": "LastWrite"
+            },
+            {
+              "target_path": "entropy.entropy_slot_hash",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "slot_hash"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": "Base58Encode"
+                }
+              },
+              "transform": null,
+              "population": "LastWrite"
+            },
+            {
+              "target_path": "entropy.entropy_start_at",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "start_at"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": null
+                }
+              },
+              "transform": null,
+              "population": "LastWrite"
+            },
+            {
+              "target_path": "entropy.entropy_end_at",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "end_at"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": null
+                }
+              },
+              "transform": null,
+              "population": "LastWrite"
+            },
+            {
+              "target_path": "entropy.entropy_samples",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "samples"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": null
+                }
+              },
+              "transform": null,
+              "population": "LastWrite"
+            },
+            {
+              "target_path": "entropy_snapshot",
+              "source": {
+                "AsCapture": {
+                  "field_transforms": {
+                    "authority": "Base58Encode",
+                    "commit": "Base58Encode",
+                    "provider": "Base58Encode",
+                    "seed": "Base58Encode",
+                    "slot_hash": "Base58Encode",
+                    "value": "Base58Encode"
+                  }
+                }
+              },
+              "transform": null,
+              "population": "LastWrite"
+            }
+          ],
+          "conditions": [],
+          "emit": true
+        },
         {
           "source": {
             "Source": {
@@ -2481,6 +3000,83 @@
           "parent_field": null
         },
         {
+          "name": "entropy",
+          "fields": [
+            {
+              "field_name": "entropy_value",
+              "rust_type_name": "Option < String >",
+              "base_type": "String",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "String",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "entropy_seed",
+              "rust_type_name": "Option < String >",
+              "base_type": "String",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "String",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "entropy_slot_hash",
+              "rust_type_name": "Option < String >",
+              "base_type": "String",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "String",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "entropy_start_at",
+              "rust_type_name": "Option < u64 >",
+              "base_type": "Timestamp",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "u64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "entropy_end_at",
+              "rust_type_name": "Option < u64 >",
+              "base_type": "Timestamp",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "u64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "entropy_samples",
+              "rust_type_name": "Option < u64 >",
+              "base_type": "Integer",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "u64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "entropy_var_address",
+              "rust_type_name": "Option < String >",
+              "base_type": "String",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "String",
+              "source_path": null,
+              "resolved_type": null
+            }
+          ],
+          "is_nested_struct": false,
+          "parent_field": null
+        },
+        {
           "name": "root",
           "fields": [
             {
@@ -2592,6 +3188,102 @@
                 "is_enum": false,
                 "enum_variants": []
               }
+            },
+            {
+              "field_name": "entropy_snapshot",
+              "rust_type_name": "Option < entropy_sdk :: accounts :: Var >",
+              "base_type": "Object",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "entropy_sdk :: accounts :: Var",
+              "source_path": null,
+              "resolved_type": {
+                "type_name": "Var",
+                "fields": [
+                  {
+                    "field_name": "authority",
+                    "field_type": "publicKey",
+                    "base_type": "Pubkey",
+                    "is_optional": false,
+                    "is_array": false
+                  },
+                  {
+                    "field_name": "id",
+                    "field_type": "u64",
+                    "base_type": "Integer",
+                    "is_optional": false,
+                    "is_array": false
+                  },
+                  {
+                    "field_name": "provider",
+                    "field_type": "publicKey",
+                    "base_type": "Pubkey",
+                    "is_optional": false,
+                    "is_array": false
+                  },
+                  {
+                    "field_name": "commit",
+                    "field_type": "[u8]",
+                    "base_type": "Integer",
+                    "is_optional": false,
+                    "is_array": true
+                  },
+                  {
+                    "field_name": "seed",
+                    "field_type": "[u8]",
+                    "base_type": "Integer",
+                    "is_optional": false,
+                    "is_array": true
+                  },
+                  {
+                    "field_name": "slot_hash",
+                    "field_type": "[u8]",
+                    "base_type": "Integer",
+                    "is_optional": false,
+                    "is_array": true
+                  },
+                  {
+                    "field_name": "value",
+                    "field_type": "[u8]",
+                    "base_type": "Integer",
+                    "is_optional": false,
+                    "is_array": true
+                  },
+                  {
+                    "field_name": "samples",
+                    "field_type": "u64",
+                    "base_type": "Integer",
+                    "is_optional": false,
+                    "is_array": false
+                  },
+                  {
+                    "field_name": "is_auto",
+                    "field_type": "u64",
+                    "base_type": "Integer",
+                    "is_optional": false,
+                    "is_array": false
+                  },
+                  {
+                    "field_name": "start_at",
+                    "field_type": "u64",
+                    "base_type": "Integer",
+                    "is_optional": false,
+                    "is_array": false
+                  },
+                  {
+                    "field_name": "end_at",
+                    "field_type": "u64",
+                    "base_type": "Integer",
+                    "is_optional": false,
+                    "is_array": false
+                  }
+                ],
+                "is_instruction": false,
+                "is_account": true,
+                "is_event": false,
+                "is_enum": false,
+                "enum_variants": []
+              }
             }
           ],
           "is_nested_struct": false,
@@ -2599,6 +3291,172 @@
         }
       ],
       "field_mappings": {
+        "entropy.entropy_end_at": {
+          "field_name": "entropy_end_at",
+          "rust_type_name": "Option < u64 >",
+          "base_type": "Timestamp",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "entropy.entropy_samples": {
+          "field_name": "entropy_samples",
+          "rust_type_name": "Option < u64 >",
+          "base_type": "Integer",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "entropy.entropy_seed": {
+          "field_name": "entropy_seed",
+          "rust_type_name": "Option < String >",
+          "base_type": "String",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "String",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "entropy.entropy_slot_hash": {
+          "field_name": "entropy_slot_hash",
+          "rust_type_name": "Option < String >",
+          "base_type": "String",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "String",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "entropy.entropy_start_at": {
+          "field_name": "entropy_start_at",
+          "rust_type_name": "Option < u64 >",
+          "base_type": "Timestamp",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "entropy.entropy_value": {
+          "field_name": "entropy_value",
+          "rust_type_name": "Option < String >",
+          "base_type": "String",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "String",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "entropy.entropy_var_address": {
+          "field_name": "entropy_var_address",
+          "rust_type_name": "Option < String >",
+          "base_type": "String",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "String",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "entropy_snapshot": {
+          "field_name": "entropy_snapshot",
+          "rust_type_name": "Option < entropy_sdk :: accounts :: Var >",
+          "base_type": "Object",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "entropy_sdk :: accounts :: Var",
+          "source_path": null,
+          "resolved_type": {
+            "type_name": "Var",
+            "fields": [
+              {
+                "field_name": "authority",
+                "field_type": "publicKey",
+                "base_type": "Pubkey",
+                "is_optional": false,
+                "is_array": false
+              },
+              {
+                "field_name": "id",
+                "field_type": "u64",
+                "base_type": "Integer",
+                "is_optional": false,
+                "is_array": false
+              },
+              {
+                "field_name": "provider",
+                "field_type": "publicKey",
+                "base_type": "Pubkey",
+                "is_optional": false,
+                "is_array": false
+              },
+              {
+                "field_name": "commit",
+                "field_type": "[u8]",
+                "base_type": "Integer",
+                "is_optional": false,
+                "is_array": true
+              },
+              {
+                "field_name": "seed",
+                "field_type": "[u8]",
+                "base_type": "Integer",
+                "is_optional": false,
+                "is_array": true
+              },
+              {
+                "field_name": "slot_hash",
+                "field_type": "[u8]",
+                "base_type": "Integer",
+                "is_optional": false,
+                "is_array": true
+              },
+              {
+                "field_name": "value",
+                "field_type": "[u8]",
+                "base_type": "Integer",
+                "is_optional": false,
+                "is_array": true
+              },
+              {
+                "field_name": "samples",
+                "field_type": "u64",
+                "base_type": "Integer",
+                "is_optional": false,
+                "is_array": false
+              },
+              {
+                "field_name": "is_auto",
+                "field_type": "u64",
+                "base_type": "Integer",
+                "is_optional": false,
+                "is_array": false
+              },
+              {
+                "field_name": "start_at",
+                "field_type": "u64",
+                "base_type": "Integer",
+                "is_optional": false,
+                "is_array": false
+              },
+              {
+                "field_name": "end_at",
+                "field_type": "u64",
+                "base_type": "Integer",
+                "is_optional": false,
+                "is_array": false
+              }
+            ],
+            "is_instruction": false,
+            "is_account": true,
+            "is_event": false,
+            "is_enum": false,
+            "enum_variants": []
+          }
+        },
         "id.round_address": {
           "field_name": "round_address",
           "rust_type_name": "String",
@@ -2880,7 +3738,17 @@
           "resolved_type": null
         }
       },
-      "resolver_hooks": [],
+      "resolver_hooks": [
+        {
+          "account_type": "entropy::VarState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": []
+            }
+          }
+        }
+      ],
       "instruction_hooks": [],
       "computed_fields": [
         "results.rng",
@@ -3239,7 +4107,7 @@
           "result_type": "Option < bool >"
         }
       ],
-      "content_hash": "35817f5513f04cc2cdfc8230bde4e34aa6b03ae4157e7214de59082c25d4b907",
+      "content_hash": "b6b2769b3ff157a488b74fb5df42294ee9f239f8aeacdfbae0db62ed635bcff6",
       "views": [
         {
           "id": "OreRound/latest",
@@ -5057,5 +5925,5 @@
       "views": []
     }
   ],
-  "content_hash": "90a49ae66b6185f9f7d856c7ffdf516253531a3e12d781b4669ef15a09941b1a"
+  "content_hash": "8876cde182bf27828b6a84e503163fbc8d240c047a9e08e4024d076bfee8b8de"
 }

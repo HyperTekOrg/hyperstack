@@ -1,3 +1,13 @@
+export interface OreRoundEntropy {
+  entropy_end_at?: number | null;
+  entropy_samples?: number | null;
+  entropy_seed?: string | null;
+  entropy_slot_hash?: string | null;
+  entropy_start_at?: number | null;
+  entropy_value?: string | null;
+  entropy_var_address?: string | null;
+}
+
 export interface OreRoundId {
   round_address?: string | null;
   round_id?: number | null;
@@ -28,11 +38,13 @@ export interface OreRoundState {
 }
 
 export interface OreRound {
+  entropy?: OreRoundEntropy;
   id?: OreRoundId;
   metrics?: OreRoundMetrics;
   results?: OreRoundResults;
   state?: OreRoundState;
   round_snapshot?: Round | null;
+  entropy_snapshot?: Var | null;
 }
 
 export interface Round {
@@ -49,6 +61,20 @@ export interface Round {
   total_miners?: number;
   total_vaulted?: number;
   total_winnings?: number;
+}
+
+export interface Var {
+  authority?: string;
+  id?: number;
+  provider?: string;
+  commit?: number[];
+  seed?: number[];
+  slot_hash?: number[];
+  value?: number[];
+  samples?: number;
+  is_auto?: number;
+  start_at?: number;
+  end_at?: number;
 }
 
 export interface OreTreasuryId {

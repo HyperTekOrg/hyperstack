@@ -1,6 +1,6 @@
 use hyperstack::prelude::*;
 
-#[hyperstack(idl = "idl/ore.json")]
+#[hyperstack(idl = ["idl/ore.json", "idl/entropy.json"])]
 pub mod ore_stream {
     use hyperstack::macros::Stream;
 
@@ -13,12 +13,16 @@ pub mod ore_stream {
         pub state: RoundState,
         pub results: RoundResults,
         pub metrics: RoundMetrics,
+        pub entropy: EntropyState,
 
         // Snapshot the entire Round account state with field transformations
         // - rent_payer: Base58Encode - Converts the pubkey to readable base58 string
         // - top_miner: Base58Encode - Converts the pubkey to readable base58 string
         #[snapshot(strategy = LastWrite, transforms = [(rent_payer, Base58Encode), (top_miner, Base58Encode)])]
         pub round_snapshot: Option<ore_sdk::accounts::Round>,
+
+        #[snapshot(strategy = LastWrite, transforms = [(authority, Base58Encode), (provider, Base58Encode), (commit, Base58Encode), (seed, Base58Encode), (slot_hash, Base58Encode), (value, Base58Encode)])]
+        pub entropy_snapshot: Option<entropy_sdk::accounts::Var>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
@@ -102,6 +106,42 @@ pub mod ore_stream {
         // Count of checkpoint instructions for this round
         #[aggregate(from = ore_sdk::instructions::Checkpoint, strategy = Count, lookup_by = accounts::round)]
         pub checkpoint_count: Option<u64>,
+    }
+
+    // ========================================================================
+    // Entropy — Cross-program randomness state from the Entropy program
+    // Linked to OreRound via Deploy/Reset instructions that reference both
+    // accounts::round and accounts::entropyVar in the same transaction.
+    // ========================================================================
+
+    #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
+    pub struct EntropyState {
+        #[map(entropy_sdk::accounts::Var::value, strategy = LastWrite, transform = Base58Encode)]
+        pub entropy_value: Option<String>,
+
+        #[map(entropy_sdk::accounts::Var::seed, strategy = LastWrite, transform = Base58Encode)]
+        pub entropy_seed: Option<String>,
+
+        #[map(entropy_sdk::accounts::Var::slot_hash, strategy = LastWrite, transform = Base58Encode)]
+        pub entropy_slot_hash: Option<String>,
+
+        #[map(entropy_sdk::accounts::Var::start_at, strategy = LastWrite)]
+        pub entropy_start_at: Option<u64>,
+
+        #[map(entropy_sdk::accounts::Var::end_at, strategy = LastWrite)]
+        pub entropy_end_at: Option<u64>,
+
+        #[map(entropy_sdk::accounts::Var::samples, strategy = LastWrite)]
+        pub entropy_samples: Option<u64>,
+
+        #[map(entropy_sdk::accounts::Var::__account_address, lookup_index(
+            register_from = [
+                // (Instruction, Account, LookupBy)
+                (ore_sdk::instructions::Deploy, accounts::entropyVar, accounts::round),
+                (ore_sdk::instructions::Reset, accounts::entropyVar, accounts::round)
+            ]
+        ), strategy = SetOnce)]
+        pub entropy_var_address: Option<String>,
     }
 
     // ========================================================================
