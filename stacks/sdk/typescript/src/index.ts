@@ -27,7 +27,6 @@ export {
   type OreRoundMetrics,
   type OreRoundResults,
   type OreRoundState,
-  type Round,
   type OreTreasury,
   type OreTreasuryId,
   type OreTreasuryState,

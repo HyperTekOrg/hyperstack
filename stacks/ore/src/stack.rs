@@ -14,15 +14,6 @@ pub mod ore_stream {
         pub results: RoundResults,
         pub metrics: RoundMetrics,
         pub entropy: EntropyState,
-
-        // Snapshot the entire Round account state with field transformations
-        // - rent_payer: Base58Encode - Converts the pubkey to readable base58 string
-        // - top_miner: Base58Encode - Converts the pubkey to readable base58 string
-        #[snapshot(strategy = LastWrite, transforms = [(rent_payer, Base58Encode), (top_miner, Base58Encode)])]
-        pub round_snapshot: Option<ore_sdk::accounts::Round>,
-
-        #[snapshot(strategy = LastWrite, transforms = [(authority, Base58Encode), (provider, Base58Encode), (commit, Base58Encode), (seed, Base58Encode), (slot_hash, Base58Encode), (value, Base58Encode)])]
-        pub entropy_snapshot: Option<entropy_sdk::accounts::Var>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
@@ -69,17 +60,21 @@ pub mod ore_stream {
         // Computed field: Calculate RNG from slot_hash bytes
         // XOR the 4 u64 values from the 32-byte hash to get a single random number
         #[computed(
-            let hash = round_snapshot.data.slot_hash.to_bytes();
-            let all_zeros = hash == [0u8; 32];
-            let all_ff = hash == [0xFFu8; 32];
-            if all_zeros || all_ff {
+            let hash = entropy.entropy_value_bytes.to_bytes();
+            if (hash.len() as u64) != 32 {
                 None
             } else {
-                let r1 = u64::from_le_bytes(hash[0..8]);
-                let r2 = u64::from_le_bytes(hash[8..16]);
-                let r3 = u64::from_le_bytes(hash[16..24]);
-                let r4 = u64::from_le_bytes(hash[24..32]);
-                Some(r1 ^ r2 ^ r3 ^ r4)
+                let all_zeros = hash == [0u8; 32];
+                let all_ff = hash == [0xFFu8; 32];
+                if all_zeros || all_ff {
+                    None
+                } else {
+                    let r1 = u64::from_le_bytes(hash[0..8]);
+                    let r2 = u64::from_le_bytes(hash[8..16]);
+                    let r3 = u64::from_le_bytes(hash[16..24]);
+                    let r4 = u64::from_le_bytes(hash[24..32]);
+                    Some(r1 ^ r2 ^ r3 ^ r4)
+                }
             }
         )]
         pub rng: Option<u64>,
@@ -116,32 +111,32 @@ pub mod ore_stream {
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct EntropyState {
-        #[map(entropy_sdk::accounts::Var::value, strategy = LastWrite, transform = Base58Encode)]
+        #[map(entropy_sdk::accounts::Var::value,
+              lookup_index(register_from = [
+                  (ore_sdk::instructions::Deploy, accounts::entropyVar, accounts::round),
+                  (ore_sdk::instructions::Reset, accounts::entropyVar, accounts::round)
+              ]),
+              when = entropy_sdk::instructions::Reveal,
+              condition = "value != ZERO_32",
+              strategy = LastWrite,
+              transform = Base58Encode)]
         pub entropy_value: Option<String>,
 
-        #[map(entropy_sdk::accounts::Var::seed, strategy = LastWrite, transform = Base58Encode)]
-        pub entropy_seed: Option<String>,
+        #[map(entropy_sdk::accounts::Var::value,
+              when = entropy_sdk::instructions::Reveal,
+              condition = "value != ZERO_32",
+              strategy = LastWrite,
+              emit = false)]
+        pub entropy_value_bytes: Option<Vec<u8>>,
 
-        #[map(entropy_sdk::accounts::Var::slot_hash, strategy = LastWrite, transform = Base58Encode)]
-        pub entropy_slot_hash: Option<String>,
-
-        #[map(entropy_sdk::accounts::Var::start_at, strategy = LastWrite)]
+        #[map(entropy_sdk::accounts::Var::start_at, strategy = SetOnce)]
         pub entropy_start_at: Option<u64>,
 
-        #[map(entropy_sdk::accounts::Var::end_at, strategy = LastWrite)]
+        #[map(entropy_sdk::accounts::Var::end_at, strategy = SetOnce)]
         pub entropy_end_at: Option<u64>,
 
-        #[map(entropy_sdk::accounts::Var::samples, strategy = LastWrite)]
+        #[map(entropy_sdk::accounts::Var::samples, strategy = SetOnce)]
         pub entropy_samples: Option<u64>,
-
-        #[map(entropy_sdk::accounts::Var::__account_address, lookup_index(
-            register_from = [
-                // (Instruction, Account, LookupBy)
-                (ore_sdk::instructions::Deploy, accounts::entropyVar, accounts::round),
-                (ore_sdk::instructions::Reset, accounts::entropyVar, accounts::round)
-            ]
-        ), strategy = SetOnce)]
-        pub entropy_var_address: Option<String>,
     }
 
     // ========================================================================

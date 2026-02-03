@@ -2330,6 +2330,10 @@
           {
             "field_name": "id.round_address",
             "temporal_field": null
+          },
+          {
+            "field_name": "entropy.entropy_value",
+            "temporal_field": null
           }
         ]
       },
@@ -2368,41 +2372,123 @@
                 }
               },
               "transform": null,
-              "population": "LastWrite"
+              "population": "LastWrite",
+              "condition": {
+                "expression": "value != ZERO_32",
+                "parsed": {
+                  "Comparison": {
+                    "field": {
+                      "segments": [
+                        "value"
+                      ],
+                      "offsets": null
+                    },
+                    "op": "NotEqual",
+                    "value": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ]
+                  }
+                }
+              },
+              "when": "entropy::RevealIxState"
             },
             {
-              "target_path": "entropy.entropy_seed",
+              "target_path": "entropy.entropy_value_bytes",
               "source": {
                 "FromSource": {
                   "path": {
                     "segments": [
-                      "seed"
+                      "value"
                     ],
                     "offsets": null
                   },
                   "default": null,
-                  "transform": "Base58Encode"
+                  "transform": null
                 }
               },
               "transform": null,
-              "population": "LastWrite"
-            },
-            {
-              "target_path": "entropy.entropy_slot_hash",
-              "source": {
-                "FromSource": {
-                  "path": {
-                    "segments": [
-                      "slot_hash"
-                    ],
-                    "offsets": null
-                  },
-                  "default": null,
-                  "transform": "Base58Encode"
+              "population": "LastWrite",
+              "condition": {
+                "expression": "value != ZERO_32",
+                "parsed": {
+                  "Comparison": {
+                    "field": {
+                      "segments": [
+                        "value"
+                      ],
+                      "offsets": null
+                    },
+                    "op": "NotEqual",
+                    "value": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ]
+                  }
                 }
               },
-              "transform": null,
-              "population": "LastWrite"
+              "when": "entropy::RevealIxState",
+              "emit": false
             },
             {
               "target_path": "entropy.entropy_start_at",
@@ -2419,7 +2505,7 @@
                 }
               },
               "transform": null,
-              "population": "LastWrite"
+              "population": "SetOnce"
             },
             {
               "target_path": "entropy.entropy_end_at",
@@ -2436,7 +2522,7 @@
                 }
               },
               "transform": null,
-              "population": "LastWrite"
+              "population": "SetOnce"
             },
             {
               "target_path": "entropy.entropy_samples",
@@ -2453,24 +2539,7 @@
                 }
               },
               "transform": null,
-              "population": "LastWrite"
-            },
-            {
-              "target_path": "entropy_snapshot",
-              "source": {
-                "AsCapture": {
-                  "field_transforms": {
-                    "authority": "Base58Encode",
-                    "commit": "Base58Encode",
-                    "provider": "Base58Encode",
-                    "seed": "Base58Encode",
-                    "slot_hash": "Base58Encode",
-                    "value": "Base58Encode"
-                  }
-                }
-              },
-              "transform": null,
-              "population": "LastWrite"
+              "population": "SetOnce"
             }
           ],
           "conditions": [],
@@ -2677,19 +2746,6 @@
                   },
                   "default": null,
                   "transform": "Base58Encode"
-                }
-              },
-              "transform": null,
-              "population": "LastWrite"
-            },
-            {
-              "target_path": "round_snapshot",
-              "source": {
-                "AsCapture": {
-                  "field_transforms": {
-                    "rent_payer": "Base58Encode",
-                    "top_miner": "Base58Encode"
-                  }
                 }
               },
               "transform": null,
@@ -3013,24 +3069,15 @@
               "resolved_type": null
             },
             {
-              "field_name": "entropy_seed",
-              "rust_type_name": "Option < String >",
-              "base_type": "String",
+              "field_name": "entropy_value_bytes",
+              "rust_type_name": "Option < Vec < u8 > >",
+              "base_type": "Array",
               "is_optional": true,
-              "is_array": false,
-              "inner_type": "String",
+              "is_array": true,
+              "inner_type": "Vec < u8 >",
               "source_path": null,
-              "resolved_type": null
-            },
-            {
-              "field_name": "entropy_slot_hash",
-              "rust_type_name": "Option < String >",
-              "base_type": "String",
-              "is_optional": true,
-              "is_array": false,
-              "inner_type": "String",
-              "source_path": null,
-              "resolved_type": null
+              "resolved_type": null,
+              "emit": false
             },
             {
               "field_name": "entropy_start_at",
@@ -3061,229 +3108,6 @@
               "inner_type": "u64",
               "source_path": null,
               "resolved_type": null
-            },
-            {
-              "field_name": "entropy_var_address",
-              "rust_type_name": "Option < String >",
-              "base_type": "String",
-              "is_optional": true,
-              "is_array": false,
-              "inner_type": "String",
-              "source_path": null,
-              "resolved_type": null
-            }
-          ],
-          "is_nested_struct": false,
-          "parent_field": null
-        },
-        {
-          "name": "root",
-          "fields": [
-            {
-              "field_name": "round_snapshot",
-              "rust_type_name": "Option < ore_sdk :: accounts :: Round >",
-              "base_type": "Object",
-              "is_optional": true,
-              "is_array": false,
-              "inner_type": "ore_sdk :: accounts :: Round",
-              "source_path": null,
-              "resolved_type": {
-                "type_name": "Round",
-                "fields": [
-                  {
-                    "field_name": "id",
-                    "field_type": "u64",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": false
-                  },
-                  {
-                    "field_name": "deployed",
-                    "field_type": "[u64]",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": true
-                  },
-                  {
-                    "field_name": "slot_hash",
-                    "field_type": "[u8]",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": true
-                  },
-                  {
-                    "field_name": "count",
-                    "field_type": "[u64]",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": true
-                  },
-                  {
-                    "field_name": "expires_at",
-                    "field_type": "u64",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": false
-                  },
-                  {
-                    "field_name": "motherlode",
-                    "field_type": "u64",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": false
-                  },
-                  {
-                    "field_name": "rent_payer",
-                    "field_type": "publicKey",
-                    "base_type": "Pubkey",
-                    "is_optional": false,
-                    "is_array": false
-                  },
-                  {
-                    "field_name": "top_miner",
-                    "field_type": "publicKey",
-                    "base_type": "Pubkey",
-                    "is_optional": false,
-                    "is_array": false
-                  },
-                  {
-                    "field_name": "top_miner_reward",
-                    "field_type": "u64",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": false
-                  },
-                  {
-                    "field_name": "total_deployed",
-                    "field_type": "u64",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": false
-                  },
-                  {
-                    "field_name": "total_miners",
-                    "field_type": "u64",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": false
-                  },
-                  {
-                    "field_name": "total_vaulted",
-                    "field_type": "u64",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": false
-                  },
-                  {
-                    "field_name": "total_winnings",
-                    "field_type": "u64",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": false
-                  }
-                ],
-                "is_instruction": false,
-                "is_account": true,
-                "is_event": false,
-                "is_enum": false,
-                "enum_variants": []
-              }
-            },
-            {
-              "field_name": "entropy_snapshot",
-              "rust_type_name": "Option < entropy_sdk :: accounts :: Var >",
-              "base_type": "Object",
-              "is_optional": true,
-              "is_array": false,
-              "inner_type": "entropy_sdk :: accounts :: Var",
-              "source_path": null,
-              "resolved_type": {
-                "type_name": "Var",
-                "fields": [
-                  {
-                    "field_name": "authority",
-                    "field_type": "publicKey",
-                    "base_type": "Pubkey",
-                    "is_optional": false,
-                    "is_array": false
-                  },
-                  {
-                    "field_name": "id",
-                    "field_type": "u64",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": false
-                  },
-                  {
-                    "field_name": "provider",
-                    "field_type": "publicKey",
-                    "base_type": "Pubkey",
-                    "is_optional": false,
-                    "is_array": false
-                  },
-                  {
-                    "field_name": "commit",
-                    "field_type": "[u8]",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": true
-                  },
-                  {
-                    "field_name": "seed",
-                    "field_type": "[u8]",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": true
-                  },
-                  {
-                    "field_name": "slot_hash",
-                    "field_type": "[u8]",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": true
-                  },
-                  {
-                    "field_name": "value",
-                    "field_type": "[u8]",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": true
-                  },
-                  {
-                    "field_name": "samples",
-                    "field_type": "u64",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": false
-                  },
-                  {
-                    "field_name": "is_auto",
-                    "field_type": "u64",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": false
-                  },
-                  {
-                    "field_name": "start_at",
-                    "field_type": "u64",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": false
-                  },
-                  {
-                    "field_name": "end_at",
-                    "field_type": "u64",
-                    "base_type": "Integer",
-                    "is_optional": false,
-                    "is_array": false
-                  }
-                ],
-                "is_instruction": false,
-                "is_account": true,
-                "is_event": false,
-                "is_enum": false,
-                "enum_variants": []
-              }
             }
           ],
           "is_nested_struct": false,
@@ -3311,26 +3135,6 @@
           "source_path": null,
           "resolved_type": null
         },
-        "entropy.entropy_seed": {
-          "field_name": "entropy_seed",
-          "rust_type_name": "Option < String >",
-          "base_type": "String",
-          "is_optional": true,
-          "is_array": false,
-          "inner_type": "String",
-          "source_path": null,
-          "resolved_type": null
-        },
-        "entropy.entropy_slot_hash": {
-          "field_name": "entropy_slot_hash",
-          "rust_type_name": "Option < String >",
-          "base_type": "String",
-          "is_optional": true,
-          "is_array": false,
-          "inner_type": "String",
-          "source_path": null,
-          "resolved_type": null
-        },
         "entropy.entropy_start_at": {
           "field_name": "entropy_start_at",
           "rust_type_name": "Option < u64 >",
@@ -3351,111 +3155,16 @@
           "source_path": null,
           "resolved_type": null
         },
-        "entropy.entropy_var_address": {
-          "field_name": "entropy_var_address",
-          "rust_type_name": "Option < String >",
-          "base_type": "String",
+        "entropy.entropy_value_bytes": {
+          "field_name": "entropy_value_bytes",
+          "rust_type_name": "Option < Vec < u8 > >",
+          "base_type": "Array",
           "is_optional": true,
-          "is_array": false,
-          "inner_type": "String",
+          "is_array": true,
+          "inner_type": "Vec < u8 >",
           "source_path": null,
-          "resolved_type": null
-        },
-        "entropy_snapshot": {
-          "field_name": "entropy_snapshot",
-          "rust_type_name": "Option < entropy_sdk :: accounts :: Var >",
-          "base_type": "Object",
-          "is_optional": true,
-          "is_array": false,
-          "inner_type": "entropy_sdk :: accounts :: Var",
-          "source_path": null,
-          "resolved_type": {
-            "type_name": "Var",
-            "fields": [
-              {
-                "field_name": "authority",
-                "field_type": "publicKey",
-                "base_type": "Pubkey",
-                "is_optional": false,
-                "is_array": false
-              },
-              {
-                "field_name": "id",
-                "field_type": "u64",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": false
-              },
-              {
-                "field_name": "provider",
-                "field_type": "publicKey",
-                "base_type": "Pubkey",
-                "is_optional": false,
-                "is_array": false
-              },
-              {
-                "field_name": "commit",
-                "field_type": "[u8]",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": true
-              },
-              {
-                "field_name": "seed",
-                "field_type": "[u8]",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": true
-              },
-              {
-                "field_name": "slot_hash",
-                "field_type": "[u8]",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": true
-              },
-              {
-                "field_name": "value",
-                "field_type": "[u8]",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": true
-              },
-              {
-                "field_name": "samples",
-                "field_type": "u64",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": false
-              },
-              {
-                "field_name": "is_auto",
-                "field_type": "u64",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": false
-              },
-              {
-                "field_name": "start_at",
-                "field_type": "u64",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": false
-              },
-              {
-                "field_name": "end_at",
-                "field_type": "u64",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": false
-              }
-            ],
-            "is_instruction": false,
-            "is_account": true,
-            "is_event": false,
-            "is_enum": false,
-            "enum_variants": []
-          }
+          "resolved_type": null,
+          "emit": false
         },
         "id.round_address": {
           "field_name": "round_address",
@@ -3577,116 +3286,6 @@
           "source_path": null,
           "resolved_type": null
         },
-        "round_snapshot": {
-          "field_name": "round_snapshot",
-          "rust_type_name": "Option < ore_sdk :: accounts :: Round >",
-          "base_type": "Object",
-          "is_optional": true,
-          "is_array": false,
-          "inner_type": "ore_sdk :: accounts :: Round",
-          "source_path": null,
-          "resolved_type": {
-            "type_name": "Round",
-            "fields": [
-              {
-                "field_name": "id",
-                "field_type": "u64",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": false
-              },
-              {
-                "field_name": "deployed",
-                "field_type": "[u64]",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": true
-              },
-              {
-                "field_name": "slot_hash",
-                "field_type": "[u8]",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": true
-              },
-              {
-                "field_name": "count",
-                "field_type": "[u64]",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": true
-              },
-              {
-                "field_name": "expires_at",
-                "field_type": "u64",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": false
-              },
-              {
-                "field_name": "motherlode",
-                "field_type": "u64",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": false
-              },
-              {
-                "field_name": "rent_payer",
-                "field_type": "publicKey",
-                "base_type": "Pubkey",
-                "is_optional": false,
-                "is_array": false
-              },
-              {
-                "field_name": "top_miner",
-                "field_type": "publicKey",
-                "base_type": "Pubkey",
-                "is_optional": false,
-                "is_array": false
-              },
-              {
-                "field_name": "top_miner_reward",
-                "field_type": "u64",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": false
-              },
-              {
-                "field_name": "total_deployed",
-                "field_type": "u64",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": false
-              },
-              {
-                "field_name": "total_miners",
-                "field_type": "u64",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": false
-              },
-              {
-                "field_name": "total_vaulted",
-                "field_type": "u64",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": false
-              },
-              {
-                "field_name": "total_winnings",
-                "field_type": "u64",
-                "base_type": "Integer",
-                "is_optional": false,
-                "is_array": false
-              }
-            ],
-            "is_instruction": false,
-            "is_account": true,
-            "is_event": false,
-            "is_enum": false,
-            "enum_variants": []
-          }
-        },
         "state.expires_at": {
           "field_name": "expires_at",
           "rust_type_name": "Option < u64 >",
@@ -3749,7 +3348,58 @@
           }
         }
       ],
-      "instruction_hooks": [],
+      "instruction_hooks": [
+        {
+          "instruction_type": "ore::DeployIxState",
+          "actions": [
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            }
+          ],
+          "lookup_by": null
+        },
+        {
+          "instruction_type": "ore::ResetIxState",
+          "actions": [
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            }
+          ],
+          "lookup_by": null
+        }
+      ],
       "computed_fields": [
         "results.rng",
         "results.winning_square",
@@ -3765,65 +3415,47 @@
                 "JsonToBytes": {
                   "expr": {
                     "FieldRef": {
-                      "path": "round_snapshot.data.slot_hash"
+                      "path": "entropy.entropy_value_bytes"
                     }
                   }
                 }
               },
               "body": {
-                "Let": {
-                  "name": "all_zeros",
-                  "value": {
+                "If": {
+                  "condition": {
                     "Binary": {
-                      "op": "Eq",
+                      "op": "Ne",
                       "left": {
-                        "Var": {
-                          "name": "hash"
+                        "Paren": {
+                          "expr": {
+                            "Cast": {
+                              "expr": {
+                                "MethodCall": {
+                                  "expr": {
+                                    "Var": {
+                                      "name": "hash"
+                                    }
+                                  },
+                                  "method": "len",
+                                  "args": []
+                                }
+                              },
+                              "to_type": "u64"
+                            }
+                          }
                         }
                       },
                       "right": {
-                        "ByteArray": {
-                          "bytes": [
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0
-                          ]
+                        "Literal": {
+                          "value": 32
                         }
                       }
                     }
                   },
-                  "body": {
+                  "then_branch": "None",
+                  "else_branch": {
                     "Let": {
-                      "name": "all_ff",
+                      "name": "all_zeros",
                       "value": {
                         "Binary": {
                           "op": "Eq",
@@ -3835,82 +3467,115 @@
                           "right": {
                             "ByteArray": {
                               "bytes": [
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255,
-                                255
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
                               ]
                             }
                           }
                         }
                       },
                       "body": {
-                        "If": {
-                          "condition": {
+                        "Let": {
+                          "name": "all_ff",
+                          "value": {
                             "Binary": {
-                              "op": "Or",
+                              "op": "Eq",
                               "left": {
                                 "Var": {
-                                  "name": "all_zeros"
+                                  "name": "hash"
                                 }
                               },
                               "right": {
-                                "Var": {
-                                  "name": "all_ff"
+                                "ByteArray": {
+                                  "bytes": [
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255,
+                                    255
+                                  ]
                                 }
                               }
                             }
                           },
-                          "then_branch": "None",
-                          "else_branch": {
-                            "Let": {
-                              "name": "r1",
-                              "value": {
-                                "U64FromLeBytes": {
-                                  "bytes": {
-                                    "Slice": {
-                                      "expr": {
-                                        "Var": {
-                                          "name": "hash"
-                                        }
-                                      },
-                                      "start": 0,
-                                      "end": 8
+                          "body": {
+                            "If": {
+                              "condition": {
+                                "Binary": {
+                                  "op": "Or",
+                                  "left": {
+                                    "Var": {
+                                      "name": "all_zeros"
+                                    }
+                                  },
+                                  "right": {
+                                    "Var": {
+                                      "name": "all_ff"
                                     }
                                   }
                                 }
                               },
-                              "body": {
+                              "then_branch": "None",
+                              "else_branch": {
                                 "Let": {
-                                  "name": "r2",
+                                  "name": "r1",
                                   "value": {
                                     "U64FromLeBytes": {
                                       "bytes": {
@@ -3920,15 +3585,15 @@
                                               "name": "hash"
                                             }
                                           },
-                                          "start": 8,
-                                          "end": 16
+                                          "start": 0,
+                                          "end": 8
                                         }
                                       }
                                     }
                                   },
                                   "body": {
                                     "Let": {
-                                      "name": "r3",
+                                      "name": "r2",
                                       "value": {
                                         "U64FromLeBytes": {
                                           "bytes": {
@@ -3938,15 +3603,15 @@
                                                   "name": "hash"
                                                 }
                                               },
-                                              "start": 16,
-                                              "end": 24
+                                              "start": 8,
+                                              "end": 16
                                             }
                                           }
                                         }
                                       },
                                       "body": {
                                         "Let": {
-                                          "name": "r4",
+                                          "name": "r3",
                                           "value": {
                                             "U64FromLeBytes": {
                                               "bytes": {
@@ -3956,45 +3621,65 @@
                                                       "name": "hash"
                                                     }
                                                   },
-                                                  "start": 24,
-                                                  "end": 32
+                                                  "start": 16,
+                                                  "end": 24
                                                 }
                                               }
                                             }
                                           },
                                           "body": {
-                                            "Some": {
+                                            "Let": {
+                                              "name": "r4",
                                               "value": {
-                                                "Binary": {
-                                                  "op": "Xor",
-                                                  "left": {
+                                                "U64FromLeBytes": {
+                                                  "bytes": {
+                                                    "Slice": {
+                                                      "expr": {
+                                                        "Var": {
+                                                          "name": "hash"
+                                                        }
+                                                      },
+                                                      "start": 24,
+                                                      "end": 32
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              "body": {
+                                                "Some": {
+                                                  "value": {
                                                     "Binary": {
                                                       "op": "Xor",
                                                       "left": {
                                                         "Binary": {
                                                           "op": "Xor",
                                                           "left": {
-                                                            "Var": {
-                                                              "name": "r1"
+                                                            "Binary": {
+                                                              "op": "Xor",
+                                                              "left": {
+                                                                "Var": {
+                                                                  "name": "r1"
+                                                                }
+                                                              },
+                                                              "right": {
+                                                                "Var": {
+                                                                  "name": "r2"
+                                                                }
+                                                              }
                                                             }
                                                           },
                                                           "right": {
                                                             "Var": {
-                                                              "name": "r2"
+                                                              "name": "r3"
                                                             }
                                                           }
                                                         }
                                                       },
                                                       "right": {
                                                         "Var": {
-                                                          "name": "r3"
+                                                          "name": "r4"
                                                         }
                                                       }
-                                                    }
-                                                  },
-                                                  "right": {
-                                                    "Var": {
-                                                      "name": "r4"
                                                     }
                                                   }
                                                 }
@@ -4107,7 +3792,7 @@
           "result_type": "Option < bool >"
         }
       ],
-      "content_hash": "b6b2769b3ff157a488b74fb5df42294ee9f239f8aeacdfbae0db62ed635bcff6",
+      "content_hash": "1bad9f3330387eaec2a86baccb8138a028500608ad6f55a9955b8636288da450",
       "views": [
         {
           "id": "OreRound/latest",
@@ -4590,11 +4275,72 @@
           }
         }
       },
-      "resolver_hooks": [],
-      "instruction_hooks": [],
+      "resolver_hooks": [
+        {
+          "account_type": "entropy::VarState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": []
+            }
+          }
+        }
+      ],
+      "instruction_hooks": [
+        {
+          "instruction_type": "ore::DeployIxState",
+          "actions": [
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            }
+          ],
+          "lookup_by": null
+        },
+        {
+          "instruction_type": "ore::ResetIxState",
+          "actions": [
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            }
+          ],
+          "lookup_by": null
+        }
+      ],
       "computed_fields": [],
       "computed_field_specs": [],
-      "content_hash": "2ee9928d91b0f58da7d27aa1234e42b8efd10194028be3600646868a36ceebeb",
+      "content_hash": "b9cab3603ab972db756d8143f16d632b6a5b1c135aeec99251ebb2638065e650",
       "views": []
     },
     {
@@ -5917,13 +5663,74 @@
           "resolved_type": null
         }
       },
-      "resolver_hooks": [],
-      "instruction_hooks": [],
+      "resolver_hooks": [
+        {
+          "account_type": "entropy::VarState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": []
+            }
+          }
+        }
+      ],
+      "instruction_hooks": [
+        {
+          "instruction_type": "ore::DeployIxState",
+          "actions": [
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            }
+          ],
+          "lookup_by": null
+        },
+        {
+          "instruction_type": "ore::ResetIxState",
+          "actions": [
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            }
+          ],
+          "lookup_by": null
+        }
+      ],
       "computed_fields": [],
       "computed_field_specs": [],
-      "content_hash": "0f6ab01b53b2c7cc96c9962e4e0f4f41c9d760a3e57e0c95d318e6fad75c1799",
+      "content_hash": "8e12bc8dde1601c0ca8325710a21a6fa2c6d5bd64603836dffa90e618b1caa57",
       "views": []
     }
   ],
-  "content_hash": "8876cde182bf27828b6a84e503163fbc8d240c047a9e08e4024d076bfee8b8de"
+  "content_hash": "604ea3e38ae5e0fc487b8f542f20fea1fcf5965169a4d1665f16d7abd4bb2889"
 }
