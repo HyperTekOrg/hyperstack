@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.4.2...hyperstack-cli-v0.4.3) (2026-02-03)
+
+
+### Features
+
+* multi-IDL support with always-scoped naming ([d752008](https://github.com/HyperTekOrg/hyperstack/commit/d752008c8662b8dd91a4b411e9f9ff4404630f81))
+* unified multi-entity stack spec format with SDK generation ([00194c5](https://github.com/HyperTekOrg/hyperstack/commit/00194c58b1d1bfc5d7dc9f46506ebd9c35af7338))
+
+
+### Bug Fixes
+
+* Case matching in cli stack lookup ([b4da6a5](https://github.com/HyperTekOrg/hyperstack/commit/b4da6a5e7ca28e2d21ead0f0dd1e4023544f2f0d))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.4.2 to 0.4.3
+
 ## [0.4.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.4.1...hyperstack-cli-v0.4.2) (2026-02-01)
 
 

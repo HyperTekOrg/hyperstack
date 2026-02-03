@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.4.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.4.2...hyperstack-interpreter-v0.4.3) (2026-02-03)
+
+
+### Features
+
+* multi-IDL support with always-scoped naming ([d752008](https://github.com/HyperTekOrg/hyperstack/commit/d752008c8662b8dd91a4b411e9f9ff4404630f81))
+* unified multi-entity stack spec format with SDK generation ([00194c5](https://github.com/HyperTekOrg/hyperstack/commit/00194c58b1d1bfc5d7dc9f46506ebd9c35af7338))
+
+
+### Bug Fixes
+
+* always generate list views in multi-entity SDK codegen ([bc81e77](https://github.com/HyperTekOrg/hyperstack/commit/bc81e776088c9d18580a4f35d7a2a14a8e003e27))
+* correct lookup resolution and conditional mappings ([0c1ac80](https://github.com/HyperTekOrg/hyperstack/commit/0c1ac809d65eb6139b1208e041817ca9d0f73724))
+* reorder temporal index update after ReadOrInitState and handle missing state tables ([b086676](https://github.com/HyperTekOrg/hyperstack/commit/b0866765a01f21d75de860902899b8e3613eb96e))
+* resolve clippy warnings for Rust 1.91 ([10c1611](https://github.com/HyperTekOrg/hyperstack/commit/10c1611282babb70bbe70d19fb599c83654caa6c))
+* use field init shorthand in generated Rust SDK code ([ac7a5b1](https://github.com/HyperTekOrg/hyperstack/commit/ac7a5b1d963b5b133d5cc1486b77e73d1e4ac350))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-macros bumped from 0.4.2 to 0.4.3
+
 ## [0.4.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.4.1...hyperstack-interpreter-v0.4.2) (2026-02-01)
 
 
