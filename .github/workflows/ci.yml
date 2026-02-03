@@ -150,8 +150,8 @@ jobs:
 
       - name: Regenerate TypeScript SDKs
         run: |
-          hs sdk create typescript pumpfun-token --config stacks/pumpfun/hyperstack.toml
-          hs sdk create typescript ore-round --config stacks/ore/hyperstack.toml
+          hs sdk create typescript pumpfun --config stacks/pumpfun/hyperstack.toml
+          hs sdk create typescript ore --config stacks/ore/hyperstack.toml
 
       - name: Check for uncommitted changes
         run: |
@@ -168,8 +168,8 @@ jobs:
             echo ""
             echo "  cargo build --manifest-path stacks/pumpfun/Cargo.toml"
             echo "  cargo build --manifest-path stacks/ore/Cargo.toml"
-            echo "  hs sdk create typescript pumpfun-token --config stacks/pumpfun/hyperstack.toml"
-            echo "  hs sdk create typescript ore-round --config stacks/ore/hyperstack.toml"
+            echo "  hs sdk create typescript pumpfun --config stacks/pumpfun/hyperstack.toml"
+            echo "  hs sdk create typescript ore --config stacks/ore/hyperstack.toml"
             echo ""
             echo "Files that differ:"
             git status --porcelain stacks/sdk/
