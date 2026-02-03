@@ -23,11 +23,11 @@ pub mod my_stream {
 
 **Arguments:**
 
-| Argument        | Type                | Required | Description                                                                  |
-| --------------- | ------------------- | -------- | ---------------------------------------------------------------------------- |
+| Argument        | Type                | Required | Description                                                                                                                               |
+| --------------- | ------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `idl`           | `string` \| `array` | No\*     | Path(s) to Anchor IDL JSON file(s) relative to `Cargo.toml`. Use an array for multi-program stacks: `idl = ["ore.json", "entropy.json"]`. |
-| `proto`         | `string` \| `array` | No\*     | Path(s) to `.proto` files for Protobuf-based streams.                        |
-| `skip_decoders` | `bool`              | No       | If true, skips generating instruction decoders (useful for manual decoding). |
+| `proto`         | `string` \| `array` | No\*     | Path(s) to `.proto` files for Protobuf-based streams.                                                                                     |
+| `skip_decoders` | `bool`              | No       | If true, skips generating instruction decoders (useful for manual decoding).                                                              |
 
 _\* Either `idl` or `proto` must be provided._
 
@@ -71,16 +71,16 @@ The path prefix (`pump_sdk::accounts::`) is derived from the IDL's program name.
 
 **Arguments:**
 
-| Argument         | Type        | Required | Description                                             |
-| ---------------- | ----------- | -------- | ------------------------------------------------------- |
-| `from`           | `path`      | Yes      | Source account field (e.g., `AccountType::field_name`). |
-| `primary_key`    | `bool`      | No       | Marks this field as the primary key for the entity.     |
-| `lookup_index`   | `bool` \| `fn` | No    | Creates a lookup index for this field. Accepts an optional `register_from` parameter for cross-account PDA resolution (see [Cross-Account Resolution](#cross-account-resolution-with-register_from) below). |
-| `strategy`       | `Strategy`  | No       | Update strategy (default: `SetOnce`).                   |
-| `transform`      | `Transform` | No       | Transformation to apply before storing.                 |
-| `rename`         | `string`    | No       | Custom target field name in the projection.             |
-| `temporal_field` | `string`    | No       | Secondary field for temporal indexing.                  |
-| `join_on`        | `string`    | No       | Field to join on for multi-entity lookups.              |
+| Argument         | Type           | Required | Description                                                                                                                                                                                                 |
+| ---------------- | -------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `from`           | `path`         | Yes      | Source account field (e.g., `AccountType::field_name`).                                                                                                                                                     |
+| `primary_key`    | `bool`         | No       | Marks this field as the primary key for the entity.                                                                                                                                                         |
+| `lookup_index`   | `bool` \| `fn` | No       | Creates a lookup index for this field. Accepts an optional `register_from` parameter for cross-account PDA resolution (see [Cross-Account Resolution](#cross-account-resolution-with-register_from) below). |
+| `strategy`       | `Strategy`     | No       | Update strategy (default: `SetOnce`).                                                                                                                                                                       |
+| `transform`      | `Transform`    | No       | Transformation to apply before storing.                                                                                                                                                                     |
+| `rename`         | `string`       | No       | Custom target field name in the projection.                                                                                                                                                                 |
+| `temporal_field` | `string`       | No       | Secondary field for temporal indexing.                                                                                                                                                                      |
+| `join_on`        | `string`       | No       | Field to join on for multi-entity lookups.                                                                                                                                                                  |
 
 ### `#[from_instruction]`
 
@@ -228,11 +228,11 @@ pub bonding_curve: String,
 
 Each tuple in `register_from` specifies:
 
-| Position | Meaning | Example |
-|----------|---------|---------|
-| 1st | The instruction type to watch | `pump_sdk::instructions::Create` |
-| 2nd | The instruction account containing the PDA address | `accounts::bonding_curve` |
-| 3rd | The instruction account containing the entity's primary key | `accounts::mint` |
+| Position | Meaning                                                     | Example                          |
+| -------- | ----------------------------------------------------------- | -------------------------------- |
+| 1st      | The instruction type to watch                               | `pump_sdk::instructions::Create` |
+| 2nd      | The instruction account containing the PDA address          | `accounts::bonding_curve`        |
+| 3rd      | The instruction account containing the entity's primary key | `accounts::mint`                 |
 
 When any of these instructions are processed, Hyperstack registers the mapping `bonding_curve_address → mint`. Subsequent `BondingCurve` account updates are then routed to the correct `Token` entity.
 

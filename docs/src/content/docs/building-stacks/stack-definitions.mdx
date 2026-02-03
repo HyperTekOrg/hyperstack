@@ -86,15 +86,15 @@ Hyperstack derives the program name from the IDL metadata and generates a typed 
 
 Hyperstack provides several mapping attributes to populate your entity fields:
 
-| Attribute             | Source              | Description                                                                        |
-| --------------------- | ------------------- | ---------------------------------------------------------------------------------- |
+| Attribute             | Source              | Description                                                                                                                                                   |
+| --------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `#[map]`              | Account State       | Tracks fields within a Solana account. Updates whenever the account changes. Supports `lookup_index(register_from = [...])` for cross-account PDA resolution. |
-| `#[from_instruction]` | Instructions        | Extracts arguments or account keys from a specific instruction.                    |
-| `#[aggregate]`        | Events/Instructions | Computes running values (Sum, Count, etc.) from a stream of events.                |
-| `#[event]`            | Events              | Captures specific instructions as a log of events within the entity.               |
-| `#[snapshot]`         | Account State       | Captures the entire state of an account at a specific point in time.               |
-| `#[computed]`         | Local Fields        | Derives a new value by performing calculations on other fields in the same entity. |
-| `#[derive_from]`      | Instructions        | Populates fields by deriving data from instruction context.                        |
+| `#[from_instruction]` | Instructions        | Extracts arguments or account keys from a specific instruction.                                                                                               |
+| `#[aggregate]`        | Events/Instructions | Computes running values (Sum, Count, etc.) from a stream of events.                                                                                           |
+| `#[event]`            | Events              | Captures specific instructions as a log of events within the entity.                                                                                          |
+| `#[snapshot]`         | Account State       | Captures the entire state of an account at a specific point in time.                                                                                          |
+| `#[computed]`         | Local Fields        | Derives a new value by performing calculations on other fields in the same entity.                                                                            |
+| `#[derive_from]`      | Instructions        | Populates fields by deriving data from instruction context.                                                                                                   |
 
 ---
 

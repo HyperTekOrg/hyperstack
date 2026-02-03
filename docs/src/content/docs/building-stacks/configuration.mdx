@@ -114,14 +114,14 @@ rust_module = true                                     # Per-stack: generate as 
 
 Define stacks explicitly for custom naming or per-stack overrides. If not defined, stacks are auto-discovered from `.hyperstack/*.stack.json` files.
 
-| Option                   | Type    | Required | Description                                                   |
-| ------------------------ | ------- | -------- | ------------------------------------------------------------- |
-| `name`                   | string  | Yes      | Stack name (used for SDK generation and CLI commands)         |
-| `stack`                  | string  | Yes      | Stack name from your Rust code or path to `.stack.json` file  |
-| `description`            | string  | No       | Stack description                                           |
-| `typescript_output_file` | string  | No       | Per-stack TypeScript output file path                       |
-| `rust_output_crate`      | string  | No       | Per-stack Rust output crate/module directory                |
-| `rust_module`            | boolean | No       | Per-stack override for module vs crate generation           |
+| Option                   | Type    | Required | Description                                                  |
+| ------------------------ | ------- | -------- | ------------------------------------------------------------ |
+| `name`                   | string  | Yes      | Stack name (used for SDK generation and CLI commands)        |
+| `stack`                  | string  | Yes      | Stack name from your Rust code or path to `.stack.json` file |
+| `description`            | string  | No       | Stack description                                            |
+| `typescript_output_file` | string  | No       | Per-stack TypeScript output file path                        |
+| `rust_output_crate`      | string  | No       | Per-stack Rust output crate/module directory                 |
+| `rust_module`            | boolean | No       | Per-stack override for module vs crate generation            |
 
 ---
 
