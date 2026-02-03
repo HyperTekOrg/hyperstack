@@ -88,7 +88,7 @@ Hyperstack provides several mapping attributes to populate your entity fields:
 
 | Attribute             | Source              | Description                                                                        |
 | --------------------- | ------------------- | ---------------------------------------------------------------------------------- |
-| `#[map]`              | Account State       | Tracks fields within a Solana account. Updates whenever the account changes.       |
+| `#[map]`              | Account State       | Tracks fields within a Solana account. Updates whenever the account changes. Supports `lookup_index(register_from = [...])` for cross-account PDA resolution. |
 | `#[from_instruction]` | Instructions        | Extracts arguments or account keys from a specific instruction.                    |
 | `#[aggregate]`        | Events/Instructions | Computes running values (Sum, Count, etc.) from a stream of events.                |
 | `#[event]`            | Events              | Captures specific instructions as a log of events within the entity.               |
@@ -110,6 +110,24 @@ When data arrives, **Strategies** determine how the field value is updated. This
 | `Count`       | Increments the total by 1 for every matching event.                   |
 | `Append`      | Adds the incoming value to a list (creating an event log).            |
 | `Max` / `Min` | Keeps only the highest or lowest value seen.                          |
+
+---
+
+## Multi-Program Stacks
+
+A single stack can consume data from multiple Solana programs by passing an array of IDL files:
+
+```rust
+#[hyperstack(idl = ["idl/ore.json", "idl/entropy.json"])]
+pub mod ore_stream {
+    // ore_sdk::accounts::* and ore_sdk::instructions::* are available
+    // entropy_sdk::accounts::* and entropy_sdk::instructions::* are available
+}
+```
+
+Each IDL generates its own namespaced SDK module (e.g., `ore_sdk`, `entropy_sdk`). You can then map fields from any program's accounts and reference instructions from any program in `register_from`, `#[aggregate]`, `#[event]`, etc.
+
+To link accounts across programs, use `lookup_index(register_from = [...])` — see the [Macro Reference](/building-stacks/rust-dsl/macros#cross-account-resolution-with-register_from) for the full syntax and examples.
 
 ---
 

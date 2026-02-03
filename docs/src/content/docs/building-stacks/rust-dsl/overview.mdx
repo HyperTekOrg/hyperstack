@@ -76,12 +76,13 @@ Field paths use the `{name}_sdk::accounts::` and `{name}_sdk::instructions::` pr
 | `#[computed]`         | Derives values from other entity fields    |
 | `#[derive_from]`      | Populates from instruction metadata        |
 
-### Declarative Hooks
+### Cross-Account Resolution
 
-| Macro             | Purpose                                     |
-| ----------------- | ------------------------------------------- |
-| `#[resolve_key]`  | Custom primary key resolution (PDA lookups) |
-| `#[register_pda]` | Registers PDA mappings for reverse lookups  |
+| Syntax | Purpose |
+| ------ | ------- |
+| `lookup_index(register_from = [...])` | Inline PDA resolution on `#[map]` fields (preferred) |
+| `#[resolve_key]` | Advanced: custom primary key resolution |
+| `#[register_pda]` | Advanced: manual PDA mapping registration |
 
 ---
 

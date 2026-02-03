@@ -75,7 +75,7 @@ The path prefix (`pump_sdk::accounts::`) is derived from the IDL's program name.
 | ---------------- | ----------- | -------- | ------------------------------------------------------- |
 | `from`           | `path`      | Yes      | Source account field (e.g., `AccountType::field_name`). |
 | `primary_key`    | `bool`      | No       | Marks this field as the primary key for the entity.     |
-| `lookup_index`   | `bool`      | No       | Creates a searchable index for this field.              |
+| `lookup_index`   | `bool` \| `fn` | No    | Creates a lookup index for this field. Accepts an optional `register_from` parameter for cross-account PDA resolution (see [Cross-Account Resolution](#cross-account-resolution-with-register_from) below). |
 | `strategy`       | `Strategy`  | No       | Update strategy (default: `SetOnce`).                   |
 | `transform`      | `Transform` | No       | Transformation to apply before storing.                 |
 | `rename`         | `string`    | No       | Custom target field name in the projection.             |
@@ -203,9 +203,80 @@ pub last_updated: i64,
 
 ---
 
-## Declarative Hooks
+## Cross-Account Resolution with `register_from`
 
-Declarative hooks are used at the struct level (usually on empty marker structs) to define complex key resolution logic and PDA mappings.
+When an entity's state includes data from a **secondary account** (one that doesn't store the entity's primary key directly), you need a way to tell Hyperstack how to map that account's address back to an entity instance. The `lookup_index(register_from = [...])` syntax on `#[map]` handles this declaratively.
+
+### The Problem
+
+Consider a Solana program where a `BondingCurve` PDA is derived from a token `mint`. When a `BondingCurve` account update arrives, Hyperstack needs to know which `Token` entity (keyed by `mint`) it belongs to. The `BondingCurve` account itself doesn't store the `mint` — the relationship only exists in instructions that reference both accounts together.
+
+### The Solution
+
+Add `register_from` to a `lookup_index` field that maps the secondary account's address:
+
+```rust
+#[map(pump_sdk::accounts::BondingCurve::__account_address, lookup_index(
+    register_from = [
+        (pump_sdk::instructions::Create, accounts::bonding_curve, accounts::mint),
+        (pump_sdk::instructions::Buy, accounts::bonding_curve, accounts::mint),
+        (pump_sdk::instructions::Sell, accounts::bonding_curve, accounts::mint)
+    ]
+), strategy = SetOnce)]
+pub bonding_curve: String,
+```
+
+Each tuple in `register_from` specifies:
+
+| Position | Meaning | Example |
+|----------|---------|---------|
+| 1st | The instruction type to watch | `pump_sdk::instructions::Create` |
+| 2nd | The instruction account containing the PDA address | `accounts::bonding_curve` |
+| 3rd | The instruction account containing the entity's primary key | `accounts::mint` |
+
+When any of these instructions are processed, Hyperstack registers the mapping `bonding_curve_address → mint`. Subsequent `BondingCurve` account updates are then routed to the correct `Token` entity.
+
+### Cross-Program Example
+
+`register_from` also works across programs in multi-IDL stacks. For example, linking an entropy program's `Var` account to an ore program's `Round` entity:
+
+```rust
+#[hyperstack(idl = ["idl/ore.json", "idl/entropy.json"])]
+pub mod ore_stream {
+    // ... entity definition ...
+
+    #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
+    pub struct EntropyState {
+        #[map(entropy_sdk::accounts::Var::value, strategy = LastWrite, transform = Base58Encode)]
+        pub entropy_value: Option<String>,
+
+        // The lookup_index with register_from links Var accounts to Round entities
+        #[map(entropy_sdk::accounts::Var::__account_address, lookup_index(
+            register_from = [
+                (ore_sdk::instructions::Deploy, accounts::entropyVar, accounts::round),
+                (ore_sdk::instructions::Reset, accounts::entropyVar, accounts::round)
+            ]
+        ), strategy = SetOnce)]
+        pub entropy_var_address: Option<String>,
+    }
+}
+```
+
+Here, the `Deploy` and `Reset` instructions (from the ore program) reference both the `entropyVar` account (from the entropy program) and the `round` account. This is enough for Hyperstack to establish the mapping.
+
+:::tip[When to use `register_from`]
+Use `register_from` whenever you map fields from an account that **doesn't contain the entity's primary key in its own data**. If the account already contains the primary key (or its address _is_ the primary key), a plain `lookup_index` is sufficient.
+:::
+
+:::note[Advanced: `#[resolve_key]` / `#[register_pda]`]
+The `register_from` syntax generates the same code as the standalone `#[resolve_key]` and `#[register_pda]` declarative hooks described below. Those hooks remain available as power-user escape hatches for custom resolution strategies or non-standard instruction patterns, but `register_from` is the preferred approach for most use cases.
+:::
+
+---
+
+## Declarative Hooks (Advanced)
+
+Declarative hooks are struct-level annotations for custom key resolution logic and PDA mappings. For most use cases, prefer `lookup_index(register_from = [...])` on field mappings (see above). These hooks are available as escape hatches for advanced scenarios.
 
 ### `#[resolve_key]`
 
@@ -251,19 +322,6 @@ struct PdaMapper;
 | `pda_field`   | `field`  | Yes      | The field containing the PDA address (e.g., `accounts::user_pda`).  |
 | `primary_key` | `field`  | Yes      | The primary key to associate with this PDA (e.g., `args::user_id`). |
 | `lookup_name` | `string` | No       | The name of the registry to store this mapping in.                  |
-
-### `#[register_pda]`
-
-Registers a PDA mapping during an instruction to enable reverse lookups later.
-
-```rust
-#[register_pda(
-    instruction = CreateUser,
-    pda_field = accounts::user_pda,
-    primary_key = args::user_id
-)]
-struct PdaMapper;
-```
 
 ---
 
