@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.4.2...hyperstack-server-v0.4.3) (2026-02-03)
+
+
+### Features
+
+* multi-IDL support with always-scoped naming ([d752008](https://github.com/HyperTekOrg/hyperstack/commit/d752008c8662b8dd91a4b411e9f9ff4404630f81))
+
+
+### Bug Fixes
+
+* use entity cache for state view initial data and increase default cache limit ([393ea9d](https://github.com/HyperTekOrg/hyperstack/commit/393ea9d065d647c5a814a1180b967e1d867ad179))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.4.2 to 0.4.3
+
 ## [0.4.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.4.1...hyperstack-server-v0.4.2) (2026-02-01)
 
 

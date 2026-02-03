@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.4.2...hyperstack-macros-v0.4.3) (2026-02-03)
+
+
+### Features
+
+* add PDA resolution hooks and multi-program stack support ([f4210a0](https://github.com/HyperTekOrg/hyperstack/commit/f4210a0a665f75f60fce09634e9ddbdde3f6898c))
+* multi-IDL support with always-scoped naming ([d752008](https://github.com/HyperTekOrg/hyperstack/commit/d752008c8662b8dd91a4b411e9f9ff4404630f81))
+* unified multi-entity stack spec format with SDK generation ([00194c5](https://github.com/HyperTekOrg/hyperstack/commit/00194c58b1d1bfc5d7dc9f46506ebd9c35af7338))
+
+
+### Bug Fixes
+
+* correct lookup resolution and conditional mappings ([0c1ac80](https://github.com/HyperTekOrg/hyperstack/commit/0c1ac809d65eb6139b1208e041817ca9d0f73724))
+* resolve clippy warnings for Rust 1.91 ([10c1611](https://github.com/HyperTekOrg/hyperstack/commit/10c1611282babb70bbe70d19fb599c83654caa6c))
+
 ## [0.4.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.4.1...hyperstack-macros-v0.4.2) (2026-02-01)
 
 

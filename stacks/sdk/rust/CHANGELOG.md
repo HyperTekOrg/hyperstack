@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.4.2...hyperstack-stacks-v0.4.3) (2026-02-03)
+
+
+### Features
+
+* add Ore stack with Ore + Entropy dual-program support ([fc4c501](https://github.com/HyperTekOrg/hyperstack/commit/fc4c501bf20b5800d9ec331bdd6c2f9babd923f0))
+* align Rust ore SDK naming with TypeScript and add decoded types ([001caf2](https://github.com/HyperTekOrg/hyperstack/commit/001caf232809403f957cf3aeb0f351b746e067cf))
+* unified multi-entity stack spec format with SDK generation ([00194c5](https://github.com/HyperTekOrg/hyperstack/commit/00194c58b1d1bfc5d7dc9f46506ebd9c35af7338))
+
+
+### Bug Fixes
+
+* Regen ore stack sdk ([ab25187](https://github.com/HyperTekOrg/hyperstack/commit/ab25187d577cb6a3c47476301f4afc3c06c43cb5))
+* use field init shorthand in generated Rust SDK code ([ac7a5b1](https://github.com/HyperTekOrg/hyperstack/commit/ac7a5b1d963b5b133d5cc1486b77e73d1e4ac350))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-sdk bumped from 0.4.2 to 0.4.3
+
 ## [0.4.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.4.1...hyperstack-stacks-v0.4.2) (2026-02-01)
 
 
