@@ -447,21 +447,19 @@ pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStrea
                 }
             }
         }
-    } else {
-        if let Some((_brace, items)) = &mut module.content {
-            for sdk_tokens in &all_sdk_tokens {
-                if let Ok(generated_items) = syn::parse::<syn::File>(sdk_tokens.clone().into()) {
-                    for gen_item in generated_items.items {
-                        items.push(gen_item);
-                    }
+    } else if let Some((_brace, items)) = &mut module.content {
+        for sdk_tokens in &all_sdk_tokens {
+            if let Ok(generated_items) = syn::parse::<syn::File>(sdk_tokens.clone().into()) {
+                for gen_item in generated_items.items {
+                    items.push(gen_item);
                 }
             }
+        }
 
-            for parser_tokens in &all_parser_tokens {
-                if let Ok(generated_items) = syn::parse::<syn::File>(parser_tokens.clone().into()) {
-                    for gen_item in generated_items.items {
-                        items.push(gen_item);
-                    }
+        for parser_tokens in &all_parser_tokens {
+            if let Ok(generated_items) = syn::parse::<syn::File>(parser_tokens.clone().into()) {
+                for gen_item in generated_items.items {
+                    items.push(gen_item);
                 }
             }
         }

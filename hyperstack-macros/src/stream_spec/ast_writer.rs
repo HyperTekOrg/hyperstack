@@ -558,7 +558,7 @@ fn build_event_handler(
                 .as_ref()
                 .or(attr.inferred_instruction.as_ref())
         })
-        .map(|p| path_to_string(p));
+        .map(path_to_string);
     let (idl, program_name) = match &instruction_path_str {
         Some(path_str) => (
             find_idl_for_type(path_str, idls),

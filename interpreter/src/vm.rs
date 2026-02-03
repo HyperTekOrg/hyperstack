@@ -1348,7 +1348,7 @@ impl VmContext {
             self.warnings.clear();
         }
 
-        if self.instructions_executed % 1000 == 0 {
+        if self.instructions_executed.is_multiple_of(1000) {
             let state_ids: Vec<u32> = self.states.keys().cloned().collect();
             for state_id in state_ids {
                 let expired = self.cleanup_expired_when_ops(state_id, 60);
@@ -1383,7 +1383,7 @@ impl VmContext {
             handler_opcodes = handler.len(),
         )
     ))]
-    #[allow(clippy::type_complexity)]
+    #[allow(clippy::type_complexity, clippy::too_many_arguments)]
     fn execute_handler(
         &mut self,
         handler: &[OpCode],
@@ -1717,10 +1717,8 @@ impl VmContext {
                     value,
                 } => {
                     let was_set = self.set_field_if_null(*object, path, *value)?;
-                    if was_set {
-                        if should_emit(path) {
-                            dirty_tracker.mark_replaced(path);
-                        }
+                    if was_set && should_emit(path) {
+                        dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
                 }
@@ -1730,10 +1728,8 @@ impl VmContext {
                     value,
                 } => {
                     let was_updated = self.set_field_max(*object, path, *value)?;
-                    if was_updated {
-                        if should_emit(path) {
-                            dirty_tracker.mark_replaced(path);
-                        }
+                    if was_updated && should_emit(path) {
+                        dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
                 }
@@ -1943,19 +1939,15 @@ impl VmContext {
                     value,
                 } => {
                     let was_updated = self.set_field_sum(*object, path, *value)?;
-                    if was_updated {
-                        if should_emit(path) {
-                            dirty_tracker.mark_replaced(path);
-                        }
+                    if was_updated && should_emit(path) {
+                        dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
                 }
                 OpCode::SetFieldIncrement { object, path } => {
                     let was_updated = self.set_field_increment(*object, path)?;
-                    if was_updated {
-                        if should_emit(path) {
-                            dirty_tracker.mark_replaced(path);
-                        }
+                    if was_updated && should_emit(path) {
+                        dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
                 }
@@ -1965,10 +1957,8 @@ impl VmContext {
                     value,
                 } => {
                     let was_updated = self.set_field_min(*object, path, *value)?;
-                    if was_updated {
-                        if should_emit(path) {
-                            dirty_tracker.mark_replaced(path);
-                        }
+                    if was_updated && should_emit(path) {
+                        dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
                 }
@@ -2136,10 +2126,8 @@ impl VmContext {
 
                     if condition_met {
                         let was_updated = self.set_field_increment(*object, path)?;
-                        if was_updated {
-                            if should_emit(path) {
-                                dirty_tracker.mark_replaced(path);
-                            }
+                        if was_updated && should_emit(path) {
+                            dirty_tracker.mark_replaced(path);
                         }
                     }
                     pc += 1;
@@ -2162,10 +2150,8 @@ impl VmContext {
                                 let new_value =
                                     Self::get_value_at_path(&self.registers[*state], path);
 
-                                if new_value != *old_value {
-                                    if should_emit(path) {
-                                        dirty_tracker.mark_replaced(path);
-                                    }
+                                if new_value != *old_value && should_emit(path) {
+                                    dirty_tracker.mark_replaced(path);
                                 }
                             }
                         }

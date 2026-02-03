@@ -1388,16 +1388,16 @@ fn generate_stack_definition_multi(
 
         // Always include state view
         view_entries.push(format!(
-            "      state: stateView<{entity}>('{}'),",
-            format!("{}/state", entity_name),
-            entity = entity_pascal
+            "      state: stateView<{entity}>('{entity_name}/state'),",
+            entity = entity_pascal,
+            entity_name = entity_name
         ));
 
         // Always include list view (built-in view, like state)
         view_entries.push(format!(
-            "      list: listView<{entity}>('{}'),",
-            format!("{}/list", entity_name),
-            entity = entity_pascal
+            "      list: listView<{entity}>('{entity_name}/list'),",
+            entity = entity_pascal,
+            entity_name = entity_name
         ));
 
         // Include derived views

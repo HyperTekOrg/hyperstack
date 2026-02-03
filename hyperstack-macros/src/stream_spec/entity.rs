@@ -84,6 +84,7 @@ pub fn process_entity_struct(
 /// 2. Generates handlers for each source type
 /// 3. Writes the AST file at compile time
 /// 4. Generates the spec function and state struct
+#[allow(clippy::too_many_arguments)]
 pub fn process_entity_struct_with_idl(
     input: ItemStruct,
     entity_name: String,
@@ -530,7 +531,7 @@ pub fn process_entity_struct_with_idl(
                 .first()
                 .filter(|s| s.ends_with("_sdk"))
                 .map(|s| crate::event_type_helpers::program_name_from_sdk_prefix(s).to_string());
-            let prog = resolved_program.as_deref().or(program_name.as_deref());
+            let prog = resolved_program.as_deref().or(program_name);
             if let Some(p) = prog {
                 format!("{}::{}State", p, account_name)
             } else {
