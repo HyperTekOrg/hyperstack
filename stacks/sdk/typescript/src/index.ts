@@ -1,7 +1,8 @@
 // Re-export stack definitions and entity types (excluding internal ViewDef helpers)
 export {
-  PUMPFUNTOKEN_STACK,
-  type PumpfunTokenStack,
+  PUMPFUN_STREAM_STACK,
+  type PumpfunStreamStack,
+  type PumpfunStreamEntity,
   type PumpfunToken,
   type PumpfunTokenEvents,
   type PumpfunTokenId,
