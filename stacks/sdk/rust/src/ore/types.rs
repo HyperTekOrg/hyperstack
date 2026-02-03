@@ -55,17 +55,11 @@ pub struct OreRoundEntropy {
     #[serde(default)]
     pub entropy_value: Option<Option<String>>,
     #[serde(default)]
-    pub entropy_seed: Option<Option<String>>,
-    #[serde(default)]
-    pub entropy_slot_hash: Option<Option<String>>,
-    #[serde(default)]
     pub entropy_start_at: Option<Option<i64>>,
     #[serde(default)]
     pub entropy_end_at: Option<Option<i64>>,
     #[serde(default)]
     pub entropy_samples: Option<Option<u64>>,
-    #[serde(default)]
-    pub entropy_var_address: Option<Option<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -80,68 +74,6 @@ pub struct OreRound {
     pub metrics: OreRoundMetrics,
     #[serde(default)]
     pub entropy: OreRoundEntropy,
-    #[serde(default)]
-    pub round_snapshot: Option<Option<serde_json::Value>>,
-    #[serde(default)]
-    pub entropy_snapshot: Option<Option<serde_json::Value>>,
-}
-
-
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct Round {
-    #[serde(default)]
-    pub id: Option<u64>,
-    #[serde(default)]
-    pub deployed: Option<Vec<u64>>,
-    #[serde(default)]
-    pub slot_hash: Option<Vec<i64>>,
-    #[serde(default)]
-    pub count: Option<Vec<u64>>,
-    #[serde(default)]
-    pub expires_at: Option<u64>,
-    #[serde(default)]
-    pub motherlode: Option<u64>,
-    #[serde(default)]
-    pub rent_payer: Option<String>,
-    #[serde(default)]
-    pub top_miner: Option<String>,
-    #[serde(default)]
-    pub top_miner_reward: Option<u64>,
-    #[serde(default)]
-    pub total_deployed: Option<u64>,
-    #[serde(default)]
-    pub total_miners: Option<u64>,
-    #[serde(default)]
-    pub total_vaulted: Option<u64>,
-    #[serde(default)]
-    pub total_winnings: Option<u64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct Var {
-    #[serde(default)]
-    pub authority: Option<String>,
-    #[serde(default)]
-    pub id: Option<u64>,
-    #[serde(default)]
-    pub provider: Option<String>,
-    #[serde(default)]
-    pub commit: Option<Vec<i64>>,
-    #[serde(default)]
-    pub seed: Option<Vec<i64>>,
-    #[serde(default)]
-    pub slot_hash: Option<Vec<i64>>,
-    #[serde(default)]
-    pub value: Option<Vec<i64>>,
-    #[serde(default)]
-    pub samples: Option<u64>,
-    #[serde(default)]
-    pub is_auto: Option<u64>,
-    #[serde(default)]
-    pub start_at: Option<u64>,
-    #[serde(default)]
-    pub end_at: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

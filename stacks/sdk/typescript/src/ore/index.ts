@@ -3,7 +3,6 @@ export interface OreRoundEntropy {
   entropy_samples?: number | null;
   entropy_start_at?: number | null;
   entropy_value?: string | null;
-  entropy_value_bytes?: any[] | null;
 }
 
 export interface OreRoundId {
