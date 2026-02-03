@@ -29,14 +29,18 @@ pub struct IdlSpec {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IdlMetadata {
-    pub name: String,
-    pub version: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub version: Option<String>,
     #[serde(default)]
     pub address: Option<String>,
     #[serde(default)]
     pub spec: Option<String>,
     #[serde(default)]
     pub description: Option<String>,
+    #[serde(default)]
+    pub origin: Option<String>,
 }
 
 /// Steel-style discriminant format: {"type": "u8", "value": N}
@@ -252,14 +256,14 @@ impl IdlSpec {
     pub fn get_name(&self) -> &str {
         self.name
             .as_deref()
-            .or_else(|| self.metadata.as_ref().map(|m| m.name.as_str()))
+            .or_else(|| self.metadata.as_ref().and_then(|m| m.name.as_deref()))
             .unwrap_or("unknown")
     }
 
     pub fn get_version(&self) -> &str {
         self.version
             .as_deref()
-            .or_else(|| self.metadata.as_ref().map(|m| m.version.as_str()))
+            .or_else(|| self.metadata.as_ref().and_then(|m| m.version.as_deref()))
             .unwrap_or("0.1.0")
     }
 

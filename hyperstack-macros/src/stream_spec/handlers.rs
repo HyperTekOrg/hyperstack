@@ -295,16 +295,17 @@ pub fn convert_event_to_map_attributes(
         // Whole instruction capture - create a single mapping for the whole source
         map_attrs.push(parse::MapAttribute {
             source_type_path: instruction_path.clone(),
-            source_field_name: String::new(), // Empty = whole source
+            source_field_name: String::new(),
             target_field_name: target_field.to_string(),
             is_primary_key: false,
             is_lookup_index: false,
+            register_from: Vec::new(),
             temporal_field: None,
             strategy: event_attr.strategy.clone(),
             join_on: get_join_on_field(&event_attr.join_on),
             transform: None,
             is_instruction: true,
-            is_whole_source: true, // Mark as whole source
+            is_whole_source: true,
             lookup_by: event_attr.lookup_by.clone(),
         });
         return map_attrs;
@@ -321,9 +322,10 @@ pub fn convert_event_to_map_attributes(
         map_attrs.push(parse::MapAttribute {
             source_type_path: instruction_path.clone(),
             source_field_name: field_name.clone(),
-            target_field_name: format!("{}.{}", target_field, field_name), // Nested path
+            target_field_name: format!("{}.{}", target_field, field_name),
             is_primary_key: false,
             is_lookup_index: false,
+            register_from: Vec::new(),
             temporal_field: None,
             strategy: event_attr.strategy.clone(),
             join_on: get_join_on_field(&event_attr.join_on),
@@ -347,6 +349,7 @@ pub fn convert_event_to_map_attributes(
             target_field_name: format!("{}.{}", target_field, field_name),
             is_primary_key: false,
             is_lookup_index: false,
+            register_from: Vec::new(),
             temporal_field: None,
             strategy: event_attr.strategy.clone(),
             join_on: get_join_on_field(&event_attr.join_on),

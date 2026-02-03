@@ -4,7 +4,7 @@
 //! which generate SDK types, parsers, and entity processing from Anchor IDL files.
 //! Supports multiple IDLs for multi-program stacks.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use proc_macro::TokenStream;
 use quote::quote;
@@ -20,7 +20,10 @@ use crate::parse::idl as idl_parser;
 use crate::utils::{to_pascal_case, to_snake_case};
 
 use super::entity::process_entity_struct_with_idl;
-use super::handlers::generate_auto_resolver_functions;
+use super::handlers::{
+    generate_auto_resolver_functions, generate_pda_registration_functions,
+    generate_resolver_functions,
+};
 
 struct IdlInfo {
     idl: idl_parser::IdlSpec,
@@ -161,6 +164,13 @@ pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStrea
             }
         }
     }
+
+    collect_register_from_specs(
+        &entity_structs,
+        &section_structs,
+        &mut resolver_hooks,
+        &mut pda_registrations,
+    );
 
     for resolve_attr in &resolver_hooks {
         let account_name = resolve_attr
@@ -315,13 +325,39 @@ pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStrea
                         items.push(gen_item);
                     }
                 }
-                if !result.auto_resolver_hooks.is_empty() {
-                    let auto_fns = generate_auto_resolver_functions(&result.auto_resolver_hooks);
-                    if let Ok(generated_items) = syn::parse::<syn::File>(auto_fns.into()) {
-                        for gen_item in generated_items.items {
-                            items.push(gen_item);
-                        }
+            }
+
+            let mut seen_auto_resolver_fns = HashSet::new();
+            let mut deduped_auto_hooks = Vec::new();
+            for result in &all_outputs {
+                for hook in &result.auto_resolver_hooks {
+                    let account_name =
+                        crate::event_type_helpers::strip_event_type_suffix(&hook.account_type);
+                    let fn_name = format!("resolve_{}_key", to_snake_case(account_name));
+                    if seen_auto_resolver_fns.insert(fn_name) {
+                        deduped_auto_hooks.push(hook.clone());
                     }
+                }
+            }
+            if !deduped_auto_hooks.is_empty() {
+                let auto_fns = generate_auto_resolver_functions(&deduped_auto_hooks);
+                if let Ok(generated_items) = syn::parse::<syn::File>(auto_fns.into()) {
+                    for gen_item in generated_items.items {
+                        items.push(gen_item);
+                    }
+                }
+            }
+
+            let primary_idl = idl_infos.first().map(|info| &info.idl);
+            let resolver_fns = generate_resolver_functions(&resolver_hooks, primary_idl);
+            let pda_registration_fns = generate_pda_registration_functions(&pda_registrations);
+            let combined_hook_fns: proc_macro2::TokenStream = quote! {
+                #resolver_fns
+                #pda_registration_fns
+            };
+            if let Ok(generated_items) = syn::parse::<syn::File>(combined_hook_fns.into()) {
+                for gen_item in generated_items.items {
+                    items.push(gen_item);
                 }
             }
 
@@ -335,10 +371,13 @@ pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStrea
                 .map(|info| info.program_id.clone())
                 .collect();
 
-            let all_idl_snapshots: Vec<_> = entity_asts
-                .first()
-                .and_then(|e| e.idl.clone())
-                .into_iter()
+            let all_idl_snapshots: Vec<_> = idl_infos
+                .iter()
+                .map(|info| {
+                    let mut snapshot = crate::ast::writer::convert_idl_to_snapshot(&info.idl);
+                    snapshot.program_id = Some(info.program_id.clone());
+                    snapshot
+                })
                 .collect();
 
             let stack_spec = SerializableStackSpec {
@@ -420,4 +459,56 @@ pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStrea
         #module
     }
     .into()
+}
+
+fn collect_register_from_specs(
+    entity_structs: &[syn::ItemStruct],
+    section_structs: &HashMap<String, syn::ItemStruct>,
+    resolver_hooks: &mut Vec<parse::ResolveKeyAttribute>,
+    pda_registrations: &mut Vec<parse::RegisterPdaAttribute>,
+) {
+    let mut all_structs_to_scan: Vec<&syn::ItemStruct> = entity_structs.iter().collect();
+    all_structs_to_scan.extend(section_structs.values());
+
+    for item_struct in all_structs_to_scan {
+        if let syn::Fields::Named(fields) = &item_struct.fields {
+            for field in &fields.named {
+                let field_name = field
+                    .ident
+                    .as_ref()
+                    .map(|i| i.to_string())
+                    .unwrap_or_default();
+                for attr in &field.attrs {
+                    if let Ok(Some(map_attrs)) = parse::parse_map_attribute(attr, &field_name) {
+                        for map_attr in &map_attrs {
+                            if !map_attr.register_from.is_empty() {
+                                let account_path = map_attr.source_type_path.clone();
+                                let instruction_paths: Vec<syn::Path> = map_attr
+                                    .register_from
+                                    .iter()
+                                    .map(|rf| rf.instruction_path.clone())
+                                    .collect();
+
+                                resolver_hooks.push(parse::ResolveKeyAttribute {
+                                    account_path,
+                                    strategy: "pda_reverse_lookup".to_string(),
+                                    lookup_name: None,
+                                    queue_until: instruction_paths,
+                                });
+
+                                for rf in &map_attr.register_from {
+                                    pda_registrations.push(parse::RegisterPdaAttribute {
+                                        instruction_path: rf.instruction_path.clone(),
+                                        pda_field: rf.pda_field.clone(),
+                                        primary_key_field: rf.primary_key_field.clone(),
+                                        lookup_name: "default_pda_lookup".to_string(),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

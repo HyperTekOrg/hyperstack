@@ -48,7 +48,6 @@ use super::computed::{
 };
 use super::handlers::{
     convert_event_to_map_attributes, determine_event_instruction, extract_account_type_from_field,
-    generate_pda_registration_functions, generate_resolver_functions,
 };
 use super::sections::{
     self as sections, extract_section_from_struct_with_idl, is_primitive_or_wrapper,
@@ -317,6 +316,7 @@ pub fn process_entity_struct_with_idl(
                             target_field_name: snapshot_attr.target_field_name.clone(),
                             is_primary_key: false,
                             is_lookup_index: false,
+                            register_from: Vec::new(),
                             temporal_field: None,
                             strategy: snapshot_attr.strategy.clone(),
                             join_on: snapshot_attr
@@ -363,6 +363,7 @@ pub fn process_entity_struct_with_idl(
                             target_field_name: aggr_attr.target_field_name.clone(),
                             is_primary_key: false,
                             is_lookup_index: false,
+                            register_from: Vec::new(),
                             temporal_field: None,
                             strategy: aggr_attr.strategy.clone(),
                             join_on: aggr_attr.join_on.as_ref().map(|fs| fs.ident.to_string()),
@@ -508,16 +509,22 @@ pub fn process_entity_struct_with_idl(
     let explicit_account_types: HashSet<String> = resolver_hooks
         .iter()
         .map(|h| {
-            let name = h
+            let segments: Vec<String> = h
                 .account_path
                 .segments
-                .last()
+                .iter()
                 .map(|seg| seg.ident.to_string())
-                .unwrap_or_default();
-            if let Some(program_name) = program_name {
-                format!("{}::{}State", program_name, name)
+                .collect();
+            let account_name = segments.last().cloned().unwrap_or_default();
+            let resolved_program = segments
+                .first()
+                .filter(|s| s.ends_with("_sdk"))
+                .map(|s| crate::event_type_helpers::program_name_from_sdk_prefix(s).to_string());
+            let prog = resolved_program.as_deref().or(program_name.as_deref());
+            if let Some(p) = prog {
+                format!("{}::{}State", p, account_name)
             } else {
-                format!("{}State", name)
+                format!("{}State", account_name)
             }
         })
         .collect();
@@ -588,10 +595,6 @@ pub fn process_entity_struct_with_idl(
         }
     };
 
-    // Level 1: Generate functions from declarative PDA macros
-    let resolver_fns = generate_resolver_functions(&resolver_hooks, idl);
-    let pda_registration_fns = generate_pda_registration_functions(&pda_registrations);
-
     // Generate field accessors for type-safe view definitions
     let field_accessors = codegen::generate_field_accessors(&section_specs);
 
@@ -636,10 +639,6 @@ pub fn process_entity_struct_with_idl(
 
             hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec::from_serializable(spec)
         }
-
-        // Generated from declarative PDA macros
-        #resolver_fns
-        #pda_registration_fns
 
         #(#handler_fns)*
     };

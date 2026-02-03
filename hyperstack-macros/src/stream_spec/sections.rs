@@ -413,6 +413,7 @@ pub fn process_nested_struct(
                             target_field_name: snapshot_attr.target_field_name.clone(),
                             is_primary_key: false,
                             is_lookup_index: false,
+                            register_from: Vec::new(),
                             temporal_field: None,
                             strategy: snapshot_attr.strategy.clone(),
                             join_on: snapshot_attr
@@ -421,7 +422,7 @@ pub fn process_nested_struct(
                                 .map(|fs| fs.ident.to_string()),
                             transform: None,
                             is_instruction: false,
-                            is_whole_source: true, // Mark as whole source capture
+                            is_whole_source: true,
                             lookup_by: snapshot_attr.lookup_by.clone(),
                         };
 
@@ -459,6 +460,7 @@ pub fn process_nested_struct(
                             target_field_name: aggr_attr.target_field_name.clone(),
                             is_primary_key: false,
                             is_lookup_index: false,
+                            register_from: Vec::new(),
                             temporal_field: None,
                             strategy: aggr_attr.strategy.clone(),
                             join_on: aggr_attr.join_on.as_ref().map(|fs| fs.ident.to_string()),

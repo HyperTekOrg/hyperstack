@@ -9,19 +9,27 @@ use syn::parse::{Parse, ParseStream};
 use syn::{Attribute, Path, Token};
 
 #[derive(Debug, Clone)]
+pub struct RegisterFromSpec {
+    pub instruction_path: Path,
+    pub pda_field: FieldSpec,
+    pub primary_key_field: FieldSpec,
+}
+
+#[derive(Debug, Clone)]
 pub struct MapAttribute {
     pub source_type_path: Path,
     pub source_field_name: String,
     pub target_field_name: String,
     pub is_primary_key: bool,
     pub is_lookup_index: bool,
+    pub register_from: Vec<RegisterFromSpec>,
     pub temporal_field: Option<String>,
     pub strategy: String,
     pub join_on: Option<String>,
     pub transform: Option<String>,
     pub is_instruction: bool,
-    pub is_whole_source: bool, // NEW: true for whole instruction capture
-    pub lookup_by: Option<FieldSpec>, // For aggregate/event lookup
+    pub is_whole_source: bool,
+    pub lookup_by: Option<FieldSpec>,
 }
 
 #[derive(Debug, Clone)]
@@ -87,6 +95,7 @@ struct MapAttributeArgs {
     source_paths: Vec<Path>,
     is_primary_key: bool,
     is_lookup_index: bool,
+    register_from: Vec<RegisterFromSpec>,
     temporal_field: Option<String>,
     strategy: Option<String>,
     rename: Option<String>,
@@ -113,6 +122,7 @@ impl Parse for MapAttributeArgs {
 
         let mut is_primary_key = false;
         let mut is_lookup_index = false;
+        let mut register_from = Vec::new();
         let mut temporal_field = None;
         let mut strategy = None;
         let mut rename = None;
@@ -134,6 +144,11 @@ impl Parse for MapAttributeArgs {
                     is_primary_key = true;
                 } else if ident_str == "lookup_index" {
                     is_lookup_index = true;
+                    if input.peek(syn::token::Paren) {
+                        let content;
+                        syn::parenthesized!(content in input);
+                        register_from = parse_register_from_list(&content)?;
+                    }
                 } else if ident_str == "temporal_field" {
                     input.parse::<Token![=]>()?;
                     let temporal_lit: syn::LitStr = input.parse()?;
@@ -169,6 +184,7 @@ impl Parse for MapAttributeArgs {
             source_paths,
             is_primary_key,
             is_lookup_index,
+            register_from,
             temporal_field,
             strategy,
             rename,
@@ -208,6 +224,7 @@ pub fn parse_map_attribute(
             target_field_name: target_name.clone(),
             is_primary_key: args.is_primary_key,
             is_lookup_index: args.is_lookup_index,
+            register_from: args.register_from.clone(),
             temporal_field: args.temporal_field.clone(),
             strategy: strategy.clone(),
             join_on: args.join_on.clone(),
@@ -251,6 +268,7 @@ pub fn parse_from_instruction_attribute(
             target_field_name: target_name.clone(),
             is_primary_key: args.is_primary_key,
             is_lookup_index: args.is_lookup_index,
+            register_from: args.register_from.clone(),
             temporal_field: args.temporal_field.clone(),
             strategy: strategy.clone(),
             join_on: args.join_on.clone(),
@@ -1310,6 +1328,44 @@ pub fn parse_derive_from_attribute(
         transform: args.transform,
         target_field_name: target_field_name.to_string(),
     }))
+}
+
+fn parse_register_from_list(input: ParseStream) -> syn::Result<Vec<RegisterFromSpec>> {
+    let ident: syn::Ident = input.parse()?;
+    if ident != "register_from" {
+        return Err(syn::Error::new(
+            ident.span(),
+            format!("Expected 'register_from', found '{}'", ident),
+        ));
+    }
+    input.parse::<Token![=]>()?;
+
+    let content;
+    syn::bracketed!(content in input);
+
+    let mut specs = Vec::new();
+    while !content.is_empty() {
+        let tuple_content;
+        syn::parenthesized!(tuple_content in content);
+
+        let instruction_path: Path = tuple_content.parse()?;
+        tuple_content.parse::<Token![,]>()?;
+        let pda_field = parse_field_spec(&tuple_content)?;
+        tuple_content.parse::<Token![,]>()?;
+        let primary_key_field = parse_field_spec(&tuple_content)?;
+
+        specs.push(RegisterFromSpec {
+            instruction_path,
+            pda_field,
+            primary_key_field,
+        });
+
+        if !content.is_empty() {
+            content.parse::<Token![,]>()?;
+        }
+    }
+
+    Ok(specs)
 }
 
 // #[resolve_key] Attribute Parser
