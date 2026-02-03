@@ -22,7 +22,7 @@ pub struct PumpfunStreamStackViews {
 impl Views for PumpfunStreamStackViews {
     fn from_builder(builder: ViewBuilder) -> Self {
         Self {
-            pumpfun_token: PumpfunTokenEntityViews { builder: builder },
+            pumpfun_token: PumpfunTokenEntityViews { builder },
         }
     }
 }

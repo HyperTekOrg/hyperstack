@@ -743,15 +743,14 @@ fn generate_stack_entity_rs(
         .enumerate()
         .map(|(i, name)| {
             let snake = to_snake_case(name);
-            let builder_expr = if i < entity_names.len() - 1 {
-                "builder.clone()"
+            if i < entity_names.len() - 1 {
+                format!(
+                    "            {}: {}EntityViews {{ builder: builder.clone() }},",
+                    snake, name
+                )
             } else {
-                "builder"
-            };
-            format!(
-                "            {}: {}EntityViews {{ builder: {} }},",
-                snake, name, builder_expr
-            )
+                format!("            {}: {}EntityViews {{ builder }},", snake, name)
+            }
         })
         .collect();
 
