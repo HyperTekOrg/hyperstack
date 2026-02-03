@@ -144,7 +144,10 @@ pub use hyperstack_sdk::{{ConnectionState, HyperStack, Stack, Update, Views}};
         let mut generated = HashSet::new();
 
         for section in &self.spec.sections {
-            if !Self::is_root_section(&section.name) && generated.insert(section.name.clone()) {
+            if !Self::is_root_section(&section.name)
+                && section.fields.iter().any(|field| field.emit)
+                && generated.insert(section.name.clone())
+            {
                 output.push_str(&self.generate_struct_for_section(section));
                 output.push_str("\n\n");
             }
@@ -162,6 +165,9 @@ pub use hyperstack_sdk::{{ConnectionState, HyperStack, Stack, Update, Views}};
         let mut fields = Vec::new();
 
         for field in &section.fields {
+            if !field.emit {
+                continue;
+            }
             let field_name = to_snake_case(&field.field_name);
             let rust_type = self.field_type_to_rust(field);
 
@@ -186,7 +192,9 @@ pub use hyperstack_sdk::{{ConnectionState, HyperStack, Stack, Update, Views}};
         let mut fields = Vec::new();
 
         for section in &self.spec.sections {
-            if !Self::is_root_section(&section.name) {
+            if !Self::is_root_section(&section.name)
+                && section.fields.iter().any(|field| field.emit)
+            {
                 let field_name = to_snake_case(&section.name);
                 let type_name = format!("{}{}", self.entity_name, to_pascal_case(&section.name));
                 fields.push(format!(
@@ -199,6 +207,9 @@ pub use hyperstack_sdk::{{ConnectionState, HyperStack, Stack, Update, Views}};
         for section in &self.spec.sections {
             if Self::is_root_section(&section.name) {
                 for field in &section.fields {
+                    if !field.emit {
+                        continue;
+                    }
                     let field_name = to_snake_case(&field.field_name);
                     let rust_type = self.field_type_to_rust(field);
                     fields.push(format!(
@@ -221,6 +232,9 @@ pub use hyperstack_sdk::{{ConnectionState, HyperStack, Stack, Update, Views}};
 
         for section in &self.spec.sections {
             for field in &section.fields {
+                if !field.emit {
+                    continue;
+                }
                 if let Some(resolved) = &field.resolved_type {
                     if generated.insert(resolved.type_name.clone()) {
                         output.push_str("\n\n");

@@ -459,6 +459,20 @@ pub struct SerializableFieldMapping {
     pub source: MappingSource,
     pub transform: Option<Transformation>,
     pub population: PopulationStrategy,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<ConditionExpr>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<String>,
+    #[serde(default = "default_emit", skip_serializing_if = "is_true")]
+    pub emit: bool,
+}
+
+fn default_emit() -> bool {
+    true
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -527,6 +541,8 @@ pub struct FieldTypeInfo {
     /// Resolved type information for complex types (instructions, accounts, custom types)
     #[serde(default)]
     pub resolved_type: Option<ResolvedStructType>,
+    #[serde(default = "default_emit", skip_serializing_if = "is_true")]
+    pub emit: bool,
 }
 
 /// Resolved structure type with field information from IDL

@@ -166,7 +166,11 @@ pub fn process_entity_struct_with_idl(
                                 &rust_type_name,
                                 idls,
                             );
-                            root_fields.push(field_type_info);
+                            root_fields.push(field_emit_override(
+                                field,
+                                field_name,
+                                field_type_info,
+                            ));
                         }
                     }
                 }
@@ -179,7 +183,7 @@ pub fn process_entity_struct_with_idl(
                 if field_type_info.resolved_type.is_some()
                     || field_type_info.base_type == crate::ast::BaseType::Object
                 {
-                    root_fields.push(field_type_info);
+                    root_fields.push(field_emit_override(field, field_name, field_type_info));
                 }
             }
         }
@@ -327,6 +331,9 @@ pub fn process_entity_struct_with_idl(
                             is_instruction: false,
                             is_whole_source: true, // Mark as whole source snapshot
                             lookup_by: snapshot_attr.lookup_by.clone(),
+                            condition: None,
+                            when: snapshot_attr.when.clone(),
+                            emit: true,
                         };
 
                         sources_by_type
@@ -371,6 +378,9 @@ pub fn process_entity_struct_with_idl(
                             is_instruction: true,
                             is_whole_source: false,
                             lookup_by: aggr_attr.lookup_by.clone(),
+                            condition: None,
+                            when: None,
+                            emit: true,
                         };
 
                         // Add to sources_by_type for handler generation
@@ -648,6 +658,37 @@ pub fn process_entity_struct_with_idl(
         auto_resolver_hooks,
         ast_spec: Some(ast),
     }
+}
+
+fn field_emit_override(
+    field: &syn::Field,
+    field_name: String,
+    mut field_type_info: FieldTypeInfo,
+) -> FieldTypeInfo {
+    let mut found_mapping = false;
+    let mut any_emit = false;
+
+    for attr in &field.attrs {
+        if let Ok(Some(map_attrs)) = parse::parse_map_attribute(attr, &field_name) {
+            found_mapping = true;
+            if map_attrs.iter().any(|m| m.emit) {
+                any_emit = true;
+            }
+        }
+
+        if let Ok(Some(map_attrs)) = parse::parse_from_instruction_attribute(attr, &field_name) {
+            found_mapping = true;
+            if map_attrs.iter().any(|m| m.emit) {
+                any_emit = true;
+            }
+        }
+    }
+
+    if found_mapping {
+        field_type_info.emit = any_emit;
+    }
+
+    field_type_info
 }
 
 // ============================================================================

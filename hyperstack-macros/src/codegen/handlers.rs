@@ -11,8 +11,9 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 use crate::ast::{
-    FieldPath, IdlSerializationSnapshot, KeyResolutionStrategy, MappingSource, PopulationStrategy,
-    SerializableFieldMapping, SerializableHandlerSpec, SourceSpec, Transformation,
+    ComparisonOp, ConditionExpr, FieldPath, IdlSerializationSnapshot, KeyResolutionStrategy,
+    LogicalOp, MappingSource, ParsedCondition, PopulationStrategy, SerializableFieldMapping,
+    SerializableHandlerSpec, SourceSpec, Transformation,
 };
 
 /// Build handler code from a serializable handler spec.
@@ -212,7 +213,7 @@ fn build_field_mapping_code(mapping: &SerializableFieldMapping) -> TokenStream {
     let source_code = build_mapping_source_code(&mapping.source);
     let population_code = build_population_strategy_code(&mapping.population);
 
-    let base_mapping = quote! {
+    let mut mapping_code = quote! {
         hyperstack::runtime::hyperstack_interpreter::ast::TypedFieldMapping::new(
             #target_path.to_string(),
             #source_code,
@@ -220,15 +221,111 @@ fn build_field_mapping_code(mapping: &SerializableFieldMapping) -> TokenStream {
         )
     };
 
-    // Add transform if present
-    match &mapping.transform {
-        Some(transform) => {
-            let transform_code = build_transformation_code(transform);
+    if let Some(transform) = &mapping.transform {
+        let transform_code = build_transformation_code(transform);
+        mapping_code = quote! {
+            #mapping_code.with_transform(#transform_code)
+        };
+    }
+
+    if let Some(condition) = &mapping.condition {
+        let condition_code = build_condition_expr_code(condition);
+        mapping_code = quote! {
+            #mapping_code.with_condition(#condition_code)
+        };
+    }
+
+    if let Some(when) = &mapping.when {
+        mapping_code = quote! {
+            #mapping_code.with_when(#when.to_string())
+        };
+    }
+
+    if !mapping.emit {
+        mapping_code = quote! {
+            #mapping_code.with_emit(false)
+        };
+    }
+
+    mapping_code
+}
+
+fn build_condition_expr_code(condition: &ConditionExpr) -> TokenStream {
+    let expression = &condition.expression;
+    let parsed_code = match &condition.parsed {
+        Some(parsed) => {
+            let parsed_code = build_parsed_condition_code(parsed);
+            quote! { Some(#parsed_code) }
+        }
+        None => quote! { None },
+    };
+
+    quote! {
+        hyperstack::runtime::hyperstack_interpreter::ast::ConditionExpr {
+            expression: #expression.to_string(),
+            parsed: #parsed_code,
+        }
+    }
+}
+
+fn build_parsed_condition_code(condition: &ParsedCondition) -> TokenStream {
+    match condition {
+        ParsedCondition::Comparison { field, op, value } => {
+            let field_code = build_field_path_code(field);
+            let op_code = build_comparison_op_code(op);
+            let value_str = serde_json::to_string(value).unwrap_or_else(|_| "null".to_string());
             quote! {
-                #base_mapping.with_transform(#transform_code)
+                hyperstack::runtime::hyperstack_interpreter::ast::ParsedCondition::Comparison {
+                    field: #field_code,
+                    op: #op_code,
+                    value: hyperstack::runtime::serde_json::from_str(#value_str)
+                        .unwrap_or(hyperstack::runtime::serde_json::Value::Null),
+                }
             }
         }
-        None => base_mapping,
+        ParsedCondition::Logical { op, conditions } => {
+            let op_code = build_logical_op_code(op);
+            let nested: Vec<TokenStream> =
+                conditions.iter().map(build_parsed_condition_code).collect();
+            quote! {
+                hyperstack::runtime::hyperstack_interpreter::ast::ParsedCondition::Logical {
+                    op: #op_code,
+                    conditions: vec![#(#nested),*],
+                }
+            }
+        }
+    }
+}
+
+fn build_comparison_op_code(op: &ComparisonOp) -> TokenStream {
+    match op {
+        ComparisonOp::Equal => {
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::Equal }
+        }
+        ComparisonOp::NotEqual => {
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::NotEqual }
+        }
+        ComparisonOp::GreaterThan => {
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::GreaterThan }
+        }
+        ComparisonOp::GreaterThanOrEqual => {
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::GreaterThanOrEqual }
+        }
+        ComparisonOp::LessThan => {
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::LessThan }
+        }
+        ComparisonOp::LessThanOrEqual => {
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::LessThanOrEqual }
+        }
+    }
+}
+
+fn build_logical_op_code(op: &LogicalOp) -> TokenStream {
+    match op {
+        LogicalOp::And => {
+            quote! { hyperstack::runtime::hyperstack_interpreter::ast::LogicalOp::And }
+        }
+        LogicalOp::Or => quote! { hyperstack::runtime::hyperstack_interpreter::ast::LogicalOp::Or },
     }
 }
 

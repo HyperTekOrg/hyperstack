@@ -121,6 +121,14 @@ fn find_top_level_operator(expr: &str, op: &str) -> Option<usize> {
 fn parse_value(value: &str) -> Option<serde_json::Value> {
     use serde_json::Value;
 
+    let value_trimmed = value.trim();
+    if value_trimmed == "ZERO_32" {
+        return Some(Value::Array(vec![Value::Number(0.into()); 32]));
+    }
+    if value_trimmed == "ZERO_64" {
+        return Some(Value::Array(vec![Value::Number(0.into()); 64]));
+    }
+
     // Remove underscores from numeric literals (Rust style: 1_000_000)
     let value_clean = value.replace('_', "");
 
@@ -193,6 +201,33 @@ mod tests {
                 assert_eq!(field.segments, vec!["data", "amount"]);
                 assert!(matches!(op, ComparisonOp::GreaterThanOrEqual));
                 assert_eq!(value, serde_json::json!(500));
+            }
+            _ => panic!("Expected comparison"),
+        }
+    }
+
+    #[test]
+    fn test_zero_32_constant() {
+        let parsed = parse_condition_expression("value != ZERO_32").unwrap();
+        match parsed {
+            ParsedCondition::Comparison { field, op, value } => {
+                assert_eq!(field.segments, vec!["value"]);
+                assert!(matches!(op, ComparisonOp::NotEqual));
+                let arr = value.as_array().unwrap();
+                assert_eq!(arr.len(), 32);
+                assert!(arr.iter().all(|v| v == &serde_json::json!(0)));
+            }
+            _ => panic!("Expected comparison"),
+        }
+    }
+
+    #[test]
+    fn test_zero_64_constant() {
+        let parsed = parse_condition_expression("data != ZERO_64").unwrap();
+        match parsed {
+            ParsedCondition::Comparison { value, .. } => {
+                let arr = value.as_array().unwrap();
+                assert_eq!(arr.len(), 64);
             }
             _ => panic!("Expected comparison"),
         }

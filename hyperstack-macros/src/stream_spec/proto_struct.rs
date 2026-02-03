@@ -277,6 +277,14 @@ pub fn process_struct_with_context(
                 mapping_expr
             };
 
+            let mapping_expr = if !mapping.emit {
+                quote! {
+                    #mapping_expr.with_emit(false)
+                }
+            } else {
+                mapping_expr
+            };
+
             field_mapping_code.push(mapping_expr);
 
             if mapping.is_primary_key {

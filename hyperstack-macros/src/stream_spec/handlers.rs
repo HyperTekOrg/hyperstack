@@ -307,6 +307,9 @@ pub fn convert_event_to_map_attributes(
             is_instruction: true,
             is_whole_source: true,
             lookup_by: event_attr.lookup_by.clone(),
+            condition: None,
+            when: None,
+            emit: true,
         });
         return map_attrs;
     }
@@ -333,6 +336,9 @@ pub fn convert_event_to_map_attributes(
             is_instruction: true,
             is_whole_source: false,
             lookup_by: event_attr.lookup_by.clone(),
+            condition: None,
+            when: None,
+            emit: true,
         });
     }
 
@@ -357,6 +363,9 @@ pub fn convert_event_to_map_attributes(
             is_instruction: true,
             is_whole_source: false,
             lookup_by: event_attr.lookup_by.clone(),
+            condition: None,
+            when: None,
+            emit: true,
         });
     }
 

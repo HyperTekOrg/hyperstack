@@ -46,8 +46,9 @@ pub fn extract_section_from_struct_with_idl(
                 let field_name = field_ident.to_string();
                 let field_ty = &field.ty;
                 let rust_type_name = quote::quote!(#field_ty).to_string();
-                let field_type_info =
+                let mut field_type_info =
                     analyze_field_type_with_idl(&field_name, &rust_type_name, idls);
+                field_type_info.emit = field_emit_from_attrs(field, &field_name);
                 fields.push(field_type_info);
             }
         }
@@ -58,6 +59,33 @@ pub fn extract_section_from_struct_with_idl(
         fields,
         is_nested_struct: parent_field.is_some(),
         parent_field,
+    }
+}
+
+fn field_emit_from_attrs(field: &syn::Field, field_name: &str) -> bool {
+    let mut found_mapping = false;
+    let mut any_emit = false;
+
+    for attr in &field.attrs {
+        if let Ok(Some(map_attrs)) = parse::parse_map_attribute(attr, field_name) {
+            found_mapping = true;
+            if map_attrs.iter().any(|m| m.emit) {
+                any_emit = true;
+            }
+        }
+
+        if let Ok(Some(map_attrs)) = parse::parse_from_instruction_attribute(attr, field_name) {
+            found_mapping = true;
+            if map_attrs.iter().any(|m| m.emit) {
+                any_emit = true;
+            }
+        }
+    }
+
+    if found_mapping {
+        any_emit
+    } else {
+        true
     }
 }
 
@@ -96,6 +124,7 @@ pub fn analyze_field_type_with_idl(
             inner_type: Some(inner.clone()),
             source_path: None,
             resolved_type,
+            emit: true,
         };
     }
 
@@ -116,6 +145,7 @@ pub fn analyze_field_type_with_idl(
             inner_type: Some(inner.clone()),
             source_path: None,
             resolved_type,
+            emit: true,
         };
     }
 
@@ -135,6 +165,7 @@ pub fn analyze_field_type_with_idl(
         inner_type: None,
         source_path: None,
         resolved_type,
+        emit: true,
     }
 }
 
@@ -424,6 +455,9 @@ pub fn process_nested_struct(
                             is_instruction: false,
                             is_whole_source: true,
                             lookup_by: snapshot_attr.lookup_by.clone(),
+                            condition: None,
+                            when: snapshot_attr.when.clone(),
+                            emit: true,
                         };
 
                         sources_by_type
@@ -468,6 +502,9 @@ pub fn process_nested_struct(
                             is_instruction: true,
                             is_whole_source: false,
                             lookup_by: aggr_attr.lookup_by.clone(),
+                            condition: None,
+                            when: None,
+                            emit: true,
                         };
 
                         // Add to sources_by_type for handler generation

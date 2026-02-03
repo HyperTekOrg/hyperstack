@@ -172,6 +172,18 @@ pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStrea
         &mut pda_registrations,
     );
 
+    let mut seen_resolver_fns: HashSet<String> = HashSet::new();
+    resolver_hooks.retain(|hook| {
+        let account_name = hook
+            .account_path
+            .segments
+            .last()
+            .map(|seg| seg.ident.to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        let fn_name = format!("resolve_{}_key", to_snake_case(&account_name));
+        seen_resolver_fns.insert(fn_name)
+    });
+
     for resolve_attr in &resolver_hooks {
         let account_name = resolve_attr
             .account_path
@@ -327,7 +339,7 @@ pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStrea
                 }
             }
 
-            let mut seen_auto_resolver_fns = HashSet::new();
+            let mut seen_auto_resolver_fns = seen_resolver_fns.clone();
             let mut deduped_auto_hooks = Vec::new();
             for result in &all_outputs {
                 for hook in &result.auto_resolver_hooks {

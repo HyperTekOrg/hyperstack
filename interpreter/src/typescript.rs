@@ -211,6 +211,9 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
         let mut sections: BTreeMap<String, Vec<TypeScriptField>> = BTreeMap::new();
 
         for mapping in &handler.mappings {
+            if !mapping.emit {
+                continue;
+            }
             let parts: Vec<&str> = mapping.target_path.split('.').collect();
 
             if parts.len() > 1 {
@@ -254,6 +257,9 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
                 let section_fields = sections.entry(section.name.clone()).or_default();
 
                 for field_info in &section.fields {
+                    if !field_info.emit {
+                        continue;
+                    }
                     // Check if field is already mapped
                     let already_exists = section_fields
                         .iter()
@@ -272,6 +278,9 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
         } else {
             // FALLBACK: Use field mappings from spec if sections aren't available yet
             for (field_path, field_type_info) in &self.spec.field_mappings {
+                if !field_type_info.emit {
+                    continue;
+                }
                 let parts: Vec<&str> = field_path.split('.').collect();
                 if parts.len() > 1 {
                     let section_name = parts[0];
@@ -351,6 +360,9 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
 
         for handler in &self.spec.handlers {
             for mapping in &handler.mappings {
+                if !mapping.emit {
+                    continue;
+                }
                 let parts: Vec<&str> = mapping.target_path.split('.').collect();
                 if parts.len() > 1 {
                     sections.insert(parts[0], true);
@@ -360,11 +372,16 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
 
         if !self.spec.sections.is_empty() {
             for section in &self.spec.sections {
-                sections.insert(&section.name, true);
+                if section.fields.iter().any(|field| field.emit) {
+                    sections.insert(&section.name, true);
+                }
             }
         } else {
             for mapping in &self.spec.handlers {
                 for field_mapping in &mapping.mappings {
+                    if !field_mapping.emit {
+                        continue;
+                    }
                     let parts: Vec<&str> = field_mapping.target_path.split('.').collect();
                     if parts.len() > 1 {
                         sections.insert(parts[0], true);
@@ -395,6 +412,9 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
         for section in &self.spec.sections {
             if is_root_section(&section.name) {
                 for field in &section.fields {
+                    if !field.emit {
+                        continue;
+                    }
                     let base_ts_type = self.field_type_info_to_typescript(field);
                     let ts_type = if field.is_optional {
                         format!("{} | null", base_ts_type)

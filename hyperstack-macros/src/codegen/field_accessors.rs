@@ -77,12 +77,14 @@ fn generate_section_module(section_name: &str, fields: &[FieldTypeInfo]) -> Toke
     // Generate constants for each field in the section
     let field_constants: Vec<TokenStream> = fields
         .iter()
+        .filter(|field| field.emit)
         .map(|field| generate_field_constant(section_name, &field.field_name))
         .collect();
 
     // Generate nested modules for complex types with resolved fields
     let nested_modules: Vec<TokenStream> = fields
         .iter()
+        .filter(|field| field.emit)
         .filter_map(|field| {
             field.resolved_type.as_ref().and_then(|rt| {
                 // Only generate nested accessors for struct types (not enums)
@@ -199,6 +201,7 @@ mod tests {
                     inner_type: None,
                     source_path: None,
                     resolved_type: None,
+                    emit: true,
                 },
                 FieldTypeInfo {
                     field_name: "round_address".to_string(),
@@ -209,6 +212,7 @@ mod tests {
                     inner_type: None,
                     source_path: None,
                     resolved_type: None,
+                    emit: true,
                 },
             ],
             is_nested_struct: false,
@@ -260,6 +264,7 @@ mod tests {
                     is_enum: false,
                     enum_variants: vec![],
                 }),
+                emit: true,
             }],
             is_nested_struct: false,
             parent_field: None,
@@ -288,6 +293,7 @@ mod tests {
                     inner_type: None,
                     source_path: None,
                     resolved_type: None,
+                    emit: true,
                 }],
                 is_nested_struct: false,
                 parent_field: None,
@@ -303,6 +309,7 @@ mod tests {
                     inner_type: None,
                     source_path: None,
                     resolved_type: None,
+                    emit: true,
                 }],
                 is_nested_struct: false,
                 parent_field: None,
@@ -342,6 +349,7 @@ mod tests {
                     is_enum: true,
                     enum_variants: vec!["Active".to_string(), "Inactive".to_string()],
                 }),
+                emit: true,
             }],
             is_nested_struct: false,
             parent_field: None,

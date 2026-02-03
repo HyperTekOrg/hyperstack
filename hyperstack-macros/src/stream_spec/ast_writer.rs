@@ -7,7 +7,7 @@
 //! The same AST is used for both inline code generation (via `codegen::generate_handlers_from_specs`)
 //! and for the `#[ast_spec]` macro, ensuring identical output.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::ast::writer::{
     convert_idl_to_snapshot, parse_population_strategy, parse_transformation,
@@ -377,11 +377,30 @@ fn build_source_handler(
 
         let population = parse_population_strategy(&mapping.strategy);
 
+        let condition = mapping.condition.as_ref().map(|cond| ConditionExpr {
+            expression: cond.clone(),
+            parsed: condition_parser::parse_condition_expression(cond),
+        });
+
+        let when = mapping.when.as_ref().map(|when_path| {
+            let instr_type = path_to_string(when_path);
+            let instr_base = instr_type.split("::").last().unwrap_or(&instr_type);
+            let program_name = program_name_for_type(&instr_type, idls);
+            if let Some(program_name) = program_name {
+                format!("{}::{}IxState", program_name, instr_base)
+            } else {
+                format!("{}IxState", instr_base)
+            }
+        });
+
         serializable_mappings.push(SerializableFieldMapping {
             target_path: mapping.target_field_name.clone(),
             source,
             transform: None,
             population,
+            condition,
+            when,
+            emit: mapping.emit,
         });
 
         if mapping.is_primary_key {
@@ -641,6 +660,9 @@ fn build_event_handler(
             source,
             transform: None,
             population,
+            condition: None,
+            when: None,
+            emit: true,
         });
     }
 
@@ -811,14 +833,14 @@ fn auto_generate_lookup_resolvers(
 ) -> Vec<ResolverHook> {
     let mut auto_hooks = Vec::new();
 
-    let account_types_needing_resolver: Vec<&str> = handlers
+    let account_types_needing_resolver: Vec<String> = handlers
         .iter()
         .filter_map(|handler| {
             if let KeyResolutionStrategy::Lookup { primary_field } = &handler.key_resolution {
                 if primary_field.segments.as_slice() == ["__account_address"] {
                     let SourceSpec::Source { ref type_name, .. } = handler.source;
                     if type_name.ends_with("State") && !type_name.ends_with("IxState") {
-                        return Some(type_name.as_str());
+                        return Some(type_name.to_string());
                     }
                 }
             }
@@ -857,7 +879,11 @@ fn auto_generate_lookup_resolvers(
         }
     }
 
+    let mut seen_account_types = HashSet::new();
     for account_type in account_types_needing_resolver {
+        if !seen_account_types.insert(account_type.clone()) {
+            continue;
+        }
         if existing_resolvers
             .iter()
             .any(|r| r.account_type == account_type)
@@ -865,7 +891,7 @@ fn auto_generate_lookup_resolvers(
             continue;
         }
         auto_hooks.push(ResolverHook {
-            account_type: account_type.to_string(),
+            account_type,
             strategy: ResolverStrategy::PdaReverseLookup {
                 lookup_name: "default_pda_lookup".to_string(),
                 queue_discriminators: queue_discriminators.clone(),

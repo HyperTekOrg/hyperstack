@@ -876,6 +876,20 @@ pub struct SerializableFieldMapping {
     pub source: MappingSource,
     pub transform: Option<Transformation>,
     pub population: PopulationStrategy,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<ConditionExpr>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<String>,
+    #[serde(default = "default_emit", skip_serializing_if = "is_true")]
+    pub emit: bool,
+}
+
+fn default_emit() -> bool {
+    true
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
 }
 
 #[derive(Debug, Clone)]
@@ -884,6 +898,9 @@ pub struct TypedFieldMapping<S> {
     pub source: MappingSource,
     pub transform: Option<Transformation>,
     pub population: PopulationStrategy,
+    pub condition: Option<ConditionExpr>,
+    pub when: Option<String>,
+    pub emit: bool,
     _phantom: PhantomData<S>,
 }
 
@@ -894,12 +911,30 @@ impl<S> TypedFieldMapping<S> {
             source,
             transform: None,
             population,
+            condition: None,
+            when: None,
+            emit: true,
             _phantom: PhantomData,
         }
     }
 
     pub fn with_transform(mut self, transform: Transformation) -> Self {
         self.transform = Some(transform);
+        self
+    }
+
+    pub fn with_condition(mut self, condition: ConditionExpr) -> Self {
+        self.condition = Some(condition);
+        self
+    }
+
+    pub fn with_when(mut self, when: String) -> Self {
+        self.when = Some(when);
+        self
+    }
+
+    pub fn with_emit(mut self, emit: bool) -> Self {
+        self.emit = emit;
         self
     }
 
@@ -910,6 +945,9 @@ impl<S> TypedFieldMapping<S> {
             source: self.source.clone(),
             transform: self.transform.clone(),
             population: self.population.clone(),
+            condition: self.condition.clone(),
+            when: self.when.clone(),
+            emit: self.emit,
         }
     }
 
@@ -920,6 +958,9 @@ impl<S> TypedFieldMapping<S> {
             source: mapping.source,
             transform: mapping.transform,
             population: mapping.population,
+            condition: mapping.condition,
+            when: mapping.when,
+            emit: mapping.emit,
             _phantom: PhantomData,
         }
     }
@@ -1011,6 +1052,8 @@ pub struct FieldTypeInfo {
     /// Resolved type information for complex types (instructions, accounts, custom types)
     #[serde(default)]
     pub resolved_type: Option<ResolvedStructType>,
+    #[serde(default = "default_emit", skip_serializing_if = "is_true")]
+    pub emit: bool,
 }
 
 /// Resolved structure type with field information from IDL
@@ -1082,6 +1125,7 @@ impl FieldTypeInfo {
             inner_type,
             source_path: None,
             resolved_type: None,
+            emit: true,
         }
     }
 

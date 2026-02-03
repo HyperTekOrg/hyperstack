@@ -30,6 +30,9 @@ pub struct MapAttribute {
     pub is_instruction: bool,
     pub is_whole_source: bool,
     pub lookup_by: Option<FieldSpec>,
+    pub condition: Option<String>,
+    pub when: Option<Path>,
+    pub emit: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +69,7 @@ pub struct CaptureAttribute {
     pub target_field_name: String,
     pub join_on: Option<FieldSpec>,
     pub lookup_by: Option<FieldSpec>,
+    pub when: Option<Path>,
 }
 
 #[derive(Debug, Clone)]
@@ -101,6 +105,9 @@ struct MapAttributeArgs {
     rename: Option<String>,
     join_on: Option<String>,
     transform: Option<String>,
+    condition: Option<String>,
+    when: Option<Path>,
+    emit: Option<bool>,
 }
 
 impl Parse for MapAttributeArgs {
@@ -128,6 +135,9 @@ impl Parse for MapAttributeArgs {
         let mut rename = None;
         let mut join_on = None;
         let mut transform = None;
+        let mut condition = None;
+        let mut when = None;
+        let mut emit = None;
 
         while !input.is_empty() {
             input.parse::<Token![,]>()?;
@@ -169,6 +179,18 @@ impl Parse for MapAttributeArgs {
                     input.parse::<Token![=]>()?;
                     let transform_ident: syn::Ident = input.parse()?;
                     transform = Some(transform_ident.to_string());
+                } else if ident_str == "condition" {
+                    input.parse::<Token![=]>()?;
+                    let condition_lit: syn::LitStr = input.parse()?;
+                    condition = Some(condition_lit.value());
+                } else if ident_str == "when" {
+                    input.parse::<Token![=]>()?;
+                    let when_path: Path = input.parse()?;
+                    when = Some(when_path);
+                } else if ident_str == "emit" {
+                    input.parse::<Token![=]>()?;
+                    let emit_lit: syn::LitBool = input.parse()?;
+                    emit = Some(emit_lit.value);
                 } else {
                     return Err(syn::Error::new(
                         ident.span(),
@@ -190,6 +212,9 @@ impl Parse for MapAttributeArgs {
             rename,
             join_on,
             transform,
+            condition,
+            when,
+            emit,
         })
     }
 }
@@ -213,6 +238,7 @@ pub fn parse_map_attribute(
 
     let strategy = args.strategy.unwrap_or_else(|| "SetOnce".to_string());
     let target_name = args.rename.unwrap_or_else(|| target_field_name.to_string());
+    let emit = args.emit.unwrap_or(true);
 
     let mut results = Vec::new();
     for source_path in args.source_paths {
@@ -232,6 +258,9 @@ pub fn parse_map_attribute(
             is_instruction: false,
             is_whole_source: false,
             lookup_by: None,
+            condition: args.condition.clone(),
+            when: args.when.clone(),
+            emit,
         });
     }
 
@@ -257,6 +286,7 @@ pub fn parse_from_instruction_attribute(
 
     let strategy = args.strategy.unwrap_or_else(|| "SetOnce".to_string());
     let target_name = args.rename.unwrap_or_else(|| target_field_name.to_string());
+    let emit = args.emit.unwrap_or(true);
 
     let mut results = Vec::new();
     for source_path in args.source_paths {
@@ -276,6 +306,9 @@ pub fn parse_from_instruction_attribute(
             is_instruction: true,
             is_whole_source: false,
             lookup_by: None,
+            condition: args.condition.clone(),
+            when: args.when.clone(),
+            emit,
         });
     }
 
@@ -589,6 +622,7 @@ struct SnapshotAttributeArgs {
     join_on: Option<FieldSpec>,
     lookup_by: Option<FieldSpec>,
     transforms: Vec<(String, syn::Ident)>, // Field transformations: (field_name, transform)
+    when: Option<Path>,
 }
 
 impl Parse for SnapshotAttributeArgs {
@@ -599,6 +633,7 @@ impl Parse for SnapshotAttributeArgs {
         let mut join_on = None;
         let mut lookup_by = None;
         let mut transforms = Vec::new();
+        let mut when = None;
 
         while !input.is_empty() {
             let ident: syn::Ident = input.parse()?;
@@ -654,6 +689,8 @@ impl Parse for SnapshotAttributeArgs {
                         content.parse::<Token![,]>()?;
                     }
                 }
+            } else if ident_str == "when" {
+                when = Some(input.parse()?);
             } else {
                 return Err(syn::Error::new(
                     ident.span(),
@@ -673,6 +710,7 @@ impl Parse for SnapshotAttributeArgs {
             join_on,
             lookup_by,
             transforms,
+            when,
         })
     }
 }
@@ -714,6 +752,7 @@ pub fn parse_snapshot_attribute(
         target_field_name: target_name,
         join_on: args.join_on,
         lookup_by: args.lookup_by,
+        when: args.when,
     }))
 }
 

@@ -310,6 +310,7 @@ pub struct VmContext {
     current_context: Option<UpdateContext>,
     warnings: Vec<String>,
     last_pda_lookup_miss: Option<String>,
+    last_lookup_index_miss: Option<String>,
     last_pda_registered: Option<String>,
     last_lookup_index_keys: Vec<String>,
 }
@@ -498,6 +499,10 @@ impl PdaReverseLookup {
     pub fn is_empty(&self) -> bool {
         self.index.is_empty()
     }
+
+    pub fn contains(&self, pda_address: &str) -> bool {
+        self.index.peek(pda_address).is_some()
+    }
 }
 
 /// Input for queueing an account update.
@@ -542,6 +547,19 @@ pub struct PendingInstructionEvent {
     pub slot: u64,
     pub signature: String,
     pub queued_at: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct DeferredWhenOperation {
+    pub entity_name: String,
+    pub primary_key: Value,
+    pub field_path: String,
+    pub field_value: Value,
+    pub when_instruction: String,
+    pub signature: String,
+    pub slot: u64,
+    pub deferred_at: i64,
+    pub emit: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -658,6 +676,9 @@ pub struct StateTable {
     config: StateTableConfig,
     #[cfg_attr(not(feature = "otel"), allow(dead_code))]
     entity_name: String,
+    pub recent_tx_instructions:
+        std::sync::Mutex<lru::LruCache<String, std::collections::HashSet<String>>>,
+    pub deferred_when_ops: DashMap<(String, String), Vec<DeferredWhenOperation>>,
 }
 
 impl StateTable {
@@ -804,6 +825,7 @@ impl VmContext {
             current_context: None,
             warnings: Vec::new(),
             last_pda_lookup_miss: None,
+            last_lookup_index_miss: None,
             last_pda_registered: None,
             last_lookup_index_keys: Vec::new(),
         };
@@ -823,6 +845,10 @@ impl VmContext {
                 ),
                 config: StateTableConfig::default(),
                 entity_name: "default".to_string(),
+                recent_tx_instructions: std::sync::Mutex::new(LruCache::new(
+                    NonZeroUsize::new(1000).unwrap(),
+                )),
+                deferred_when_ops: DashMap::new(),
             },
         );
         vm
@@ -841,6 +867,7 @@ impl VmContext {
             current_context: None,
             warnings: Vec::new(),
             last_pda_lookup_miss: None,
+            last_lookup_index_miss: None,
             last_pda_registered: None,
             last_lookup_index_keys: Vec::new(),
         };
@@ -860,6 +887,10 @@ impl VmContext {
                 ),
                 config: state_config,
                 entity_name: "default".to_string(),
+                recent_tx_instructions: std::sync::Mutex::new(LruCache::new(
+                    NonZeroUsize::new(1000).unwrap(),
+                )),
+                deferred_when_ops: DashMap::new(),
             },
         );
         vm
@@ -1073,6 +1104,37 @@ impl VmContext {
 
         let mut all_mutations = Vec::new();
 
+        if event_type.ends_with("IxState") && bytecode.when_events.contains(event_type) {
+            if let Some(ctx) = context {
+                if let Some(signature) = ctx.signature.clone() {
+                    let state_ids: Vec<u32> = self.states.keys().cloned().collect();
+                    for state_id in state_ids {
+                        if let Some(state) = self.states.get(&state_id) {
+                            {
+                                let mut cache = state.recent_tx_instructions.lock().unwrap();
+                                let entry =
+                                    cache.get_or_insert_mut(signature.clone(), HashSet::new);
+                                entry.insert(event_type.to_string());
+                            }
+
+                            let key = (signature.clone(), event_type.to_string());
+                            if let Some((_, deferred_ops)) = state.deferred_when_ops.remove(&key) {
+                                for op in deferred_ops {
+                                    match self.apply_deferred_when_op(state_id, &op) {
+                                        Ok(mutations) => all_mutations.extend(mutations),
+                                        Err(e) => tracing::warn!(
+                                            "Failed to apply deferred when-op: {}",
+                                            e
+                                        ),
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if let Some(entity_names) = bytecode.event_routing.get(event_type) {
             for entity_name in entity_names {
                 if let Some(entity_bytecode) = bytecode.entities.get(entity_name) {
@@ -1094,6 +1156,7 @@ impl VmContext {
                             entity_bytecode.state_id,
                             entity_name,
                             entity_bytecode.computed_fields_evaluator.as_ref(),
+                            Some(&entity_bytecode.non_emitted_fields),
                         )?;
 
                         if let Some(ref mut log) = log {
@@ -1128,9 +1191,72 @@ impl VmContext {
                                     );
                                 }
                             }
+
+                            if let Some(missed_lookup) = self.take_last_lookup_index_miss() {
+                                if !event_type.ends_with("IxState") {
+                                    let slot = context.and_then(|c| c.slot).unwrap_or(0);
+                                    let signature = context
+                                        .and_then(|c| c.signature.clone())
+                                        .unwrap_or_default();
+                                    if let Some(write_version) =
+                                        context.and_then(|c| c.write_version)
+                                    {
+                                        let _ = self.queue_account_update(
+                                            entity_bytecode.state_id,
+                                            QueuedAccountUpdate {
+                                                pda_address: missed_lookup,
+                                                account_type: event_type.to_string(),
+                                                account_data: event_value.clone(),
+                                                slot,
+                                                write_version,
+                                                signature,
+                                            },
+                                        );
+                                    }
+                                }
+                            }
                         }
 
                         all_mutations.extend(mutations);
+
+                        if event_type.ends_with("IxState") {
+                            if let Some(ctx) = context {
+                                if let Some(ref signature) = ctx.signature {
+                                    if let Some(state) = self.states.get(&entity_bytecode.state_id)
+                                    {
+                                        {
+                                            let mut cache =
+                                                state.recent_tx_instructions.lock().unwrap();
+                                            let entry = cache
+                                                .get_or_insert_mut(signature.clone(), HashSet::new);
+                                            entry.insert(event_type.to_string());
+                                        }
+
+                                        let key = (signature.clone(), event_type.to_string());
+                                        if let Some((_, deferred_ops)) =
+                                            state.deferred_when_ops.remove(&key)
+                                        {
+                                            for op in deferred_ops {
+                                                match self.apply_deferred_when_op(
+                                                    entity_bytecode.state_id,
+                                                    &op,
+                                                ) {
+                                                    Ok(mutations) => {
+                                                        all_mutations.extend(mutations)
+                                                    }
+                                                    Err(e) => {
+                                                        tracing::warn!(
+                                                            "Failed to apply deferred when-op: {}",
+                                                            e
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         if let Some(registered_pda) = self.take_last_pda_registered() {
                             let pending_events = self.flush_pending_instruction_events(
@@ -1148,6 +1274,7 @@ impl VmContext {
                                         entity_bytecode.state_id,
                                         entity_name,
                                         entity_bytecode.computed_fields_evaluator.as_ref(),
+                                        Some(&entity_bytecode.non_emitted_fields),
                                     ) {
                                         all_mutations.extend(reprocessed_mutations);
                                     }
@@ -1176,6 +1303,7 @@ impl VmContext {
                                             entity_bytecode.state_id,
                                             entity_name,
                                             entity_bytecode.computed_fields_evaluator.as_ref(),
+                                            Some(&entity_bytecode.non_emitted_fields),
                                         ) {
                                             all_mutations.extend(reprocessed);
                                         }
@@ -1220,6 +1348,20 @@ impl VmContext {
             self.warnings.clear();
         }
 
+        if self.instructions_executed % 1000 == 0 {
+            let state_ids: Vec<u32> = self.states.keys().cloned().collect();
+            for state_id in state_ids {
+                let expired = self.cleanup_expired_when_ops(state_id, 60);
+                if expired > 0 {
+                    tracing::debug!(
+                        "Cleaned up {} expired deferred when-ops for state {}",
+                        expired,
+                        state_id
+                    );
+                }
+            }
+        }
+
         Ok(all_mutations)
     }
 
@@ -1250,6 +1392,7 @@ impl VmContext {
         override_state_id: u32,
         entity_name: &str,
         entity_evaluator: Option<&Box<dyn Fn(&mut Value) -> Result<()> + Send + Sync>>,
+        non_emitted_fields: Option<&HashSet<String>>,
     ) -> Result<Vec<Mutation>> {
         self.reset_registers();
         self.last_pda_lookup_miss = None;
@@ -1257,6 +1400,11 @@ impl VmContext {
         let mut pc: usize = 0;
         let mut output = Vec::new();
         let mut dirty_tracker = DirtyTracker::new();
+        let should_emit = |path: &str| {
+            non_emitted_fields
+                .map(|fields| !fields.contains(path))
+                .unwrap_or(true)
+        };
 
         while pc < handler.len() {
             match &handler[pc] {
@@ -1297,13 +1445,17 @@ impl VmContext {
                     value,
                 } => {
                     self.set_field_auto_vivify(*object, path, *value)?;
-                    dirty_tracker.mark_replaced(path);
+                    if should_emit(path) {
+                        dirty_tracker.mark_replaced(path);
+                    }
                     pc += 1;
                 }
                 OpCode::SetFields { object, fields } => {
                     for (path, value_reg) in fields {
                         self.set_field_auto_vivify(*object, path, *value_reg)?;
-                        dirty_tracker.mark_replaced(path);
+                        if should_emit(path) {
+                            dirty_tracker.mark_replaced(path);
+                        }
                     }
                     pc += 1;
                 }
@@ -1336,6 +1488,10 @@ impl VmContext {
                             ),
                             config: StateTableConfig::default(),
                             entity_name: entity_name_owned,
+                            recent_tx_instructions: std::sync::Mutex::new(LruCache::new(
+                                NonZeroUsize::new(1000).unwrap(),
+                            )),
+                            deferred_when_ops: DashMap::new(),
                         });
                     let key_value = self.registers[*key].clone();
                     let warn_null_key = key_value.is_null()
@@ -1426,7 +1582,9 @@ impl VmContext {
                         .map(|s| s.max_array_length())
                         .unwrap_or(DEFAULT_MAX_ARRAY_LENGTH);
                     self.append_to_array(*object, path, *value, max_len)?;
-                    dirty_tracker.mark_appended(path, appended_value);
+                    if should_emit(path) {
+                        dirty_tracker.mark_appended(path, appended_value);
+                    }
                     pc += 1;
                 }
                 OpCode::GetCurrentTimestamp { dest } => {
@@ -1560,7 +1718,9 @@ impl VmContext {
                 } => {
                     let was_set = self.set_field_if_null(*object, path, *value)?;
                     if was_set {
-                        dirty_tracker.mark_replaced(path);
+                        if should_emit(path) {
+                            dirty_tracker.mark_replaced(path);
+                        }
                     }
                     pc += 1;
                 }
@@ -1571,7 +1731,9 @@ impl VmContext {
                 } => {
                     let was_updated = self.set_field_max(*object, path, *value)?;
                     if was_updated {
-                        dirty_tracker.mark_replaced(path);
+                        if should_emit(path) {
+                            dirty_tracker.mark_replaced(path);
+                        }
                     }
                     pc += 1;
                 }
@@ -1687,46 +1849,86 @@ impl VmContext {
                     dest,
                 } => {
                     let actual_state_id = override_state_id;
-                    let lookup_val = self.registers[*lookup_value].clone();
+                    let mut current_value = self.registers[*lookup_value].clone();
 
-                    let final_result = if let Some(state) = self.states.get(&actual_state_id) {
-                        let result = if let Some(index) = state.lookup_indexes.get(index_name) {
-                            let found = index.lookup(&lookup_val).unwrap_or(Value::Null);
-                            #[cfg(feature = "otel")]
-                            if found.is_null() {
-                                crate::vm_metrics::record_lookup_index_miss(index_name);
-                            } else {
-                                crate::vm_metrics::record_lookup_index_hit(index_name);
+                    const MAX_CHAIN_DEPTH: usize = 5;
+                    let mut iterations = 0;
+
+                    let final_result = if self.states.contains_key(&actual_state_id) {
+                        loop {
+                            iterations += 1;
+                            if iterations > MAX_CHAIN_DEPTH {
+                                break current_value;
                             }
-                            found
-                        } else {
-                            Value::Null
-                        };
 
-                        if result.is_null() {
-                            if let Some(pda_str) = lookup_val.as_str() {
-                                if let Some(state) = self.states.get_mut(&actual_state_id) {
-                                    if let Some(pda_lookup) =
-                                        state.pda_reverse_lookups.get_mut("default_pda_lookup")
-                                    {
-                                        if let Some(resolved) = pda_lookup.lookup(pda_str) {
-                                            Value::String(resolved)
-                                        } else {
-                                            self.last_pda_lookup_miss = Some(pda_str.to_string());
-                                            Value::Null
+                            let resolved = self
+                                .states
+                                .get(&actual_state_id)
+                                .and_then(|state| {
+                                    if let Some(index) = state.lookup_indexes.get(index_name) {
+                                        if let Some(found) = index.lookup(&current_value) {
+                                            return Some(found);
                                         }
-                                    } else {
-                                        self.last_pda_lookup_miss = Some(pda_str.to_string());
-                                        Value::Null
                                     }
+
+                                    for (name, index) in state.lookup_indexes.iter() {
+                                        if name == index_name {
+                                            continue;
+                                        }
+                                        if let Some(found) = index.lookup(&current_value) {
+                                            return Some(found);
+                                        }
+                                    }
+
+                                    None
+                                })
+                                .unwrap_or(Value::Null);
+
+                            let mut resolved_from_pda = false;
+                            let resolved = if resolved.is_null() {
+                                if let Some(pda_str) = current_value.as_str() {
+                                    resolved_from_pda = true;
+                                    self.states
+                                        .get_mut(&actual_state_id)
+                                        .and_then(|state_mut| {
+                                            state_mut
+                                                .pda_reverse_lookups
+                                                .get_mut("default_pda_lookup")
+                                        })
+                                        .and_then(|pda_lookup| pda_lookup.lookup(pda_str))
+                                        .map(Value::String)
+                                        .unwrap_or(Value::Null)
                                 } else {
                                     Value::Null
                                 }
                             } else {
-                                Value::Null
+                                resolved
+                            };
+
+                            if resolved.is_null() {
+                                if iterations == 1 {
+                                    if let Some(pda_str) = current_value.as_str() {
+                                        self.last_pda_lookup_miss = Some(pda_str.to_string());
+                                    }
+                                }
+                                break Value::Null;
                             }
-                        } else {
-                            result
+
+                            let can_chain =
+                                self.can_resolve_further(&resolved, actual_state_id, index_name);
+
+                            if !can_chain {
+                                if resolved_from_pda {
+                                    if let Some(resolved_str) = resolved.as_str() {
+                                        self.last_lookup_index_miss =
+                                            Some(resolved_str.to_string());
+                                    }
+                                    break Value::Null;
+                                }
+                                break resolved;
+                            }
+
+                            current_value = resolved;
                         }
                     } else {
                         Value::Null
@@ -1742,14 +1944,18 @@ impl VmContext {
                 } => {
                     let was_updated = self.set_field_sum(*object, path, *value)?;
                     if was_updated {
-                        dirty_tracker.mark_replaced(path);
+                        if should_emit(path) {
+                            dirty_tracker.mark_replaced(path);
+                        }
                     }
                     pc += 1;
                 }
                 OpCode::SetFieldIncrement { object, path } => {
                     let was_updated = self.set_field_increment(*object, path)?;
                     if was_updated {
-                        dirty_tracker.mark_replaced(path);
+                        if should_emit(path) {
+                            dirty_tracker.mark_replaced(path);
+                        }
                     }
                     pc += 1;
                 }
@@ -1760,7 +1966,9 @@ impl VmContext {
                 } => {
                     let was_updated = self.set_field_min(*object, path, *value)?;
                     if was_updated {
-                        dirty_tracker.mark_replaced(path);
+                        if should_emit(path) {
+                            dirty_tracker.mark_replaced(path);
+                        }
                     }
                     pc += 1;
                 }
@@ -1801,7 +2009,9 @@ impl VmContext {
                     if was_new {
                         self.registers[100] = Value::Number(serde_json::Number::from(set.len()));
                         self.set_field_auto_vivify(*count_object, count_path, 100)?;
-                        dirty_tracker.mark_replaced(count_path);
+                        if should_emit(count_path) {
+                            dirty_tracker.mark_replaced(count_path);
+                        }
                     }
 
                     pc += 1;
@@ -1820,8 +2030,97 @@ impl VmContext {
 
                     if condition_met {
                         self.set_field_auto_vivify(*object, path, *value)?;
-                        dirty_tracker.mark_replaced(path);
+                        if should_emit(path) {
+                            dirty_tracker.mark_replaced(path);
+                        }
                     }
+                    pc += 1;
+                }
+                OpCode::SetFieldWhen {
+                    object,
+                    path,
+                    value,
+                    when_instruction,
+                    entity_name,
+                    key_reg,
+                    condition_field,
+                    condition_op,
+                    condition_value,
+                } => {
+                    let actual_state_id = override_state_id;
+                    let condition_met = if let (Some(field), Some(op), Some(cond_value)) = (
+                        condition_field.as_ref(),
+                        condition_op.as_ref(),
+                        condition_value.as_ref(),
+                    ) {
+                        let field_value = self.load_field(event_value, field, None)?;
+                        self.evaluate_comparison(&field_value, op, cond_value)?
+                    } else {
+                        true
+                    };
+
+                    if !condition_met {
+                        pc += 1;
+                        continue;
+                    }
+
+                    let signature = self
+                        .current_context
+                        .as_ref()
+                        .and_then(|c| c.signature.clone())
+                        .unwrap_or_default();
+
+                    let emit = should_emit(path);
+
+                    let instruction_seen = if !signature.is_empty() {
+                        if let Some(state) = self.states.get(&actual_state_id) {
+                            let mut cache = state.recent_tx_instructions.lock().unwrap();
+                            cache
+                                .get(&signature)
+                                .map(|set| set.contains(when_instruction))
+                                .unwrap_or(false)
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
+                    if instruction_seen {
+                        self.set_field_auto_vivify(*object, path, *value)?;
+                        if emit {
+                            dirty_tracker.mark_replaced(path);
+                        }
+                    } else if !signature.is_empty() {
+                        let deferred = DeferredWhenOperation {
+                            entity_name: entity_name.clone(),
+                            primary_key: self.registers[*key_reg].clone(),
+                            field_path: path.clone(),
+                            field_value: self.registers[*value].clone(),
+                            when_instruction: when_instruction.clone(),
+                            signature: signature.clone(),
+                            slot: self
+                                .current_context
+                                .as_ref()
+                                .and_then(|c| c.slot)
+                                .unwrap_or(0),
+                            deferred_at: std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs() as i64,
+                            emit,
+                        };
+
+                        if let Some(state) = self.states.get(&actual_state_id) {
+                            let key = (signature, when_instruction.clone());
+                            state
+                                .deferred_when_ops
+                                .entry(key)
+                                .or_insert_with(Vec::new)
+                                .push(deferred);
+                        }
+                    }
+
                     pc += 1;
                 }
                 OpCode::ConditionalIncrement {
@@ -1838,7 +2137,9 @@ impl VmContext {
                     if condition_met {
                         let was_updated = self.set_field_increment(*object, path)?;
                         if was_updated {
-                            dirty_tracker.mark_replaced(path);
+                            if should_emit(path) {
+                                dirty_tracker.mark_replaced(path);
+                            }
                         }
                     }
                     pc += 1;
@@ -1862,7 +2163,9 @@ impl VmContext {
                                     Self::get_value_at_path(&self.registers[*state], path);
 
                                 if new_value != *old_value {
-                                    dirty_tracker.mark_replaced(path);
+                                    if should_emit(path) {
+                                        dirty_tracker.mark_replaced(path);
+                                    }
                                 }
                             }
                         }
@@ -2468,6 +2771,116 @@ impl VmContext {
         }
     }
 
+    fn can_resolve_further(&self, value: &Value, state_id: u32, index_name: &str) -> bool {
+        if let Some(state) = self.states.get(&state_id) {
+            if let Some(index) = state.lookup_indexes.get(index_name) {
+                if index.lookup(value).is_some() {
+                    return true;
+                }
+            }
+
+            for (name, index) in state.lookup_indexes.iter() {
+                if name == index_name {
+                    continue;
+                }
+                if index.lookup(value).is_some() {
+                    return true;
+                }
+            }
+
+            if let Some(pda_str) = value.as_str() {
+                if let Some(pda_lookup) = state.pda_reverse_lookups.get("default_pda_lookup") {
+                    if pda_lookup.contains(pda_str) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    fn apply_deferred_when_op(
+        &mut self,
+        state_id: u32,
+        op: &DeferredWhenOperation,
+    ) -> Result<Vec<Mutation>> {
+        let state = self.states.get(&state_id).ok_or("State not found")?;
+
+        if op.primary_key.is_null() {
+            return Ok(vec![]);
+        }
+
+        let mut entity_state = state
+            .get_and_touch(&op.primary_key)
+            .unwrap_or_else(|| json!({}));
+
+        Self::set_nested_field_value(&mut entity_state, &op.field_path, op.field_value.clone())?;
+
+        state.insert_with_eviction(op.primary_key.clone(), entity_state);
+
+        if !op.emit {
+            return Ok(vec![]);
+        }
+
+        let mut patch = json!({});
+        Self::set_nested_field_value(&mut patch, &op.field_path, op.field_value.clone())?;
+
+        Ok(vec![Mutation {
+            export: op.entity_name.clone(),
+            key: op.primary_key.clone(),
+            patch,
+            append: vec![],
+        }])
+    }
+
+    fn set_nested_field_value(obj: &mut Value, path: &str, value: Value) -> Result<()> {
+        let parts: Vec<&str> = path.split('.').collect();
+        let mut current = obj;
+
+        for (i, part) in parts.iter().enumerate() {
+            if i == parts.len() - 1 {
+                if let Some(map) = current.as_object_mut() {
+                    map.insert(part.to_string(), value);
+                    return Ok(());
+                }
+                return Err("Cannot set field on non-object".into());
+            }
+
+            if current.get(*part).is_none() || !current.get(*part).unwrap().is_object() {
+                if let Some(map) = current.as_object_mut() {
+                    map.insert(part.to_string(), json!({}));
+                }
+            }
+
+            current = current.get_mut(*part).ok_or("Path navigation failed")?;
+        }
+
+        Ok(())
+    }
+
+    pub fn cleanup_expired_when_ops(&mut self, state_id: u32, max_age_secs: i64) -> usize {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        let state = match self.states.get(&state_id) {
+            Some(s) => s,
+            None => return 0,
+        };
+
+        let mut removed = 0;
+        state.deferred_when_ops.retain(|_, ops| {
+            let before = ops.len();
+            ops.retain(|op| now - op.deferred_at < max_age_secs);
+            removed += before - ops.len();
+            !ops.is_empty()
+        });
+
+        removed
+    }
+
     /// Update a PDA reverse lookup and return pending updates for reprocessing.
     /// Returns any pending account updates that were queued for this PDA.
     /// ```ignore
@@ -2700,6 +3113,10 @@ impl VmContext {
 
     pub fn take_last_pda_lookup_miss(&mut self) -> Option<String> {
         self.last_pda_lookup_miss.take()
+    }
+
+    pub fn take_last_lookup_index_miss(&mut self) -> Option<String> {
+        self.last_lookup_index_miss.take()
     }
 
     pub fn take_last_pda_registered(&mut self) -> Option<String> {
@@ -3701,6 +4118,287 @@ mod tests {
             !sell_serialized.contains('.'),
             "Sell volume should not have decimal: {}",
             sell_serialized
+        );
+    }
+
+    #[test]
+    fn test_lookup_index_chaining() {
+        let mut vm = VmContext::new();
+
+        let state = vm.states.get_mut(&0).unwrap();
+
+        state
+            .pda_reverse_lookups
+            .entry("default_pda_lookup".to_string())
+            .or_insert_with(|| PdaReverseLookup::new(1000))
+            .insert("pda_123".to_string(), "addr_456".to_string());
+
+        state
+            .lookup_indexes
+            .entry("round_address_lookup_index".to_string())
+            .or_insert_with(LookupIndex::new)
+            .insert(json!("addr_456"), json!(789));
+
+        let handler = vec![
+            OpCode::LoadConstant {
+                value: json!("pda_123"),
+                dest: 0,
+            },
+            OpCode::LookupIndex {
+                state_id: 0,
+                index_name: "round_address_lookup_index".to_string(),
+                lookup_value: 0,
+                dest: 1,
+            },
+        ];
+
+        vm.execute_handler(&handler, &json!({}), "test", 0, "TestEntity", None, None)
+            .unwrap();
+
+        assert_eq!(vm.registers[1], json!(789));
+    }
+
+    #[test]
+    fn test_lookup_index_no_chain() {
+        let mut vm = VmContext::new();
+
+        let state = vm.states.get_mut(&0).unwrap();
+        state
+            .lookup_indexes
+            .entry("test_index".to_string())
+            .or_insert_with(LookupIndex::new)
+            .insert(json!("key_abc"), json!(42));
+
+        let handler = vec![
+            OpCode::LoadConstant {
+                value: json!("key_abc"),
+                dest: 0,
+            },
+            OpCode::LookupIndex {
+                state_id: 0,
+                index_name: "test_index".to_string(),
+                lookup_value: 0,
+                dest: 1,
+            },
+        ];
+
+        vm.execute_handler(&handler, &json!({}), "test", 0, "TestEntity", None, None)
+            .unwrap();
+
+        assert_eq!(vm.registers[1], json!(42));
+    }
+
+    #[test]
+    fn test_conditional_set_field_with_zero_array() {
+        let mut vm = VmContext::new();
+
+        let event_zeros = json!({
+            "value": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        });
+
+        let event_nonzero = json!({
+            "value": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+                      17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]
+        });
+
+        let zero_32: Value = json!([
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0
+        ]);
+
+        let handler = vec![
+            OpCode::CreateObject { dest: 2 },
+            OpCode::LoadEventField {
+                path: FieldPath::new(&["value"]),
+                dest: 10,
+                default: None,
+            },
+            OpCode::ConditionalSetField {
+                object: 2,
+                path: "captured_value".to_string(),
+                value: 10,
+                condition_field: FieldPath::new(&["value"]),
+                condition_op: ComparisonOp::NotEqual,
+                condition_value: zero_32,
+            },
+        ];
+
+        vm.execute_handler(&handler, &event_zeros, "test", 0, "Test", None, None)
+            .unwrap();
+        assert!(
+            vm.registers[2].get("captured_value").is_none(),
+            "Field should not be set when value is all zeros"
+        );
+
+        vm.reset_registers();
+        vm.execute_handler(&handler, &event_nonzero, "test", 0, "Test", None, None)
+            .unwrap();
+        assert!(
+            vm.registers[2].get("captured_value").is_some(),
+            "Field should be set when value is non-zero"
+        );
+    }
+
+    #[test]
+    fn test_when_instruction_arrives_first() {
+        let mut vm = VmContext::new();
+
+        let signature = "test_sig_123".to_string();
+
+        {
+            let state = vm.states.get(&0).unwrap();
+            let mut cache = state.recent_tx_instructions.lock().unwrap();
+            let mut set = HashSet::new();
+            set.insert("RevealIxState".to_string());
+            cache.put(signature.clone(), set);
+        }
+
+        vm.current_context = Some(UpdateContext::new(100, signature.clone()));
+
+        let handler = vec![
+            OpCode::CreateObject { dest: 2 },
+            OpCode::LoadConstant {
+                value: json!("primary_key_value"),
+                dest: 1,
+            },
+            OpCode::LoadConstant {
+                value: json!("the_revealed_value"),
+                dest: 10,
+            },
+            OpCode::SetFieldWhen {
+                object: 2,
+                path: "entropy_value".to_string(),
+                value: 10,
+                when_instruction: "RevealIxState".to_string(),
+                entity_name: "TestEntity".to_string(),
+                key_reg: 1,
+                condition_field: None,
+                condition_op: None,
+                condition_value: None,
+            },
+        ];
+
+        vm.execute_handler(
+            &handler,
+            &json!({}),
+            "VarState",
+            0,
+            "TestEntity",
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(
+            vm.registers[2].get("entropy_value").unwrap(),
+            "the_revealed_value",
+            "Field should be set when instruction was already seen"
+        );
+    }
+
+    #[test]
+    fn test_when_account_arrives_first() {
+        let mut vm = VmContext::new();
+
+        let signature = "test_sig_456".to_string();
+
+        vm.current_context = Some(UpdateContext::new(100, signature.clone()));
+
+        let handler = vec![
+            OpCode::CreateObject { dest: 2 },
+            OpCode::LoadConstant {
+                value: json!("pk_123"),
+                dest: 1,
+            },
+            OpCode::LoadConstant {
+                value: json!("deferred_value"),
+                dest: 10,
+            },
+            OpCode::SetFieldWhen {
+                object: 2,
+                path: "entropy_value".to_string(),
+                value: 10,
+                when_instruction: "RevealIxState".to_string(),
+                entity_name: "TestEntity".to_string(),
+                key_reg: 1,
+                condition_field: None,
+                condition_op: None,
+                condition_value: None,
+            },
+        ];
+
+        vm.execute_handler(
+            &handler,
+            &json!({}),
+            "VarState",
+            0,
+            "TestEntity",
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(
+            vm.registers[2].get("entropy_value").is_none(),
+            "Field should not be set when instruction hasn't been seen"
+        );
+
+        let state = vm.states.get(&0).unwrap();
+        let key = (signature.clone(), "RevealIxState".to_string());
+        assert!(
+            state.deferred_when_ops.contains_key(&key),
+            "Operation should be queued"
+        );
+
+        {
+            let mut cache = state.recent_tx_instructions.lock().unwrap();
+            let mut set = HashSet::new();
+            set.insert("RevealIxState".to_string());
+            cache.put(signature.clone(), set);
+        }
+
+        let deferred = state.deferred_when_ops.remove(&key).unwrap().1;
+        for op in deferred {
+            vm.apply_deferred_when_op(0, &op).unwrap();
+        }
+
+        let state = vm.states.get(&0).unwrap();
+        let entity = state.data.get(&json!("pk_123")).unwrap();
+        assert_eq!(
+            entity.get("entropy_value").unwrap(),
+            "deferred_value",
+            "Field should be set after instruction arrives"
+        );
+    }
+
+    #[test]
+    fn test_when_cleanup_expired() {
+        let mut vm = VmContext::new();
+
+        let state = vm.states.get(&0).unwrap();
+        let key = ("old_sig".to_string(), "SomeIxState".to_string());
+        state.deferred_when_ops.insert(
+            key,
+            vec![DeferredWhenOperation {
+                entity_name: "Test".to_string(),
+                primary_key: json!("pk"),
+                field_path: "field".to_string(),
+                field_value: json!("value"),
+                when_instruction: "SomeIxState".to_string(),
+                signature: "old_sig".to_string(),
+                slot: 0,
+                deferred_at: 0,
+                emit: true,
+            }],
+        );
+
+        let removed = vm.cleanup_expired_when_ops(0, 60);
+
+        assert_eq!(removed, 1, "Should have removed 1 expired op");
+        assert!(
+            vm.states.get(&0).unwrap().deferred_when_ops.is_empty(),
+            "Deferred ops should be empty after cleanup"
         );
     }
 }
