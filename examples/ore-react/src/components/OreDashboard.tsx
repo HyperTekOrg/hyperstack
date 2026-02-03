@@ -7,7 +7,7 @@ import {
 } from 'hyperstack-stacks/ore';
 
 export function OreDashboard() {
-  const stack = useHyperstack(ORE_STREAM_STACK, { url: 'ws://localhost:8878' });
+  const stack = useHyperstack(ORE_STREAM_STACK);
   const { data: latestRounds } = stack.views.OreRound.latest.use({ take: 5 });
   // const { data: treasury } = stack.views.OreTreasury.list.use({ take: 1 });
   // console.log(treasury);
