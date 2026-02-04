@@ -56,8 +56,8 @@ pub fn generate_vm_handler(
     let entity_name_lit = entity_name;
 
     quote! {
-        const DEFAULT_TRITON_BATCH_SIZE: usize = 100;
-        const DEFAULT_TRITON_TIMEOUT_SECS: u64 = 10;
+        const DEFAULT_DAS_BATCH_SIZE: usize = 100;
+        const DEFAULT_DAS_TIMEOUT_SECS: u64 = 10;
 
         struct ResolverClient {
             endpoint: String,
@@ -68,7 +68,7 @@ pub fn generate_vm_handler(
         impl ResolverClient {
             fn new(endpoint: String, batch_size: usize) -> hyperstack::runtime::anyhow::Result<Self> {
                 let client = hyperstack::runtime::reqwest::Client::builder()
-                    .timeout(std::time::Duration::from_secs(DEFAULT_TRITON_TIMEOUT_SECS))
+                    .timeout(std::time::Duration::from_secs(DEFAULT_DAS_TIMEOUT_SECS))
                     .build()
                     .map_err(|err| {
                         hyperstack::runtime::anyhow::anyhow!(
@@ -330,7 +330,7 @@ pub fn generate_vm_handler(
                         let mut vm = self.vm.lock().unwrap();
                         vm.restore_resolver_requests(requests);
                         hyperstack::runtime::tracing::warn!(
-                            "TRITON_DAS_ENDPOINT not set; resolver requests re-queued (count={})",
+                            "DAS_API_ENDPOINT not set; resolver requests re-queued (count={})",
                             total_requests
                         );
                         return Vec::new();
@@ -782,16 +782,16 @@ pub fn generate_spec_function(
                 ))?;
             let x_token = std::env::var("YELLOWSTONE_X_TOKEN").ok();
 
-            let resolver_batch_size = std::env::var("TRITON_DAS_BATCH_SIZE")
+            let resolver_batch_size = std::env::var("DAS_API_BATCH_SIZE")
                 .ok()
                 .and_then(|value| value.parse::<usize>().ok())
-                .unwrap_or(DEFAULT_TRITON_BATCH_SIZE);
+                .unwrap_or(DEFAULT_DAS_BATCH_SIZE);
 
-            let resolver_client = match std::env::var("TRITON_DAS_ENDPOINT").ok() {
+            let resolver_client = match std::env::var("DAS_API_ENDPOINT").ok() {
                 Some(endpoint) => Some(Arc::new(ResolverClient::new(endpoint, resolver_batch_size)?)),
                 None => {
                     hyperstack::runtime::tracing::warn!(
-                        "TRITON_DAS_ENDPOINT not set; token resolver disabled."
+                        "DAS_API_ENDPOINT not set; token resolver disabled."
                     );
                     None
                 }
@@ -903,8 +903,8 @@ pub fn generate_spec_function(
 
 pub fn generate_vm_handler_struct() -> TokenStream {
     quote! {
-        const DEFAULT_TRITON_BATCH_SIZE: usize = 100;
-        const DEFAULT_TRITON_TIMEOUT_SECS: u64 = 10;
+        const DEFAULT_DAS_BATCH_SIZE: usize = 100;
+        const DEFAULT_DAS_TIMEOUT_SECS: u64 = 10;
 
         struct ResolverClient {
             endpoint: String,
@@ -915,7 +915,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
         impl ResolverClient {
             fn new(endpoint: String, batch_size: usize) -> hyperstack::runtime::anyhow::Result<Self> {
                 let client = hyperstack::runtime::reqwest::Client::builder()
-                    .timeout(std::time::Duration::from_secs(DEFAULT_TRITON_TIMEOUT_SECS))
+                    .timeout(std::time::Duration::from_secs(DEFAULT_DAS_TIMEOUT_SECS))
                     .build()
                     .map_err(|err| {
                         hyperstack::runtime::anyhow::anyhow!(
@@ -1177,7 +1177,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                         let mut vm = self.vm.lock().unwrap();
                         vm.restore_resolver_requests(requests);
                         hyperstack::runtime::tracing::warn!(
-                            "TRITON_DAS_ENDPOINT not set; resolver requests re-queued (count={})",
+                            "DAS_API_ENDPOINT not set; resolver requests re-queued (count={})",
                             total_requests
                         );
                         return Vec::new();
@@ -1703,16 +1703,16 @@ pub fn generate_multi_pipeline_spec_function(
                 ))?;
             let x_token = std::env::var("YELLOWSTONE_X_TOKEN").ok();
 
-            let resolver_batch_size = std::env::var("TRITON_DAS_BATCH_SIZE")
+            let resolver_batch_size = std::env::var("DAS_API_BATCH_SIZE")
                 .ok()
                 .and_then(|value| value.parse::<usize>().ok())
-                .unwrap_or(DEFAULT_TRITON_BATCH_SIZE);
+                .unwrap_or(DEFAULT_DAS_BATCH_SIZE);
 
-            let resolver_client = match std::env::var("TRITON_DAS_ENDPOINT").ok() {
+            let resolver_client = match std::env::var("DAS_API_ENDPOINT").ok() {
                 Some(endpoint) => Some(Arc::new(ResolverClient::new(endpoint, resolver_batch_size)?)),
                 None => {
                     hyperstack::runtime::tracing::warn!(
-                        "TRITON_DAS_ENDPOINT not set; token resolver disabled."
+                        "DAS_API_ENDPOINT not set; token resolver disabled."
                     );
                     None
                 }
