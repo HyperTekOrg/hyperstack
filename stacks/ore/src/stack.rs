@@ -183,14 +183,31 @@ pub mod ore_stream {
         #[map(ore_sdk::accounts::Treasury::motherlode, strategy = LastWrite)]
         pub motherlode: Option<u64>,
 
+        /// Motherlode formatted in ORE tokens (11 decimals)
+        /// Uses resolver-computed ui_amount method for decimal conversion
+        #[computed(state.motherlode.ui_amount(11))]
+        pub motherlode_ui: Option<f64>,
+
         #[map(ore_sdk::accounts::Treasury::total_refined, strategy = LastWrite)]
         pub total_refined: Option<u64>,
+
+        /// Total refined formatted in ORE tokens (11 decimals)
+        #[computed(state.total_refined.ui_amount(11))]
+        pub total_refined_ui: Option<f64>,
 
         #[map(ore_sdk::accounts::Treasury::total_staked, strategy = LastWrite)]
         pub total_staked: Option<u64>,
 
+        /// Total staked formatted in ORE tokens (11 decimals)
+        #[computed(state.total_staked.ui_amount(11))]
+        pub total_staked_ui: Option<f64>,
+
         #[map(ore_sdk::accounts::Treasury::total_unclaimed, strategy = LastWrite)]
         pub total_unclaimed: Option<u64>,
+
+        /// Total unclaimed formatted in ORE tokens (11 decimals)
+        #[computed(state.total_unclaimed.ui_amount(11))]
+        pub total_unclaimed_ui: Option<f64>,
     }
 
     // ========================================================================

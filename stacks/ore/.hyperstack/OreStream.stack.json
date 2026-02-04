@@ -4231,12 +4231,32 @@
               "resolved_type": null
             },
             {
+              "field_name": "motherlode_ui",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "f64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
               "field_name": "total_refined",
               "rust_type_name": "Option < u64 >",
               "base_type": "Integer",
               "is_optional": true,
               "is_array": false,
               "inner_type": "u64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "total_refined_ui",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "f64",
               "source_path": null,
               "resolved_type": null
             },
@@ -4251,12 +4271,32 @@
               "resolved_type": null
             },
             {
+              "field_name": "total_staked_ui",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "f64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
               "field_name": "total_unclaimed",
               "rust_type_name": "Option < u64 >",
               "base_type": "Integer",
               "is_optional": true,
               "is_array": false,
               "inner_type": "u64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "total_unclaimed_ui",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "f64",
               "source_path": null,
               "resolved_type": null
             }
@@ -4385,6 +4425,16 @@
           "source_path": null,
           "resolved_type": null
         },
+        "state.motherlode_ui": {
+          "field_name": "motherlode_ui",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "f64",
+          "source_path": null,
+          "resolved_type": null
+        },
         "state.total_refined": {
           "field_name": "total_refined",
           "rust_type_name": "Option < u64 >",
@@ -4392,6 +4442,16 @@
           "is_optional": true,
           "is_array": false,
           "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "state.total_refined_ui": {
+          "field_name": "total_refined_ui",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "f64",
           "source_path": null,
           "resolved_type": null
         },
@@ -4405,6 +4465,16 @@
           "source_path": null,
           "resolved_type": null
         },
+        "state.total_staked_ui": {
+          "field_name": "total_staked_ui",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "f64",
+          "source_path": null,
+          "resolved_type": null
+        },
         "state.total_unclaimed": {
           "field_name": "total_unclaimed",
           "rust_type_name": "Option < u64 >",
@@ -4412,6 +4482,16 @@
           "is_optional": true,
           "is_array": false,
           "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "state.total_unclaimed_ui": {
+          "field_name": "total_unclaimed_ui",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "f64",
           "source_path": null,
           "resolved_type": null
         },
@@ -4562,9 +4642,103 @@
         }
       ],
       "resolver_specs": [],
-      "computed_fields": [],
-      "computed_field_specs": [],
-      "content_hash": "14fd30f13c409fc6d8d1d066fde91ff0899b17383870a74c1591fd22abd08409",
+      "computed_fields": [
+        "state.motherlode_ui",
+        "state.total_refined_ui",
+        "state.total_staked_ui",
+        "state.total_unclaimed_ui"
+      ],
+      "computed_field_specs": [
+        {
+          "target_path": "state.motherlode_ui",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.motherlode"
+                  }
+                },
+                {
+                  "Literal": {
+                    "value": 11
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
+        },
+        {
+          "target_path": "state.total_refined_ui",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.total_refined"
+                  }
+                },
+                {
+                  "Literal": {
+                    "value": 11
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
+        },
+        {
+          "target_path": "state.total_staked_ui",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.total_staked"
+                  }
+                },
+                {
+                  "Literal": {
+                    "value": 11
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
+        },
+        {
+          "target_path": "state.total_unclaimed_ui",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.total_unclaimed"
+                  }
+                },
+                {
+                  "Literal": {
+                    "value": 11
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
+        }
+      ],
+      "content_hash": "07a4036e3697551744b588e8c77e78b7462c0a7aeb66e2d25639dd89c99de1bb",
       "views": []
     },
     {
@@ -8042,5 +8216,5 @@
       ]
     }
   ],
-  "content_hash": "59334d4df5417db35bda85fcc8b4501a983c8e1ec3d81680f7515f48059fceba"
+  "content_hash": "3a068a32ccb0e92128b377a924ca5c90276663eef236c6f00c5d1ecde276d5a2"
 }
