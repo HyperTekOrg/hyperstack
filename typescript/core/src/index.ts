@@ -68,6 +68,10 @@ export type {
   InstructionHandler,
   InstructionDefinition,
   BuiltInstruction,
+  SeedDef,
+  PdaDeriveContext,
+  PdaFactory,
+  ProgramPdas,
 } from './instructions';
 
 export {
@@ -86,4 +90,10 @@ export {
   formatProgramError,
   executeInstruction,
   createInstructionExecutor,
+  literal,
+  account,
+  arg,
+  bytes,
+  pda,
+  createProgramPdas,
 } from './instructions';

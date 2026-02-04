@@ -31,3 +31,5 @@ export type {
   ResolvedAccounts,
 } from './executor';
 export { executeInstruction, createInstructionExecutor } from './executor';
+export type { SeedDef, PdaDeriveContext, PdaFactory, ProgramPdas } from './pda-dsl';
+export { literal, account, arg, bytes, pda, createProgramPdas } from './pda-dsl';
