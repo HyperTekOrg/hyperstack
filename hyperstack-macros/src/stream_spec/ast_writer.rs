@@ -15,8 +15,8 @@ use crate::ast::writer::{
 use crate::ast::{
     ComputedFieldSpec, ConditionExpr, EntitySection, FieldPath, HookAction, IdentitySpec,
     IdlSerializationSnapshot, InstructionHook, KeyResolutionStrategy, LookupIndexSpec,
-    MappingSource, ResolverHook, ResolverStrategy, SerializableFieldMapping,
-    SerializableHandlerSpec, SerializableStreamSpec, SourceSpec,
+    MappingSource, ResolverExtractSpec, ResolverHook, ResolverSpec, ResolverStrategy, ResolverType,
+    SerializableFieldMapping, SerializableHandlerSpec, SerializableStreamSpec, SourceSpec,
 };
 use crate::event_type_helpers::{find_idl_for_type, program_name_for_type, IdlLookup};
 use crate::parse;
@@ -65,6 +65,7 @@ pub fn build_ast(
     derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
+    resolve_specs: &[parse::ResolveSpec],
     section_specs: &[EntitySection],
     idls: IdlLookup,
     views: Vec<crate::ast::ViewDef>,
@@ -131,6 +132,8 @@ pub fn build_ast(
         })
         .collect();
 
+    let resolver_specs = build_resolver_specs(resolve_specs);
+
     // Build field_mappings from sections - this provides type information for ALL fields
     let mut field_mappings = BTreeMap::new();
     for section in section_specs {
@@ -164,6 +167,7 @@ pub fn build_ast(
         field_mappings,
         resolver_hooks: resolver_hooks_ast,
         instruction_hooks: instruction_hooks_ast,
+        resolver_specs,
         computed_fields: computed_field_paths,
         computed_field_specs,
         content_hash: None,
@@ -172,6 +176,41 @@ pub fn build_ast(
     // Compute and set the content hash
     spec.content_hash = Some(spec.compute_content_hash());
     spec
+}
+
+fn build_resolver_specs(resolve_specs: &[parse::ResolveSpec]) -> Vec<ResolverSpec> {
+    let mut grouped: BTreeMap<String, ResolverSpec> = BTreeMap::new();
+
+    for spec in resolve_specs {
+        let key = format!("{}::{}", resolver_type_key(&spec.resolver), spec.from);
+
+        let entry = grouped.entry(key).or_insert_with(|| ResolverSpec {
+            resolver: spec.resolver.clone(),
+            input_path: spec.from.clone(),
+            extracts: Vec::new(),
+        });
+
+        let extract = ResolverExtractSpec {
+            target_path: spec.target_field_name.clone(),
+            source_path: spec.extract.clone(),
+            transform: None,
+        };
+
+        if !entry.extracts.iter().any(|existing| {
+            existing.target_path == extract.target_path
+                && existing.source_path == extract.source_path
+        }) {
+            entry.extracts.push(extract);
+        }
+    }
+
+    grouped.into_values().collect()
+}
+
+fn resolver_type_key(resolver: &ResolverType) -> &'static str {
+    match resolver {
+        ResolverType::Token => "token",
+    }
 }
 
 // ============================================================================
@@ -191,6 +230,7 @@ pub fn build_and_write_ast(
     derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
+    resolve_specs: &[parse::ResolveSpec],
     section_specs: &[EntitySection],
     idls: IdlLookup,
     views: Vec<crate::ast::ViewDef>,
@@ -206,6 +246,7 @@ pub fn build_and_write_ast(
         derive_from_mappings,
         aggregate_conditions,
         computed_fields,
+        resolve_specs,
         section_specs,
         idls,
         views,

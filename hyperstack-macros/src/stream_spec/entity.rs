@@ -16,9 +16,9 @@
 use std::collections::{HashMap, HashSet};
 
 use quote::{format_ident, quote};
-use syn::{Fields, ItemStruct, Type};
+use syn::{Fields, GenericArgument, ItemStruct, PathArguments, Type};
 
-use crate::ast::{EntitySection, FieldTypeInfo, ResolverHook};
+use crate::ast::{EntitySection, FieldTypeInfo, ResolverHook, ResolverType};
 use crate::codegen;
 use crate::event_type_helpers::IdlLookup;
 use crate::parse;
@@ -115,6 +115,7 @@ pub fn process_entity_struct_with_idl(
     let program_name = idl.map(|idl| idl.get_name());
     let mut has_events = false;
     let mut computed_fields: Vec<(String, proc_macro2::TokenStream, syn::Type)> = Vec::new();
+    let mut resolve_specs: Vec<parse::ResolveSpec> = Vec::new();
 
     // Level 1: Declarative hook macros passed from caller
     // resolver_hooks and pda_registrations are now passed as parameters
@@ -408,6 +409,28 @@ pub fn process_entity_struct_with_idl(
                             .or_default()
                             .push(derive_attr.clone());
                     }
+                } else if let Ok(Some(resolve_attr)) =
+                    parse::parse_resolve_attribute(attr, &field_name.to_string())
+                {
+                    has_attrs = true;
+
+                    state_fields.push(quote! {
+                        pub #field_name: #field_type
+                    });
+
+                    let resolver = if let Some(name) = resolve_attr.resolver.as_deref() {
+                        parse_resolver_type_name(name, field_type)
+                    } else {
+                        infer_resolver_type(field_type)
+                    }
+                    .unwrap_or_else(|err| panic!("{}", err));
+
+                    resolve_specs.push(parse::ResolveSpec {
+                        resolver,
+                        from: resolve_attr.from,
+                        extract: resolve_attr.extract,
+                        target_field_name: resolve_attr.target_field_name,
+                    });
                 } else if let Ok(Some(computed_attr)) =
                     parse::parse_computed_attribute(attr, &field_name.to_string())
                 {
@@ -445,6 +468,7 @@ pub fn process_entity_struct_with_idl(
                                 &mut events_by_instruction,
                                 &mut has_events,
                                 &mut computed_fields,
+                                &mut resolve_specs,
                                 &mut derive_from_mappings,
                                 &mut aggregate_conditions,
                                 program_name,
@@ -512,6 +536,7 @@ pub fn process_entity_struct_with_idl(
         &derive_from_mappings,
         &aggregate_conditions,
         &computed_fields,
+        &resolve_specs,
         &section_specs,
         idls,
         views,
@@ -690,6 +715,50 @@ fn field_emit_override(
     }
 
     field_type_info
+}
+
+pub(super) fn parse_resolver_type_name(name: &str, field_type: &Type) -> syn::Result<ResolverType> {
+    match name.to_lowercase().as_str() {
+        "token" => Ok(ResolverType::Token),
+        _ => Err(syn::Error::new_spanned(
+            field_type,
+            format!("Unknown resolver type '{}'.", name),
+        )),
+    }
+}
+
+pub(super) fn infer_resolver_type(field_type: &Type) -> syn::Result<ResolverType> {
+    let type_ident = extract_resolver_type_ident(field_type).ok_or_else(|| {
+        syn::Error::new_spanned(field_type, "Unable to infer resolver type from field")
+    })?;
+
+    match type_ident.as_str() {
+        "TokenMetadata" => Ok(ResolverType::Token),
+        _ => Err(syn::Error::new_spanned(
+            field_type,
+            format!("No resolver registered for type '{}'.", type_ident),
+        )),
+    }
+}
+
+fn extract_resolver_type_ident(field_type: &Type) -> Option<String> {
+    match field_type {
+        Type::Path(type_path) => {
+            let segment = type_path.path.segments.last()?;
+            if segment.ident == "Option" || segment.ident == "Vec" {
+                if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                    for arg in &args.args {
+                        if let GenericArgument::Type(inner_ty) = arg {
+                            return extract_resolver_type_ident(inner_ty);
+                        }
+                    }
+                }
+                return None;
+            }
+            Some(segment.ident.to_string())
+        }
+        _ => None,
+    }
 }
 
 // ============================================================================

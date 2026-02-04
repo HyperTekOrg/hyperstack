@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
 /// Context provided to primary key resolver functions
 pub struct ResolveContext<'a> {
     #[allow(dead_code)]
@@ -82,6 +84,15 @@ pub trait ReverseLookupUpdater {
         seed_value: String,
     ) -> Vec<crate::vm::PendingAccountUpdate>;
     fn flush_pending(&mut self, pda_address: &str) -> Vec<crate::vm::PendingAccountUpdate>;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenMetadata {
+    pub mint: String,
+    pub name: Option<String>,
+    pub symbol: Option<String>,
+    pub decimals: Option<u8>,
+    pub logo_uri: Option<String>,
 }
 
 impl<'a> InstructionContext<'a> {

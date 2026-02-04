@@ -180,6 +180,16 @@ pub enum OpCode {
         state: Register,
         computed_paths: Vec<String>,
     },
+    /// Queue a resolver for asynchronous enrichment
+    QueueResolver {
+        state_id: u32,
+        entity_name: String,
+        resolver: ResolverType,
+        input_path: String,
+        extracts: Vec<ResolverExtractSpec>,
+        state: Register,
+        key: Register,
+    },
     /// Update PDA reverse lookup table
     /// Maps a PDA address to its primary key for reverse lookups
     UpdatePdaReverseLookup {
@@ -196,6 +206,7 @@ pub struct EntityBytecode {
     pub entity_name: String,
     pub when_events: HashSet<String>,
     pub non_emitted_fields: HashSet<String>,
+    pub computed_paths: Vec<String>,
     /// Optional callback for evaluating computed fields
     #[allow(clippy::type_complexity)]
     pub computed_fields_evaluator: Option<
@@ -213,6 +224,7 @@ impl std::fmt::Debug for EntityBytecode {
             .field("entity_name", &self.entity_name)
             .field("when_events", &self.when_events)
             .field("non_emitted_fields", &self.non_emitted_fields)
+            .field("computed_paths", &self.computed_paths)
             .field(
                 "computed_fields_evaluator",
                 &self.computed_fields_evaluator.is_some(),
@@ -602,6 +614,7 @@ impl<S> TypedCompiler<S> {
             entity_name: self.entity_name.clone(),
             when_events,
             non_emitted_fields,
+            computed_paths: self.spec.computed_fields.clone(),
             computed_fields_evaluator: None,
         }
     }
@@ -636,6 +649,8 @@ impl<S> TypedCompiler<S> {
             ops.extend(self.compile_mapping(mapping, state_reg, key_reg));
         }
 
+        ops.extend(self.compile_resolvers(state_reg, key_reg));
+
         // Evaluate computed fields after all mappings but before updating state
         ops.push(OpCode::EvaluateComputedFields {
             state: state_reg,
@@ -653,6 +668,24 @@ impl<S> TypedCompiler<S> {
                 entity_name: self.entity_name.clone(),
                 key: key_reg,
                 state: state_reg,
+            });
+        }
+
+        ops
+    }
+
+    fn compile_resolvers(&self, state_reg: Register, key_reg: Register) -> Vec<OpCode> {
+        let mut ops = Vec::new();
+
+        for resolver_spec in &self.spec.resolver_specs {
+            ops.push(OpCode::QueueResolver {
+                state_id: self.state_id,
+                entity_name: self.entity_name.clone(),
+                resolver: resolver_spec.resolver.clone(),
+                input_path: resolver_spec.input_path.clone(),
+                extracts: resolver_spec.extracts.clone(),
+                state: state_reg,
+                key: key_reg,
             });
         }
 

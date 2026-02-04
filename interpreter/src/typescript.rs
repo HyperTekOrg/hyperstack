@@ -1317,6 +1317,8 @@ pub fn compile_stack_spec(
         &stack_kebab,
         &stack_spec.entities,
         &entity_names,
+        &stack_spec.pdas,
+        &stack_spec.program_ids,
         &config,
     );
 
@@ -1363,6 +1365,8 @@ fn generate_stack_definition_multi(
     stack_kebab: &str,
     entities: &[SerializableStreamSpec],
     entity_names: &[String],
+    pdas: &BTreeMap<String, BTreeMap<String, PdaDefinition>>,
+    program_ids: &[String],
     config: &TypeScriptStackConfig,
 ) -> String {
     let export_name = format!(
@@ -1386,21 +1390,18 @@ fn generate_stack_definition_multi(
 
         let mut view_entries = Vec::new();
 
-        // Always include state view
         view_entries.push(format!(
             "      state: stateView<{entity}>('{entity_name}/state'),",
             entity = entity_pascal,
             entity_name = entity_name
         ));
 
-        // Always include list view (built-in view, like state)
         view_entries.push(format!(
             "      list: listView<{entity}>('{entity_name}/list'),",
             entity = entity_pascal,
             entity_name = entity_name
         ));
 
-        // Include derived views
         for view in &entity_spec.views {
             if !view.id.ends_with("/state")
                 && !view.id.ends_with("/list")
@@ -1425,7 +1426,8 @@ fn generate_stack_definition_multi(
 
     let views_body = entity_view_blocks.join("\n");
 
-    // Generate entity type union for convenience
+    let pdas_block = generate_pdas_block(pdas, program_ids);
+
     let entity_types: Vec<String> = entity_names.iter().map(|n| to_pascal_case(n)).collect();
 
     format!(
@@ -1441,7 +1443,7 @@ export const {export_name} = {{
 {url_line}
   views: {{
 {views_body}
-  }},
+  }},{pdas_section}
 }} as const;
 
 /** Type alias for the stack */
@@ -1459,8 +1461,72 @@ export default {export_name};"#,
         stack_kebab = stack_kebab,
         url_line = url_line,
         views_body = views_body,
+        pdas_section = pdas_block,
         entity_union = entity_types.join(" | "),
     )
+}
+
+fn generate_pdas_block(
+    pdas: &BTreeMap<String, BTreeMap<String, PdaDefinition>>,
+    program_ids: &[String],
+) -> String {
+    if pdas.is_empty() {
+        return String::new();
+    }
+
+    let mut program_blocks = Vec::new();
+
+    for (program_name, program_pdas) in pdas {
+        if program_pdas.is_empty() {
+            continue;
+        }
+
+        let program_id = program_ids.first().cloned().unwrap_or_default();
+
+        let mut pda_entries = Vec::new();
+        for (pda_name, pda_def) in program_pdas {
+            let seeds_str = pda_def
+                .seeds
+                .iter()
+                .map(|seed| match seed {
+                    PdaSeedDef::Literal { value } => format!("literal('{}')", value),
+                    PdaSeedDef::AccountRef { account_name } => {
+                        format!("account('{}')", account_name)
+                    }
+                    PdaSeedDef::ArgRef { arg_name, arg_type } => {
+                        if let Some(t) = arg_type {
+                            format!("arg('{}', '{}')", arg_name, t)
+                        } else {
+                            format!("arg('{}')", arg_name)
+                        }
+                    }
+                    PdaSeedDef::Bytes { value } => {
+                        let bytes_arr: Vec<String> = value.iter().map(|b| b.to_string()).collect();
+                        format!("bytes(new Uint8Array([{}]))", bytes_arr.join(", "))
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            let pid = pda_def.program_id.as_ref().unwrap_or(&program_id);
+            pda_entries.push(format!(
+                "      {}: pda('{}', {}),",
+                pda_name, pid, seeds_str
+            ));
+        }
+
+        program_blocks.push(format!(
+            "    {}: {{\n{}\n    }},",
+            program_name,
+            pda_entries.join("\n")
+        ));
+    }
+
+    if program_blocks.is_empty() {
+        return String::new();
+    }
+
+    format!("\n  pdas: {{\n{}\n  }},", program_blocks.join("\n"))
 }
 
 fn generate_view_helpers_static() -> String {
@@ -1553,6 +1619,7 @@ mod tests {
             sections: vec![],
             field_mappings: BTreeMap::new(),
             resolver_hooks: vec![],
+            resolver_specs: vec![],
             instruction_hooks: vec![],
             computed_fields: vec![],
             computed_field_specs: vec![],

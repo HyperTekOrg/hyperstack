@@ -847,6 +847,7 @@ fn convert_anchor_pda_to_def(name: &str, pda: &idl_parser::IdlPda) -> PdaDefinit
 
     let program_id = pda.program.as_ref().and_then(|p| match p {
         idl_parser::IdlPdaProgram::Literal { value, .. } => Some(value.clone()),
+        idl_parser::IdlPdaProgram::Const { value, .. } => Some(bs58::encode(value).into_string()),
         idl_parser::IdlPdaProgram::Account { .. } => None,
     });
 

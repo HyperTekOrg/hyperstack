@@ -243,6 +243,32 @@ pub struct ComputedFieldSpec {
     pub result_type: String,
 }
 
+// ==========================================================================
+// Resolver Specifications
+// ==========================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum ResolverType {
+    Token,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolverExtractSpec {
+    pub target_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transform: Option<Transformation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolverSpec {
+    pub resolver: ResolverType,
+    pub input_path: String,
+    pub extracts: Vec<ResolverExtractSpec>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ComputedExpr {
     // Existing variants
@@ -390,6 +416,8 @@ pub struct SerializableStreamSpec {
     pub field_mappings: BTreeMap<String, FieldTypeInfo>,
     pub resolver_hooks: Vec<ResolverHook>,
     pub instruction_hooks: Vec<InstructionHook>,
+    #[serde(default)]
+    pub resolver_specs: Vec<ResolverSpec>,
     #[serde(default)]
     pub computed_fields: Vec<String>,
     #[serde(default)]
@@ -944,8 +972,9 @@ pub struct SerializableStackSpec {
     #[serde(default)]
     pub idls: Vec<IdlSnapshot>,
     pub entities: Vec<SerializableStreamSpec>,
+    /// Outer key = program name, inner key = PDA name
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub pdas: BTreeMap<String, PdaDefinition>,
+    pub pdas: BTreeMap<String, BTreeMap<String, PdaDefinition>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub instructions: Vec<InstructionDef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

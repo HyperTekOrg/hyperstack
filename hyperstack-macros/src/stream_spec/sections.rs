@@ -305,6 +305,7 @@ pub fn process_nested_struct(
     events_by_instruction: &mut HashMap<String, Vec<(String, parse::EventAttribute, Type)>>,
     has_events: &mut bool,
     computed_fields: &mut Vec<(String, proc_macro2::TokenStream, Type)>,
+    resolve_specs: &mut Vec<parse::ResolveSpec>,
     derive_from_mappings: &mut HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &mut HashMap<String, String>,
     program_name: Option<&str>,
@@ -546,6 +547,27 @@ pub fn process_nested_struct(
                         computed_attr.expression.clone(),
                         field_type.clone(),
                     ));
+                } else if let Ok(Some(resolve_attr)) =
+                    parse::parse_resolve_attribute(attr, &field_name.to_string())
+                {
+                    let resolver = if let Some(name) = resolve_attr.resolver.as_deref() {
+                        super::entity::parse_resolver_type_name(name, field_type)
+                    } else {
+                        super::entity::infer_resolver_type(field_type)
+                    }
+                    .unwrap_or_else(|err| panic!("{}", err));
+
+                    let mut target_field_name = resolve_attr.target_field_name;
+                    if !target_field_name.contains('.') {
+                        target_field_name = format!("{}.{}", section_name, target_field_name);
+                    }
+
+                    resolve_specs.push(parse::ResolveSpec {
+                        resolver,
+                        from: resolve_attr.from,
+                        extract: resolve_attr.extract,
+                        target_field_name,
+                    });
                 }
             }
         }

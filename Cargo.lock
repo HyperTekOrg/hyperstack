@@ -1230,6 +1230,7 @@ dependencies = [
  "hyperstack-macros",
  "hyperstack-sdk",
  "hyperstack-server",
+ "reqwest",
  "serde",
  "serde_json",
  "smallvec",
@@ -1293,6 +1294,7 @@ dependencies = [
 name = "hyperstack-macros"
 version = "0.4.3"
 dependencies = [
+ "bs58",
  "hex",
  "proc-macro2",
  "quote",

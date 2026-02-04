@@ -121,6 +121,8 @@ pub enum IdlPdaProgram {
     Account { kind: String, path: String },
     /// Literal program ID
     Literal { kind: String, value: String },
+    /// Constant program ID as bytes
+    Const { kind: String, value: Vec<u8> },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

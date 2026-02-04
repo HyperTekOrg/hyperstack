@@ -1,12 +1,13 @@
 use crate::ast::{
-    BinaryOp, ComparisonOp, ComputedExpr, ComputedFieldSpec, FieldPath, Transformation,
+    BinaryOp, ComparisonOp, ComputedExpr, ComputedFieldSpec, FieldPath, ResolverExtractSpec,
+    ResolverType, Transformation,
 };
 use crate::compiler::{MultiEntityBytecode, OpCode};
 use crate::Mutation;
 use dashmap::DashMap;
 use lru::LruCache;
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::num::NonZeroUsize;
 
 #[cfg(feature = "otel")]
@@ -171,6 +172,8 @@ const DEFAULT_MAX_TEMPORAL_INDEX_KEYS: usize = 2_500;
 
 const DEFAULT_MAX_PDA_REVERSE_LOOKUP_ENTRIES: usize = 2_500;
 
+const DEFAULT_MAX_RESOLVER_CACHE_ENTRIES: usize = 5_000;
+
 /// Estimate the size of a JSON value in bytes
 fn estimate_json_size(value: &Value) -> usize {
     match value {
@@ -307,6 +310,11 @@ pub struct VmContext {
     pub pda_cache_hits: u64,
     pub pda_cache_misses: u64,
     pub pending_queue_size: u64,
+    resolver_requests: VecDeque<ResolverRequest>,
+    resolver_pending: HashMap<String, PendingResolverEntry>,
+    resolver_cache: LruCache<String, Value>,
+    pub resolver_cache_hits: u64,
+    pub resolver_cache_misses: u64,
     current_context: Option<UpdateContext>,
     warnings: Vec<String>,
     last_pda_lookup_miss: Option<String>,
@@ -366,6 +374,20 @@ fn value_to_cache_key(value: &Value) -> String {
         Value::Null => "null".to_string(),
         _ => serde_json::to_string(value).unwrap_or_else(|_| "unknown".to_string()),
     }
+}
+
+fn resolver_type_key(resolver: &ResolverType) -> &'static str {
+    match resolver {
+        ResolverType::Token => "token",
+    }
+}
+
+fn resolver_cache_key(resolver: &ResolverType, input: &Value) -> String {
+    format!(
+        "{}:{}",
+        resolver_type_key(resolver),
+        value_to_cache_key(input)
+    )
 }
 
 #[derive(Debug)]
@@ -560,6 +582,53 @@ pub struct DeferredWhenOperation {
     pub slot: u64,
     pub deferred_at: i64,
     pub emit: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolverRequest {
+    pub cache_key: String,
+    pub resolver: ResolverType,
+    pub input: Value,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolverTarget {
+    pub state_id: u32,
+    pub entity_name: String,
+    pub primary_key: Value,
+    pub extracts: Vec<ResolverExtractSpec>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingResolverEntry {
+    pub resolver: ResolverType,
+    pub input: Value,
+    pub targets: Vec<ResolverTarget>,
+    pub queued_at: i64,
+}
+
+impl PendingResolverEntry {
+    fn add_target(&mut self, target: ResolverTarget) {
+        if let Some(existing) = self.targets.iter_mut().find(|t| {
+            t.state_id == target.state_id
+                && t.entity_name == target.entity_name
+                && t.primary_key == target.primary_key
+        }) {
+            let mut seen = HashSet::new();
+            for extract in &existing.extracts {
+                seen.insert((extract.target_path.clone(), extract.source_path.clone()));
+            }
+
+            for extract in target.extracts {
+                let key = (extract.target_path.clone(), extract.source_path.clone());
+                if seen.insert(key) {
+                    existing.extracts.push(extract);
+                }
+            }
+        } else {
+            self.targets.push(target);
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -822,6 +891,14 @@ impl VmContext {
             pda_cache_hits: 0,
             pda_cache_misses: 0,
             pending_queue_size: 0,
+            resolver_requests: VecDeque::new(),
+            resolver_pending: HashMap::new(),
+            resolver_cache: LruCache::new(
+                NonZeroUsize::new(DEFAULT_MAX_RESOLVER_CACHE_ENTRIES)
+                    .expect("capacity must be > 0"),
+            ),
+            resolver_cache_hits: 0,
+            resolver_cache_misses: 0,
             current_context: None,
             warnings: Vec::new(),
             last_pda_lookup_miss: None,
@@ -864,6 +941,14 @@ impl VmContext {
             pda_cache_hits: 0,
             pda_cache_misses: 0,
             pending_queue_size: 0,
+            resolver_requests: VecDeque::new(),
+            resolver_pending: HashMap::new(),
+            resolver_cache: LruCache::new(
+                NonZeroUsize::new(DEFAULT_MAX_RESOLVER_CACHE_ENTRIES)
+                    .expect("capacity must be > 0"),
+            ),
+            resolver_cache_hits: 0,
+            resolver_cache_misses: 0,
             current_context: None,
             warnings: Vec::new(),
             last_pda_lookup_miss: None,
@@ -894,6 +979,224 @@ impl VmContext {
             },
         );
         vm
+    }
+
+    pub fn take_resolver_requests(&mut self) -> Vec<ResolverRequest> {
+        self.resolver_requests.drain(..).collect()
+    }
+
+    pub fn restore_resolver_requests(&mut self, requests: Vec<ResolverRequest>) {
+        if requests.is_empty() {
+            return;
+        }
+
+        self.resolver_requests.extend(requests);
+    }
+
+    pub fn apply_resolver_result(
+        &mut self,
+        bytecode: &MultiEntityBytecode,
+        cache_key: &str,
+        resolved_value: Value,
+    ) -> Result<Vec<Mutation>> {
+        self.resolver_cache
+            .put(cache_key.to_string(), resolved_value.clone());
+
+        let entry = match self.resolver_pending.remove(cache_key) {
+            Some(entry) => entry,
+            None => return Ok(Vec::new()),
+        };
+
+        let mut mutations = Vec::new();
+
+        for target in entry.targets {
+            if target.primary_key.is_null() {
+                continue;
+            }
+
+            let entity_bytecode = match bytecode.entities.get(&target.entity_name) {
+                Some(bc) => bc,
+                None => continue,
+            };
+
+            let state = match self.states.get(&target.state_id) {
+                Some(s) => s,
+                None => continue,
+            };
+
+            let mut entity_state = state
+                .get_and_touch(&target.primary_key)
+                .unwrap_or_else(|| json!({}));
+
+            let mut dirty_tracker = DirtyTracker::new();
+            let should_emit = |path: &str| !entity_bytecode.non_emitted_fields.contains(path);
+
+            Self::apply_resolver_extractions_to_value(
+                &mut entity_state,
+                &resolved_value,
+                &target.extracts,
+                &mut dirty_tracker,
+                &should_emit,
+            )?;
+
+            if let Some(evaluator) = entity_bytecode.computed_fields_evaluator.as_ref() {
+                let old_values: Vec<_> = entity_bytecode
+                    .computed_paths
+                    .iter()
+                    .map(|path| Self::get_value_at_path(&entity_state, path))
+                    .collect();
+
+                let eval_result = evaluator(&mut entity_state);
+                if eval_result.is_ok() {
+                    for (path, old_value) in
+                        entity_bytecode.computed_paths.iter().zip(old_values.iter())
+                    {
+                        let new_value = Self::get_value_at_path(&entity_state, path);
+                        if new_value != *old_value && should_emit(path) {
+                            dirty_tracker.mark_replaced(path);
+                        }
+                    }
+                }
+            }
+
+            state.insert_with_eviction(target.primary_key.clone(), entity_state.clone());
+
+            if dirty_tracker.is_empty() {
+                continue;
+            }
+
+            let patch = Self::build_partial_state_from_value(&entity_state, &dirty_tracker)?;
+
+            mutations.push(Mutation {
+                export: target.entity_name.clone(),
+                key: target.primary_key.clone(),
+                patch,
+                append: vec![],
+            });
+        }
+
+        Ok(mutations)
+    }
+
+    fn enqueue_resolver_request(
+        &mut self,
+        cache_key: String,
+        resolver: ResolverType,
+        input: Value,
+        target: ResolverTarget,
+    ) {
+        if let Some(entry) = self.resolver_pending.get_mut(&cache_key) {
+            entry.add_target(target);
+            return;
+        }
+
+        let queued_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        self.resolver_pending.insert(
+            cache_key.clone(),
+            PendingResolverEntry {
+                resolver: resolver.clone(),
+                input: input.clone(),
+                targets: vec![target],
+                queued_at,
+            },
+        );
+
+        self.resolver_requests.push_back(ResolverRequest {
+            cache_key,
+            resolver,
+            input,
+        });
+    }
+
+    fn apply_resolver_extractions_to_value<F>(
+        state: &mut Value,
+        resolved_value: &Value,
+        extracts: &[ResolverExtractSpec],
+        dirty_tracker: &mut DirtyTracker,
+        should_emit: &F,
+    ) -> Result<()>
+    where
+        F: Fn(&str) -> bool,
+    {
+        for extract in extracts {
+            let resolved = match extract.source_path.as_deref() {
+                Some(path) => Self::get_value_at_path(resolved_value, path),
+                None => Some(resolved_value.clone()),
+            };
+
+            let Some(value) = resolved else {
+                continue;
+            };
+
+            let value = if let Some(transform) = &extract.transform {
+                Self::apply_transformation(&value, transform)?
+            } else {
+                value
+            };
+
+            Self::set_nested_field_value(state, &extract.target_path, value)?;
+            if should_emit(&extract.target_path) {
+                dirty_tracker.mark_replaced(&extract.target_path);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn build_partial_state_from_value(state: &Value, tracker: &DirtyTracker) -> Result<Value> {
+        if tracker.is_empty() {
+            return Ok(json!({}));
+        }
+
+        let mut partial = serde_json::Map::new();
+
+        for (path, change) in tracker.iter() {
+            let segments: Vec<&str> = path.split('.').collect();
+
+            let value_to_insert = match change {
+                FieldChange::Replaced => {
+                    let mut current = state;
+                    let mut found = true;
+
+                    for segment in &segments {
+                        match current.get(*segment) {
+                            Some(v) => current = v,
+                            None => {
+                                found = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if !found {
+                        continue;
+                    }
+                    current.clone()
+                }
+                FieldChange::Appended(values) => Value::Array(values.clone()),
+            };
+
+            let mut target = &mut partial;
+            for (i, segment) in segments.iter().enumerate() {
+                if i == segments.len() - 1 {
+                    target.insert(segment.to_string(), value_to_insert.clone());
+                } else {
+                    target
+                        .entry(segment.to_string())
+                        .or_insert_with(|| json!({}));
+                    target = target
+                        .get_mut(*segment)
+                        .and_then(|v| v.as_object_mut())
+                        .ok_or("Failed to build nested structure")?;
+                }
+            }
+        }
+
+        Ok(Value::Object(partial))
     }
 
     /// Get a mutable reference to a state table by ID
@@ -1672,7 +1975,7 @@ impl VmContext {
                         self.transform_in_place(*source, transformation)?;
                     } else {
                         let source_value = &self.registers[*source];
-                        let value = self.apply_transformation(source_value, transformation)?;
+                        let value = Self::apply_transformation(source_value, transformation)?;
                         self.registers[*dest] = value;
                     }
                     pc += 1;
@@ -2158,6 +2461,76 @@ impl VmContext {
                     }
                     pc += 1;
                 }
+                OpCode::QueueResolver {
+                    state_id: _,
+                    entity_name,
+                    resolver,
+                    input_path,
+                    extracts,
+                    state,
+                    key,
+                } => {
+                    let actual_state_id = override_state_id;
+                    let input_value = Self::get_value_at_path(&self.registers[*state], input_path);
+
+                    if let Some(input) = input_value {
+                        let key_value = &self.registers[*key];
+
+                        if input.is_null() || key_value.is_null() {
+                            tracing::warn!(
+                                entity = %entity_name,
+                                resolver = ?resolver,
+                                input_path = %input_path,
+                                input_is_null = input.is_null(),
+                                key_is_null = key_value.is_null(),
+                                input = ?input,
+                                key = ?key_value,
+                                "Resolver skipped: null input or key"
+                            );
+                            pc += 1;
+                            continue;
+                        }
+
+                        let cache_key = resolver_cache_key(resolver, &input);
+
+                        let cached_value = self.resolver_cache.get(&cache_key).cloned();
+                        if let Some(cached) = cached_value {
+                            self.resolver_cache_hits += 1;
+                            Self::apply_resolver_extractions_to_value(
+                                &mut self.registers[*state],
+                                &cached,
+                                extracts,
+                                &mut dirty_tracker,
+                                &should_emit,
+                            )?;
+                        } else {
+                            self.resolver_cache_misses += 1;
+                            let target = ResolverTarget {
+                                state_id: actual_state_id,
+                                entity_name: entity_name.clone(),
+                                primary_key: self.registers[*key].clone(),
+                                extracts: extracts.clone(),
+                            };
+
+                            self.enqueue_resolver_request(
+                                cache_key,
+                                resolver.clone(),
+                                input,
+                                target,
+                            );
+                        }
+                    } else {
+                        tracing::warn!(
+                            entity = %entity_name,
+                            resolver = ?resolver,
+                            input_path = %input_path,
+                            state = ?self.registers[*state],
+                            "Resolver skipped: input path not found in state"
+                        );
+                    }
+
+                    pc += 1;
+                }
                 OpCode::UpdatePdaReverseLookup {
                     state_id: _,
                     lookup_name,
@@ -2628,16 +3001,12 @@ impl VmContext {
 
     fn transform_in_place(&mut self, reg: Register, transformation: &Transformation) -> Result<()> {
         let value = &self.registers[reg];
-        let transformed = self.apply_transformation(value, transformation)?;
+        let transformed = Self::apply_transformation(value, transformation)?;
         self.registers[reg] = transformed;
         Ok(())
     }
 
-    fn apply_transformation(
-        &self,
-        value: &Value,
-        transformation: &Transformation,
-    ) -> Result<Value> {
+    fn apply_transformation(value: &Value, transformation: &Transformation) -> Result<Value> {
         match transformation {
             Transformation::HexEncode => {
                 if let Some(arr) = value.as_array() {

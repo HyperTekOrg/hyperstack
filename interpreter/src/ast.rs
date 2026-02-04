@@ -359,6 +359,32 @@ pub struct ComputedFieldSpec {
     pub result_type: String,
 }
 
+// ============================================================================
+// Resolver Specifications
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum ResolverType {
+    Token,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolverExtractSpec {
+    pub target_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transform: Option<Transformation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolverSpec {
+    pub resolver: ResolverType,
+    pub input_path: String,
+    pub extracts: Vec<ResolverExtractSpec>,
+}
+
 /// AST for computed field expressions
 /// Supports a subset of Rust expressions needed for computed fields:
 /// - Field references (possibly from other sections)
@@ -529,6 +555,8 @@ pub struct SerializableStreamSpec {
     pub field_mappings: BTreeMap<String, FieldTypeInfo>,
     pub resolver_hooks: Vec<ResolverHook>,
     pub instruction_hooks: Vec<InstructionHook>,
+    #[serde(default)]
+    pub resolver_specs: Vec<ResolverSpec>,
     /// Computed field paths (legacy, for backward compatibility)
     #[serde(default)]
     pub computed_fields: Vec<String>,
@@ -553,6 +581,7 @@ pub struct TypedStreamSpec<S> {
     pub field_mappings: BTreeMap<String, FieldTypeInfo>, // NEW: All field type info by target path
     pub resolver_hooks: Vec<ResolverHook>, // NEW: Resolver hooks for PDA key resolution
     pub instruction_hooks: Vec<InstructionHook>, // NEW: Instruction hooks for PDA registration
+    pub resolver_specs: Vec<ResolverSpec>,
     pub computed_fields: Vec<String>, // List of computed field paths
     _phantom: PhantomData<S>,
 }
@@ -571,6 +600,7 @@ impl<S> TypedStreamSpec<S> {
             field_mappings: BTreeMap::new(),
             resolver_hooks: Vec::new(),
             instruction_hooks: Vec::new(),
+            resolver_specs: Vec::new(),
             computed_fields: Vec::new(),
             _phantom: PhantomData,
         }
@@ -592,9 +622,15 @@ impl<S> TypedStreamSpec<S> {
             field_mappings,
             resolver_hooks: Vec::new(),
             instruction_hooks: Vec::new(),
+            resolver_specs: Vec::new(),
             computed_fields: Vec::new(),
             _phantom: PhantomData,
         }
+    }
+
+    pub fn with_resolver_specs(mut self, resolver_specs: Vec<ResolverSpec>) -> Self {
+        self.resolver_specs = resolver_specs;
+        self
     }
 
     /// Get type information for a specific field path
@@ -627,6 +663,7 @@ impl<S> TypedStreamSpec<S> {
             field_mappings: self.field_mappings.clone(),
             resolver_hooks: self.resolver_hooks.clone(),
             instruction_hooks: self.instruction_hooks.clone(),
+            resolver_specs: self.resolver_specs.clone(),
             computed_fields: self.computed_fields.clone(),
             computed_field_specs: Vec::new(),
             content_hash: None,
@@ -650,6 +687,7 @@ impl<S> TypedStreamSpec<S> {
             field_mappings: spec.field_mappings,
             resolver_hooks: spec.resolver_hooks,
             instruction_hooks: spec.instruction_hooks,
+            resolver_specs: spec.resolver_specs,
             computed_fields: spec.computed_fields,
             _phantom: PhantomData,
         }
@@ -1430,9 +1468,10 @@ pub struct SerializableStackSpec {
     pub idls: Vec<IdlSnapshot>,
     /// All entity specifications in this stack
     pub entities: Vec<SerializableStreamSpec>,
-    /// PDA registry - defines all PDAs for the stack
+    /// PDA registry - defines all PDAs for the stack, grouped by program name
+    /// Outer key is program name (e.g., "ore", "entropy"), inner key is PDA name
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub pdas: BTreeMap<String, PdaDefinition>,
+    pub pdas: BTreeMap<String, BTreeMap<String, PdaDefinition>>,
     /// Instruction definitions for SDK code generation
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub instructions: Vec<InstructionDef>,

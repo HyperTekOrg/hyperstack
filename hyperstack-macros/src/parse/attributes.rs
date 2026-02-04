@@ -8,6 +8,8 @@ use std::collections::HashMap;
 use syn::parse::{Parse, ParseStream};
 use syn::{Attribute, Path, Token};
 
+use crate::ast::ResolverType;
+
 #[derive(Debug, Clone)]
 pub struct RegisterFromSpec {
     pub instruction_path: Path,
@@ -942,6 +944,96 @@ pub fn parse_aggregate_attribute(
 // ============================================================================
 // Computed Macro - Declarative Computed Fields
 // ============================================================================
+
+#[derive(Debug, Clone)]
+pub struct ResolveAttribute {
+    pub from: String,
+    pub extract: Option<String>,
+    pub target_field_name: String,
+    pub resolver: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolveSpec {
+    pub resolver: ResolverType,
+    pub from: String,
+    pub extract: Option<String>,
+    pub target_field_name: String,
+}
+
+struct ResolveAttributeArgs {
+    from: Option<String>,
+    extract: Option<String>,
+    resolver: Option<String>,
+}
+
+impl Parse for ResolveAttributeArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut from = None;
+        let mut extract = None;
+        let mut resolver = None;
+
+        while !input.is_empty() {
+            let ident: syn::Ident = input.parse()?;
+            let ident_str = ident.to_string();
+
+            input.parse::<Token![=]>()?;
+
+            if ident_str == "from" {
+                let lit: syn::LitStr = input.parse()?;
+                from = Some(lit.value());
+            } else if ident_str == "extract" {
+                let lit: syn::LitStr = input.parse()?;
+                extract = Some(lit.value());
+            } else if ident_str == "resolver" {
+                if input.peek(syn::LitStr) {
+                    let lit: syn::LitStr = input.parse()?;
+                    resolver = Some(lit.value());
+                } else {
+                    let ident: syn::Ident = input.parse()?;
+                    resolver = Some(ident.to_string());
+                }
+            } else {
+                return Err(syn::Error::new(
+                    ident.span(),
+                    format!("Unknown resolve attribute argument: {}", ident_str),
+                ));
+            }
+
+            if !input.is_empty() {
+                input.parse::<Token![,]>()?;
+            }
+        }
+
+        Ok(ResolveAttributeArgs {
+            from,
+            extract,
+            resolver,
+        })
+    }
+}
+
+pub fn parse_resolve_attribute(
+    attr: &Attribute,
+    target_field_name: &str,
+) -> syn::Result<Option<ResolveAttribute>> {
+    if !attr.path().is_ident("resolve") {
+        return Ok(None);
+    }
+
+    let args: ResolveAttributeArgs = attr.parse_args()?;
+
+    let from = args
+        .from
+        .ok_or_else(|| syn::Error::new_spanned(attr, "#[resolve] requires 'from' parameter"))?;
+
+    Ok(Some(ResolveAttribute {
+        from,
+        extract: args.extract,
+        target_field_name: target_field_name.to_string(),
+        resolver: args.resolver,
+    }))
+}
 
 #[derive(Debug, Clone)]
 pub struct ComputedAttribute {
