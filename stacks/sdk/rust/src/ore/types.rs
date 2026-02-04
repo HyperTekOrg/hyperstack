@@ -101,11 +101,19 @@ pub struct OreTreasuryState {
     #[serde(default)]
     pub motherlode: Option<Option<u64>>,
     #[serde(default)]
+    pub motherlode_ui: Option<Option<f64>>,
+    #[serde(default)]
     pub total_refined: Option<Option<u64>>,
+    #[serde(default)]
+    pub total_refined_ui: Option<Option<f64>>,
     #[serde(default)]
     pub total_staked: Option<Option<u64>>,
     #[serde(default)]
+    pub total_staked_ui: Option<Option<f64>>,
+    #[serde(default)]
     pub total_unclaimed: Option<Option<u64>>,
+    #[serde(default)]
+    pub total_unclaimed_ui: Option<Option<f64>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -100,7 +100,13 @@ export const OreRoundSchema = z.object({
   state: OreRoundStateSchema.optional(),
 });
 
-export const OreRoundCompletedSchema = OreRoundSchema;
+export const OreRoundCompletedSchema = z.object({
+  entropy: OreRoundEntropySchema,
+  id: OreRoundIdSchema,
+  metrics: OreRoundMetricsSchema,
+  results: OreRoundResultsSchema,
+  state: OreRoundStateSchema,
+});
 
 export interface OreTreasuryId {
   address?: string | null;
@@ -109,9 +115,13 @@ export interface OreTreasuryId {
 export interface OreTreasuryState {
   balance?: number | null;
   motherlode?: number | null;
+  motherlode_ui?: number | null;
   total_refined?: number | null;
+  total_refined_ui?: number | null;
   total_staked?: number | null;
+  total_staked_ui?: number | null;
   total_unclaimed?: number | null;
+  total_unclaimed_ui?: number | null;
 }
 
 export interface OreTreasury {
@@ -151,9 +161,13 @@ export const OreTreasuryIdSchema = z.object({
 export const OreTreasuryStateSchema = z.object({
   balance: z.number().nullable().optional(),
   motherlode: z.number().nullable().optional(),
+  motherlode_ui: z.number().nullable().optional(),
   total_refined: z.number().nullable().optional(),
+  total_refined_ui: z.number().nullable().optional(),
   total_staked: z.number().nullable().optional(),
+  total_staked_ui: z.number().nullable().optional(),
   total_unclaimed: z.number().nullable().optional(),
+  total_unclaimed_ui: z.number().nullable().optional(),
 });
 
 export const OreTreasurySchema = z.object({
@@ -162,7 +176,9 @@ export const OreTreasurySchema = z.object({
   treasury_snapshot: TreasurySchema.nullable().optional(),
 });
 
-export const OreTreasuryCompletedSchema = OreTreasurySchema.extend({
+export const OreTreasuryCompletedSchema = z.object({
+  id: OreTreasuryIdSchema,
+  state: OreTreasuryStateSchema,
   treasury_snapshot: TreasurySchema,
 });
 
@@ -308,7 +324,11 @@ export const OreMinerSchema = z.object({
   automation_snapshot: AutomationSchema.nullable().optional(),
 });
 
-export const OreMinerCompletedSchema = OreMinerSchema.extend({
+export const OreMinerCompletedSchema = z.object({
+  automation: OreMinerAutomationSchema,
+  id: OreMinerIdSchema,
+  rewards: OreMinerRewardsSchema,
+  state: OreMinerStateSchema,
   miner_snapshot: MinerSchema,
   automation_snapshot: AutomationSchema,
 });
