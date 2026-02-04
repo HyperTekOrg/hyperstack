@@ -169,11 +169,12 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
         let main_interface = self.generate_main_entity_interface();
         interfaces.push(main_interface);
 
-        // Generate nested interfaces for resolved types (instructions, accounts, etc.)
         let nested_interfaces = self.generate_nested_interfaces();
         interfaces.extend(nested_interfaces);
 
-        // Generate EventWrapper interface if there are any event types
+        let builtin_interfaces = self.generate_builtin_resolver_interfaces();
+        interfaces.extend(builtin_interfaces);
+
         if self.has_event_types() {
             interfaces.push(self.generate_event_wrapper_interface());
         }
@@ -467,6 +468,10 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
             }
         };
 
+        for (schema_name, definition) in self.generate_builtin_resolver_schemas() {
+            push_schema(schema_name, definition);
+        }
+
         if self.has_event_types() {
             push_schema(
                 "EventWrapperSchema".to_string(),
@@ -521,6 +526,56 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
   signature: z.string().optional(),
 });"#
             .to_string()
+    }
+
+    fn generate_builtin_resolver_schemas(&self) -> Vec<(String, String)> {
+        let mut schemas = Vec::new();
+
+        if self.uses_builtin_type("TokenMetadata") {
+            schemas.push((
+                "TokenMetadataSchema".to_string(),
+                r#"export const TokenMetadataSchema = z.object({
+  mint: z.string(),
+  name: z.string().nullable().optional(),
+  symbol: z.string().nullable().optional(),
+  decimals: z.number().nullable().optional(),
+  logo_uri: z.string().nullable().optional(),
+});"#
+                    .to_string(),
+            ));
+        }
+
+        schemas
+    }
+
+    fn uses_builtin_type(&self, type_name: &str) -> bool {
+        for section in &self.spec.sections {
+            for field in &section.fields {
+                if field.inner_type.as_deref() == Some(type_name) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn generate_builtin_resolver_interfaces(&self) -> Vec<String> {
+        let mut interfaces = Vec::new();
+
+        if self.uses_builtin_type("TokenMetadata") {
+            interfaces.push(
+                r#"export interface TokenMetadata {
+  mint: string;
+  name?: string | null;
+  symbol?: string | null;
+  decimals?: number | null;
+  logo_uri?: string | null;
+}"#
+                .to_string(),
+            );
+        }
+
+        interfaces
     }
 
     fn collect_main_entity_fields(&self) -> Vec<TypeScriptField> {
@@ -628,75 +683,8 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
     }
 
     fn generate_completed_entity_schema(&self, entity_name: &str) -> String {
-        let mut root_overrides: Vec<TypeScriptField> = Vec::new();
-        let mut nested_overrides: BTreeMap<String, Vec<TypeScriptField>> = BTreeMap::new();
-
-        for section in &self.spec.sections {
-            for field in &section.fields {
-                if !field.emit {
-                    continue;
-                }
-                if !matches!(&field.resolved_type, Some(resolved) if !resolved.is_event && !resolved.is_instruction)
-                {
-                    continue;
-                }
-
-                let ts_type = self.field_type_info_to_typescript(field);
-
-                if is_root_section(&section.name) {
-                    root_overrides.push(TypeScriptField {
-                        name: field.field_name.clone(),
-                        ts_type,
-                        optional: false,
-                        description: None,
-                    });
-                } else {
-                    let entry = nested_overrides.entry(section.name.clone()).or_default();
-                    entry.push(TypeScriptField {
-                        name: field.field_name.clone(),
-                        ts_type,
-                        optional: false,
-                        description: None,
-                    });
-                }
-            }
-        }
-
-        if root_overrides.is_empty() && nested_overrides.is_empty() {
-            return format!(
-                "export const {}CompletedSchema = {}Schema;",
-                entity_name, entity_name
-            );
-        }
-
-        let mut override_lines = Vec::new();
-
-        for field in &root_overrides {
-            let schema = self.typescript_type_to_zod(&field.ts_type);
-            override_lines.push(format!("  {}: {},", field.name, schema));
-        }
-
-        for (section_name, fields) in &nested_overrides {
-            let interface_name = self.section_interface_name(section_name);
-            let mut nested_lines = Vec::new();
-            for field in fields {
-                let schema = self.typescript_type_to_zod(&field.ts_type);
-                nested_lines.push(format!("    {}: {},", field.name, schema));
-            }
-            override_lines.push(format!(
-                "  {}: {}Schema.extend({{\n{}\n  }}),",
-                section_name,
-                interface_name,
-                nested_lines.join("\n")
-            ));
-        }
-
-        format!(
-            "export const {}CompletedSchema = {}Schema.extend({{\n{}\n}});",
-            entity_name,
-            entity_name,
-            override_lines.join("\n")
-        )
+        let main_fields = self.collect_main_entity_fields();
+        self.generate_schema_for_fields(&format!("{}Completed", entity_name), &main_fields, true)
     }
 
     fn generate_resolved_type_schemas(&self) -> Vec<(String, String)> {
@@ -1098,13 +1086,10 @@ export default {};"#,
         }
     }
 
-    /// Convert FieldTypeInfo from AST to TypeScript type string
     fn field_type_info_to_typescript(&self, field_info: &FieldTypeInfo) -> String {
-        // If we have resolved type information (complex types from IDL), use it
         if let Some(resolved) = &field_info.resolved_type {
             let interface_name = self.resolved_type_to_interface_name(resolved);
 
-            // Wrap in EventWrapper if it's an event type
             let base_type = if resolved.is_event || (resolved.is_instruction && field_info.is_array)
             {
                 format!("EventWrapper<{}>", interface_name)
@@ -1112,7 +1097,6 @@ export default {};"#,
                 interface_name
             };
 
-            // Handle optional and array
             let with_array = if field_info.is_array {
                 format!("{}[]", base_type)
             } else {
@@ -1122,8 +1106,12 @@ export default {};"#,
             return with_array;
         }
 
-        // Check if this is an event field (has BaseType::Any or BaseType::Array with Value inner type)
-        // We can detect event fields by looking for them in handlers with AsEvent mappings
+        if let Some(inner_type) = &field_info.inner_type {
+            if is_builtin_resolver_type(inner_type) {
+                return inner_type.clone();
+            }
+        }
+
         if field_info.base_type == BaseType::Any
             || (field_info.base_type == BaseType::Array
                 && field_info.inner_type.as_deref() == Some("Value"))
@@ -1139,7 +1127,6 @@ export default {};"#,
             }
         }
 
-        // Use base type mapping
         self.base_type_to_typescript(&field_info.base_type, field_info.is_array)
     }
 
@@ -1688,9 +1675,12 @@ fn normalize_for_comparison(s: &str) -> String {
         .collect()
 }
 
-/// Check if a section name is the root section (case-insensitive)
 fn is_root_section(name: &str) -> bool {
     name.eq_ignore_ascii_case("root")
+}
+
+fn is_builtin_resolver_type(type_name: &str) -> bool {
+    matches!(type_name, "TokenMetadata")
 }
 
 /// Convert PascalCase/camelCase to kebab-case
