@@ -27,6 +27,7 @@ export interface ConnectOptions {
   reconnectIntervals?: number[];
   maxReconnectAttempts?: number;
   flushIntervalMs?: number;
+  validateFrames?: boolean;
 }
 
 /** @deprecated Use ConnectOptions instead */
@@ -68,6 +69,7 @@ export class HyperStack<TStack extends StackDefinition> {
     this.processor = new FrameProcessor(this.storage, {
       maxEntriesPerView: options.maxEntriesPerView,
       flushIntervalMs: options.flushIntervalMs,
+      schemas: options.validateFrames ? this.stack.schemas : undefined,
     });
     this.connection = new ConnectionManager({
       websocketUrl: url,
@@ -116,6 +118,7 @@ export class HyperStack<TStack extends StackDefinition> {
       autoReconnect: options?.autoReconnect,
       reconnectIntervals: options?.reconnectIntervals,
       maxReconnectAttempts: options?.maxReconnectAttempts,
+      validateFrames: options?.validateFrames,
     };
 
     const client = new HyperStack(url, internalOptions);

@@ -31,6 +31,8 @@ export type {
   StackDefinition,
   ViewGroup,
   Subscription,
+  Schema,
+  SchemaResult,
   WatchOptions,
   HyperStackOptions,
   HyperStackConfig,

@@ -18,29 +18,33 @@ export function createTypedStateView<T>(
   subscriptionRegistry: SubscriptionRegistry
 ): TypedStateView<T> {
   return {
-    use(key: string, options?: WatchOptions): AsyncIterable<T> {
+    use<TSchema = T>(key: string, options?: WatchOptions<TSchema>): AsyncIterable<TSchema> {
+      const { schema: _schema, ...subscriptionOptions } = options ?? {};
       return createEntityStream<T>(
         storage,
         subscriptionRegistry,
-        { view: viewDef.view, key, ...options },
+        { view: viewDef.view, key, ...subscriptionOptions },
+        options,
         key
-      );
+      ) as AsyncIterable<TSchema>;
     },
 
     watch(key: string, options?: WatchOptions): AsyncIterable<Update<T>> {
+      const { schema: _schema, ...subscriptionOptions } = options ?? {};
       return createUpdateStream<T>(
         storage,
         subscriptionRegistry,
-        { view: viewDef.view, key, ...options },
+        { view: viewDef.view, key, ...subscriptionOptions },
         key
       );
     },
 
     watchRich(key: string, options?: WatchOptions): AsyncIterable<RichUpdate<T>> {
+      const { schema: _schema, ...subscriptionOptions } = options ?? {};
       return createRichUpdateStream<T>(
         storage,
         subscriptionRegistry,
-        { view: viewDef.view, key, ...options },
+        { view: viewDef.view, key, ...subscriptionOptions },
         key
       );
     },
@@ -61,16 +65,24 @@ export function createTypedListView<T>(
   subscriptionRegistry: SubscriptionRegistry
 ): TypedListView<T> {
   return {
-    use(options?: WatchOptions): AsyncIterable<T> {
-      return createEntityStream<T>(storage, subscriptionRegistry, { view: viewDef.view, ...options });
+    use<TSchema = T>(options?: WatchOptions<TSchema>): AsyncIterable<TSchema> {
+      const { schema: _schema, ...subscriptionOptions } = options ?? {};
+      return createEntityStream<T>(
+        storage,
+        subscriptionRegistry,
+        { view: viewDef.view, ...subscriptionOptions },
+        options
+      ) as AsyncIterable<TSchema>;
     },
 
     watch(options?: WatchOptions): AsyncIterable<Update<T>> {
-      return createUpdateStream<T>(storage, subscriptionRegistry, { view: viewDef.view, ...options });
+      const { schema: _schema, ...subscriptionOptions } = options ?? {};
+      return createUpdateStream<T>(storage, subscriptionRegistry, { view: viewDef.view, ...subscriptionOptions });
     },
 
     watchRich(options?: WatchOptions): AsyncIterable<RichUpdate<T>> {
-      return createRichUpdateStream<T>(storage, subscriptionRegistry, { view: viewDef.view, ...options });
+      const { schema: _schema, ...subscriptionOptions } = options ?? {};
+      return createRichUpdateStream<T>(storage, subscriptionRegistry, { view: viewDef.view, ...subscriptionOptions });
     },
 
     async get(): Promise<T[]> {
