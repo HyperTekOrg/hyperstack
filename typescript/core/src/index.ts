@@ -1,5 +1,5 @@
 export { HyperStack } from './client';
-export type { ConnectOptions, HyperStackOptionsWithStorage, InstructionExecutorOptions, InstructionExecutor } from './client';
+export type { HyperStackOptionsWithStorage, InstructionExecutorOptions, InstructionExecutor } from './client';
 
 export { ConnectionManager } from './connection';
 export { SubscriptionRegistry } from './subscription';
@@ -73,9 +73,13 @@ export type {
 export {
   resolveAccounts,
   validateAccountResolution,
+  findProgramAddress,
+  findProgramAddressSync,
   derivePda,
   createSeed,
   createPublicKeySeed,
+  decodeBase58,
+  encodeBase58,
   serializeInstructionData,
   waitForConfirmation,
   parseInstructionError,

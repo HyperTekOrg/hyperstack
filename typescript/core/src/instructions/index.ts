@@ -9,7 +9,15 @@ export type {
   AccountResolutionOptions
 } from './account-resolver';
 export { resolveAccounts, validateAccountResolution } from './account-resolver';
-export { derivePda, createSeed, createPublicKeySeed } from './pda';
+export { 
+  findProgramAddress,
+  findProgramAddressSync,
+  derivePda,
+  createSeed, 
+  createPublicKeySeed,
+  decodeBase58,
+  encodeBase58,
+} from './pda';
 export type { ArgSchema, ArgType } from './serializer';
 export { serializeInstructionData } from './serializer';
 export type { ConfirmationLevel, ExecuteOptions, ExecutionResult } from './confirmation';
