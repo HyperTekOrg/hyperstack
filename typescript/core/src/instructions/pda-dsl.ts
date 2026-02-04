@@ -1,4 +1,4 @@
-import { findProgramAddress, findProgramAddressSync, decodeBase58, createSeed } from './pda';
+import { findProgramAddress, findProgramAddressSync, decodeBase58 } from './pda';
 
 export type SeedDef =
   | { type: 'literal'; value: string }
@@ -88,7 +88,7 @@ function serializeArgForSeed(value: unknown, argType?: string): Uint8Array {
 function getArgSize(argType?: string): number {
   if (!argType) return 8;
   const match = argType.match(/^[ui](\d+)$/);
-  if (match) {
+  if (match && match[1]) {
     return parseInt(match[1], 10) / 8;
   }
   if (argType === 'pubkey') return 32;

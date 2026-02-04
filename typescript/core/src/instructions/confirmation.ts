@@ -1,5 +1,4 @@
 import type { WalletAdapter } from '../wallet/types';
-import type { AccountMeta, AccountResolutionOptions } from './account-resolver';
 
 /**
  * Confirmation level for transaction processing.
@@ -77,7 +76,7 @@ export async function waitForConfirmation(
   throw new Error(`Transaction confirmation timeout after ${timeout}ms`);
 }
 
-async function checkTransactionStatus(signature: string): Promise<{
+async function checkTransactionStatus(_signature: string): Promise<{
   err: unknown;
   confirmations: number | null;
   slot: number;
