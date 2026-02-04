@@ -224,7 +224,7 @@ pub struct IdlEventSnapshot {
     pub docs: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IdlErrorSnapshot {
     pub code: u32,
     pub name: String,
@@ -845,24 +845,109 @@ impl SerializableStreamSpec {
 }
 
 // ============================================================================
+// PDA and Instruction Types — For SDK code generation
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PdaDefinition {
+    pub name: String,
+    pub seeds: Vec<PdaSeedDef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum PdaSeedDef {
+    Literal {
+        value: String,
+    },
+    Bytes {
+        value: Vec<u8>,
+    },
+    ArgRef {
+        arg_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        arg_type: Option<String>,
+    },
+    AccountRef {
+        account_name: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "category", rename_all = "camelCase")]
+pub enum AccountResolution {
+    Signer,
+    Known {
+        address: String,
+    },
+    PdaRef {
+        pda_name: String,
+    },
+    PdaInline {
+        seeds: Vec<PdaSeedDef>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        program_id: Option<String>,
+    },
+    UserProvided,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InstructionAccountDef {
+    pub name: String,
+    #[serde(default)]
+    pub is_signer: bool,
+    #[serde(default)]
+    pub is_writable: bool,
+    pub resolution: AccountResolution,
+    #[serde(default)]
+    pub is_optional: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InstructionArgDef {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub arg_type: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InstructionDef {
+    pub name: String,
+    pub discriminator: Vec<u8>,
+    #[serde(default = "default_discriminant_size")]
+    pub discriminator_size: usize,
+    pub accounts: Vec<InstructionAccountDef>,
+    pub args: Vec<InstructionArgDef>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<IdlErrorSnapshot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
+}
+
+// ============================================================================
 // Stack Spec — Unified multi-entity AST format
 // ============================================================================
 
-/// A unified stack specification containing all entities.
-/// Written to `.hyperstack/{StackName}.stack.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerializableStackSpec {
-    /// Stack name (PascalCase, derived from module ident)
     pub stack_name: String,
-    /// Program IDs (one per IDL, in order)
     #[serde(default)]
     pub program_ids: Vec<String>,
-    /// IDL snapshots (one per program)
     #[serde(default)]
     pub idls: Vec<IdlSnapshot>,
-    /// All entity specifications in this stack
     pub entities: Vec<SerializableStreamSpec>,
-    /// Deterministic content hash of the entire stack
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub pdas: BTreeMap<String, PdaDefinition>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub instructions: Vec<InstructionDef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_hash: Option<String>,
 }

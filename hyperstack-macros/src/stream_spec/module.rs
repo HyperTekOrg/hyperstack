@@ -134,6 +134,8 @@ pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
                 program_ids: vec![],
                 idls: vec![],
                 entities: entity_asts,
+                pdas: std::collections::BTreeMap::new(),
+                instructions: vec![],
                 content_hash: None,
             }
             .with_content_hash();

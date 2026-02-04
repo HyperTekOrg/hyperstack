@@ -230,7 +230,7 @@ pub struct IdlEventSnapshot {
 }
 
 /// Error definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IdlErrorSnapshot {
     /// Error code
     pub code: u32,
@@ -1274,6 +1274,145 @@ impl SerializableStreamSpec {
 }
 
 // ============================================================================
+// PDA and Instruction Types — For SDK code generation
+// ============================================================================
+
+/// PDA (Program-Derived Address) definition for the stack-level registry.
+/// PDAs defined here can be referenced by instructions via `pdaRef`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PdaDefinition {
+    /// Human-readable name (e.g., "miner", "bondingCurve")
+    pub name: String,
+
+    /// Seeds for PDA derivation, in order
+    pub seeds: Vec<PdaSeedDef>,
+
+    /// Program ID that owns this PDA.
+    /// If None, uses the stack's primary programId.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_id: Option<String>,
+}
+
+/// Single seed in a PDA derivation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum PdaSeedDef {
+    /// Static string seed: "miner" → "miner".as_bytes()
+    Literal { value: String },
+
+    /// Static byte array (for non-UTF8 seeds)
+    Bytes { value: Vec<u8> },
+
+    /// Reference to an instruction argument: arg("roundId") → args.roundId as bytes
+    ArgRef {
+        arg_name: String,
+        /// Optional type hint for serialization (e.g., "u64", "pubkey")
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        arg_type: Option<String>,
+    },
+
+    /// Reference to another account in the instruction: account("mint") → accounts.mint pubkey
+    AccountRef { account_name: String },
+}
+
+/// How an instruction account's address is determined.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "category", rename_all = "camelCase")]
+pub enum AccountResolution {
+    /// Must sign the transaction (uses wallet.publicKey)
+    Signer,
+
+    /// Fixed known address (e.g., System Program, Token Program)
+    Known { address: String },
+
+    /// Reference to a PDA in the stack's pdas registry
+    PdaRef { pda_name: String },
+
+    /// Inline PDA definition (for one-off PDAs not in the registry)
+    PdaInline {
+        seeds: Vec<PdaSeedDef>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        program_id: Option<String>,
+    },
+
+    /// User must provide at call time via options.accounts
+    UserProvided,
+}
+
+/// Account metadata for an instruction.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InstructionAccountDef {
+    /// Account name (e.g., "user", "mint", "bondingCurve")
+    pub name: String,
+
+    /// Whether this account must sign the transaction
+    #[serde(default)]
+    pub is_signer: bool,
+
+    /// Whether this account is writable
+    #[serde(default)]
+    pub is_writable: bool,
+
+    /// How this account's address is resolved
+    pub resolution: AccountResolution,
+
+    /// Whether this account can be omitted (optional accounts)
+    #[serde(default)]
+    pub is_optional: bool,
+
+    /// Documentation from IDL
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
+}
+
+/// Argument definition for an instruction.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InstructionArgDef {
+    /// Argument name
+    pub name: String,
+
+    /// Type from IDL (e.g., "u64", "bool", "pubkey", "Option<u64>")
+    #[serde(rename = "type")]
+    pub arg_type: String,
+
+    /// Documentation from IDL
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
+}
+
+/// Full instruction definition in the AST.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InstructionDef {
+    /// Instruction name (e.g., "buy", "sell", "automate")
+    pub name: String,
+
+    /// Discriminator bytes (8 bytes for Anchor, 1 byte for Steel)
+    pub discriminator: Vec<u8>,
+
+    /// Size of discriminator in bytes (for buffer allocation)
+    #[serde(default = "default_discriminant_size")]
+    pub discriminator_size: usize,
+
+    /// Accounts required by this instruction, in order
+    pub accounts: Vec<InstructionAccountDef>,
+
+    /// Arguments for this instruction, in order
+    pub args: Vec<InstructionArgDef>,
+
+    /// Error definitions specific to this instruction
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<IdlErrorSnapshot>,
+
+    /// Program ID for this instruction (usually same as stack's programId)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_id: Option<String>,
+
+    /// Documentation from IDL
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
+}
+
+// ============================================================================
 // Stack Spec — Unified multi-entity AST format
 // ============================================================================
 
@@ -1291,6 +1430,12 @@ pub struct SerializableStackSpec {
     pub idls: Vec<IdlSnapshot>,
     /// All entity specifications in this stack
     pub entities: Vec<SerializableStreamSpec>,
+    /// PDA registry - defines all PDAs for the stack
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub pdas: BTreeMap<String, PdaDefinition>,
+    /// Instruction definitions for SDK code generation
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub instructions: Vec<InstructionDef>,
     /// Deterministic content hash of the entire stack
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_hash: Option<String>,

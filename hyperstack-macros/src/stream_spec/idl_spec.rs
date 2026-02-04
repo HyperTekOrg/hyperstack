@@ -4,12 +4,13 @@
 //! which generate SDK types, parsers, and entity processing from Anchor IDL files.
 //! Supports multiple IDLs for multi-program stacks.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Item, ItemMod};
 
+use crate::ast::writer::{extract_instructions_from_idl, extract_pdas_from_idl};
 use crate::ast::SerializableStackSpec;
 use crate::codegen::generate_multi_entity_builder;
 use crate::idl_codegen;
@@ -392,6 +393,15 @@ pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStrea
                 })
                 .collect();
 
+            let mut all_pdas: BTreeMap<String, crate::ast::PdaDefinition> = BTreeMap::new();
+            let mut all_instructions: Vec<crate::ast::InstructionDef> = Vec::new();
+            for info in &idl_infos {
+                let pdas = extract_pdas_from_idl(&info.idl);
+                let instructions = extract_instructions_from_idl(&info.idl, &pdas);
+                all_pdas.extend(pdas);
+                all_instructions.extend(instructions);
+            }
+
             let stack_spec = SerializableStackSpec {
                 stack_name: stack_name.clone(),
                 program_ids: all_program_ids,
@@ -403,6 +413,8 @@ pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStrea
                         e
                     })
                     .collect(),
+                pdas: all_pdas,
+                instructions: all_instructions,
                 content_hash: None,
             }
             .with_content_hash();

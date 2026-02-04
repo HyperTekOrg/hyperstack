@@ -798,3 +798,159 @@ fn path_to_string(path: &syn::Path) -> String {
         .collect::<Vec<_>>()
         .join("::")
 }
+
+// ============================================================================
+// PDA and Instruction Extraction from Anchor IDL
+// ============================================================================
+
+/// Extract PDA definitions from an Anchor IDL.
+/// Returns a map of PDA name -> PdaDefinition.
+pub fn extract_pdas_from_idl(idl: &idl_parser::IdlSpec) -> BTreeMap<String, PdaDefinition> {
+    let mut pdas = BTreeMap::new();
+
+    for instruction in &idl.instructions {
+        for account in &instruction.accounts {
+            if let Some(pda_info) = &account.pda {
+                let pda_def = convert_anchor_pda_to_def(&account.name, pda_info);
+                pdas.entry(account.name.clone()).or_insert(pda_def);
+            }
+        }
+    }
+
+    pdas
+}
+
+/// Convert Anchor IDL PDA info to our PdaDefinition type.
+fn convert_anchor_pda_to_def(name: &str, pda: &idl_parser::IdlPda) -> PdaDefinition {
+    let seeds = pda
+        .seeds
+        .iter()
+        .map(|seed| match seed {
+            idl_parser::IdlPdaSeed::Const { value } => {
+                if let Ok(s) = String::from_utf8(value.clone()) {
+                    PdaSeedDef::Literal { value: s }
+                } else {
+                    PdaSeedDef::Bytes {
+                        value: value.clone(),
+                    }
+                }
+            }
+            idl_parser::IdlPdaSeed::Account { path, .. } => PdaSeedDef::AccountRef {
+                account_name: path.clone(),
+            },
+            idl_parser::IdlPdaSeed::Arg { path, arg_type } => PdaSeedDef::ArgRef {
+                arg_name: path.clone(),
+                arg_type: arg_type.clone(),
+            },
+        })
+        .collect();
+
+    let program_id = pda.program.as_ref().and_then(|p| match p {
+        idl_parser::IdlPdaProgram::Literal { value, .. } => Some(value.clone()),
+        idl_parser::IdlPdaProgram::Account { .. } => None,
+    });
+
+    PdaDefinition {
+        name: name.to_string(),
+        seeds,
+        program_id,
+    }
+}
+
+/// Extract instruction definitions from an Anchor IDL.
+pub fn extract_instructions_from_idl(
+    idl: &idl_parser::IdlSpec,
+    pdas: &BTreeMap<String, PdaDefinition>,
+) -> Vec<InstructionDef> {
+    let program_id = idl
+        .address
+        .clone()
+        .or_else(|| idl.metadata.as_ref().and_then(|m| m.address.clone()));
+
+    let uses_steel = idl
+        .instructions
+        .iter()
+        .any(|ix| ix.discriminant.is_some() && ix.discriminator.is_empty());
+    let discriminator_size = if uses_steel { 1 } else { 8 };
+
+    idl.instructions
+        .iter()
+        .map(|ix| {
+            let accounts = ix
+                .accounts
+                .iter()
+                .map(|acc| convert_account_to_def(acc, pdas))
+                .collect();
+
+            let args = ix
+                .args
+                .iter()
+                .map(|arg| InstructionArgDef {
+                    name: arg.name.clone(),
+                    arg_type: arg.type_.to_rust_type_string(),
+                    docs: vec![],
+                })
+                .collect();
+
+            let errors: Vec<IdlErrorSnapshot> = idl
+                .errors
+                .iter()
+                .map(|e| IdlErrorSnapshot {
+                    code: e.code,
+                    name: e.name.clone(),
+                    msg: e.msg.clone(),
+                })
+                .collect();
+
+            InstructionDef {
+                name: ix.name.clone(),
+                discriminator: ix.get_discriminator(),
+                discriminator_size,
+                accounts,
+                args,
+                errors,
+                program_id: program_id.clone(),
+                docs: ix.docs.clone(),
+            }
+        })
+        .collect()
+}
+
+/// Convert an IDL account argument to our InstructionAccountDef type.
+fn convert_account_to_def(
+    acc: &idl_parser::IdlAccountArg,
+    pdas: &BTreeMap<String, PdaDefinition>,
+) -> InstructionAccountDef {
+    let resolution = if acc.is_signer && acc.address.is_none() && acc.pda.is_none() {
+        AccountResolution::Signer
+    } else if let Some(address) = &acc.address {
+        AccountResolution::Known {
+            address: address.clone(),
+        }
+    } else if acc.pda.is_some() {
+        if pdas.contains_key(&acc.name) {
+            AccountResolution::PdaRef {
+                pda_name: acc.name.clone(),
+            }
+        } else if let Some(pda_info) = &acc.pda {
+            let pda_def = convert_anchor_pda_to_def(&acc.name, pda_info);
+            AccountResolution::PdaInline {
+                seeds: pda_def.seeds,
+                program_id: pda_def.program_id,
+            }
+        } else {
+            AccountResolution::UserProvided
+        }
+    } else {
+        AccountResolution::UserProvided
+    };
+
+    InstructionAccountDef {
+        name: acc.name.clone(),
+        is_signer: acc.is_signer,
+        is_writable: acc.is_mut,
+        resolution,
+        is_optional: acc.optional,
+        docs: acc.docs.clone(),
+    }
+}
