@@ -1,8 +1,13 @@
+import { z } from 'zod';
+
 export interface OreRoundEntropy {
   entropy_end_at?: number | null;
   entropy_samples?: number | null;
+  entropy_seed?: string | null;
+  entropy_slot_hash?: string | null;
   entropy_start_at?: number | null;
   entropy_value?: string | null;
+  entropy_var_address?: string | null;
 }
 
 export interface OreRoundId {
@@ -27,9 +32,12 @@ export interface OreRoundResults {
 }
 
 export interface OreRoundState {
+  count_per_square?: any[] | null;
+  deployed_per_square?: any[] | null;
   expires_at?: number | null;
   motherlode?: number | null;
   total_deployed?: number | null;
+  total_miners?: number | null;
   total_vaulted?: number | null;
   total_winnings?: number | null;
 }
@@ -41,6 +49,58 @@ export interface OreRound {
   results?: OreRoundResults;
   state?: OreRoundState;
 }
+
+export const OreRoundEntropySchema = z.object({
+  entropy_end_at: z.number().nullable().optional(),
+  entropy_samples: z.number().nullable().optional(),
+  entropy_seed: z.string().nullable().optional(),
+  entropy_slot_hash: z.string().nullable().optional(),
+  entropy_start_at: z.number().nullable().optional(),
+  entropy_value: z.string().nullable().optional(),
+  entropy_var_address: z.string().nullable().optional(),
+});
+
+export const OreRoundIdSchema = z.object({
+  round_address: z.string().nullable().optional(),
+  round_id: z.number().nullable().optional(),
+});
+
+export const OreRoundMetricsSchema = z.object({
+  checkpoint_count: z.number().nullable().optional(),
+  deploy_count: z.number().nullable().optional(),
+  total_deployed_sol: z.number().nullable().optional(),
+});
+
+export const OreRoundResultsSchema = z.object({
+  did_hit_motherlode: z.boolean().nullable().optional(),
+  rent_payer: z.string().nullable().optional(),
+  rng: z.number().nullable().optional(),
+  slot_hash: z.string().nullable().optional(),
+  top_miner: z.string().nullable().optional(),
+  top_miner_reward: z.number().nullable().optional(),
+  winning_square: z.number().nullable().optional(),
+});
+
+export const OreRoundStateSchema = z.object({
+  count_per_square: z.array(z.any()).nullable().optional(),
+  deployed_per_square: z.array(z.any()).nullable().optional(),
+  expires_at: z.number().nullable().optional(),
+  motherlode: z.number().nullable().optional(),
+  total_deployed: z.number().nullable().optional(),
+  total_miners: z.number().nullable().optional(),
+  total_vaulted: z.number().nullable().optional(),
+  total_winnings: z.number().nullable().optional(),
+});
+
+export const OreRoundSchema = z.object({
+  entropy: OreRoundEntropySchema.optional(),
+  id: OreRoundIdSchema.optional(),
+  metrics: OreRoundMetricsSchema.optional(),
+  results: OreRoundResultsSchema.optional(),
+  state: OreRoundStateSchema.optional(),
+});
+
+export const OreRoundCompletedSchema = OreRoundSchema;
 
 export interface OreTreasuryId {
   address?: string | null;
@@ -71,6 +131,40 @@ export interface Treasury {
   total_staked?: number;
   total_unclaimed?: number;
 }
+
+export const TreasurySchema = z.object({
+  balance: z.number().optional(),
+  buffer_a: z.number().optional(),
+  motherlode: z.number().optional(),
+  miner_rewards_factor: z.record(z.any()).optional(),
+  stake_rewards_factor: z.record(z.any()).optional(),
+  buffer_b: z.number().optional(),
+  total_refined: z.number().optional(),
+  total_staked: z.number().optional(),
+  total_unclaimed: z.number().optional(),
+});
+
+export const OreTreasuryIdSchema = z.object({
+  address: z.string().nullable().optional(),
+});
+
+export const OreTreasuryStateSchema = z.object({
+  balance: z.number().nullable().optional(),
+  motherlode: z.number().nullable().optional(),
+  total_refined: z.number().nullable().optional(),
+  total_staked: z.number().nullable().optional(),
+  total_unclaimed: z.number().nullable().optional(),
+});
+
+export const OreTreasurySchema = z.object({
+  id: OreTreasuryIdSchema.optional(),
+  state: OreTreasuryStateSchema.optional(),
+  treasury_snapshot: TreasurySchema.nullable().optional(),
+});
+
+export const OreTreasuryCompletedSchema = OreTreasurySchema.extend({
+  treasury_snapshot: TreasurySchema,
+});
 
 export interface OreMinerAutomation {
   amount?: number | null;
@@ -143,6 +237,82 @@ export interface Automation {
   reload?: number;
 }
 
+export const MinerSchema = z.object({
+  authority: z.string().optional(),
+  deployed: z.array(z.number()).optional(),
+  cumulative: z.array(z.number()).optional(),
+  checkpoint_fee: z.number().optional(),
+  checkpoint_id: z.number().optional(),
+  last_claim_ore_at: z.number().optional(),
+  last_claim_sol_at: z.number().optional(),
+  rewards_factor: z.record(z.any()).optional(),
+  rewards_sol: z.number().optional(),
+  rewards_ore: z.number().optional(),
+  refined_ore: z.number().optional(),
+  round_id: z.number().optional(),
+  lifetime_rewards_sol: z.number().optional(),
+  lifetime_rewards_ore: z.number().optional(),
+  lifetime_deployed: z.number().optional(),
+});
+
+export const AutomationSchema = z.object({
+  amount: z.number().optional(),
+  authority: z.string().optional(),
+  balance: z.number().optional(),
+  executor: z.string().optional(),
+  fee: z.number().optional(),
+  strategy: z.number().optional(),
+  mask: z.number().optional(),
+  reload: z.number().optional(),
+});
+
+export const OreMinerAutomationSchema = z.object({
+  amount: z.number().nullable().optional(),
+  balance: z.number().nullable().optional(),
+  executor: z.string().nullable().optional(),
+  fee: z.number().nullable().optional(),
+  mask: z.number().nullable().optional(),
+  reload: z.number().nullable().optional(),
+  strategy: z.number().nullable().optional(),
+});
+
+export const OreMinerIdSchema = z.object({
+  authority: z.string().nullable().optional(),
+  automation_address: z.string().nullable().optional(),
+  miner_address: z.string().nullable().optional(),
+});
+
+export const OreMinerRewardsSchema = z.object({
+  lifetime_deployed: z.number().nullable().optional(),
+  lifetime_rewards_ore: z.number().nullable().optional(),
+  lifetime_rewards_sol: z.number().nullable().optional(),
+  refined_ore: z.number().nullable().optional(),
+  rewards_ore: z.number().nullable().optional(),
+  rewards_sol: z.number().nullable().optional(),
+});
+
+export const OreMinerStateSchema = z.object({
+  checkpoint_fee: z.number().nullable().optional(),
+  checkpoint_id: z.number().nullable().optional(),
+  last_claim_ore_at: z.number().nullable().optional(),
+  last_claim_sol_at: z.number().nullable().optional(),
+  round_id: z.number().nullable().optional(),
+});
+
+export const OreMinerSchema = z.object({
+  automation: OreMinerAutomationSchema.optional(),
+  id: OreMinerIdSchema.optional(),
+  rewards: OreMinerRewardsSchema.optional(),
+  state: OreMinerStateSchema.optional(),
+  miner_snapshot: MinerSchema.nullable().optional(),
+  automation_snapshot: AutomationSchema.nullable().optional(),
+});
+
+export const OreMinerCompletedSchema = OreMinerSchema.extend({
+  miner_snapshot: MinerSchema,
+  automation_snapshot: AutomationSchema,
+});
+
 // ============================================================================
 // View Definition Types (framework-agnostic)
 // ============================================================================
@@ -187,6 +357,28 @@ export const ORE_STREAM_STACK = {
       state: stateView<OreMiner>('OreMiner/state'),
       list: listView<OreMiner>('OreMiner/list'),
     },
+  },
+  schemas: {
+    Automation: AutomationSchema,
+    Miner: MinerSchema,
+    OreMinerAutomation: OreMinerAutomationSchema,
+    OreMinerCompleted: OreMinerCompletedSchema,
+    OreMinerId: OreMinerIdSchema,
+    OreMinerRewards: OreMinerRewardsSchema,
+    OreMiner: OreMinerSchema,
+    OreMinerState: OreMinerStateSchema,
+    OreRoundCompleted: OreRoundCompletedSchema,
+    OreRoundEntropy: OreRoundEntropySchema,
+    OreRoundId: OreRoundIdSchema,
+    OreRoundMetrics: OreRoundMetricsSchema,
+    OreRoundResults: OreRoundResultsSchema,
+    OreRound: OreRoundSchema,
+    OreRoundState: OreRoundStateSchema,
+    OreTreasuryCompleted: OreTreasuryCompletedSchema,
+    OreTreasuryId: OreTreasuryIdSchema,
+    OreTreasury: OreTreasurySchema,
+    OreTreasuryState: OreTreasuryStateSchema,
+    Treasury: TreasurySchema,
   },
 } as const;
 

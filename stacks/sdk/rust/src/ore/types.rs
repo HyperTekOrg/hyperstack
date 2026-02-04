@@ -20,6 +20,12 @@ pub struct OreRoundState {
     pub total_vaulted: Option<Option<u64>>,
     #[serde(default)]
     pub total_winnings: Option<Option<u64>>,
+    #[serde(default)]
+    pub total_miners: Option<Option<u64>>,
+    #[serde(default)]
+    pub deployed_per_square: Option<Option<Vec<serde_json::Value>>>,
+    #[serde(default)]
+    pub count_per_square: Option<Option<Vec<serde_json::Value>>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -55,11 +61,17 @@ pub struct OreRoundEntropy {
     #[serde(default)]
     pub entropy_value: Option<Option<String>>,
     #[serde(default)]
+    pub entropy_seed: Option<Option<String>>,
+    #[serde(default)]
+    pub entropy_slot_hash: Option<Option<String>>,
+    #[serde(default)]
     pub entropy_start_at: Option<Option<i64>>,
     #[serde(default)]
     pub entropy_end_at: Option<Option<i64>>,
     #[serde(default)]
     pub entropy_samples: Option<Option<u64>>,
+    #[serde(default)]
+    pub entropy_var_address: Option<Option<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

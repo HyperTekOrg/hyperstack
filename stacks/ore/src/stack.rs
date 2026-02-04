@@ -41,6 +41,17 @@ pub mod ore_stream {
 
         #[map(ore_sdk::accounts::Round::total_winnings, strategy = LastWrite)]
         pub total_winnings: Option<u64>,
+
+        #[map(ore_sdk::accounts::Round::total_miners, strategy = LastWrite)]
+        pub total_miners: Option<u64>,
+
+        // Per-square deployed SOL amounts (25 squares in 5x5 grid)
+        #[map(ore_sdk::accounts::Round::deployed, strategy = LastWrite)]
+        pub deployed_per_square: Option<Vec<u64>>,
+
+        // Per-square miner counts (25 squares in 5x5 grid)
+        #[map(ore_sdk::accounts::Round::count, strategy = LastWrite)]
+        pub count_per_square: Option<Vec<u64>>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
@@ -57,8 +68,6 @@ pub mod ore_stream {
         #[map(ore_sdk::accounts::Round::slot_hash, strategy = LastWrite, transform = Base58Encode)]
         pub slot_hash: Option<String>,
 
-        // Computed field: Calculate RNG from slot_hash bytes
-        // XOR the 4 u64 values from the 32-byte hash to get a single random number
         #[computed(
             let hash = entropy.entropy_value_bytes.to_bytes();
             if (hash.len() as u64) != 32 {
@@ -79,11 +88,9 @@ pub mod ore_stream {
         )]
         pub rng: Option<u64>,
 
-        // Computed field: Winning square = rng mod 25 (5x5 grid)
         #[computed(results.rng.map(|r| r % 25))]
         pub winning_square: Option<u64>,
 
-        // Computed field: Did the round hit the motherlode (1/625 chance)
         #[computed(results.rng.map(|r| r.reverse_bits() % 625 == 0))]
         pub did_hit_motherlode: Option<bool>,
     }
@@ -122,6 +129,7 @@ pub mod ore_stream {
               transform = Base58Encode)]
         pub entropy_value: Option<String>,
 
+        // Raw bytes for computed field (not emitted to clients)
         #[map(entropy_sdk::accounts::Var::value,
               when = entropy_sdk::instructions::Reveal,
               condition = "value != ZERO_32",
@@ -129,14 +137,23 @@ pub mod ore_stream {
               emit = false)]
         pub entropy_value_bytes: Option<Vec<u8>>,
 
-        #[map(entropy_sdk::accounts::Var::start_at, strategy = SetOnce)]
+        #[map(entropy_sdk::accounts::Var::seed, strategy = LastWrite, transform = Base58Encode)]
+        pub entropy_seed: Option<String>,
+
+        #[map(entropy_sdk::accounts::Var::slot_hash, strategy = LastWrite, transform = Base58Encode)]
+        pub entropy_slot_hash: Option<String>,
+
+        #[map(entropy_sdk::accounts::Var::start_at, strategy = LastWrite)]
         pub entropy_start_at: Option<u64>,
 
-        #[map(entropy_sdk::accounts::Var::end_at, strategy = SetOnce)]
+        #[map(entropy_sdk::accounts::Var::end_at, strategy = LastWrite)]
         pub entropy_end_at: Option<u64>,
 
-        #[map(entropy_sdk::accounts::Var::samples, strategy = SetOnce)]
+        #[map(entropy_sdk::accounts::Var::samples, strategy = LastWrite)]
         pub entropy_samples: Option<u64>,
+
+        #[map(entropy_sdk::accounts::Var::__account_address, strategy = SetOnce)]
+        pub entropy_var_address: Option<String>,
     }
 
     // ========================================================================
