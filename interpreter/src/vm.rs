@@ -3861,6 +3861,18 @@ impl VmContext {
                 self.apply_cast(&val, to_type)
             }
 
+            ComputedExpr::ResolverComputed {
+                resolver,
+                method,
+                args,
+            } => {
+                let evaluated_args: Vec<Value> = args
+                    .iter()
+                    .map(|arg| self.evaluate_computed_expr_with_env(arg, state, env))
+                    .collect::<Result<Vec<_>>>()?;
+                crate::resolvers::evaluate_resolver_computed(resolver, method, &evaluated_args)
+            }
+
             ComputedExpr::MethodCall { expr, method, args } => {
                 let val = self.evaluate_computed_expr_with_env(expr, state, env)?;
                 // Special handling for map() with closures
@@ -4299,6 +4311,8 @@ impl VmContext {
         computed_field_specs: &[ComputedFieldSpec],
     ) -> Result<Vec<String>> {
         let mut updated_paths = Vec::new();
+
+        crate::resolvers::validate_resolver_computed_specs(computed_field_specs)?;
 
         for spec in computed_field_specs {
             if let Ok(result) = self.evaluate_computed_expr(&spec.expression, state) {

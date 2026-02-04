@@ -530,19 +530,14 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
 
     fn generate_builtin_resolver_schemas(&self) -> Vec<(String, String)> {
         let mut schemas = Vec::new();
+        let registry = crate::resolvers::builtin_resolver_registry();
 
-        if self.uses_builtin_type("TokenMetadata") {
-            schemas.push((
-                "TokenMetadataSchema".to_string(),
-                r#"export const TokenMetadataSchema = z.object({
-  mint: z.string(),
-  name: z.string().nullable().optional(),
-  symbol: z.string().nullable().optional(),
-  decimals: z.number().nullable().optional(),
-  logo_uri: z.string().nullable().optional(),
-});"#
-                    .to_string(),
-            ));
+        for resolver in registry.definitions() {
+            if self.uses_builtin_type(resolver.output_type()) {
+                if let Some(schema) = resolver.typescript_schema() {
+                    schemas.push((schema.name.to_string(), schema.definition.to_string()));
+                }
+            }
         }
 
         schemas
@@ -561,18 +556,14 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
 
     fn generate_builtin_resolver_interfaces(&self) -> Vec<String> {
         let mut interfaces = Vec::new();
+        let registry = crate::resolvers::builtin_resolver_registry();
 
-        if self.uses_builtin_type("TokenMetadata") {
-            interfaces.push(
-                r#"export interface TokenMetadata {
-  mint: string;
-  name?: string | null;
-  symbol?: string | null;
-  decimals?: number | null;
-  logo_uri?: string | null;
-}"#
-                .to_string(),
-            );
+        for resolver in registry.definitions() {
+            if self.uses_builtin_type(resolver.output_type()) {
+                if let Some(interface) = resolver.typescript_interface() {
+                    interfaces.push(interface.to_string());
+                }
+            }
         }
 
         interfaces
@@ -1680,7 +1671,7 @@ fn is_root_section(name: &str) -> bool {
 }
 
 fn is_builtin_resolver_type(type_name: &str) -> bool {
-    matches!(type_name, "TokenMetadata")
+    crate::resolvers::is_resolver_output_type(type_name)
 }
 
 /// Convert PascalCase/camelCase to kebab-case

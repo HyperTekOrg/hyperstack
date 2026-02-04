@@ -31,6 +31,13 @@ pub fn parse_computed_expression(tokens: &proc_macro2::TokenStream) -> ComputedE
     resolve_bindings_in_expr(expr, &HashSet::new())
 }
 
+fn resolver_for_method(method: &str) -> Option<&'static str> {
+    match method {
+        "ui_amount" | "raw_amount" => Some("TokenMetadata"),
+        _ => None,
+    }
+}
+
 /// Qualify unqualified field references in a computed expression with a section prefix.
 ///
 /// This ensures that field references like `total_buy_volume` become `trading.total_buy_volume`
@@ -63,6 +70,18 @@ pub fn qualify_field_refs(expr: ComputedExpr, section: &str) -> ComputedExpr {
         },
         ComputedExpr::MethodCall { expr, method, args } => ComputedExpr::MethodCall {
             expr: Box::new(qualify_field_refs(*expr, section)),
+            method,
+            args: args
+                .into_iter()
+                .map(|a| qualify_field_refs(a, section))
+                .collect(),
+        },
+        ComputedExpr::ResolverComputed {
+            resolver,
+            method,
+            args,
+        } => ComputedExpr::ResolverComputed {
+            resolver,
             method,
             args: args
                 .into_iter()
@@ -309,6 +328,18 @@ fn resolve_bindings_in_expr(expr: ComputedExpr, bindings: &HashSet<String>) -> C
         },
         ComputedExpr::MethodCall { expr, method, args } => ComputedExpr::MethodCall {
             expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
+            method,
+            args: args
+                .into_iter()
+                .map(|a| resolve_bindings_in_expr(a, bindings))
+                .collect(),
+        },
+        ComputedExpr::ResolverComputed {
+            resolver,
+            method,
+            args,
+        } => ComputedExpr::ResolverComputed {
+            resolver,
             method,
             args: args
                 .into_iter()
@@ -809,6 +840,19 @@ fn parse_postfix_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
                                 if name == "to_bytes" && args.is_empty() {
                                     expr = ComputedExpr::JsonToBytes {
                                         expr: Box::new(expr),
+                                    };
+                                    continue;
+                                }
+
+                                if let Some(resolver) = resolver_for_method(&name) {
+                                    let base_expr = expr;
+                                    let mut resolver_args = Vec::with_capacity(args.len() + 1);
+                                    resolver_args.push(base_expr);
+                                    resolver_args.extend(args);
+                                    expr = ComputedExpr::ResolverComputed {
+                                        resolver: resolver.to_string(),
+                                        method: name,
+                                        args: resolver_args,
                                     };
                                     continue;
                                 }

@@ -428,6 +428,13 @@ pub enum ComputedExpr {
         args: Vec<ComputedExpr>,
     },
 
+    /// Computation provided by a resolver
+    ResolverComputed {
+        resolver: String,
+        method: String,
+        args: Vec<ComputedExpr>,
+    },
+
     /// Literal value: numbers, booleans, strings
     Literal {
         value: serde_json::Value,

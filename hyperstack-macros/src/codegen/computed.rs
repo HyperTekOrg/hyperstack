@@ -42,6 +42,11 @@ fn extract_deps_recursive(expr: &ComputedExpr, section: &str, deps: &mut HashSet
                 extract_deps_recursive(arg, section, deps);
             }
         }
+        ComputedExpr::ResolverComputed { args, .. } => {
+            for arg in args {
+                extract_deps_recursive(arg, section, deps);
+            }
+        }
         ComputedExpr::Paren { expr } => {
             extract_deps_recursive(expr, section, deps);
         }
@@ -365,6 +370,31 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
             }
 
             quote! { #inner.#method_ident(#(#arg_codes),*) }
+        }
+        ComputedExpr::ResolverComputed {
+            resolver,
+            method,
+            args,
+        } => {
+            let resolver_name = resolver.as_str();
+            let method_name = method.as_str();
+            let arg_codes: Vec<TokenStream> =
+                args.iter().map(generate_computed_expr_code).collect();
+            quote! {
+                {
+                    let resolver_args = vec![#(hyperstack::runtime::serde_json::to_value(#arg_codes)?),*];
+                    let resolver_value = hyperstack::runtime::hyperstack_interpreter::resolvers::evaluate_resolver_computed(
+                        #resolver_name,
+                        #method_name,
+                        &resolver_args,
+                    )?;
+                    if resolver_value.is_null() {
+                        None
+                    } else {
+                        Some(resolver_value)
+                    }
+                }
+            }
         }
         ComputedExpr::Literal { value } => {
             // Convert the JSON value to a literal
