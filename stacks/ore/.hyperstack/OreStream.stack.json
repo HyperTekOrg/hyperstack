@@ -775,6 +775,22 @@
               "optional": false,
               "address": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X",
               "docs": []
+            },
+            {
+              "name": "mintAuthority",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "oreMintProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "mintzxW6Kckmeyh1h6Zfdj9QcYgCzhPSGiC8ChZ6fCx",
+              "docs": []
             }
           ],
           "args": []
@@ -3097,6 +3113,16 @@
               "resolved_type": null
             },
             {
+              "field_name": "top_miner_reward_ui",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "f64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
               "field_name": "rent_payer",
               "rust_type_name": "Option < String >",
               "base_type": "String",
@@ -3274,6 +3300,23 @@
           ],
           "is_nested_struct": false,
           "parent_field": null
+        },
+        {
+          "name": "root",
+          "fields": [
+            {
+              "field_name": "ore_metadata",
+              "rust_type_name": "Option < TokenMetadata >",
+              "base_type": "Object",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "TokenMetadata",
+              "source_path": null,
+              "resolved_type": null
+            }
+          ],
+          "is_nested_struct": false,
+          "parent_field": null
         }
       ],
       "field_mappings": {
@@ -3408,6 +3451,16 @@
           "source_path": null,
           "resolved_type": null
         },
+        "ore_metadata": {
+          "field_name": "ore_metadata",
+          "rust_type_name": "Option < TokenMetadata >",
+          "base_type": "Object",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "TokenMetadata",
+          "source_path": null,
+          "resolved_type": null
+        },
         "results.did_hit_motherlode": {
           "field_name": "did_hit_motherlode",
           "rust_type_name": "Option < bool >",
@@ -3465,6 +3518,16 @@
           "is_optional": true,
           "is_array": false,
           "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "results.top_miner_reward_ui": {
+          "field_name": "top_miner_reward_ui",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "f64",
           "source_path": null,
           "resolved_type": null
         },
@@ -3622,13 +3685,47 @@
           "lookup_by": null
         }
       ],
-      "resolver_specs": [],
+      "resolver_specs": [
+        {
+          "resolver": "token",
+          "input_value": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
+          "strategy": "SetOnce",
+          "extracts": [
+            {
+              "target_path": "ore_metadata"
+            }
+          ]
+        }
+      ],
       "computed_fields": [
+        "results.top_miner_reward_ui",
         "results.rng",
         "results.winning_square",
         "results.did_hit_motherlode"
       ],
       "computed_field_specs": [
+        {
+          "target_path": "results.top_miner_reward_ui",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "results.top_miner_reward"
+                  }
+                },
+                {
+                  "FieldRef": {
+                    "path": "ore_metadata.decimals"
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
+        },
         {
           "target_path": "results.rng",
           "expression": {
@@ -4015,7 +4112,7 @@
           "result_type": "Option < bool >"
         }
       ],
-      "content_hash": "7cb6c66072f8d542ec10abe9874122064e0d96e81cc65f7acd97b36e20910771",
+      "content_hash": "c3d11ac7e122b04f55a3131063614b70ef798d44665beb44f509d949c06aa326",
       "views": [
         {
           "id": "OreRound/latest",
@@ -4738,7 +4835,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "07a4036e3697551744b588e8c77e78b7462c0a7aeb66e2d25639dd89c99de1bb",
+      "content_hash": "d04384bbb4b0c51071d280cf712ad87d46e63c554fd641ae7de24d23af43850e",
       "views": []
     },
     {
@@ -6127,7 +6224,7 @@
       "resolver_specs": [],
       "computed_fields": [],
       "computed_field_specs": [],
-      "content_hash": "4841eb81cd34f1c1942578e5d85f815b2a48ea1792d2a50e6751f9b71342dd79",
+      "content_hash": "25e5b373b007878f2f90156110155f38ebeff07bae96ccbfe04a73f28f8e5c91",
       "views": []
     }
   ],
@@ -6952,6 +7049,25 @@
           "resolution": {
             "category": "known",
             "address": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "mintAuthority",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "oreMintProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "mintzxW6Kckmeyh1h6Zfdj9QcYgCzhPSGiC8ChZ6fCx"
           },
           "is_optional": false
         }
@@ -8216,5 +8332,5 @@
       ]
     }
   ],
-  "content_hash": "3a068a32ccb0e92128b377a924ca5c90276663eef236c6f00c5d1ecde276d5a2"
+  "content_hash": "c5c4a013ff78d092cdb9c8f2acf729f65bd639096458c1d6e8a6f75ae733f69d"
 }

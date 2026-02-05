@@ -3,6 +3,7 @@ use hyperstack::prelude::*;
 #[hyperstack(idl = ["idl/ore.json", "idl/entropy.json"])]
 pub mod ore_stream {
     use hyperstack::macros::Stream;
+    use hyperstack::resolvers::TokenMetadata;
 
     use serde::{Deserialize, Serialize};
 
@@ -14,6 +15,8 @@ pub mod ore_stream {
         pub results: RoundResults,
         pub metrics: RoundMetrics,
         pub entropy: EntropyState,
+        #[resolve(address = "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp")]
+        pub ore_metadata: Option<TokenMetadata>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
@@ -61,6 +64,9 @@ pub mod ore_stream {
 
         #[map(ore_sdk::accounts::Round::top_miner_reward, strategy = LastWrite)]
         pub top_miner_reward: Option<u64>,
+
+        #[computed(results.top_miner_reward.ui_amount(ore_metadata.decimals))]
+        pub top_miner_reward_ui: Option<f64>,
 
         #[map(ore_sdk::accounts::Round::rent_payer, strategy = LastWrite, transform = Base58Encode)]
         pub rent_payer: Option<String>,

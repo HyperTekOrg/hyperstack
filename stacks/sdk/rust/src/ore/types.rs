@@ -35,6 +35,8 @@ pub struct OreRoundResults {
     #[serde(default)]
     pub top_miner_reward: Option<Option<u64>>,
     #[serde(default)]
+    pub top_miner_reward_ui: Option<Option<f64>>,
+    #[serde(default)]
     pub rent_payer: Option<Option<String>>,
     #[serde(default)]
     pub slot_hash: Option<Option<String>>,
@@ -75,6 +77,12 @@ pub struct OreRoundEntropy {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OreRoundToken {
+    #[serde(default)]
+    pub ore_mint: Option<Option<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OreRound {
     #[serde(default)]
     pub id: OreRoundId,
@@ -86,6 +94,10 @@ pub struct OreRound {
     pub metrics: OreRoundMetrics,
     #[serde(default)]
     pub entropy: OreRoundEntropy,
+    #[serde(default)]
+    pub token: OreRoundToken,
+    #[serde(default)]
+    pub ore_metadata: Option<Option<serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
