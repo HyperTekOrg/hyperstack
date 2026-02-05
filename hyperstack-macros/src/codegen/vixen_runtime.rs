@@ -290,13 +290,22 @@ pub fn generate_vm_handler(
             }
 
             #[inline]
-            async fn send_mutations_with_context(&self, mutations: Vec<hyperstack::runtime::hyperstack_interpreter::Mutation>, slot: u64, ordering: u64) {
+            async fn send_mutations_with_context(
+                &self,
+                mutations: Vec<hyperstack::runtime::hyperstack_interpreter::Mutation>,
+                slot: u64,
+                ordering: u64,
+                event_context: Option<hyperstack::runtime::hyperstack_server::EventContext>,
+            ) {
                 if !mutations.is_empty() {
                     let slot_context = hyperstack::runtime::hyperstack_server::SlotContext::new(slot, ordering);
-                    let batch = hyperstack::runtime::hyperstack_server::MutationBatch::with_slot_context(
+                    let mut batch = hyperstack::runtime::hyperstack_server::MutationBatch::with_slot_context(
                         hyperstack::runtime::smallvec::SmallVec::from_vec(mutations),
                         slot_context,
                     );
+                    if let Some(ctx) = event_context {
+                        batch = batch.with_event_context(ctx);
+                    }
                     let _ = self.mutations_tx.send(batch).await;
                 }
             }
@@ -452,6 +461,13 @@ pub fn generate_vm_handler(
                 let account_address = hyperstack::runtime::bs58::encode(&account.pubkey).into_string();
 
                 let event_type = value.event_type();
+                let mut log = hyperstack::runtime::hyperstack_interpreter::CanonicalLog::new();
+                log.set("phase", "vixen")
+                    .set("event_kind", "account")
+                    .set("event_type", event_type)
+                    .set("slot", slot)
+                    .set("program", #entity_name_lit)
+                    .set("account", account_address);
                 let mut event_value = value.to_value();
 
                 if let Some(obj) = event_value.as_object_mut() {
@@ -513,7 +529,7 @@ pub fn generate_vm_handler(
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
 
-                    let result = vm.process_event(&self.bytecode, event_value, event_type, Some(&context), None)
+                    let result = vm.process_event(&self.bytecode, event_value, event_type, Some(&context), Some(&mut log))
                         .map_err(|e| e.to_string());
 
                     let requests = if result.is_ok() {
@@ -534,8 +550,27 @@ pub fn generate_vm_handler(
                 match mutations_result {
                     Ok(mutations) => {
                         self.slot_tracker.record(slot);
-                        self.send_mutations_with_context(mutations, slot, write_version).await;
-                        self.send_mutations_with_context(resolver_mutations, slot, write_version).await;
+                        let event_context = hyperstack::runtime::hyperstack_server::EventContext {
+                            program: #entity_name_lit.to_string(),
+                            event_kind: "account".to_string(),
+                            event_type: event_type.to_string(),
+                            account: Some(account_address),
+                            accounts_count: None,
+                        };
+                        self.send_mutations_with_context(
+                            mutations,
+                            slot,
+                            write_version,
+                            Some(event_context.clone()),
+                        )
+                        .await;
+                        self.send_mutations_with_context(
+                            resolver_mutations,
+                            slot,
+                            write_version,
+                            Some(event_context),
+                        )
+                        .await;
                         Ok(())
                     }
                     Err(e) => {
@@ -564,6 +599,21 @@ pub fn generate_vm_handler(
 
                 let static_keys_vec = &raw_update.accounts;
                 let event_type = value.event_type();
+                let account_keys: Vec<String> = static_keys_vec
+                    .iter()
+                    .map(|key| {
+                        let key_bytes: &[u8] = AsRef::<[u8]>::as_ref(key);
+                        hyperstack::runtime::bs58::encode(key_bytes).into_string()
+                    })
+                    .collect();
+                let mut log = hyperstack::runtime::hyperstack_interpreter::CanonicalLog::new();
+                log.set("phase", "vixen")
+                    .set("event_kind", "instruction")
+                    .set("event_type", event_type)
+                    .set("slot", slot)
+                    .set("txn_index", txn_index)
+                    .set("program", #entity_name_lit)
+                    .set("accounts", account_keys);
                 let event_value = value.to_value_with_accounts(static_keys_vec);
 
                 let bytecode = self.bytecode.clone();
@@ -572,7 +622,7 @@ pub fn generate_vm_handler(
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
 
-                    let mut result = vm.process_event(&bytecode, event_value.clone(), event_type, Some(&context), None)
+                    let mut result = vm.process_event(&bytecode, event_value.clone(), event_type, Some(&context), Some(&mut log))
                         .map_err(|e| e.to_string());
 
                     if result.is_ok() {
@@ -676,8 +726,27 @@ pub fn generate_vm_handler(
                 match mutations_result {
                     Ok(mutations) => {
                         self.slot_tracker.record(slot);
-                        self.send_mutations_with_context(mutations, slot, txn_index as u64).await;
-                        self.send_mutations_with_context(resolver_mutations, slot, txn_index as u64).await;
+                        let event_context = hyperstack::runtime::hyperstack_server::EventContext {
+                            program: #entity_name_lit.to_string(),
+                            event_kind: "instruction".to_string(),
+                            event_type: event_type.to_string(),
+                            account: None,
+                            accounts_count: Some(static_keys_vec.len()),
+                        };
+                        self.send_mutations_with_context(
+                            mutations,
+                            slot,
+                            txn_index as u64,
+                            Some(event_context.clone()),
+                        )
+                        .await;
+                        self.send_mutations_with_context(
+                            resolver_mutations,
+                            slot,
+                            txn_index as u64,
+                            Some(event_context),
+                        )
+                        .await;
                         Ok(())
                     }
                     Err(e) => {
@@ -1137,13 +1206,22 @@ pub fn generate_vm_handler_struct() -> TokenStream {
             }
 
             #[inline]
-            async fn send_mutations_with_context(&self, mutations: Vec<hyperstack::runtime::hyperstack_interpreter::Mutation>, slot: u64, ordering: u64) {
+            async fn send_mutations_with_context(
+                &self,
+                mutations: Vec<hyperstack::runtime::hyperstack_interpreter::Mutation>,
+                slot: u64,
+                ordering: u64,
+                event_context: Option<hyperstack::runtime::hyperstack_server::EventContext>,
+            ) {
                 if !mutations.is_empty() {
                     let slot_context = hyperstack::runtime::hyperstack_server::SlotContext::new(slot, ordering);
-                    let batch = hyperstack::runtime::hyperstack_server::MutationBatch::with_slot_context(
+                    let mut batch = hyperstack::runtime::hyperstack_server::MutationBatch::with_slot_context(
                         hyperstack::runtime::smallvec::SmallVec::from_vec(mutations),
                         slot_context,
                     );
+                    if let Some(ctx) = event_context {
+                        batch = batch.with_event_context(ctx);
+                    }
                     let _ = self.mutations_tx.send(batch).await;
                 }
             }
@@ -1289,6 +1367,7 @@ pub fn generate_account_handler_impl(
 ) -> TokenStream {
     let parser_mod = format_ident!("{}", parser_module_name);
     let state_enum = format_ident!("{}", state_enum_name);
+    let program_name_lit = parser_module_name;
 
     quote! {
         impl hyperstack::runtime::yellowstone_vixen::Handler<#parser_mod::#state_enum, hyperstack::runtime::yellowstone_vixen_core::AccountUpdate> for VmHandler {
@@ -1309,6 +1388,13 @@ pub fn generate_account_handler_impl(
                 let account_address = hyperstack::runtime::bs58::encode(&account.pubkey).into_string();
 
                 let event_type = value.event_type();
+                let mut log = hyperstack::runtime::hyperstack_interpreter::CanonicalLog::new();
+                log.set("phase", "vixen")
+                    .set("event_kind", "account")
+                    .set("event_type", event_type)
+                    .set("slot", slot)
+                    .set("program", #program_name_lit)
+                    .set("account", &account_address);
                 let mut event_value = value.to_value();
 
                 if let Some(obj) = event_value.as_object_mut() {
@@ -1370,7 +1456,7 @@ pub fn generate_account_handler_impl(
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
 
-                    let result = vm.process_event(&self.bytecode, event_value, event_type, Some(&context), None)
+                    let result = vm.process_event(&self.bytecode, event_value, event_type, Some(&context), Some(&mut log))
                         .map_err(|e| e.to_string());
 
                     let requests = if result.is_ok() {
@@ -1391,8 +1477,27 @@ pub fn generate_account_handler_impl(
                 match mutations_result {
                     Ok(mutations) => {
                         self.slot_tracker.record(slot);
-                        self.send_mutations_with_context(mutations, slot, write_version).await;
-                        self.send_mutations_with_context(resolver_mutations, slot, write_version).await;
+                        let event_context = hyperstack::runtime::hyperstack_server::EventContext {
+                            program: #program_name_lit.to_string(),
+                            event_kind: "account".to_string(),
+                            event_type: event_type.to_string(),
+                            account: Some(account_address),
+                            accounts_count: None,
+                        };
+                        self.send_mutations_with_context(
+                            mutations,
+                            slot,
+                            write_version,
+                            Some(event_context.clone()),
+                        )
+                        .await;
+                        self.send_mutations_with_context(
+                            resolver_mutations,
+                            slot,
+                            write_version,
+                            Some(event_context),
+                        )
+                        .await;
                         Ok(())
                     }
                     Err(e) => {
@@ -1433,6 +1538,14 @@ pub fn generate_instruction_handler_impl(
 
                 let static_keys_vec = &raw_update.accounts;
                 let event_type = value.event_type();
+                let mut log = hyperstack::runtime::hyperstack_interpreter::CanonicalLog::new();
+                log.set("phase", "vixen")
+                    .set("event_kind", "instruction")
+                    .set("event_type", event_type)
+                    .set("slot", slot)
+                    .set("txn_index", txn_index)
+                    .set("program", #entity_name_lit)
+                    .set("accounts_count", static_keys_vec.len());
                 let event_value = value.to_value_with_accounts(static_keys_vec);
 
                 let bytecode = self.bytecode.clone();
@@ -1441,7 +1554,7 @@ pub fn generate_instruction_handler_impl(
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
 
-                    let mut result = vm.process_event(&bytecode, event_value.clone(), event_type, Some(&context), None)
+                    let mut result = vm.process_event(&bytecode, event_value.clone(), event_type, Some(&context), Some(&mut log))
                         .map_err(|e| e.to_string());
 
                     if result.is_ok() {
@@ -1542,8 +1655,27 @@ pub fn generate_instruction_handler_impl(
                 match mutations_result {
                     Ok(mutations) => {
                         self.slot_tracker.record(slot);
-                        self.send_mutations_with_context(mutations, slot, txn_index as u64).await;
-                        self.send_mutations_with_context(resolver_mutations, slot, txn_index as u64).await;
+                        let event_context = hyperstack::runtime::hyperstack_server::EventContext {
+                            program: #entity_name_lit.to_string(),
+                            event_kind: "instruction".to_string(),
+                            event_type: event_type.to_string(),
+                            account: None,
+                            accounts_count: Some(static_keys_vec.len()),
+                        };
+                        self.send_mutations_with_context(
+                            mutations,
+                            slot,
+                            txn_index as u64,
+                            Some(event_context.clone()),
+                        )
+                        .await;
+                        self.send_mutations_with_context(
+                            resolver_mutations,
+                            slot,
+                            txn_index as u64,
+                            Some(event_context),
+                        )
+                        .await;
                         Ok(())
                     }
                     Err(e) => {

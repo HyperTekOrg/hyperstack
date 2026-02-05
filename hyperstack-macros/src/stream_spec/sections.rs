@@ -565,8 +565,10 @@ pub fn process_nested_struct(
                     resolve_specs.push(parse::ResolveSpec {
                         resolver,
                         from: resolve_attr.from,
+                        address: resolve_attr.address,
                         extract: resolve_attr.extract,
                         target_field_name,
+                        strategy: resolve_attr.strategy,
                     });
                 }
             }

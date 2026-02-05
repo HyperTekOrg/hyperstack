@@ -239,6 +239,15 @@ pub fn parse_map_attribute(
     }
 
     let strategy = args.strategy.unwrap_or_else(|| "SetOnce".to_string());
+    if strategy != "SetOnce" && strategy != "LastWrite" {
+        return Err(syn::Error::new_spanned(
+            attr,
+            format!(
+                "Invalid strategy '{}' for #[resolve]. Only 'SetOnce' or 'LastWrite' are allowed.",
+                strategy
+            ),
+        ));
+    }
     let target_name = args.rename.unwrap_or_else(|| target_field_name.to_string());
     let emit = args.emit.unwrap_or(true);
 
@@ -947,31 +956,39 @@ pub fn parse_aggregate_attribute(
 
 #[derive(Debug, Clone)]
 pub struct ResolveAttribute {
-    pub from: String,
+    pub from: Option<String>,
+    pub address: Option<String>,
     pub extract: Option<String>,
     pub target_field_name: String,
     pub resolver: Option<String>,
+    pub strategy: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct ResolveSpec {
     pub resolver: ResolverType,
-    pub from: String,
+    pub from: Option<String>,
+    pub address: Option<String>,
     pub extract: Option<String>,
     pub target_field_name: String,
+    pub strategy: String,
 }
 
 struct ResolveAttributeArgs {
     from: Option<String>,
+    address: Option<String>,
     extract: Option<String>,
     resolver: Option<String>,
+    strategy: Option<String>,
 }
 
 impl Parse for ResolveAttributeArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut from = None;
+        let mut address = None;
         let mut extract = None;
         let mut resolver = None;
+        let mut strategy = None;
 
         while !input.is_empty() {
             let ident: syn::Ident = input.parse()?;
@@ -982,6 +999,9 @@ impl Parse for ResolveAttributeArgs {
             if ident_str == "from" {
                 let lit: syn::LitStr = input.parse()?;
                 from = Some(lit.value());
+            } else if ident_str == "address" {
+                let lit: syn::LitStr = input.parse()?;
+                address = Some(lit.value());
             } else if ident_str == "extract" {
                 let lit: syn::LitStr = input.parse()?;
                 extract = Some(lit.value());
@@ -993,6 +1013,9 @@ impl Parse for ResolveAttributeArgs {
                     let ident: syn::Ident = input.parse()?;
                     resolver = Some(ident.to_string());
                 }
+            } else if ident_str == "strategy" {
+                let ident: syn::Ident = input.parse()?;
+                strategy = Some(ident.to_string());
             } else {
                 return Err(syn::Error::new(
                     ident.span(),
@@ -1007,8 +1030,10 @@ impl Parse for ResolveAttributeArgs {
 
         Ok(ResolveAttributeArgs {
             from,
+            address,
             extract,
             resolver,
+            strategy,
         })
     }
 }
@@ -1023,15 +1048,29 @@ pub fn parse_resolve_attribute(
 
     let args: ResolveAttributeArgs = attr.parse_args()?;
 
-    let from = args
-        .from
-        .ok_or_else(|| syn::Error::new_spanned(attr, "#[resolve] requires 'from' parameter"))?;
+    if args.from.is_some() && args.address.is_some() {
+        return Err(syn::Error::new_spanned(
+            attr,
+            "#[resolve] cannot specify both 'from' and 'address'",
+        ));
+    }
+
+    if args.from.is_none() && args.address.is_none() {
+        return Err(syn::Error::new_spanned(
+            attr,
+            "#[resolve] requires either 'from' or 'address' parameter",
+        ));
+    }
+
+    let strategy = args.strategy.unwrap_or_else(|| "SetOnce".to_string());
 
     Ok(Some(ResolveAttribute {
-        from,
+        from: args.from,
+        address: args.address,
         extract: args.extract,
         target_field_name: target_field_name.to_string(),
         resolver: args.resolver,
+        strategy,
     }))
 }
 

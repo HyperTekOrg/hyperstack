@@ -1,6 +1,6 @@
 use crate::ast::{
-    BinaryOp, ComparisonOp, ComputedExpr, ComputedFieldSpec, FieldPath, ResolverExtractSpec,
-    ResolverType, Transformation,
+    BinaryOp, ComparisonOp, ComputedExpr, ComputedFieldSpec, FieldPath, ResolveStrategy,
+    ResolverExtractSpec, ResolverType, Transformation,
 };
 use crate::compiler::{MultiEntityBytecode, OpCode};
 use crate::Mutation;
@@ -2466,27 +2466,50 @@ impl VmContext {
                     entity_name,
                     resolver,
                     input_path,
+                    input_value,
+                    strategy,
                     extracts,
                     state,
                     key,
                 } => {
                     let actual_state_id = override_state_id;
-                    let input_value = Self::get_value_at_path(&self.registers[*state], input_path);
+                    let resolved_input = if let Some(value) = input_value {
+                        Some(value.clone())
+                    } else if let Some(path) = input_path.as_ref() {
+                        Self::get_value_at_path(&self.registers[*state], path)
+                    } else {
+                        None
+                    };
 
-                    if let Some(input) = input_value {
+                    if let Some(input) = resolved_input {
                         let key_value = &self.registers[*key];
 
                         if input.is_null() || key_value.is_null() {
                             tracing::warn!(
                                 entity = %entity_name,
                                 resolver = ?resolver,
-                                input_path = %input_path,
+                                input_path = %input_path.as_deref().unwrap_or("<literal>"),
                                 input_is_null = input.is_null(),
                                 key_is_null = key_value.is_null(),
                                 input = ?input,
                                 key = ?key_value,
                                 "Resolver skipped: null input or key"
                             );
+                            pc += 1;
+                            continue;
+                        }
+
+                        if matches!(strategy, ResolveStrategy::SetOnce)
+                            && extracts.iter().all(|extract| {
+                                match Self::get_value_at_path(
+                                    &self.registers[*state],
+                                    &extract.target_path,
+                                ) {
+                                    Some(value) => !value.is_null(),
+                                    None => false,
+                                }
+                            })
+                        {
                             pc += 1;
                             continue;
                         }
@@ -2523,7 +2546,7 @@ impl VmContext {
                         tracing::warn!(
                             entity = %entity_name,
                             resolver = ?resolver,
-                            input_path = %input_path,
+                            input_path = %input_path.as_deref().unwrap_or("<literal>"),
                             state = ?self.registers[*state],
                             "Resolver skipped: input path not found in state"
                         );
@@ -3016,6 +3039,8 @@ impl VmContext {
                         .collect();
                     let hex = hex::encode(&bytes);
                     Ok(json!(hex))
+                } else if value.is_string() {
+                    Ok(value.clone())
                 } else {
                     Err("HexEncode requires an array of numbers".into())
                 }

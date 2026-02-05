@@ -39,6 +39,17 @@ pub struct MutationBatch {
     pub mutations: SmallVec<[Mutation; 6]>,
     /// Slot context for ordering (optional for backward compatibility)
     pub slot_context: Option<SlotContext>,
+    /// Event metadata for logging and diagnostics
+    pub event_context: Option<EventContext>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EventContext {
+    pub program: String,
+    pub event_kind: String,
+    pub event_type: String,
+    pub account: Option<String>,
+    pub accounts_count: Option<usize>,
 }
 
 impl MutationBatch {
@@ -47,6 +58,7 @@ impl MutationBatch {
             span: Span::current(),
             mutations,
             slot_context: None,
+            event_context: None,
         }
     }
 
@@ -55,6 +67,7 @@ impl MutationBatch {
             span,
             mutations,
             slot_context: None,
+            event_context: None,
         }
     }
 
@@ -66,7 +79,13 @@ impl MutationBatch {
             span: Span::current(),
             mutations,
             slot_context: Some(slot_context),
+            event_context: None,
         }
+    }
+
+    pub fn with_event_context(mut self, event_context: EventContext) -> Self {
+        self.event_context = Some(event_context);
+        self
     }
 
     pub fn len(&self) -> usize {

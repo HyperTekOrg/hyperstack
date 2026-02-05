@@ -428,8 +428,10 @@ pub fn process_entity_struct_with_idl(
                     resolve_specs.push(parse::ResolveSpec {
                         resolver,
                         from: resolve_attr.from,
+                        address: resolve_attr.address,
                         extract: resolve_attr.extract,
                         target_field_name: resolve_attr.target_field_name,
+                        strategy: resolve_attr.strategy,
                     });
                 } else if let Ok(Some(computed_attr)) =
                     parse::parse_computed_attribute(attr, &field_name.to_string())

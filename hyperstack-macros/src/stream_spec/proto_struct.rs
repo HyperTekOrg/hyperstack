@@ -144,8 +144,10 @@ pub fn process_struct_with_context(
                     resolve_specs.push(parse::ResolveSpec {
                         resolver,
                         from: resolve_attr.from,
+                        address: resolve_attr.address,
                         extract: resolve_attr.extract,
                         target_field_name: resolve_attr.target_field_name,
+                        strategy: resolve_attr.strategy,
                     });
                 }
             }
@@ -422,23 +424,48 @@ pub fn process_struct_with_context(
         .collect();
 
     let mut resolver_specs_by_key: HashMap<
-        (crate::ast::ResolverType, String),
+        (crate::ast::ResolverType, String, String),
         Vec<parse::ResolveSpec>,
     > = HashMap::new();
     for spec in &resolve_specs {
+        let input_key = if let Some(from) = &spec.from {
+            format!("path:{}", from)
+        } else if let Some(address) = &spec.address {
+            format!("value:{}", address)
+        } else {
+            "value:".to_string()
+        };
         resolver_specs_by_key
-            .entry((spec.resolver.clone(), spec.from.clone()))
+            .entry((spec.resolver.clone(), input_key, spec.strategy.clone()))
             .or_default()
             .push(spec.clone());
     }
 
     let resolver_specs_code: Vec<_> = resolver_specs_by_key
         .into_iter()
-        .map(|((resolver, from), specs)| {
+        .map(|((resolver, _input_key, strategy), specs)| {
             let resolver_code = match resolver {
                 crate::ast::ResolverType::Token => quote! {
                     hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Token
                 },
+            };
+            let strategy_code = match strategy.as_str() {
+                "LastWrite" => quote! {
+                    hyperstack::runtime::hyperstack_interpreter::ast::ResolveStrategy::LastWrite
+                },
+                _ => quote! {
+                    hyperstack::runtime::hyperstack_interpreter::ast::ResolveStrategy::SetOnce
+                },
+            };
+            let input_path_code = match specs.first().and_then(|spec| spec.from.as_ref()) {
+                Some(value) => quote! { Some(#value.to_string()) },
+                None => quote! { None },
+            };
+            let input_value_code = match specs.first().and_then(|spec| spec.address.as_ref()) {
+                Some(value) => quote! {
+                    Some(hyperstack::runtime::serde_json::Value::String(#value.to_string()))
+                },
+                None => quote! { None },
             };
 
             let mut seen = HashSet::new();
@@ -468,7 +495,9 @@ pub fn process_struct_with_context(
             quote! {
                 hyperstack::runtime::hyperstack_interpreter::ast::ResolverSpec {
                     resolver: #resolver_code,
-                    input_path: #from.to_string(),
+                    input_path: #input_path_code,
+                    input_value: #input_value_code,
+                    strategy: #strategy_code,
                     extracts: vec![
                         #(#extracts_code),*
                     ],

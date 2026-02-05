@@ -378,10 +378,27 @@ pub struct ResolverExtractSpec {
     pub transform: Option<Transformation>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ResolveStrategy {
+    SetOnce,
+    LastWrite,
+}
+
+impl Default for ResolveStrategy {
+    fn default() -> Self {
+        ResolveStrategy::SetOnce
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResolverSpec {
     pub resolver: ResolverType,
-    pub input_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_value: Option<Value>,
+    #[serde(default)]
+    pub strategy: ResolveStrategy,
     pub extracts: Vec<ResolverExtractSpec>,
 }
 

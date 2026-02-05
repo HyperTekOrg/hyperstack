@@ -15,8 +15,9 @@ use crate::ast::writer::{
 use crate::ast::{
     ComputedFieldSpec, ConditionExpr, EntitySection, FieldPath, HookAction, IdentitySpec,
     IdlSerializationSnapshot, InstructionHook, KeyResolutionStrategy, LookupIndexSpec,
-    MappingSource, ResolverExtractSpec, ResolverHook, ResolverSpec, ResolverStrategy, ResolverType,
-    SerializableFieldMapping, SerializableHandlerSpec, SerializableStreamSpec, SourceSpec,
+    MappingSource, ResolveStrategy, ResolverExtractSpec, ResolverHook, ResolverSpec,
+    ResolverStrategy, ResolverType, SerializableFieldMapping, SerializableHandlerSpec,
+    SerializableStreamSpec, SourceSpec,
 };
 use crate::event_type_helpers::{find_idl_for_type, program_name_for_type, IdlLookup};
 use crate::parse;
@@ -182,11 +183,28 @@ fn build_resolver_specs(resolve_specs: &[parse::ResolveSpec]) -> Vec<ResolverSpe
     let mut grouped: BTreeMap<String, ResolverSpec> = BTreeMap::new();
 
     for spec in resolve_specs {
-        let key = format!("{}::{}", resolver_type_key(&spec.resolver), spec.from);
+        let input_key = if let Some(from) = &spec.from {
+            format!("path:{}", from)
+        } else if let Some(address) = &spec.address {
+            format!("value:{}", address)
+        } else {
+            "value:".to_string()
+        };
+        let key = format!(
+            "{}::{}::{}",
+            resolver_type_key(&spec.resolver),
+            input_key,
+            spec.strategy
+        );
 
         let entry = grouped.entry(key).or_insert_with(|| ResolverSpec {
             resolver: spec.resolver.clone(),
             input_path: spec.from.clone(),
+            input_value: spec
+                .address
+                .as_ref()
+                .map(|value| serde_json::Value::String(value.clone())),
+            strategy: parse_resolve_strategy(&spec.strategy),
             extracts: Vec::new(),
         });
 
@@ -205,6 +223,13 @@ fn build_resolver_specs(resolve_specs: &[parse::ResolveSpec]) -> Vec<ResolverSpe
     }
 
     grouped.into_values().collect()
+}
+
+fn parse_resolve_strategy(strategy: &str) -> ResolveStrategy {
+    match strategy {
+        "LastWrite" => ResolveStrategy::LastWrite,
+        _ => ResolveStrategy::SetOnce,
+    }
 }
 
 fn resolver_type_key(resolver: &ResolverType) -> &'static str {
