@@ -21,27 +21,27 @@ export function BlockGrid({ round }: BlockGridProps) {
     }));
 
   return (
-    <div className="grid grid-cols-5 gap-2 max-w-[700px]">
+    <div className="grid grid-cols-5 gap-3">
       {blocks.map((block) => (
         <div
           key={block.id}
           className={`
-            bg-slate-900/80 border rounded-xl p-3 flex flex-col gap-5 min-h-[100px]
-            transition-all duration-300 hover:bg-slate-800/80 hover:border-slate-600
+            bg-white dark:bg-stone-800 rounded-2xl p-4 flex flex-col justify-between min-h-[110px]
+            transition-all duration-200 hover:shadow-md dark:hover:bg-stone-750
             ${block.isWinner
-              ? 'border-2 border-violet-500 shadow-[0_0_25px_rgba(139,92,246,0.4)] animate-pulse-glow'
-              : 'border-slate-700/50'
+              ? 'bg-amber-50 dark:bg-amber-900/30 ring-2 ring-amber-400 shadow-lg'
+              : 'shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700'
             }
           `}
         >
-          <div className="flex justify-between items-center">
-            <span className="text-slate-500 text-sm font-medium">#{block.id}</span>
-            <div className="flex items-center gap-1 text-slate-500 text-sm">
-              <span className="text-slate-300">{block.minerCount}</span>
+          <div className="flex justify-between items-start">
+            <span className="text-stone-400 dark:text-stone-500 text-xs font-medium">{block.id}</span>
+            <div className="flex items-center gap-1 text-stone-400 dark:text-stone-500">
+              <span className="text-xs">{block.minerCount}</span>
               <MinerIcon />
             </div>
           </div>
-          <div className="flex items-center justify-center gap-1.5 text-base font-semibold text-white">
+          <div className="flex items-center gap-1.5 text-lg font-semibold text-stone-800 dark:text-stone-100">
             <SolanaIcon size={14} />
             <span>{Number(block.deployedUi).toFixed(4)}</span>
           </div>

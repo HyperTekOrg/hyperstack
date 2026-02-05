@@ -39,51 +39,49 @@ export function StatsPanel({ round, treasuryMotherlode, isConnected }: StatsPane
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-3">
-        <div className="flex-1 bg-gradient-to-br from-violet-900/40 to-slate-900 border-2 border-violet-500/60 rounded-2xl p-5 flex flex-col items-center gap-2 shadow-[0_0_20px_rgba(139,92,246,0.2)]">
-          <div className="flex items-center gap-2 text-2xl font-bold text-white">
-            <OreIcon />
-            <span>{treasuryMotherlode}</span>
-          </div>
-          <div className="text-xs text-slate-400 uppercase tracking-wider">Motherlode</div>
+      <div className="bg-white dark:bg-stone-800 rounded-2xl p-6 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
+        <div className="flex items-center gap-2 text-3xl font-bold text-stone-800 dark:text-stone-100">
+          <OreIcon />
+          <span>{treasuryMotherlode ?? '–'}</span>
         </div>
-        <div className="flex-1 bg-slate-900/80 border border-slate-700/50 rounded-2xl p-5 flex flex-col items-center gap-2 transition-colors hover:border-slate-600">
-          <div className="text-3xl font-bold text-white tabular-nums">{timeRemaining}</div>
-          <div className="text-xs text-slate-400 uppercase tracking-wider">Time remaining</div>
-        </div>
+        <div className="text-sm text-stone-500 dark:text-stone-400 mt-1">Motherlode</div>
       </div>
 
-      <div className="flex gap-3">
-        <div className="flex-1 bg-slate-900/80 border border-slate-700/50 rounded-2xl p-5 flex flex-col items-center gap-2 transition-colors hover:border-slate-600">
-          <div className="flex items-center gap-2 text-2xl font-bold text-white">
-            <SolanaIcon />
+      <div className="bg-white dark:bg-stone-800 rounded-2xl p-6 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
+        <div className="text-3xl font-semibold text-stone-800 dark:text-stone-100 tabular-nums">{timeRemaining}</div>
+        <div className="text-sm text-stone-500 dark:text-stone-400 mt-1">Time remaining</div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white dark:bg-stone-800 rounded-2xl p-5 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
+          <div className="flex items-center gap-1.5 text-xl font-semibold text-stone-800 dark:text-stone-100">
+            <SolanaIcon size={16} />
             <span>{round ? round.state.total_deployed_ui.toFixed(4) : '0.0000'}</span>
           </div>
-          <div className="text-xs text-slate-400 uppercase tracking-wider">Total deployed</div>
+          <div className="text-sm text-stone-500 dark:text-stone-400 mt-1">Total deployed</div>
         </div>
-        <div className="flex-1 bg-slate-900/80 border border-slate-700/50 rounded-2xl p-5 flex flex-col items-center gap-2 transition-colors hover:border-slate-600">
-          <div className="flex items-center gap-2 text-2xl font-bold text-white">
-            <SolanaIcon />
+        <div className="bg-white dark:bg-stone-800 rounded-2xl p-5 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
+          <div className="flex items-center gap-1.5 text-xl font-semibold text-stone-800 dark:text-stone-100">
+            <SolanaIcon size={16} />
             <span>0</span>
           </div>
-          <div className="text-xs text-slate-400 uppercase tracking-wider">You deployed</div>
+          <div className="text-sm text-stone-500 dark:text-stone-400 mt-1">You deployed</div>
         </div>
       </div>
 
-      <div className="flex justify-between items-center px-4 py-3 bg-slate-900/80 rounded-xl border border-slate-700/50">
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-slate-400">Round #{round?.id.round_id ?? '--'}</span>
-          {round && (
-            <span className="text-sm text-slate-400">
-              {round.state.total_miners} miners
-            </span>
-          )}
-        </div>
+      <div className="flex items-center gap-3 px-1 text-sm text-stone-500 dark:text-stone-400">
+        <span>Round {round?.id.round_id ?? '–'}</span>
+        {round && (
+          <>
+            <span className="text-stone-300 dark:text-stone-600">·</span>
+            <span>{round.state.total_miners} miners</span>
+          </>
+        )}
       </div>
 
       {!isConnected && (
-        <div className="bg-red-500/10 border border-red-500/30 text-red-300 p-3 rounded-xl text-center text-sm">
-          Waiting for connection...
+        <div className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 p-4 rounded-xl text-center text-sm">
+          Connecting...
         </div>
       )}
     </div>
