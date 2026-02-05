@@ -9,10 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "hyperstack-react": "^0.4",
-    "hyperstack-stacks": "^0.4",
+    "hyperstack-react": "file:../../typescript/react",
+    "hyperstack-stacks": "file:../../stacks/sdk/typescript",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "zod": "^3.23.0",
     "zustand": "^4.4.1"
   },
   "devDependencies": {

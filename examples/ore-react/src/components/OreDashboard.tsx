@@ -1,13 +1,11 @@
 import { useHyperstack } from 'hyperstack-react';
-import {
-  ORE_STREAM_STACK,
-  type OreRound,
-} from 'hyperstack-stacks/ore';
+import { ORE_STREAM_STACK } from 'hyperstack-stacks/ore';
 import { useState, useEffect } from 'react';
+import { ValidatedOreRoundSchema, type ValidatedOreRound } from '../schemas/ore-round-validated';
 
 export function OreDashboard() {
   const { views, isConnected } = useHyperstack(ORE_STREAM_STACK, { url: "ws://localhost:8878" });
-  const { data: latestRound } = views.OreRound.latest.useOne();
+  const { data: latestRound } = views.OreRound.latest.useOne({ schema: ValidatedOreRoundSchema });
   const { data: treasuryData } = views.OreTreasury.list.useOne();
 
   return (
@@ -45,16 +43,20 @@ export function OreDashboard() {
   );
 }
 
-function BlockGrid({ round }: { round: OreRound | undefined }) {
-  const deployedPerSquareUi = round?.state?.deployed_per_square_ui;
-  const countPerSquare = round?.state?.count_per_square;
-
-  const blocks = Array.from({ length: 25 }, (_, i) => ({
-    id: i + 1,
-    minerCount: countPerSquare?.[i] ?? 0,
-    deployedUi: deployedPerSquareUi?.[i] ?? 0,
-    isWinner: round?.results?.winning_square === i,
-  }));
+function BlockGrid({ round }: { round: ValidatedOreRound | undefined }) {
+  const blocks = round
+    ? round.state.deployed_per_square_ui.map((deployedUi, i) => ({
+      id: i + 1,
+      minerCount: round.state.count_per_square[i],
+      deployedUi,
+      isWinner: round?.results.winning_square === i,
+    }))
+    : Array.from({ length: 25 }, (_, i) => ({
+      id: i + 1,
+      minerCount: 0,
+      deployedUi: 0,
+      isWinner: false,
+    }));
 
   return (
     <div style={styles.gridContainer}>
@@ -88,22 +90,21 @@ function StatsPanel({
   treasuryMotherlode,
   isConnected,
 }: {
-  round: OreRound | undefined;
+  round: ValidatedOreRound | undefined;
   treasuryMotherlode: number | null | undefined;
   isConnected: boolean;
 }) {
   const [timeRemaining, setTimeRemaining] = useState<string>('--:--');
 
-  // Calculate time remaining
   useEffect(() => {
-    if (!round?.state?.expires_at) {
+    if (!round) {
       setTimeRemaining('--:--');
       return;
     }
 
     const updateTimer = () => {
       const now = Math.floor(Date.now() / 1000);
-      const expiresAt = Number(round.state?.expires_at);
+      const expiresAt = round.state.expires_at;
       const remaining = Math.max(0, expiresAt - now);
 
       const minutes = Math.floor(remaining / 60);
@@ -114,9 +115,9 @@ function StatsPanel({
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [round?.state?.expires_at]);
+  }, [round]);
 
-  const motherlodeValue = treasuryMotherlode ?? round?.state?.motherlode;
+  const motherlodeValue = treasuryMotherlode;
 
   return (
     <div style={styles.statsContainer}>
@@ -135,12 +136,11 @@ function StatsPanel({
         </div>
       </div>
 
-      {/* Second row - Deployed stats */}
       <div style={styles.statsRow}>
         <div style={styles.statCard}>
           <div style={styles.statValue}>
             <SolanaIcon />
-            <span>{Number(round?.state?.total_deployed_ui ?? 0).toFixed(4)}</span>
+            <span>{round ? round.state.total_deployed_ui.toFixed(4) : '0.0000'}</span>
           </div>
           <div style={styles.statLabel}>Total deployed</div>
         </div>
@@ -153,19 +153,18 @@ function StatsPanel({
         </div>
       </div>
 
-      {/* Round info */}
       <div style={styles.roundInfo}>
         <div>
-          <span style={styles.roundLabel}>Round #{round?.id?.round_id ?? '--'}</span>
-          {round?.state?.total_miners != null && (
+          <span style={styles.roundLabel}>Round #{round?.id.round_id ?? '--'}</span>
+          {round && (
             <span style={{ ...styles.roundLabel, marginLeft: '16px' }}>
               {round.state.total_miners} miners
             </span>
           )}
         </div>
-        {round?.results?.winning_square != null && (
+        {round && (
           <span style={styles.winnerBadge}>
-            Winner: Block #{(round.results.winning_square ?? 0) + 1}
+            Winner: Block #{round?.results.winning_square + 1}
           </span>
         )}
       </div>
