@@ -3961,14 +3961,14 @@
                 "pda_field": {
                   "segments": [
                     "accounts",
-                    "treasury"
+                    "entropyVar"
                   ],
                   "offsets": null
                 },
                 "seed_field": {
                   "segments": [
                     "accounts",
-                    "roundNext"
+                    "round"
                   ],
                   "offsets": null
                 },
@@ -3980,14 +3980,14 @@
                 "pda_field": {
                   "segments": [
                     "accounts",
-                    "entropyVar"
+                    "treasury"
                   ],
                   "offsets": null
                 },
                 "seed_field": {
                   "segments": [
                     "accounts",
-                    "round"
+                    "roundNext"
                   ],
                   "offsets": null
                 },
@@ -4751,7 +4751,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "add1542f0f3191d2abf529dc4ab13bc6f553788198c229fcadf0c9aa269dd152",
+      "content_hash": "d016ce3a30dc6ded9328dd666a7361662f2ecea93179a87bf26032f5bc71e606",
       "views": [
         {
           "id": "OreRound/latest",
@@ -5417,14 +5417,14 @@
                 "pda_field": {
                   "segments": [
                     "accounts",
-                    "treasury"
+                    "entropyVar"
                   ],
                   "offsets": null
                 },
                 "seed_field": {
                   "segments": [
                     "accounts",
-                    "roundNext"
+                    "round"
                   ],
                   "offsets": null
                 },
@@ -5436,14 +5436,14 @@
                 "pda_field": {
                   "segments": [
                     "accounts",
-                    "entropyVar"
+                    "treasury"
                   ],
                   "offsets": null
                 },
                 "seed_field": {
                   "segments": [
                     "accounts",
-                    "round"
+                    "roundNext"
                   ],
                   "offsets": null
                 },
@@ -5551,7 +5551,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "7d8feb8178f1c5e42e46db9012987bc889ab2bbdb5f0a5f87d54ef49729dd3b7",
+      "content_hash": "c80e2e6ab72f7e83ea233c9d9dabea035a208daa20f7d740295b66e28edac8d5",
       "views": []
     },
     {
@@ -6977,25 +6977,6 @@
                 "pda_field": {
                   "segments": [
                     "accounts",
-                    "treasury"
-                  ],
-                  "offsets": null
-                },
-                "seed_field": {
-                  "segments": [
-                    "accounts",
-                    "roundNext"
-                  ],
-                  "offsets": null
-                },
-                "lookup_name": "default_pda_lookup"
-              }
-            },
-            {
-              "RegisterPdaMapping": {
-                "pda_field": {
-                  "segments": [
-                    "accounts",
                     "entropyVar"
                   ],
                   "offsets": null
@@ -7009,6 +6990,25 @@
                 },
                 "lookup_name": "default_pda_lookup"
               }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "treasury"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "roundNext"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
             }
           ],
           "lookup_by": null
@@ -7017,7 +7017,7 @@
       "resolver_specs": [],
       "computed_fields": [],
       "computed_field_specs": [],
-      "content_hash": "fa965125488f32c6c794a56c517d6455d2b04d90f29250d419b73efd957ea3d3",
+      "content_hash": "236fccaddbe4354f0fd201accb7bc597b90894a1b517d987980178b7be75a6be",
       "views": []
     }
   ],
@@ -9125,5 +9125,5 @@
       ]
     }
   ],
-  "content_hash": "1b5f00bae8cde6a58c7b0aa95e3e5baefe524c64296fc5d4414dfbf92495adf3"
+  "content_hash": "d005a48a890c5f437ca0f776fac3b87c6125ba0a7986983e037f2f095f577c2e"
 }
