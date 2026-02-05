@@ -3949,7 +3949,19 @@ impl VmContext {
                         if val.is_null() {
                             return Ok(Value::Null);
                         }
-                        // Evaluate the closure body with the value bound to param
+
+                        if let Value::Array(arr) = &val {
+                            let results: Result<Vec<Value>> = arr
+                                .iter()
+                                .map(|elem| {
+                                    let mut closure_env = env.clone();
+                                    closure_env.insert(param.clone(), elem.clone());
+                                    self.evaluate_computed_expr_with_env(body, state, &closure_env)
+                                })
+                                .collect();
+                            return Ok(Value::Array(results?));
+                        }
+
                         let mut closure_env = env.clone();
                         closure_env.insert(param.clone(), val);
                         return self.evaluate_computed_expr_with_env(body, state, &closure_env);

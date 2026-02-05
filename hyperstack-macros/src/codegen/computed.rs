@@ -95,6 +95,46 @@ fn extract_deps_recursive(expr: &ComputedExpr, section: &str, deps: &mut HashSet
     }
 }
 
+fn contains_resolver_computed(expr: &ComputedExpr) -> bool {
+    match expr {
+        ComputedExpr::ResolverComputed { .. } => true,
+        ComputedExpr::FieldRef { .. }
+        | ComputedExpr::Literal { .. }
+        | ComputedExpr::None
+        | ComputedExpr::Var { .. }
+        | ComputedExpr::ByteArray { .. } => false,
+        ComputedExpr::UnwrapOr { expr, .. }
+        | ComputedExpr::Cast { expr, .. }
+        | ComputedExpr::Paren { expr }
+        | ComputedExpr::Some { value: expr }
+        | ComputedExpr::Slice { expr, .. }
+        | ComputedExpr::Index { expr, .. }
+        | ComputedExpr::U64FromLeBytes { bytes: expr }
+        | ComputedExpr::U64FromBeBytes { bytes: expr }
+        | ComputedExpr::JsonToBytes { expr }
+        | ComputedExpr::Unary { expr, .. } => contains_resolver_computed(expr),
+        ComputedExpr::Binary { left, right, .. } => {
+            contains_resolver_computed(left) || contains_resolver_computed(right)
+        }
+        ComputedExpr::MethodCall { expr, args, .. } => {
+            contains_resolver_computed(expr) || args.iter().any(contains_resolver_computed)
+        }
+        ComputedExpr::Let { value, body, .. } => {
+            contains_resolver_computed(value) || contains_resolver_computed(body)
+        }
+        ComputedExpr::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            contains_resolver_computed(condition)
+                || contains_resolver_computed(then_branch)
+                || contains_resolver_computed(else_branch)
+        }
+        ComputedExpr::Closure { body, .. } => contains_resolver_computed(body),
+    }
+}
+
 /// Topologically sort computed fields by dependencies within a section.
 fn sort_by_dependencies<'a>(
     fields: &[&'a ComputedFieldSpec],
@@ -238,6 +278,56 @@ pub fn generate_computed_evaluator(computed_field_specs: &[ComputedFieldSpec]) -
 }
 
 /// Generate code for a computed expression.
+fn generate_option_safe_expr_code(expr: &ComputedExpr) -> TokenStream {
+    match expr {
+        ComputedExpr::ResolverComputed {
+            resolver,
+            method,
+            args,
+        } => {
+            let resolver_name = resolver.as_str();
+            let method_name = method.as_str();
+            let arg_codes: Vec<TokenStream> =
+                args.iter().map(generate_option_safe_expr_code).collect();
+            quote! {
+                {
+                    let resolver_args = vec![#(hyperstack::runtime::serde_json::to_value(#arg_codes).ok()?),*];
+                    let resolver_value = hyperstack::runtime::hyperstack_interpreter::resolvers::evaluate_resolver_computed(
+                        #resolver_name,
+                        #method_name,
+                        &resolver_args,
+                    ).ok()?;
+                    if resolver_value.is_null() {
+                        None
+                    } else {
+                        Some(resolver_value)
+                    }
+                }
+            }
+        }
+        ComputedExpr::Var { name } => {
+            let name_ident = format_ident!("{}", name);
+            quote! { #name_ident }
+        }
+        ComputedExpr::Literal { value } => match value {
+            serde_json::Value::Number(n) => {
+                if let Some(u) = n.as_u64() {
+                    quote! { #u }
+                } else if let Some(i) = n.as_i64() {
+                    quote! { #i }
+                } else {
+                    let num = n.as_f64().unwrap_or(0.0);
+                    quote! { #num }
+                }
+            }
+            serde_json::Value::Bool(b) => quote! { #b },
+            serde_json::Value::Null => quote! { () },
+            _ => quote! { 0.0_f64 },
+        },
+        _ => generate_computed_expr_code(expr),
+    }
+}
+
 ///
 /// This generates code that extracts values from JSON and performs calculations.
 /// The code generation handles multiple types including f64, u64, Option<T>, byte arrays, etc.
@@ -345,12 +435,27 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
             let arg_codes: Vec<TokenStream> =
                 args.iter().map(generate_computed_expr_code).collect();
 
-            // Special handling for .map() on Option<serde_json::Value> - need to extract the numeric value
             if method == "map" && args.len() == 1 {
                 if let ComputedExpr::Closure { param, body } = &args[0] {
                     let param_ident = format_ident!("{}", param);
+
+                    if contains_resolver_computed(body) {
+                        let body_code = generate_option_safe_expr_code(body);
+                        return quote! {
+                            #inner.as_ref().and_then(|v| {
+                                v.as_array().map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|elem| {
+                                            let #param_ident = elem.as_f64()?;
+                                            #body_code
+                                        })
+                                        .collect::<Vec<_>>()
+                                })
+                            })
+                        };
+                    }
+
                     let body_code = generate_computed_expr_code(body);
-                    // Convert the JSON value to u64 before passing to the closure
                     return quote! {
                         #inner.and_then(|v| v.as_u64()).map(|#param_ident| #body_code)
                     };
