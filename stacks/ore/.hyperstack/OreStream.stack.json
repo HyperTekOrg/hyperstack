@@ -2348,10 +2348,6 @@
             "temporal_field": null
           },
           {
-            "field_name": "treasury.motherlode",
-            "temporal_field": null
-          },
-          {
             "field_name": "entropy.entropy_value",
             "temporal_field": null
           }
@@ -2872,47 +2868,6 @@
               },
               "transform": null,
               "population": "LastWrite"
-            }
-          ],
-          "conditions": [],
-          "emit": true
-        },
-        {
-          "source": {
-            "Source": {
-              "program_id": null,
-              "discriminator": null,
-              "type_name": "ore::TreasuryState"
-            }
-          },
-          "key_resolution": {
-            "Lookup": {
-              "primary_field": {
-                "segments": [
-                  "__account_address"
-                ],
-                "offsets": null
-              }
-            }
-          },
-          "mappings": [
-            {
-              "target_path": "treasury.motherlode",
-              "source": {
-                "FromSource": {
-                  "path": {
-                    "segments": [
-                      "motherlode"
-                    ],
-                    "offsets": null
-                  },
-                  "default": null,
-                  "transform": null
-                }
-              },
-              "transform": null,
-              "population": "SetOnce",
-              "stop": "ore::ResetIxState"
             }
           ],
           "conditions": [],
@@ -3823,26 +3778,6 @@
               "queue_discriminators": []
             }
           }
-        },
-        {
-          "account_type": "ore::TreasuryState",
-          "strategy": {
-            "PdaReverseLookup": {
-              "lookup_name": "default_pda_lookup",
-              "queue_discriminators": [
-                [
-                  9,
-                  0,
-                  0,
-                  0,
-                  0,
-                  0,
-                  0,
-                  0
-                ]
-              ]
-            }
-          }
         }
       ],
       "instruction_hooks": [
@@ -3892,57 +3827,12 @@
                 },
                 "lookup_name": "default_pda_lookup"
               }
-            },
-            {
-              "RegisterPdaMapping": {
-                "pda_field": {
-                  "segments": [
-                    "accounts",
-                    "treasury"
-                  ],
-                  "offsets": null
-                },
-                "seed_field": {
-                  "segments": [
-                    "accounts",
-                    "roundNext"
-                  ],
-                  "offsets": null
-                },
-                "lookup_name": "default_pda_lookup"
-              }
-            },
-            {
-              "SetField": {
-                "target_field": "__stop:treasury.motherlode",
-                "source": {
-                  "Constant": true
-                },
-                "condition": null
-              }
             }
           ],
-          "lookup_by": {
-            "segments": [
-              "accounts",
-              "round"
-            ],
-            "offsets": null
-          }
+          "lookup_by": null
         }
       ],
-      "resolver_specs": [
-        {
-          "resolver": "token",
-          "input_value": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
-          "strategy": "SetOnce",
-          "extracts": [
-            {
-              "target_path": "ore_metadata"
-            }
-          ]
-        }
-      ],
+      "resolver_specs": [],
       "computed_fields": [
         "state.motherlode_ui",
         "state.total_deployed_ui",
@@ -4496,7 +4386,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "4e0140be2988bdca7a7983864e13073b0d631b5e09c52dcc7a6b33615ca92229",
+      "content_hash": "1235a9d1276c74ad994afb0981c7ace02f11b95af0240978447762a6fdd679f0",
       "views": [
         {
           "id": "OreRound/latest",
@@ -5068,26 +4958,6 @@
               "queue_discriminators": []
             }
           }
-        },
-        {
-          "account_type": "ore::TreasuryState",
-          "strategy": {
-            "PdaReverseLookup": {
-              "lookup_name": "default_pda_lookup",
-              "queue_discriminators": [
-                [
-                  9,
-                  0,
-                  0,
-                  0,
-                  0,
-                  0,
-                  0,
-                  0
-                ]
-              ]
-            }
-          }
         }
       ],
       "instruction_hooks": [
@@ -5132,25 +5002,6 @@
                   "segments": [
                     "accounts",
                     "round"
-                  ],
-                  "offsets": null
-                },
-                "lookup_name": "default_pda_lookup"
-              }
-            },
-            {
-              "RegisterPdaMapping": {
-                "pda_field": {
-                  "segments": [
-                    "accounts",
-                    "treasury"
-                  ],
-                  "offsets": null
-                },
-                "seed_field": {
-                  "segments": [
-                    "accounts",
-                    "roundNext"
                   ],
                   "offsets": null
                 },
@@ -5258,7 +5109,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "82da9c20bd639677a76f16c6214463fdc1095c670ae232160fa9b8788358eb4e",
+      "content_hash": "d04384bbb4b0c51071d280cf712ad87d46e63c554fd641ae7de24d23af43850e",
       "views": []
     },
     {
@@ -6590,26 +6441,6 @@
               "queue_discriminators": []
             }
           }
-        },
-        {
-          "account_type": "ore::TreasuryState",
-          "strategy": {
-            "PdaReverseLookup": {
-              "lookup_name": "default_pda_lookup",
-              "queue_discriminators": [
-                [
-                  9,
-                  0,
-                  0,
-                  0,
-                  0,
-                  0,
-                  0,
-                  0
-                ]
-              ]
-            }
-          }
         }
       ],
       "instruction_hooks": [
@@ -6659,25 +6490,6 @@
                 },
                 "lookup_name": "default_pda_lookup"
               }
-            },
-            {
-              "RegisterPdaMapping": {
-                "pda_field": {
-                  "segments": [
-                    "accounts",
-                    "treasury"
-                  ],
-                  "offsets": null
-                },
-                "seed_field": {
-                  "segments": [
-                    "accounts",
-                    "roundNext"
-                  ],
-                  "offsets": null
-                },
-                "lookup_name": "default_pda_lookup"
-              }
             }
           ],
           "lookup_by": null
@@ -6686,7 +6498,7 @@
       "resolver_specs": [],
       "computed_fields": [],
       "computed_field_specs": [],
-      "content_hash": "734446f995f8ff380cfc5e85dfce5b91483b213e43b1f41105dc05e885b53daa",
+      "content_hash": "25e5b373b007878f2f90156110155f38ebeff07bae96ccbfe04a73f28f8e5c91",
       "views": []
     }
   ],
@@ -8794,5 +8606,5 @@
       ]
     }
   ],
-  "content_hash": "b028ea15887a28acf7572cf944d5dae925f0c90f6f03a7a1c5c211e6c97f110c"
+  "content_hash": "40c6de2f44d94f8ba8420c09433e652982517206d17170150933fc0ef5a35d09"
 }
