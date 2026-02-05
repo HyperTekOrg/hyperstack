@@ -294,10 +294,13 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#ccc',
   },
   blockDeployed: {
-    fontSize: '18px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+    fontSize: '16px',
     fontWeight: 600,
     color: '#fff',
-    textAlign: 'center' as const,
   },
   statsContainer: {
     display: 'flex',
