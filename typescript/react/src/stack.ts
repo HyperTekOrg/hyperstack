@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import type { ConnectionState } from 'hyperstack-typescript';
 import type { StoreApi, UseBoundStore } from 'zustand';
 import { useHyperstackContext } from './provider';
 import { createStateViewHook, createListViewHook } from './view-hooks';
@@ -71,6 +72,8 @@ type StackClient<TStack extends StackDefinition> = {
   instructions: BuildInstructionInterface<TStack['instructions']>;
   zustandStore: UseBoundStore<StoreApi<HyperStackStore>>;
   client: HyperStack<TStack>;
+  connectionState: ConnectionState;
+  isConnected: boolean;
   isLoading: boolean;
   error: Error | null;
 };
@@ -84,6 +87,9 @@ export function useHyperstack<TStack extends StackDefinition>(
   const [client, setClient] = useState<HyperStack<TStack> | null>(getClient(stack) as HyperStack<TStack> | null);
   const [isLoading, setIsLoading] = useState(!client);
   const [error, setError] = useState<Error | null>(null);
+  const [connectionState, setConnectionState] = useState<ConnectionState>(() => 
+    client?.connectionState ?? 'disconnected'
+  );
 
   useEffect(() => {
     const existingClient = getClient(stack);
@@ -106,6 +112,20 @@ export function useHyperstack<TStack extends StackDefinition>(
         setIsLoading(false);
       });
   }, [stack, getOrCreateClient, getClient, urlOverride]);
+
+  useEffect(() => {
+    if (!client) {
+      setConnectionState('disconnected');
+      return;
+    }
+    
+    setConnectionState(client.connectionState);
+    const unsubscribe = client.onConnectionStateChange((state) => {
+      setConnectionState(state);
+    });
+    
+    return unsubscribe;
+  }, [client]);
 
   const views = useMemo(() => {
     const result: Record<string, Record<string, unknown>> = {};
@@ -149,6 +169,8 @@ export function useHyperstack<TStack extends StackDefinition>(
     instructions: instructions as BuildInstructionInterface<TStack['instructions']>,
     zustandStore: (client?.store as ZustandAdapter | undefined)?.store as UseBoundStore<StoreApi<HyperStackStore>>,
     client: client!,
+    connectionState,
+    isConnected: connectionState === 'connected',
     isLoading,
     error
   };

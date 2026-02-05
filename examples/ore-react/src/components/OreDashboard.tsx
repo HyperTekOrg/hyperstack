@@ -1,4 +1,4 @@
-import { useHyperstack, useConnectionState } from 'hyperstack-react';
+import { useHyperstack } from 'hyperstack-react';
 import {
   ORE_STREAM_STACK,
   type OreRound,
@@ -6,11 +6,9 @@ import {
 import { useState, useEffect } from 'react';
 
 export function OreDashboard() {
-  const stack = useHyperstack(ORE_STREAM_STACK, { url: "ws://localhost:8878" });
-  const { data: latestRound } = stack.views.OreRound.latest.useOne();
-  const { data: treasuryData } = stack.views.OreTreasury.list.useOne();
-  const connectionState = useConnectionState();
-  const isConnected = connectionState === 'connected';
+  const { views, isConnected } = useHyperstack(ORE_STREAM_STACK, { url: "ws://localhost:8878" });
+  const { data: latestRound } = views.OreRound.latest.useOne();
+  const { data: treasuryData } = views.OreTreasury.list.useOne();
 
   return (
     <div style={styles.container}>
@@ -142,7 +140,7 @@ function StatsPanel({
         <div style={styles.statCard}>
           <div style={styles.statValue}>
             <SolanaIcon />
-            <span>{round?.state?.total_deployed_ui}</span>
+            <span>{Number(round?.state?.total_deployed_ui ?? 0).toFixed(4)}</span>
           </div>
           <div style={styles.statLabel}>Total deployed</div>
         </div>
