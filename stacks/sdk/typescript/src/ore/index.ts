@@ -36,6 +36,7 @@ export interface OreRoundResults {
 export interface OreRoundState {
   count_per_square?: any[] | null;
   deployed_per_square?: any[] | null;
+  deployed_per_square_ui?: any[] | null;
   expires_at?: number | null;
   motherlode?: number | null;
   motherlode_ui?: number | null;
@@ -115,6 +116,7 @@ export const OreRoundResultsSchema = z.object({
 export const OreRoundStateSchema = z.object({
   count_per_square: z.array(z.any()).nullable().optional(),
   deployed_per_square: z.array(z.any()).nullable().optional(),
+  deployed_per_square_ui: z.array(z.any()).nullable().optional(),
   expires_at: z.number().nullable().optional(),
   motherlode: z.number().nullable().optional(),
   motherlode_ui: z.number().nullable().optional(),

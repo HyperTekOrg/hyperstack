@@ -65,6 +65,9 @@ pub mod ore_stream {
         #[map(ore_sdk::accounts::Round::deployed, strategy = LastWrite)]
         pub deployed_per_square: Option<Vec<u64>>,
 
+        #[computed(state.deployed_per_square.map(|x| x.ui_amount(9)))]
+        pub deployed_per_square_ui: Option<Vec<f64>>,
+
         // Per-square miner counts (25 squares in 5x5 grid)
         #[map(ore_sdk::accounts::Round::count, strategy = LastWrite)]
         pub count_per_square: Option<Vec<u64>>,

@@ -2348,6 +2348,10 @@
             "temporal_field": null
           },
           {
+            "field_name": "treasury.motherlode",
+            "temporal_field": null
+          },
+          {
             "field_name": "entropy.entropy_value",
             "temporal_field": null
           }
@@ -2878,6 +2882,47 @@
             "Source": {
               "program_id": null,
               "discriminator": null,
+              "type_name": "ore::TreasuryState"
+            }
+          },
+          "key_resolution": {
+            "Lookup": {
+              "primary_field": {
+                "segments": [
+                  "__account_address"
+                ],
+                "offsets": null
+              }
+            }
+          },
+          "mappings": [
+            {
+              "target_path": "treasury.motherlode",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "motherlode"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": null
+                }
+              },
+              "transform": null,
+              "population": "SetOnce",
+              "stop": "ore::ResetIxState"
+            }
+          ],
+          "conditions": [],
+          "emit": true
+        },
+        {
+          "source": {
+            "Source": {
+              "program_id": null,
+              "discriminator": null,
               "type_name": "ore::CheckpointIxState"
             }
           },
@@ -3112,6 +3157,16 @@
               "is_optional": true,
               "is_array": true,
               "inner_type": "Vec < u64 >",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "deployed_per_square_ui",
+              "rust_type_name": "Option < Vec < f64 > >",
+              "base_type": "Array",
+              "is_optional": true,
+              "is_array": true,
+              "inner_type": "Vec < f64 >",
               "source_path": null,
               "resolved_type": null
             },
@@ -3648,6 +3703,16 @@
           "source_path": null,
           "resolved_type": null
         },
+        "state.deployed_per_square_ui": {
+          "field_name": "deployed_per_square_ui",
+          "rust_type_name": "Option < Vec < f64 > >",
+          "base_type": "Array",
+          "is_optional": true,
+          "is_array": true,
+          "inner_type": "Vec < f64 >",
+          "source_path": null,
+          "resolved_type": null
+        },
         "state.expires_at": {
           "field_name": "expires_at",
           "rust_type_name": "Option < u64 >",
@@ -3771,6 +3836,26 @@
       },
       "resolver_hooks": [
         {
+          "account_type": "ore::TreasuryState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": [
+                [
+                  9,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              ]
+            }
+          }
+        },
+        {
           "account_type": "entropy::VarState",
           "strategy": {
             "PdaReverseLookup": {
@@ -3814,6 +3899,25 @@
                 "pda_field": {
                   "segments": [
                     "accounts",
+                    "treasury"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "roundNext"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
                     "entropyVar"
                   ],
                   "offsets": null
@@ -3827,17 +3931,44 @@
                 },
                 "lookup_name": "default_pda_lookup"
               }
+            },
+            {
+              "SetField": {
+                "target_field": "__stop:treasury.motherlode",
+                "source": {
+                  "Constant": true
+                },
+                "condition": null
+              }
             }
           ],
-          "lookup_by": null
+          "lookup_by": {
+            "segments": [
+              "accounts",
+              "round"
+            ],
+            "offsets": null
+          }
         }
       ],
-      "resolver_specs": [],
+      "resolver_specs": [
+        {
+          "resolver": "token",
+          "input_value": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
+          "strategy": "SetOnce",
+          "extracts": [
+            {
+              "target_path": "ore_metadata"
+            }
+          ]
+        }
+      ],
       "computed_fields": [
         "state.motherlode_ui",
         "state.total_deployed_ui",
         "state.total_vaulted_ui",
         "state.total_winnings_ui",
+        "state.deployed_per_square_ui",
         "results.top_miner_reward_ui",
         "results.rng",
         "results.winning_square",
@@ -3933,6 +4064,45 @@
             }
           },
           "result_type": "Option < u64 >"
+        },
+        {
+          "target_path": "state.deployed_per_square_ui",
+          "expression": {
+            "MethodCall": {
+              "expr": {
+                "FieldRef": {
+                  "path": "state.deployed_per_square"
+                }
+              },
+              "method": "map",
+              "args": [
+                {
+                  "Closure": {
+                    "param": "x",
+                    "body": {
+                      "ResolverComputed": {
+                        "resolver": "TokenMetadata",
+                        "method": "ui_amount",
+                        "args": [
+                          {
+                            "Var": {
+                              "name": "x"
+                            }
+                          },
+                          {
+                            "Literal": {
+                              "value": 9
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < Vec < f64 > >"
         },
         {
           "target_path": "results.top_miner_reward_ui",
@@ -4386,7 +4556,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "1235a9d1276c74ad994afb0981c7ace02f11b95af0240978447762a6fdd679f0",
+      "content_hash": "ffa84e82fea08736bb0114824063ae44f23d9aaf20b60ceca8fffd23671345f1",
       "views": [
         {
           "id": "OreRound/latest",
@@ -4951,6 +5121,26 @@
       },
       "resolver_hooks": [
         {
+          "account_type": "ore::TreasuryState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": [
+                [
+                  9,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              ]
+            }
+          }
+        },
+        {
           "account_type": "entropy::VarState",
           "strategy": {
             "PdaReverseLookup": {
@@ -4989,6 +5179,25 @@
         {
           "instruction_type": "ore::ResetIxState",
           "actions": [
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "treasury"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "roundNext"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            },
             {
               "RegisterPdaMapping": {
                 "pda_field": {
@@ -5109,7 +5318,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "d04384bbb4b0c51071d280cf712ad87d46e63c554fd641ae7de24d23af43850e",
+      "content_hash": "51a2e12d5dab59b34c4e6d0608bfd20286b94df29c691f96d46ede0b0c262d16",
       "views": []
     },
     {
@@ -6434,6 +6643,26 @@
       },
       "resolver_hooks": [
         {
+          "account_type": "ore::TreasuryState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": [
+                [
+                  9,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              ]
+            }
+          }
+        },
+        {
           "account_type": "entropy::VarState",
           "strategy": {
             "PdaReverseLookup": {
@@ -6477,6 +6706,25 @@
                 "pda_field": {
                   "segments": [
                     "accounts",
+                    "treasury"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "roundNext"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
                     "entropyVar"
                   ],
                   "offsets": null
@@ -6498,7 +6746,7 @@
       "resolver_specs": [],
       "computed_fields": [],
       "computed_field_specs": [],
-      "content_hash": "25e5b373b007878f2f90156110155f38ebeff07bae96ccbfe04a73f28f8e5c91",
+      "content_hash": "adbf581501c66358a7d37afb18b6ecde6e60072c80dc731603a7bb2c6a504065",
       "views": []
     }
   ],
@@ -8606,5 +8854,5 @@
       ]
     }
   ],
-  "content_hash": "40c6de2f44d94f8ba8420c09433e652982517206d17170150933fc0ef5a35d09"
+  "content_hash": "b0833090de282da7c5fe3d442cca2e7bd33c7549d7118edbaf6363c6ddf0ddc1"
 }
