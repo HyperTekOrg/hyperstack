@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "hyperstack-react": "file:../../typescript/react",
+    "hyperstack-react": "^0.4",
     "hyperstack-stacks": "^0.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
