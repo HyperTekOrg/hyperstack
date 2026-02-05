@@ -6,6 +6,7 @@ import { ValidatedOreRoundSchema, type ValidatedOreRound } from '../schemas/ore-
 export function OreDashboard() {
   const { views, isConnected } = useHyperstack(ORE_STREAM_STACK, { url: "ws://localhost:8878" });
   const { data: latestRound } = views.OreRound.latest.useOne({ schema: ValidatedOreRoundSchema });
+  console.log(latestRound);
   const { data: treasuryData } = views.OreTreasury.list.useOne();
 
   return (
@@ -49,7 +50,7 @@ function BlockGrid({ round }: { round: ValidatedOreRound | undefined }) {
       id: i + 1,
       minerCount: round.state.count_per_square[i],
       deployedUi,
-      isWinner: round?.results.winning_square === i,
+      isWinner: round.results?.winning_square === i,
     }))
     : Array.from({ length: 25 }, (_, i) => ({
       id: i + 1,
@@ -104,8 +105,20 @@ function StatsPanel({
 
     const updateTimer = () => {
       const now = Math.floor(Date.now() / 1000);
-      const expiresAt = round.state.expires_at;
+      let expiresAt = round.state.expires_at;
+      
+      // Normalize to seconds if timestamp is in milliseconds (13+ digits)
+      if (expiresAt > 9999999999) {
+        expiresAt = Math.floor(expiresAt / 1000);
+      }
+      
       const remaining = Math.max(0, expiresAt - now);
+
+      // Sanity check: rounds are ~60s, anything over 5 min is likely bad data
+      if (remaining > 300) {
+        setTimeRemaining('--:--');
+        return;
+      }
 
       const minutes = Math.floor(remaining / 60);
       const seconds = remaining % 60;
@@ -162,11 +175,6 @@ function StatsPanel({
             </span>
           )}
         </div>
-        {round && (
-          <span style={styles.winnerBadge}>
-            Winner: Block #{round?.results.winning_square + 1}
-          </span>
-        )}
       </div>
 
       {/* Connection status */}
@@ -255,6 +263,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'grid',
     gridTemplateColumns: 'repeat(5, 1fr)',
     gap: '8px',
+    maxWidth: '700px',
   },
   blockCard: {
     backgroundColor: '#1a1a1a',
