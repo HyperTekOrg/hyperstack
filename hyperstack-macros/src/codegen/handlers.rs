@@ -241,6 +241,12 @@ fn build_field_mapping_code(mapping: &SerializableFieldMapping) -> TokenStream {
         };
     }
 
+    if let Some(stop) = &mapping.stop {
+        mapping_code = quote! {
+            #mapping_code.with_stop(#stop.to_string())
+        };
+    }
+
     if !mapping.emit {
         mapping_code = quote! {
             #mapping_code.with_emit(false)

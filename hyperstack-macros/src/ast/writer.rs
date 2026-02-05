@@ -445,6 +445,16 @@ pub fn build_handlers_from_sources(
                 }
             });
 
+            let stop = mapping.stop.as_ref().map(|stop_path| {
+                let instr_type = path_to_string(stop_path);
+                let instr_base = instr_type.split("::").last().unwrap_or(&instr_type);
+                if let Some(program_name) = program_name {
+                    format!("{}::{}IxState", program_name, instr_base)
+                } else {
+                    format!("{}IxState", instr_base)
+                }
+            });
+
             serializable_mappings.push(SerializableFieldMapping {
                 target_path: mapping.target_field_name.clone(),
                 source,
@@ -452,6 +462,7 @@ pub fn build_handlers_from_sources(
                 population,
                 condition,
                 when,
+                stop,
                 emit: mapping.emit,
             });
 

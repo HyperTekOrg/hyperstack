@@ -335,6 +335,8 @@ pub fn process_entity_struct_with_idl(
                             lookup_by: snapshot_attr.lookup_by.clone(),
                             condition: None,
                             when: snapshot_attr.when.clone(),
+                            stop: None,
+                            stop_lookup_by: None,
                             emit: true,
                         };
 
@@ -382,6 +384,8 @@ pub fn process_entity_struct_with_idl(
                             lookup_by: aggr_attr.lookup_by.clone(),
                             condition: None,
                             when: None,
+                            stop: None,
+                            stop_lookup_by: None,
                             emit: true,
                         };
 

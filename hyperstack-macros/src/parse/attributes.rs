@@ -34,6 +34,8 @@ pub struct MapAttribute {
     pub lookup_by: Option<FieldSpec>,
     pub condition: Option<String>,
     pub when: Option<Path>,
+    pub stop: Option<Path>,
+    pub stop_lookup_by: Option<FieldSpec>,
     pub emit: bool,
 }
 
@@ -109,6 +111,8 @@ struct MapAttributeArgs {
     transform: Option<String>,
     condition: Option<String>,
     when: Option<Path>,
+    stop: Option<Path>,
+    stop_lookup_by: Option<FieldSpec>,
     emit: Option<bool>,
 }
 
@@ -139,6 +143,8 @@ impl Parse for MapAttributeArgs {
         let mut transform = None;
         let mut condition = None;
         let mut when = None;
+        let mut stop = None;
+        let mut stop_lookup_by = None;
         let mut emit = None;
 
         while !input.is_empty() {
@@ -189,6 +195,13 @@ impl Parse for MapAttributeArgs {
                     input.parse::<Token![=]>()?;
                     let when_path: Path = input.parse()?;
                     when = Some(when_path);
+                } else if ident_str == "stop" {
+                    input.parse::<Token![=]>()?;
+                    let stop_path: Path = input.parse()?;
+                    stop = Some(stop_path);
+                } else if ident_str == "stop_lookup_by" {
+                    input.parse::<Token![=]>()?;
+                    stop_lookup_by = Some(parse_field_spec(input)?);
                 } else if ident_str == "emit" {
                     input.parse::<Token![=]>()?;
                     let emit_lit: syn::LitBool = input.parse()?;
@@ -216,6 +229,8 @@ impl Parse for MapAttributeArgs {
             transform,
             condition,
             when,
+            stop,
+            stop_lookup_by,
             emit,
         })
     }
@@ -271,6 +286,8 @@ pub fn parse_map_attribute(
             lookup_by: None,
             condition: args.condition.clone(),
             when: args.when.clone(),
+            stop: args.stop.clone(),
+            stop_lookup_by: args.stop_lookup_by.clone(),
             emit,
         });
     }
@@ -319,6 +336,8 @@ pub fn parse_from_instruction_attribute(
             lookup_by: None,
             condition: args.condition.clone(),
             when: args.when.clone(),
+            stop: args.stop.clone(),
+            stop_lookup_by: args.stop_lookup_by.clone(),
             emit,
         });
     }

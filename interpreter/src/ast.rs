@@ -942,6 +942,8 @@ pub struct SerializableFieldMapping {
     pub condition: Option<ConditionExpr>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub when: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop: Option<String>,
     #[serde(default = "default_emit", skip_serializing_if = "is_true")]
     pub emit: bool,
 }
@@ -962,6 +964,7 @@ pub struct TypedFieldMapping<S> {
     pub population: PopulationStrategy,
     pub condition: Option<ConditionExpr>,
     pub when: Option<String>,
+    pub stop: Option<String>,
     pub emit: bool,
     _phantom: PhantomData<S>,
 }
@@ -975,6 +978,7 @@ impl<S> TypedFieldMapping<S> {
             population,
             condition: None,
             when: None,
+            stop: None,
             emit: true,
             _phantom: PhantomData,
         }
@@ -995,6 +999,11 @@ impl<S> TypedFieldMapping<S> {
         self
     }
 
+    pub fn with_stop(mut self, stop: String) -> Self {
+        self.stop = Some(stop);
+        self
+    }
+
     pub fn with_emit(mut self, emit: bool) -> Self {
         self.emit = emit;
         self
@@ -1009,6 +1018,7 @@ impl<S> TypedFieldMapping<S> {
             population: self.population.clone(),
             condition: self.condition.clone(),
             when: self.when.clone(),
+            stop: self.stop.clone(),
             emit: self.emit,
         }
     }
@@ -1022,6 +1032,7 @@ impl<S> TypedFieldMapping<S> {
             population: mapping.population,
             condition: mapping.condition,
             when: mapping.when,
+            stop: mapping.stop,
             emit: mapping.emit,
             _phantom: PhantomData,
         }

@@ -513,6 +513,8 @@ pub struct SerializableFieldMapping {
     pub condition: Option<ConditionExpr>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub when: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop: Option<String>,
     #[serde(default = "default_emit", skip_serializing_if = "is_true")]
     pub emit: bool,
 }

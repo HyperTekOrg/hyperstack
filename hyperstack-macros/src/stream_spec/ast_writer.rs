@@ -459,6 +459,17 @@ fn build_source_handler(
             }
         });
 
+        let stop = mapping.stop.as_ref().map(|stop_path| {
+            let instr_type = path_to_string(stop_path);
+            let instr_base = instr_type.split("::").last().unwrap_or(&instr_type);
+            let program_name = program_name_for_type(&instr_type, idls);
+            if let Some(program_name) = program_name {
+                format!("{}::{}IxState", program_name, instr_base)
+            } else {
+                format!("{}IxState", instr_base)
+            }
+        });
+
         serializable_mappings.push(SerializableFieldMapping {
             target_path: mapping.target_field_name.clone(),
             source,
@@ -466,6 +477,7 @@ fn build_source_handler(
             population,
             condition,
             when,
+            stop,
             emit: mapping.emit,
         });
 
@@ -728,6 +740,7 @@ fn build_event_handler(
             population,
             condition: None,
             when: None,
+            stop: None,
             emit: true,
         });
     }
@@ -1080,10 +1093,78 @@ fn build_instruction_hooks_ast(
         }
     }
 
-    let mut sorted_aggregate_conditions: Vec<_> = aggregate_conditions.iter().collect();
-    sorted_aggregate_conditions.sort_by_key(|(k, _)| *k);
     let mut sorted_sources: Vec<_> = sources_by_type.iter().collect();
     sorted_sources.sort_by_key(|(k, _)| *k);
+    for (source_type, mappings) in &sorted_sources {
+        for mapping in *mappings {
+            let Some(stop_path) = &mapping.stop else {
+                continue;
+            };
+
+            let stop_type = path_to_string(stop_path);
+            let stop_base = stop_type.split("::").last().unwrap_or(&stop_type);
+            let stop_program = program_name_for_type(&stop_type, idls);
+            let stop_type_state = if let Some(program_name) = stop_program {
+                format!("{}::{}IxState", program_name, stop_base)
+            } else {
+                format!("{}IxState", stop_base)
+            };
+
+            let stop_field = format!("__stop:{}", mapping.target_field_name);
+
+            let lookup_by = mapping
+                .stop_lookup_by
+                .as_ref()
+                .map(|field_spec| {
+                    let prefix = match &field_spec.explicit_location {
+                        Some(parse::FieldLocation::InstructionArg) => "data",
+                        _ => "accounts",
+                    };
+                    FieldPath::new(&[prefix, &field_spec.ident.to_string()])
+                })
+                .or_else(|| {
+                    mapping.lookup_by.as_ref().map(|field_spec| {
+                        FieldPath::new(&["accounts", &field_spec.ident.to_string()])
+                    })
+                })
+                .or_else(|| {
+                    mapping
+                        .register_from
+                        .iter()
+                        .find(|reg| path_to_string(&reg.instruction_path) == stop_type)
+                        .map(|reg| {
+                            let prefix = match &reg.primary_key_field.explicit_location {
+                                Some(parse::FieldLocation::InstructionArg) => "data",
+                                _ => "accounts",
+                            };
+                            FieldPath::new(&[prefix, &reg.primary_key_field.ident.to_string()])
+                        })
+                });
+
+            let action = HookAction::SetField {
+                target_field: stop_field,
+                source: MappingSource::Constant(serde_json::Value::Bool(true)),
+                condition: None,
+            };
+
+            let hook = instruction_hooks_map
+                .entry(stop_type_state.clone())
+                .or_insert_with(|| InstructionHook {
+                    instruction_type: stop_type_state.clone(),
+                    actions: Vec::new(),
+                    lookup_by: lookup_by.clone(),
+                });
+
+            hook.actions.push(action);
+
+            if hook.lookup_by.is_none() {
+                hook.lookup_by = lookup_by;
+            }
+        }
+    }
+
+    let mut sorted_aggregate_conditions: Vec<_> = aggregate_conditions.iter().collect();
+    sorted_aggregate_conditions.sort_by_key(|(k, _)| *k);
     for (field_path, condition_str) in sorted_aggregate_conditions {
         for (source_type, mappings) in &sorted_sources {
             for mapping in *mappings {

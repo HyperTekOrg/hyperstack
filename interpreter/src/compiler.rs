@@ -5,6 +5,10 @@ use tracing;
 
 pub type Register = usize;
 
+fn stop_field_path(target_path: &str) -> String {
+    format!("__stop:{}", target_path)
+}
+
 #[derive(Debug, Clone)]
 pub enum OpCode {
     LoadEventField {
@@ -147,6 +151,17 @@ pub enum OpCode {
         condition_field: Option<FieldPath>,
         condition_op: Option<ComparisonOp>,
         condition_value: Option<Value>,
+    },
+    /// Set field unless stopped by a specific instruction.
+    /// Stop is tracked by a per-entity stop flag.
+    SetFieldUnlessStopped {
+        object: Register,
+        path: String,
+        value: Register,
+        stop_field: String,
+        stop_instruction: String,
+        entity_name: String,
+        key_reg: Register,
     },
     /// Add value to unique set and update count
     /// Maintains internal Set, field stores count
@@ -453,6 +468,11 @@ impl<S> TypedCompiler<S> {
                     .entry(mapping.target_path.clone())
                     .or_insert(false);
                 *entry |= mapping.emit;
+                if mapping.stop.is_some() {
+                    emit_by_path
+                        .entry(stop_field_path(&mapping.target_path))
+                        .or_insert(false);
+                }
             }
             let opcodes = self.compile_handler(handler_spec);
             let event_type = self.get_event_type(&handler_spec.source);
@@ -713,6 +733,34 @@ impl<S> TypedCompiler<S> {
                 dest: temp_reg,
                 transformation: transform.clone(),
             });
+        }
+
+        if let Some(stop_instruction) = &mapping.stop {
+            if mapping.when.is_some() {
+                tracing::warn!(
+                    "#[map] stop and when both set for {}. Ignoring when.",
+                    mapping.target_path
+                );
+            }
+            if !matches!(mapping.population, PopulationStrategy::LastWrite)
+                && !matches!(mapping.population, PopulationStrategy::Merge)
+            {
+                tracing::warn!(
+                    "#[map] stop ignores population strategy {:?}",
+                    mapping.population
+                );
+            }
+
+            ops.push(OpCode::SetFieldUnlessStopped {
+                object: state_reg,
+                path: mapping.target_path.clone(),
+                value: temp_reg,
+                stop_field: stop_field_path(&mapping.target_path),
+                stop_instruction: stop_instruction.clone(),
+                entity_name: self.entity_name.clone(),
+                key_reg,
+            });
+            return ops;
         }
 
         if let Some(when_instruction) = &mapping.when {

@@ -1422,6 +1422,12 @@ impl VmContext {
 
                             let key = (signature.clone(), event_type.to_string());
                             if let Some((_, deferred_ops)) = state.deferred_when_ops.remove(&key) {
+                                tracing::debug!(
+                                    event_type = %event_type,
+                                    signature = %signature,
+                                    deferred_count = deferred_ops.len(),
+                                    "flushing deferred when-ops"
+                                );
                                 for op in deferred_ops {
                                     match self.apply_deferred_when_op(state_id, &op) {
                                         Ok(mutations) => all_mutations.extend(mutations),
@@ -1539,6 +1545,12 @@ impl VmContext {
                                         if let Some((_, deferred_ops)) =
                                             state.deferred_when_ops.remove(&key)
                                         {
+                                            tracing::debug!(
+                                                event_type = %event_type,
+                                                signature = %signature,
+                                                deferred_count = deferred_ops.len(),
+                                                "flushing deferred when-ops"
+                                            );
                                             for op in deferred_ops {
                                                 match self.apply_deferred_when_op(
                                                     entity_bytecode.state_id,
@@ -2414,6 +2426,36 @@ impl VmContext {
                         }
                     }
 
+                    pc += 1;
+                }
+                OpCode::SetFieldUnlessStopped {
+                    object,
+                    path,
+                    value,
+                    stop_field,
+                    stop_instruction,
+                    entity_name,
+                    key_reg: _,
+                } => {
+                    let stop_value = self.get_field(*object, stop_field).unwrap_or(Value::Null);
+                    let stopped = stop_value.as_bool().unwrap_or(false);
+
+                    if stopped {
+                        tracing::debug!(
+                            entity = %entity_name,
+                            field = %path,
+                            stop_field = %stop_field,
+                            stop_instruction = %stop_instruction,
+                            "stop flag set; skipping field update"
+                        );
+                        pc += 1;
+                        continue;
+                    }
+
+                    self.set_field_auto_vivify(*object, path, *value)?;
+                    if should_emit(path) {
+                        dirty_tracker.mark_replaced(path);
+                    }
                     pc += 1;
                 }
                 OpCode::ConditionalIncrement {
