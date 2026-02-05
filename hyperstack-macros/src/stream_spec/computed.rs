@@ -963,6 +963,15 @@ fn parse_primary_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
             (ComputedExpr::ByteArray { bytes }, start + 1)
         }
 
+        // Brace-delimited block expression: { let x = ...; expr }
+        proc_macro2::TokenTree::Group(group)
+            if group.delimiter() == proc_macro2::Delimiter::Brace =>
+        {
+            let inner_tokens: Vec<_> = group.stream().into_iter().collect();
+            let (inner_expr, _) = parse_expr(&inner_tokens, 0);
+            (inner_expr, start + 1)
+        }
+
         // Closure: |param| body
         proc_macro2::TokenTree::Punct(p) if p.as_char() == '|' => parse_closure(tokens, start),
 

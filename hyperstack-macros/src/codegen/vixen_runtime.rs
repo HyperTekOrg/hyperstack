@@ -336,7 +336,7 @@ pub fn generate_vm_handler(
                 let resolver_client = match self.resolver_client.as_ref() {
                     Some(client) => client.clone(),
                     None => {
-                        let mut vm = self.vm.lock().unwrap();
+                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
                         vm.restore_resolver_requests(requests);
                         hyperstack::runtime::tracing::warn!(
                             "DAS_API_ENDPOINT not set; resolver requests re-queued (count={})",
@@ -368,7 +368,7 @@ pub fn generate_vm_handler(
 
                     if mints.is_empty() {
                         let token_count = token_requests.len();
-                        let mut vm = self.vm.lock().unwrap();
+                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
                         vm.restore_resolver_requests(token_requests);
                         hyperstack::runtime::tracing::warn!(
                             "Resolver token requests missing mint values; re-queued (count={})",
@@ -378,7 +378,7 @@ pub fn generate_vm_handler(
                         match resolver_client.resolve_token_metadata(&mints).await {
                             Ok(resolved_map) => {
                                 let mut unresolved = Vec::new();
-                                let mut vm = self.vm.lock().unwrap();
+                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                                 for request in token_requests {
                                     let Some(mint) =
@@ -417,7 +417,7 @@ pub fn generate_vm_handler(
                             }
                             Err(err) => {
                                 let token_count = token_requests.len();
-                                let mut vm = self.vm.lock().unwrap();
+                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
                                 vm.restore_resolver_requests(token_requests);
                                 hyperstack::runtime::tracing::warn!(
                                     "Resolver request failed (count={}): {}",
@@ -431,7 +431,7 @@ pub fn generate_vm_handler(
 
                 if !other_requests.is_empty() {
                     let other_count = other_requests.len();
-                    let mut vm = self.vm.lock().unwrap();
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
                     vm.restore_resolver_requests(other_requests);
                     hyperstack::runtime::tracing::warn!(
                         "Resolver type unsupported; requests re-queued (count={})",
@@ -475,7 +475,7 @@ pub fn generate_vm_handler(
                 }
 
                 let resolver_result = {
-                    let mut vm = self.vm.lock().unwrap();
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     if let Some(state_table) = vm.get_state_table_mut(0) {
                         let mut ctx = hyperstack::runtime::hyperstack_interpreter::resolvers::ResolveContext::new(
@@ -504,7 +504,7 @@ pub fn generate_vm_handler(
                         }
                     }
                     hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(_discriminators) => {
-                        let mut vm = self.vm.lock().unwrap();
+                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                         let _ = vm.queue_account_update(
                             0,
@@ -525,7 +525,7 @@ pub fn generate_vm_handler(
                 }
 
                 let (mutations_result, resolver_requests) = {
-                    let mut vm = self.vm.lock().unwrap();
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
 
@@ -618,7 +618,7 @@ pub fn generate_vm_handler(
 
                 let bytecode = self.bytecode.clone();
                 let (mutations_result, resolver_requests) = {
-                    let mut vm = self.vm.lock().unwrap();
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
 
@@ -1252,7 +1252,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                 let resolver_client = match self.resolver_client.as_ref() {
                     Some(client) => client.clone(),
                     None => {
-                        let mut vm = self.vm.lock().unwrap();
+                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
                         vm.restore_resolver_requests(requests);
                         hyperstack::runtime::tracing::warn!(
                             "DAS_API_ENDPOINT not set; resolver requests re-queued (count={})",
@@ -1284,7 +1284,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
 
                     if mints.is_empty() {
                         let token_count = token_requests.len();
-                        let mut vm = self.vm.lock().unwrap();
+                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
                         vm.restore_resolver_requests(token_requests);
                         hyperstack::runtime::tracing::warn!(
                             "Resolver token requests missing mint values; re-queued (count={})",
@@ -1294,7 +1294,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                         match resolver_client.resolve_token_metadata(&mints).await {
                             Ok(resolved_map) => {
                                 let mut unresolved = Vec::new();
-                                let mut vm = self.vm.lock().unwrap();
+                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                                 for request in token_requests {
                                     let Some(mint) =
@@ -1333,7 +1333,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                             }
                             Err(err) => {
                                 let token_count = token_requests.len();
-                                let mut vm = self.vm.lock().unwrap();
+                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
                                 vm.restore_resolver_requests(token_requests);
                                 hyperstack::runtime::tracing::warn!(
                                     "Resolver request failed (count={}): {}",
@@ -1347,7 +1347,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
 
                 if !other_requests.is_empty() {
                     let other_count = other_requests.len();
-                    let mut vm = self.vm.lock().unwrap();
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
                     vm.restore_resolver_requests(other_requests);
                     hyperstack::runtime::tracing::warn!(
                         "Resolver type unsupported; requests re-queued (count={})",
@@ -1402,7 +1402,7 @@ pub fn generate_account_handler_impl(
                 }
 
                 let resolver_result = {
-                    let mut vm = self.vm.lock().unwrap();
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     if let Some(state_table) = vm.get_state_table_mut(0) {
                         let mut ctx = hyperstack::runtime::hyperstack_interpreter::resolvers::ResolveContext::new(
@@ -1431,7 +1431,7 @@ pub fn generate_account_handler_impl(
                         }
                     }
                     hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(_discriminators) => {
-                        let mut vm = self.vm.lock().unwrap();
+                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                         let _ = vm.queue_account_update(
                             0,
@@ -1452,7 +1452,7 @@ pub fn generate_account_handler_impl(
                 }
 
                 let (mutations_result, resolver_requests) = {
-                    let mut vm = self.vm.lock().unwrap();
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
 
@@ -1550,7 +1550,7 @@ pub fn generate_instruction_handler_impl(
 
                 let bytecode = self.bytecode.clone();
                 let (mutations_result, resolver_requests) = {
-                    let mut vm = self.vm.lock().unwrap();
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
 
