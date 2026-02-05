@@ -1,4 +1,4 @@
-import { OreDashboard } from './components/OreDashboard';
+import { OreDashboard } from './components';
 import { HyperstackProvider } from 'hyperstack-react';
 
 export default function App() {
