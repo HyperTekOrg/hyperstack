@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@theme {
+  --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(139, 92, 246, 0.6);
+  }
+}
