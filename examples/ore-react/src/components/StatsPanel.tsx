@@ -38,38 +38,38 @@ export function StatsPanel({ round, treasuryMotherlode, isConnected }: StatsPane
   }, [round?.state.estimated_expires_at_unix]);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="bg-white dark:bg-stone-800 rounded-2xl p-6 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
-        <div className="flex items-center gap-2 text-3xl font-bold text-stone-800 dark:text-stone-100">
+    <div className="flex flex-col gap-6 h-full">
+      <div className="bg-white dark:bg-stone-800 rounded-2xl p-8 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
+        <div className="flex items-center gap-3 text-5xl font-bold text-stone-800 dark:text-stone-100">
           <OreIcon />
           <span>{treasuryMotherlode ?? '–'}</span>
         </div>
-        <div className="text-sm text-stone-500 dark:text-stone-400 mt-1">Motherlode</div>
+        <div className="text-base text-stone-500 dark:text-stone-400 mt-2">Motherlode</div>
       </div>
 
-      <div className="bg-white dark:bg-stone-800 rounded-2xl p-6 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
-        <div className="text-3xl font-semibold text-stone-800 dark:text-stone-100 tabular-nums">{timeRemaining}</div>
-        <div className="text-sm text-stone-500 dark:text-stone-400 mt-1">Time remaining</div>
+      <div className="bg-white dark:bg-stone-800 rounded-2xl p-8 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
+        <div className="text-5xl font-semibold text-stone-800 dark:text-stone-100 tabular-nums">{timeRemaining}</div>
+        <div className="text-base text-stone-500 dark:text-stone-400 mt-2">Time remaining</div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white dark:bg-stone-800 rounded-2xl p-5 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
-          <div className="flex items-center gap-1.5 text-xl font-semibold text-stone-800 dark:text-stone-100">
-            <SolanaIcon size={16} />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white dark:bg-stone-800 rounded-2xl p-6 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
+          <div className="flex items-center gap-2 text-2xl font-semibold text-stone-800 dark:text-stone-100">
+            <SolanaIcon size={20} />
             <span>{round ? round.state.total_deployed_ui.toFixed(4) : '0.0000'}</span>
           </div>
-          <div className="text-sm text-stone-500 dark:text-stone-400 mt-1">Total deployed</div>
+          <div className="text-base text-stone-500 dark:text-stone-400 mt-2">Total deployed</div>
         </div>
-        <div className="bg-white dark:bg-stone-800 rounded-2xl p-5 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
-          <div className="flex items-center gap-1.5 text-xl font-semibold text-stone-800 dark:text-stone-100">
-            <SolanaIcon size={16} />
+        <div className="bg-white dark:bg-stone-800 rounded-2xl p-6 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
+          <div className="flex items-center gap-2 text-2xl font-semibold text-stone-800 dark:text-stone-100">
+            <SolanaIcon size={20} />
             <span>0</span>
           </div>
-          <div className="text-sm text-stone-500 dark:text-stone-400 mt-1">You deployed</div>
+          <div className="text-base text-stone-500 dark:text-stone-400 mt-2">You deployed</div>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 px-1 text-sm text-stone-500 dark:text-stone-400">
+      <div className="flex items-center gap-4 px-2 text-base text-stone-500 dark:text-stone-400 mt-auto">
         <span>Round {round?.id.round_id ?? '–'}</span>
         {round && (
           <>
@@ -80,7 +80,7 @@ export function StatsPanel({ round, treasuryMotherlode, isConnected }: StatsPane
       </div>
 
       {!isConnected && (
-        <div className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 p-4 rounded-xl text-center text-sm">
+        <div className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 p-5 rounded-xl text-center">
           Connecting...
         </div>
       )}

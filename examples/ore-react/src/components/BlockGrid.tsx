@@ -21,12 +21,19 @@ export function BlockGrid({ round }: BlockGridProps) {
     }));
 
   return (
-    <div className="grid grid-cols-5 gap-3">
+    <div 
+      className="grid grid-cols-5 gap-2"
+      style={{ 
+        height: 'calc(100vh - 120px)',
+        width: 'calc((100vh - 120px - 4 * 0.5rem) / 5 * 5 + 4 * 0.5rem)'
+      }}
+    >
       {blocks.map((block) => (
         <div
           key={block.id}
+          style={{ aspectRatio: '1' }}
           className={`
-            bg-white dark:bg-stone-800 rounded-2xl p-4 flex flex-col justify-between min-h-[110px]
+            bg-white dark:bg-stone-800 rounded-2xl p-4 flex flex-col justify-between
             transition-all duration-200 hover:shadow-md dark:hover:bg-stone-750
             ${block.isWinner
               ? 'bg-amber-50 dark:bg-amber-900/30 ring-2 ring-amber-400 shadow-lg'
@@ -35,14 +42,14 @@ export function BlockGrid({ round }: BlockGridProps) {
           `}
         >
           <div className="flex justify-between items-start">
-            <span className="text-stone-400 dark:text-stone-500 text-xs font-medium">{block.id}</span>
-            <div className="flex items-center gap-1 text-stone-400 dark:text-stone-500">
-              <span className="text-xs">{block.minerCount}</span>
+            <span className="text-stone-400 dark:text-stone-500 text-sm font-medium">{block.id}</span>
+            <div className="flex items-center gap-1.5 text-stone-400 dark:text-stone-500">
+              <span className="text-sm">{block.minerCount}</span>
               <MinerIcon />
             </div>
           </div>
-          <div className="flex items-center gap-1.5 text-lg font-semibold text-stone-800 dark:text-stone-100">
-            <SolanaIcon size={14} />
+          <div className="flex items-center gap-2 text-xl font-semibold text-stone-800 dark:text-stone-100">
+            <SolanaIcon size={18} />
             <span>{Number(block.deployedUi).toFixed(4)}</span>
           </div>
         </div>
