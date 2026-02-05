@@ -13,17 +13,29 @@ pub struct OreRoundState {
     #[serde(default)]
     pub expires_at: Option<Option<i64>>,
     #[serde(default)]
+    pub estimated_expires_at_unix: Option<Option<i64>>,
+    #[serde(default)]
     pub motherlode: Option<Option<u64>>,
+    #[serde(default)]
+    pub motherlode_ui: Option<Option<u64>>,
     #[serde(default)]
     pub total_deployed: Option<Option<u64>>,
     #[serde(default)]
+    pub total_deployed_ui: Option<Option<u64>>,
+    #[serde(default)]
     pub total_vaulted: Option<Option<u64>>,
     #[serde(default)]
+    pub total_vaulted_ui: Option<Option<u64>>,
+    #[serde(default)]
     pub total_winnings: Option<Option<u64>>,
+    #[serde(default)]
+    pub total_winnings_ui: Option<Option<u64>>,
     #[serde(default)]
     pub total_miners: Option<Option<u64>>,
     #[serde(default)]
     pub deployed_per_square: Option<Option<Vec<serde_json::Value>>>,
+    #[serde(default)]
+    pub deployed_per_square_ui: Option<Option<Vec<serde_json::Value>>>,
     #[serde(default)]
     pub count_per_square: Option<Option<Vec<serde_json::Value>>>,
 }
@@ -55,7 +67,17 @@ pub struct OreRoundMetrics {
     #[serde(default)]
     pub total_deployed_sol: Option<Option<u64>>,
     #[serde(default)]
+    pub total_deployed_sol_ui: Option<Option<u64>>,
+    #[serde(default)]
     pub checkpoint_count: Option<Option<u64>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OreRoundTreasury {
+    #[serde(default)]
+    pub motherlode: Option<Option<u64>>,
+    #[serde(default)]
+    pub motherlode_ui: Option<Option<f64>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -77,12 +99,6 @@ pub struct OreRoundEntropy {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct OreRoundToken {
-    #[serde(default)]
-    pub ore_mint: Option<Option<String>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OreRound {
     #[serde(default)]
     pub id: OreRoundId,
@@ -93,9 +109,9 @@ pub struct OreRound {
     #[serde(default)]
     pub metrics: OreRoundMetrics,
     #[serde(default)]
-    pub entropy: OreRoundEntropy,
+    pub treasury: OreRoundTreasury,
     #[serde(default)]
-    pub token: OreRoundToken,
+    pub entropy: OreRoundEntropy,
     #[serde(default)]
     pub ore_metadata: Option<Option<serde_json::Value>>,
 }

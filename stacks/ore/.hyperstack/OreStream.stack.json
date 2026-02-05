@@ -2348,6 +2348,10 @@
             "temporal_field": null
           },
           {
+            "field_name": "state.expires_at",
+            "temporal_field": null
+          },
+          {
             "field_name": "treasury.motherlode",
             "temporal_field": null
           },
@@ -2377,6 +2381,23 @@
             }
           },
           "mappings": [
+            {
+              "target_path": "state.expires_at",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "end_at"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": null
+                }
+              },
+              "transform": null,
+              "population": "LastWrite"
+            },
             {
               "target_path": "entropy.entropy_value",
               "source": {
@@ -2668,23 +2689,6 @@
               },
               "transform": null,
               "population": "SetOnce"
-            },
-            {
-              "target_path": "state.expires_at",
-              "source": {
-                "FromSource": {
-                  "path": {
-                    "segments": [
-                      "expires_at"
-                    ],
-                    "offsets": null
-                  },
-                  "default": null,
-                  "transform": null
-                }
-              },
-              "transform": null,
-              "population": "LastWrite"
             },
             {
               "target_path": "state.motherlode",
@@ -3907,6 +3911,25 @@
                 },
                 "lookup_name": "default_pda_lookup"
               }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
             }
           ],
           "lookup_by": null
@@ -3946,6 +3969,25 @@
                   "segments": [
                     "accounts",
                     "roundNext"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
                   ],
                   "offsets": null
                 },
@@ -4001,8 +4043,131 @@
         {
           "target_path": "state.estimated_expires_at_unix",
           "expression": {
-            "Literal": {
-              "value": null
+            "Let": {
+              "name": "expires_at_slot",
+              "value": {
+                "Cast": {
+                  "expr": {
+                    "UnwrapOr": {
+                      "expr": {
+                        "FieldRef": {
+                          "path": "state.expires_at"
+                        }
+                      },
+                      "default": 0
+                    }
+                  },
+                  "to_type": "u64"
+                }
+              },
+              "body": {
+                "Let": {
+                  "name": "current_slot",
+                  "value": "ContextSlot",
+                  "body": {
+                    "If": {
+                      "condition": {
+                        "Binary": {
+                          "op": "And",
+                          "left": {
+                            "Binary": {
+                              "op": "Gt",
+                              "left": {
+                                "Var": {
+                                  "name": "current_slot"
+                                }
+                              },
+                              "right": {
+                                "Literal": {
+                                  "value": 0
+                                }
+                              }
+                            }
+                          },
+                          "right": {
+                            "Binary": {
+                              "op": "Gt",
+                              "left": {
+                                "Var": {
+                                  "name": "expires_at_slot"
+                                }
+                              },
+                              "right": {
+                                "Var": {
+                                  "name": "current_slot"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "then_branch": {
+                        "Some": {
+                          "value": {
+                            "Binary": {
+                              "op": "Add",
+                              "left": "ContextTimestamp",
+                              "right": {
+                                "Paren": {
+                                  "expr": {
+                                    "Cast": {
+                                      "expr": {
+                                        "Paren": {
+                                          "expr": {
+                                            "Binary": {
+                                              "op": "Div",
+                                              "left": {
+                                                "Binary": {
+                                                  "op": "Mul",
+                                                  "left": {
+                                                    "Paren": {
+                                                      "expr": {
+                                                        "Binary": {
+                                                          "op": "Sub",
+                                                          "left": {
+                                                            "Var": {
+                                                              "name": "expires_at_slot"
+                                                            }
+                                                          },
+                                                          "right": {
+                                                            "Var": {
+                                                              "name": "current_slot"
+                                                            }
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "right": {
+                                                    "Literal": {
+                                                      "value": 400
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              "right": {
+                                                "Literal": {
+                                                  "value": 1000
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      "to_type": "i64"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "else_branch": "None"
+                    }
+                  }
+                }
+              }
             }
           },
           "result_type": "Option < i64 >"
@@ -4586,7 +4751,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "f7c3c16bf17ef1535c68ec62fdf8cb586c68e17cb3f4ed120585fd678cdcb7b7",
+      "content_hash": "add1542f0f3191d2abf529dc4ab13bc6f553788198c229fcadf0c9aa269dd152",
       "views": [
         {
           "id": "OreRound/latest",
@@ -5202,6 +5367,25 @@
                 },
                 "lookup_name": "default_pda_lookup"
               }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
             }
           ],
           "lookup_by": null
@@ -5241,6 +5425,25 @@
                   "segments": [
                     "accounts",
                     "roundNext"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
                   ],
                   "offsets": null
                 },
@@ -5348,7 +5551,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "82da9c20bd639677a76f16c6214463fdc1095c670ae232160fa9b8788358eb4e",
+      "content_hash": "7d8feb8178f1c5e42e46db9012987bc889ab2bbdb5f0a5f87d54ef49729dd3b7",
       "views": []
     },
     {
@@ -6724,6 +6927,25 @@
                 },
                 "lookup_name": "default_pda_lookup"
               }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
             }
           ],
           "lookup_by": null
@@ -6768,6 +6990,25 @@
                 },
                 "lookup_name": "default_pda_lookup"
               }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
             }
           ],
           "lookup_by": null
@@ -6776,7 +7017,7 @@
       "resolver_specs": [],
       "computed_fields": [],
       "computed_field_specs": [],
-      "content_hash": "734446f995f8ff380cfc5e85dfce5b91483b213e43b1f41105dc05e885b53daa",
+      "content_hash": "fa965125488f32c6c794a56c517d6455d2b04d90f29250d419b73efd957ea3d3",
       "views": []
     }
   ],
@@ -8884,5 +9125,5 @@
       ]
     }
   ],
-  "content_hash": "6989f2f194c3b906ec060adb407bce7e7ef67e13709d0e068daafbe7f2d4a841"
+  "content_hash": "1b5f00bae8cde6a58c7b0aa95e3e5baefe524c64296fc5d4414dfbf92495adf3"
 }

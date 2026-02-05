@@ -9,26 +9,21 @@ interface StatsPanelProps {
 }
 
 export function StatsPanel({ round, treasuryMotherlode, isConnected }: StatsPanelProps) {
-  const [timeRemaining, setTimeRemaining] = useState<string>('--:--');
+  const [timeRemaining, setTimeRemaining] = useState<string>('00:00');
 
   useEffect(() => {
-    if (!round) {
-      setTimeRemaining('--:--');
+    const expiresAtUnix = round?.state.estimated_expires_at_unix;
+    if (!expiresAtUnix) {
+      setTimeRemaining('00:00');
       return;
     }
 
     const updateTimer = () => {
       const now = Math.floor(Date.now() / 1000);
-      let expiresAt = round.state.expires_at;
-
-      if (expiresAt > 9999999999) {
-        expiresAt = Math.floor(expiresAt / 1000);
-      }
-
-      const remaining = Math.max(0, expiresAt - now);
+      const remaining = Math.max(0, expiresAtUnix - now);
 
       if (remaining > 300) {
-        setTimeRemaining('--:--');
+        setTimeRemaining('00:00');
         return;
       }
 
@@ -40,7 +35,7 @@ export function StatsPanel({ round, treasuryMotherlode, isConnected }: StatsPane
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [round]);
+  }, [round?.state.estimated_expires_at_unix]);
 
   return (
     <div className="flex flex-col gap-4">

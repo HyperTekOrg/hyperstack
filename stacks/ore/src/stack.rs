@@ -31,7 +31,12 @@ pub mod ore_stream {
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct RoundState {
-        #[map(ore_sdk::accounts::Round::expires_at, strategy = LastWrite)]
+        #[map(entropy_sdk::accounts::Var::end_at,
+              lookup_index(register_from = [
+                  (ore_sdk::instructions::Deploy, accounts::entropyVar, accounts::round),
+                  (ore_sdk::instructions::Reset, accounts::entropyVar, accounts::round)
+              ]),
+              strategy = LastWrite)]
         pub expires_at: Option<u64>,
 
         #[computed({
