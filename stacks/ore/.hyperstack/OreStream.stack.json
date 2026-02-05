@@ -2348,6 +2348,10 @@
             "temporal_field": null
           },
           {
+            "field_name": "treasury.motherlode",
+            "temporal_field": null
+          },
+          {
             "field_name": "entropy.entropy_value",
             "temporal_field": null
           }
@@ -2878,6 +2882,47 @@
             "Source": {
               "program_id": null,
               "discriminator": null,
+              "type_name": "ore::TreasuryState"
+            }
+          },
+          "key_resolution": {
+            "Lookup": {
+              "primary_field": {
+                "segments": [
+                  "__account_address"
+                ],
+                "offsets": null
+              }
+            }
+          },
+          "mappings": [
+            {
+              "target_path": "treasury.motherlode",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "motherlode"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": null
+                }
+              },
+              "transform": null,
+              "population": "SetOnce",
+              "stop": "ore::ResetIxState"
+            }
+          ],
+          "conditions": [],
+          "emit": true
+        },
+        {
+          "source": {
+            "Source": {
+              "program_id": null,
+              "discriminator": null,
               "type_name": "ore::CheckpointIxState"
             }
           },
@@ -3026,7 +3071,27 @@
               "resolved_type": null
             },
             {
+              "field_name": "motherlode_ui",
+              "rust_type_name": "Option < u64 >",
+              "base_type": "Integer",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "u64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
               "field_name": "total_deployed",
+              "rust_type_name": "Option < u64 >",
+              "base_type": "Integer",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "u64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "total_deployed_ui",
               "rust_type_name": "Option < u64 >",
               "base_type": "Integer",
               "is_optional": true,
@@ -3046,7 +3111,27 @@
               "resolved_type": null
             },
             {
+              "field_name": "total_vaulted_ui",
+              "rust_type_name": "Option < u64 >",
+              "base_type": "Integer",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "u64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
               "field_name": "total_winnings",
+              "rust_type_name": "Option < u64 >",
+              "base_type": "Integer",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "u64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "total_winnings_ui",
               "rust_type_name": "Option < u64 >",
               "base_type": "Integer",
               "is_optional": true,
@@ -3200,12 +3285,49 @@
               "resolved_type": null
             },
             {
+              "field_name": "total_deployed_sol_ui",
+              "rust_type_name": "Option < u64 >",
+              "base_type": "Integer",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "u64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
               "field_name": "checkpoint_count",
               "rust_type_name": "Option < u64 >",
               "base_type": "Integer",
               "is_optional": true,
               "is_array": false,
               "inner_type": "u64",
+              "source_path": null,
+              "resolved_type": null
+            }
+          ],
+          "is_nested_struct": false,
+          "parent_field": null
+        },
+        {
+          "name": "treasury",
+          "fields": [
+            {
+              "field_name": "motherlode",
+              "rust_type_name": "Option < u64 >",
+              "base_type": "Integer",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "u64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "motherlode_ui",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "f64",
               "source_path": null,
               "resolved_type": null
             }
@@ -3451,6 +3573,16 @@
           "source_path": null,
           "resolved_type": null
         },
+        "metrics.total_deployed_sol_ui": {
+          "field_name": "total_deployed_sol_ui",
+          "rust_type_name": "Option < u64 >",
+          "base_type": "Integer",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
         "ore_metadata": {
           "field_name": "ore_metadata",
           "rust_type_name": "Option < TokenMetadata >",
@@ -3581,8 +3713,28 @@
           "source_path": null,
           "resolved_type": null
         },
+        "state.motherlode_ui": {
+          "field_name": "motherlode_ui",
+          "rust_type_name": "Option < u64 >",
+          "base_type": "Integer",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
         "state.total_deployed": {
           "field_name": "total_deployed",
+          "rust_type_name": "Option < u64 >",
+          "base_type": "Integer",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "state.total_deployed_ui": {
+          "field_name": "total_deployed_ui",
           "rust_type_name": "Option < u64 >",
           "base_type": "Integer",
           "is_optional": true,
@@ -3611,6 +3763,16 @@
           "source_path": null,
           "resolved_type": null
         },
+        "state.total_vaulted_ui": {
+          "field_name": "total_vaulted_ui",
+          "rust_type_name": "Option < u64 >",
+          "base_type": "Integer",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
         "state.total_winnings": {
           "field_name": "total_winnings",
           "rust_type_name": "Option < u64 >",
@@ -3618,6 +3780,36 @@
           "is_optional": true,
           "is_array": false,
           "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "state.total_winnings_ui": {
+          "field_name": "total_winnings_ui",
+          "rust_type_name": "Option < u64 >",
+          "base_type": "Integer",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "treasury.motherlode": {
+          "field_name": "motherlode",
+          "rust_type_name": "Option < u64 >",
+          "base_type": "Integer",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "treasury.motherlode_ui": {
+          "field_name": "motherlode_ui",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "f64",
           "source_path": null,
           "resolved_type": null
         }
@@ -3629,6 +3821,26 @@
             "PdaReverseLookup": {
               "lookup_name": "default_pda_lookup",
               "queue_discriminators": []
+            }
+          }
+        },
+        {
+          "account_type": "ore::TreasuryState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": [
+                [
+                  9,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              ]
             }
           }
         }
@@ -3680,9 +3892,43 @@
                 },
                 "lookup_name": "default_pda_lookup"
               }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "treasury"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "roundNext"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            },
+            {
+              "SetField": {
+                "target_field": "__stop:treasury.motherlode",
+                "source": {
+                  "Constant": true
+                },
+                "condition": null
+              }
             }
           ],
-          "lookup_by": null
+          "lookup_by": {
+            "segments": [
+              "accounts",
+              "round"
+            ],
+            "offsets": null
+          }
         }
       ],
       "resolver_specs": [
@@ -3698,12 +3944,106 @@
         }
       ],
       "computed_fields": [
+        "state.motherlode_ui",
+        "state.total_deployed_ui",
+        "state.total_vaulted_ui",
+        "state.total_winnings_ui",
         "results.top_miner_reward_ui",
         "results.rng",
         "results.winning_square",
-        "results.did_hit_motherlode"
+        "results.did_hit_motherlode",
+        "metrics.total_deployed_sol_ui",
+        "treasury.motherlode_ui"
       ],
       "computed_field_specs": [
+        {
+          "target_path": "state.motherlode_ui",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.motherlode"
+                  }
+                },
+                {
+                  "FieldRef": {
+                    "path": "ore_metadata.decimals"
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < u64 >"
+        },
+        {
+          "target_path": "state.total_deployed_ui",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.total_deployed"
+                  }
+                },
+                {
+                  "Literal": {
+                    "value": 9
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < u64 >"
+        },
+        {
+          "target_path": "state.total_vaulted_ui",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.total_vaulted"
+                  }
+                },
+                {
+                  "Literal": {
+                    "value": 9
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < u64 >"
+        },
+        {
+          "target_path": "state.total_winnings_ui",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.total_winnings"
+                  }
+                },
+                {
+                  "Literal": {
+                    "value": 9
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < u64 >"
+        },
         {
           "target_path": "results.top_miner_reward_ui",
           "expression": {
@@ -4110,9 +4450,53 @@
             }
           },
           "result_type": "Option < bool >"
+        },
+        {
+          "target_path": "metrics.total_deployed_sol_ui",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "metrics.total_deployed_sol"
+                  }
+                },
+                {
+                  "Literal": {
+                    "value": 9
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < u64 >"
+        },
+        {
+          "target_path": "treasury.motherlode_ui",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "treasury.motherlode"
+                  }
+                },
+                {
+                  "FieldRef": {
+                    "path": "ore_metadata.decimals"
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "c3d11ac7e122b04f55a3131063614b70ef798d44665beb44f509d949c06aa326",
+      "content_hash": "4e0140be2988bdca7a7983864e13073b0d631b5e09c52dcc7a6b33615ca92229",
       "views": [
         {
           "id": "OreRound/latest",
@@ -4684,6 +5068,26 @@
               "queue_discriminators": []
             }
           }
+        },
+        {
+          "account_type": "ore::TreasuryState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": [
+                [
+                  9,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              ]
+            }
+          }
         }
       ],
       "instruction_hooks": [
@@ -4728,6 +5132,25 @@
                   "segments": [
                     "accounts",
                     "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "treasury"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "roundNext"
                   ],
                   "offsets": null
                 },
@@ -4835,7 +5258,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "d04384bbb4b0c51071d280cf712ad87d46e63c554fd641ae7de24d23af43850e",
+      "content_hash": "82da9c20bd639677a76f16c6214463fdc1095c670ae232160fa9b8788358eb4e",
       "views": []
     },
     {
@@ -6167,6 +6590,26 @@
               "queue_discriminators": []
             }
           }
+        },
+        {
+          "account_type": "ore::TreasuryState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": [
+                [
+                  9,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              ]
+            }
+          }
         }
       ],
       "instruction_hooks": [
@@ -6216,6 +6659,25 @@
                 },
                 "lookup_name": "default_pda_lookup"
               }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "treasury"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "roundNext"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
             }
           ],
           "lookup_by": null
@@ -6224,7 +6686,7 @@
       "resolver_specs": [],
       "computed_fields": [],
       "computed_field_specs": [],
-      "content_hash": "25e5b373b007878f2f90156110155f38ebeff07bae96ccbfe04a73f28f8e5c91",
+      "content_hash": "734446f995f8ff380cfc5e85dfce5b91483b213e43b1f41105dc05e885b53daa",
       "views": []
     }
   ],
@@ -8332,5 +8794,5 @@
       ]
     }
   ],
-  "content_hash": "c5c4a013ff78d092cdb9c8f2acf729f65bd639096458c1d6e8a6f75ae733f69d"
+  "content_hash": "b028ea15887a28acf7572cf944d5dae925f0c90f6f03a7a1c5c211e6c97f110c"
 }

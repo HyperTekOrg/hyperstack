@@ -14,6 +14,7 @@ pub mod ore_stream {
         pub state: RoundState,
         pub results: RoundResults,
         pub metrics: RoundMetrics,
+        pub treasury: RoundTreasury,
         pub entropy: EntropyState,
         #[resolve(address = "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp")]
         pub ore_metadata: Option<TokenMetadata>,
@@ -36,14 +37,26 @@ pub mod ore_stream {
         #[map(ore_sdk::accounts::Round::motherlode, strategy = LastWrite)]
         pub motherlode: Option<u64>,
 
+        #[computed(state.motherlode.ui_amount(ore_metadata.decimals))]
+        pub motherlode_ui: Option<u64>,
+
         #[map(ore_sdk::accounts::Round::total_deployed, strategy = LastWrite)]
         pub total_deployed: Option<u64>,
+
+        #[computed(state.total_deployed.ui_amount(9))]
+        pub total_deployed_ui: Option<u64>,
 
         #[map(ore_sdk::accounts::Round::total_vaulted, strategy = LastWrite)]
         pub total_vaulted: Option<u64>,
 
+        #[computed(state.total_vaulted.ui_amount(9))]
+        pub total_vaulted_ui: Option<u64>,
+
         #[map(ore_sdk::accounts::Round::total_winnings, strategy = LastWrite)]
         pub total_winnings: Option<u64>,
+
+        #[computed(state.total_winnings.ui_amount(9))]
+        pub total_winnings_ui: Option<u64>,
 
         #[map(ore_sdk::accounts::Round::total_miners, strategy = LastWrite)]
         pub total_miners: Option<u64>,
@@ -111,9 +124,27 @@ pub mod ore_stream {
         #[aggregate(from = ore_sdk::instructions::Deploy, field = amount, strategy = Sum, lookup_by = accounts::round)]
         pub total_deployed_sol: Option<u64>,
 
+        #[computed(metrics.total_deployed_sol.ui_amount(9))]
+        pub total_deployed_sol_ui: Option<u64>,
+
         // Count of checkpoint instructions for this round
         #[aggregate(from = ore_sdk::instructions::Checkpoint, strategy = Count, lookup_by = accounts::round)]
         pub checkpoint_count: Option<u64>,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
+    pub struct RoundTreasury {
+        #[map(ore_sdk::accounts::Treasury::motherlode,
+              lookup_index(register_from = [
+                  (ore_sdk::instructions::Reset, accounts::treasury, accounts::roundNext)
+              ]),
+              stop = ore_sdk::instructions::Reset,
+              stop_lookup_by = accounts::round,
+              strategy = SetOnce)]
+        pub motherlode: Option<u64>,
+
+        #[computed(treasury.motherlode.ui_amount(ore_metadata.decimals))]
+        pub motherlode_ui: Option<f64>,
     }
 
     // ========================================================================

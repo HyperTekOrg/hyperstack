@@ -19,6 +19,7 @@ export interface OreRoundMetrics {
   checkpoint_count?: number | null;
   deploy_count?: number | null;
   total_deployed_sol?: number | null;
+  total_deployed_sol_ui?: number | null;
 }
 
 export interface OreRoundResults {
@@ -37,14 +38,19 @@ export interface OreRoundState {
   deployed_per_square?: any[] | null;
   expires_at?: number | null;
   motherlode?: number | null;
+  motherlode_ui?: number | null;
   total_deployed?: number | null;
+  total_deployed_ui?: number | null;
   total_miners?: number | null;
   total_vaulted?: number | null;
+  total_vaulted_ui?: number | null;
   total_winnings?: number | null;
+  total_winnings_ui?: number | null;
 }
 
-export interface OreRoundToken {
-  ore_mint?: string | null;
+export interface OreRoundTreasury {
+  motherlode?: number | null;
+  motherlode_ui?: number | null;
 }
 
 export interface OreRound {
@@ -53,7 +59,7 @@ export interface OreRound {
   metrics?: OreRoundMetrics;
   results?: OreRoundResults;
   state?: OreRoundState;
-  token?: OreRoundToken;
+  treasury?: OreRoundTreasury;
   ore_metadata?: TokenMetadata | null;
 }
 
@@ -92,6 +98,7 @@ export const OreRoundMetricsSchema = z.object({
   checkpoint_count: z.number().nullable().optional(),
   deploy_count: z.number().nullable().optional(),
   total_deployed_sol: z.number().nullable().optional(),
+  total_deployed_sol_ui: z.number().nullable().optional(),
 });
 
 export const OreRoundResultsSchema = z.object({
@@ -110,14 +117,19 @@ export const OreRoundStateSchema = z.object({
   deployed_per_square: z.array(z.any()).nullable().optional(),
   expires_at: z.number().nullable().optional(),
   motherlode: z.number().nullable().optional(),
+  motherlode_ui: z.number().nullable().optional(),
   total_deployed: z.number().nullable().optional(),
+  total_deployed_ui: z.number().nullable().optional(),
   total_miners: z.number().nullable().optional(),
   total_vaulted: z.number().nullable().optional(),
+  total_vaulted_ui: z.number().nullable().optional(),
   total_winnings: z.number().nullable().optional(),
+  total_winnings_ui: z.number().nullable().optional(),
 });
 
-export const OreRoundTokenSchema = z.object({
-  ore_mint: z.string().nullable().optional(),
+export const OreRoundTreasurySchema = z.object({
+  motherlode: z.number().nullable().optional(),
+  motherlode_ui: z.number().nullable().optional(),
 });
 
 export const OreRoundSchema = z.object({
@@ -126,7 +138,7 @@ export const OreRoundSchema = z.object({
   metrics: OreRoundMetricsSchema.optional(),
   results: OreRoundResultsSchema.optional(),
   state: OreRoundStateSchema.optional(),
-  token: OreRoundTokenSchema.optional(),
+  treasury: OreRoundTreasurySchema.optional(),
   ore_metadata: TokenMetadataSchema.nullable().optional(),
 });
 
@@ -136,7 +148,7 @@ export const OreRoundCompletedSchema = z.object({
   metrics: OreRoundMetricsSchema,
   results: OreRoundResultsSchema,
   state: OreRoundStateSchema,
-  token: OreRoundTokenSchema,
+  treasury: OreRoundTreasurySchema,
   ore_metadata: TokenMetadataSchema,
 });
 
@@ -426,7 +438,7 @@ export const ORE_STREAM_STACK = {
     OreRoundResults: OreRoundResultsSchema,
     OreRound: OreRoundSchema,
     OreRoundState: OreRoundStateSchema,
-    OreRoundToken: OreRoundTokenSchema,
+    OreRoundTreasury: OreRoundTreasurySchema,
     OreTreasuryCompleted: OreTreasuryCompletedSchema,
     OreTreasuryId: OreTreasuryIdSchema,
     OreTreasury: OreTreasurySchema,
