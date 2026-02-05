@@ -93,4 +93,5 @@ export type {
   ViewMode,
   ViewDef,
   ViewGroup,
+  Schema,
 } from './types';

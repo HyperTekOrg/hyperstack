@@ -22,32 +22,32 @@ import type { HyperStack } from 'hyperstack-typescript';
 
 type ViewHookForDef<TDef> = TDef extends ViewDef<infer T, 'state'>
   ? {
-      use: (
+      use: <TSchema = T>(
         key?: Record<string, string>,
-        options?: ViewHookOptions
-      ) => ViewHookResult<T>;
+        options?: ViewHookOptions<TSchema>
+      ) => ViewHookResult<TSchema>;
     }
   : TDef extends ViewDef<infer T, 'list'>
   ? {
       use: {
-        (params: ListParamsSingle, options?: ViewHookOptions): ViewHookResult<T | undefined>;
-        (params?: ListParamsMultiple, options?: ViewHookOptions): ViewHookResult<T[]>;
+        <TSchema = T>(params: ListParamsSingle<TSchema>, options?: ViewHookOptions<TSchema>): ViewHookResult<TSchema | undefined>;
+        <TSchema = T>(params?: ListParamsMultiple<TSchema>, options?: ViewHookOptions<TSchema>): ViewHookResult<TSchema[]>;
       };
-      useOne: (
-        params?: Omit<ListParamsBase, 'take'>,
-        options?: ViewHookOptions
-      ) => ViewHookResult<T | undefined>;
+      useOne: <TSchema = T>(
+        params?: Omit<ListParamsBase<TSchema>, 'take'>,
+        options?: ViewHookOptions<TSchema>
+      ) => ViewHookResult<TSchema | undefined>;
     }
   : TDef extends ViewDef<infer T, 'state' | 'list'>
   ? {
       use: {
-        (params: ListParamsSingle, options?: ViewHookOptions): ViewHookResult<T | undefined>;
-        (params?: ListParamsMultiple | Record<string, string>, options?: ViewHookOptions): ViewHookResult<T | T[]>;
+        <TSchema = T>(params: ListParamsSingle<TSchema>, options?: ViewHookOptions<TSchema>): ViewHookResult<TSchema | undefined>;
+        <TSchema = T>(params?: ListParamsMultiple<TSchema> | Record<string, string>, options?: ViewHookOptions<TSchema>): ViewHookResult<TSchema | TSchema[]>;
       };
-      useOne: (
-        params?: Omit<ListParamsBase, 'take'>,
-        options?: ViewHookOptions
-      ) => ViewHookResult<T | undefined>;
+      useOne: <TSchema = T>(
+        params?: Omit<ListParamsBase<TSchema>, 'take'>,
+        options?: ViewHookOptions<TSchema>
+      ) => ViewHookResult<TSchema | undefined>;
     }
   : never;
 
