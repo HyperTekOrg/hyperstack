@@ -625,7 +625,9 @@ pub fn process_entity_struct_with_idl(
         quote! {
             /// No-op evaluate_computed_fields (no computed fields defined)
             pub fn evaluate_computed_fields(
-                _state: &mut hyperstack::runtime::serde_json::Value
+                _state: &mut hyperstack::runtime::serde_json::Value,
+                _context_slot: Option<u64>,
+                _context_timestamp: i64,
             ) -> Result<(), Box<dyn std::error::Error>> {
                 Ok(())
             }
@@ -993,6 +995,8 @@ fn generate_computed_fields_hook(
             fn #eval_fn_name(
                 section_obj: &mut hyperstack::runtime::serde_json::Map<String, hyperstack::runtime::serde_json::Value>,
                 section_parent_state: &hyperstack::runtime::serde_json::Value,
+                __context_slot: Option<u64>,
+                __context_timestamp: i64,
                 #(#cross_section_params),*
             ) -> Result<(), Box<dyn std::error::Error>> {
                 // Create local bindings for all fields in the current section
@@ -1056,7 +1060,7 @@ fn generate_computed_fields_hook(
 
                 if let Some(section_value) = state.get_mut(#section_str) {
                     if let Some(section_obj) = section_value.as_object_mut() {
-                        #eval_fn_name(section_obj, &state_snapshot)?;
+                        #eval_fn_name(section_obj, &state_snapshot, __context_slot, __context_timestamp)?;
                     }
                 }
             }
@@ -1087,7 +1091,7 @@ fn generate_computed_fields_hook(
                     // Now get mutable borrow of target section and compute
                     if let Some(section_value) = state.get_mut(#section_str) {
                         if let Some(section_obj) = section_value.as_object_mut() {
-                            #eval_fn_name(section_obj, &state_snapshot, #(&#dep_param_names),*)?;
+                            #eval_fn_name(section_obj, &state_snapshot, __context_slot, __context_timestamp, #(&#dep_param_names),*)?;
                         }
                     }
                 } else {
@@ -1113,7 +1117,9 @@ fn generate_computed_fields_hook(
         /// Evaluate all computed fields for the entity state
         /// This should be called after aggregations complete but before hooks run
         pub fn evaluate_computed_fields(
-            state: &mut hyperstack::runtime::serde_json::Value
+            state: &mut hyperstack::runtime::serde_json::Value,
+            __context_slot: Option<u64>,
+            __context_timestamp: i64,
         ) -> Result<(), Box<dyn std::error::Error>> {
             #(#eval_calls)*
             Ok(())

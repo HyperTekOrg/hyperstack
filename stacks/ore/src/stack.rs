@@ -34,6 +34,17 @@ pub mod ore_stream {
         #[map(ore_sdk::accounts::Round::expires_at, strategy = LastWrite)]
         pub expires_at: Option<u64>,
 
+        #[computed({
+            let expires_at_slot = state.expires_at.unwrap_or(0) as u64;
+            let current_slot = __slot;
+            if current_slot > 0 && expires_at_slot > current_slot {
+                Some(__timestamp + (((expires_at_slot - current_slot) * 400 / 1000) as i64))
+            } else {
+                None
+            }
+        })]
+        pub estimated_expires_at_unix: Option<i64>,
+
         #[map(ore_sdk::accounts::Round::motherlode, strategy = LastWrite)]
         pub motherlode: Option<u64>,
 

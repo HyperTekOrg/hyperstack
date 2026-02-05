@@ -3061,6 +3061,16 @@
               "resolved_type": null
             },
             {
+              "field_name": "estimated_expires_at_unix",
+              "rust_type_name": "Option < i64 >",
+              "base_type": "Integer",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "i64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
               "field_name": "motherlode",
               "rust_type_name": "Option < u64 >",
               "base_type": "Integer",
@@ -3713,6 +3723,16 @@
           "source_path": null,
           "resolved_type": null
         },
+        "state.estimated_expires_at_unix": {
+          "field_name": "estimated_expires_at_unix",
+          "rust_type_name": "Option < i64 >",
+          "base_type": "Integer",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "i64",
+          "source_path": null,
+          "resolved_type": null
+        },
         "state.expires_at": {
           "field_name": "expires_at",
           "rust_type_name": "Option < u64 >",
@@ -3964,6 +3984,7 @@
         }
       ],
       "computed_fields": [
+        "state.estimated_expires_at_unix",
         "state.motherlode_ui",
         "state.total_deployed_ui",
         "state.total_vaulted_ui",
@@ -3977,6 +3998,15 @@
         "treasury.motherlode_ui"
       ],
       "computed_field_specs": [
+        {
+          "target_path": "state.estimated_expires_at_unix",
+          "expression": {
+            "Literal": {
+              "value": null
+            }
+          },
+          "result_type": "Option < i64 >"
+        },
         {
           "target_path": "state.motherlode_ui",
           "expression": {
@@ -4556,7 +4586,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "a764749938ad07799abd5b3e3e85f5d95b41fe577f943a2aea49a588169b807d",
+      "content_hash": "f7c3c16bf17ef1535c68ec62fdf8cb586c68e17cb3f4ed120585fd678cdcb7b7",
       "views": [
         {
           "id": "OreRound/latest",
@@ -8854,5 +8884,5 @@
       ]
     }
   ],
-  "content_hash": "31c51f4bf93c23e19850c3b13c59ed3028587416f1f556fcc8b1ce6f149b5ba5"
+  "content_hash": "6989f2f194c3b906ec060adb407bce7e7ef67e13709d0e068daafbe7f2d4a841"
 }

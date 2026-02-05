@@ -92,6 +92,7 @@ fn extract_deps_recursive(expr: &ComputedExpr, section: &str, deps: &mut HashSet
         ComputedExpr::JsonToBytes { expr } => {
             extract_deps_recursive(expr, section, deps);
         }
+        ComputedExpr::ContextSlot | ComputedExpr::ContextTimestamp => {}
     }
 }
 
@@ -102,7 +103,9 @@ fn contains_resolver_computed(expr: &ComputedExpr) -> bool {
         | ComputedExpr::Literal { .. }
         | ComputedExpr::None
         | ComputedExpr::Var { .. }
-        | ComputedExpr::ByteArray { .. } => false,
+        | ComputedExpr::ByteArray { .. }
+        | ComputedExpr::ContextSlot
+        | ComputedExpr::ContextTimestamp => false,
         ComputedExpr::UnwrapOr { expr, .. }
         | ComputedExpr::Cast { expr, .. }
         | ComputedExpr::Paren { expr }
@@ -203,7 +206,9 @@ pub fn generate_computed_evaluator(computed_field_specs: &[ComputedFieldSpec]) -
         return quote! {
             /// No-op evaluate_computed_fields (no computed fields defined)
             pub fn evaluate_computed_fields(
-                _state: &mut hyperstack::runtime::serde_json::Value
+                _state: &mut hyperstack::runtime::serde_json::Value,
+                _context_slot: Option<u64>,
+                _context_timestamp: i64,
             ) -> Result<(), Box<dyn std::error::Error>> {
                 Ok(())
             }
@@ -264,7 +269,9 @@ pub fn generate_computed_evaluator(computed_field_specs: &[ComputedFieldSpec]) -
     quote! {
         /// Evaluate all computed fields for the entity state
         pub fn evaluate_computed_fields(
-            state: &mut hyperstack::runtime::serde_json::Value
+            state: &mut hyperstack::runtime::serde_json::Value,
+            __context_slot: Option<u64>,
+            __context_timestamp: i64,
         ) -> Result<(), Box<dyn std::error::Error>> {
             #(#section_evals)*
             Ok(())
@@ -630,6 +637,14 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
                     }).unwrap_or_default()
                 }
             }
+        }
+        ComputedExpr::ContextSlot => {
+            // __context_slot is Option<u64>, unwrap to u64 with 0 as default
+            quote! { __context_slot.unwrap_or(0) }
+        }
+        ComputedExpr::ContextTimestamp => {
+            // __context_timestamp is i64, use directly
+            quote! { __context_timestamp }
         }
     }
 }

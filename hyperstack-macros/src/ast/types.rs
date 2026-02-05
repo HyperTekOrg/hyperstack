@@ -387,6 +387,10 @@ pub enum ComputedExpr {
     JsonToBytes {
         expr: Box<ComputedExpr>,
     },
+
+    // Context access - slot and timestamp from the update that triggered evaluation
+    ContextSlot,
+    ContextTimestamp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -225,10 +225,17 @@ pub struct EntityBytecode {
     pub non_emitted_fields: HashSet<String>,
     pub computed_paths: Vec<String>,
     /// Optional callback for evaluating computed fields
+    /// Parameters: state, context_slot (Option<u64>), context_timestamp (i64)
     #[allow(clippy::type_complexity)]
     pub computed_fields_evaluator: Option<
         Box<
-            dyn Fn(&mut Value) -> std::result::Result<(), Box<dyn std::error::Error>> + Send + Sync,
+            dyn Fn(
+                    &mut Value,
+                    Option<u64>,
+                    i64,
+                ) -> std::result::Result<(), Box<dyn std::error::Error>>
+                + Send
+                + Sync,
         >,
     >,
 }
@@ -332,7 +339,13 @@ impl MultiEntityBytecodeBuilder {
             entity_name,
             spec,
             state_id,
-            None::<fn(&mut Value) -> std::result::Result<(), Box<dyn std::error::Error>>>,
+            None::<
+                fn(
+                    &mut Value,
+                    Option<u64>,
+                    i64,
+                ) -> std::result::Result<(), Box<dyn std::error::Error>>,
+            >,
         )
     }
 
@@ -344,7 +357,7 @@ impl MultiEntityBytecodeBuilder {
         evaluator: Option<F>,
     ) -> Self
     where
-        F: Fn(&mut Value) -> std::result::Result<(), Box<dyn std::error::Error>>
+        F: Fn(&mut Value, Option<u64>, i64) -> std::result::Result<(), Box<dyn std::error::Error>>
             + Send
             + Sync
             + 'static,

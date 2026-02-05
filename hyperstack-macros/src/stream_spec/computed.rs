@@ -139,6 +139,8 @@ pub fn qualify_field_refs(expr: ComputedExpr, section: &str) -> ComputedExpr {
         ComputedExpr::JsonToBytes { expr } => ComputedExpr::JsonToBytes {
             expr: Box::new(qualify_field_refs(*expr, section)),
         },
+        ComputedExpr::ContextSlot => ComputedExpr::ContextSlot,
+        ComputedExpr::ContextTimestamp => ComputedExpr::ContextTimestamp,
     }
 }
 
@@ -391,7 +393,9 @@ fn resolve_bindings_in_expr(expr: ComputedExpr, bindings: &HashSet<String>) -> C
         ComputedExpr::Var { .. }
         | ComputedExpr::None
         | ComputedExpr::Literal { .. }
-        | ComputedExpr::ByteArray { .. } => expr,
+        | ComputedExpr::ByteArray { .. }
+        | ComputedExpr::ContextSlot
+        | ComputedExpr::ContextTimestamp => expr,
     }
 }
 
@@ -969,6 +973,14 @@ fn parse_primary_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
             // Check for None
             if name == "None" {
                 return (ComputedExpr::None, start + 1);
+            }
+
+            // Check for context access special identifiers
+            if name == "__slot" {
+                return (ComputedExpr::ContextSlot, start + 1);
+            }
+            if name == "__timestamp" {
+                return (ComputedExpr::ContextTimestamp, start + 1);
             }
 
             // Check for Some(expr)

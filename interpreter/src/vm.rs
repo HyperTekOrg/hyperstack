@@ -1046,7 +1046,18 @@ impl VmContext {
                     .map(|path| Self::get_value_at_path(&entity_state, path))
                     .collect();
 
-                let eval_result = evaluator(&mut entity_state);
+                let context_slot = self.current_context.as_ref().and_then(|c| c.slot);
+                let context_timestamp = self
+                    .current_context
+                    .as_ref()
+                    .map(|c| c.timestamp())
+                    .unwrap_or_else(|| {
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs() as i64
+                    });
+                let eval_result = evaluator(&mut entity_state, context_slot, context_timestamp);
                 if eval_result.is_ok() {
                     for (path, old_value) in
                         entity_bytecode.computed_paths.iter().zip(old_values.iter())
@@ -1218,6 +1229,11 @@ impl VmContext {
     /// Get the current update context
     pub fn current_context(&self) -> Option<&UpdateContext> {
         self.current_context.as_ref()
+    }
+
+    /// Set the current update context for computed field evaluation
+    pub fn set_current_context(&mut self, context: Option<UpdateContext>) {
+        self.current_context = context;
     }
 
     fn add_warning(&mut self, msg: String) {
@@ -1706,7 +1722,9 @@ impl VmContext {
         event_type: &str,
         override_state_id: u32,
         entity_name: &str,
-        entity_evaluator: Option<&Box<dyn Fn(&mut Value) -> Result<()> + Send + Sync>>,
+        entity_evaluator: Option<
+            &Box<dyn Fn(&mut Value, Option<u64>, i64) -> Result<()> + Send + Sync>,
+        >,
         non_emitted_fields: Option<&HashSet<String>>,
     ) -> Result<Vec<Mutation>> {
         self.reset_registers();
@@ -2488,7 +2506,18 @@ impl VmContext {
                             .collect();
 
                         let state_value = &mut self.registers[*state];
-                        let eval_result = evaluator(state_value);
+                        let context_slot = self.current_context.as_ref().and_then(|c| c.slot);
+                        let context_timestamp = self
+                            .current_context
+                            .as_ref()
+                            .map(|c| c.timestamp())
+                            .unwrap_or_else(|| {
+                                std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs() as i64
+                            });
+                        let eval_result = evaluator(state_value, context_slot, context_timestamp);
 
                         if eval_result.is_ok() {
                             for (path, old_value) in computed_paths.iter().zip(old_values.iter()) {
@@ -3977,6 +4006,19 @@ impl VmContext {
             ComputedExpr::Literal { value } => Ok(value.clone()),
 
             ComputedExpr::Paren { expr } => self.evaluate_computed_expr_with_env(expr, state, env),
+
+            ComputedExpr::ContextSlot => Ok(self
+                .current_context
+                .as_ref()
+                .and_then(|ctx| ctx.slot)
+                .map(|s| json!(s))
+                .unwrap_or(Value::Null)),
+
+            ComputedExpr::ContextTimestamp => Ok(self
+                .current_context
+                .as_ref()
+                .map(|ctx| json!(ctx.timestamp()))
+                .unwrap_or(Value::Null)),
         }
     }
 
@@ -4439,11 +4481,14 @@ impl VmContext {
     /// This returns a function that can be passed to the bytecode builder
     pub fn create_evaluator_from_specs(
         specs: Vec<ComputedFieldSpec>,
-    ) -> impl Fn(&mut Value) -> Result<()> + Send + Sync + 'static {
-        move |state: &mut Value| {
-            // Create a temporary VmContext just for evaluation
-            // (We only need the expression evaluation methods)
-            let vm = VmContext::new();
+    ) -> impl Fn(&mut Value, Option<u64>, i64) -> Result<()> + Send + Sync + 'static {
+        move |state: &mut Value, context_slot: Option<u64>, context_timestamp: i64| {
+            let mut vm = VmContext::new();
+            vm.current_context = Some(UpdateContext {
+                slot: context_slot,
+                timestamp: Some(context_timestamp),
+                ..Default::default()
+            });
             vm.evaluate_computed_fields_from_ast(state, &specs)?;
             Ok(())
         }

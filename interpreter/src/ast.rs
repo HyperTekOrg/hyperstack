@@ -527,6 +527,12 @@ pub enum ComputedExpr {
     JsonToBytes {
         expr: Box<ComputedExpr>,
     },
+
+    // Context access - slot and timestamp from the update that triggered evaluation
+    /// Access the slot number from the current update context
+    ContextSlot,
+    /// Access the unix timestamp from the current update context
+    ContextTimestamp,
 }
 
 /// Binary operators for computed expressions

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
@@ -235,7 +235,9 @@ impl ResolverRegistry {
             | crate::ast::ComputedExpr::Literal { .. }
             | crate::ast::ComputedExpr::None
             | crate::ast::ComputedExpr::Var { .. }
-            | crate::ast::ComputedExpr::ByteArray { .. } => {}
+            | crate::ast::ComputedExpr::ByteArray { .. }
+            | crate::ast::ComputedExpr::ContextSlot
+            | crate::ast::ComputedExpr::ContextTimestamp => {}
             crate::ast::ComputedExpr::UnwrapOr { expr, .. }
             | crate::ast::ComputedExpr::Cast { expr, .. }
             | crate::ast::ComputedExpr::Paren { expr }
@@ -280,10 +282,14 @@ impl ResolverRegistry {
 
 static BUILTIN_RESOLVER_REGISTRY: OnceLock<ResolverRegistry> = OnceLock::new();
 
+pub fn register_builtin_resolvers(registry: &mut ResolverRegistry) {
+    registry.register(Box::new(TokenMetadataResolver));
+}
+
 pub fn builtin_resolver_registry() -> &'static ResolverRegistry {
     BUILTIN_RESOLVER_REGISTRY.get_or_init(|| {
         let mut registry = ResolverRegistry::new();
-        registry.register(Box::new(TokenMetadataResolver));
+        register_builtin_resolvers(&mut registry);
         registry
     })
 }
@@ -315,6 +321,171 @@ pub fn validate_resolver_computed_specs(
 
 pub fn is_resolver_output_type(type_name: &str) -> bool {
     builtin_resolver_registry().is_output_type(type_name)
+}
+
+const DEFAULT_DAS_BATCH_SIZE: usize = 100;
+const DEFAULT_DAS_TIMEOUT_SECS: u64 = 10;
+const DAS_API_ENDPOINT_ENV: &str = "DAS_API_ENDPOINT";
+const DAS_API_BATCH_ENV: &str = "DAS_API_BATCH_SIZE";
+
+pub struct TokenMetadataResolverClient {
+    endpoint: String,
+    client: reqwest::Client,
+    batch_size: usize,
+}
+
+impl TokenMetadataResolverClient {
+    pub fn new(
+        endpoint: String,
+        batch_size: usize,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(DEFAULT_DAS_TIMEOUT_SECS))
+            .build()?;
+
+        Ok(Self {
+            endpoint,
+            client,
+            batch_size: batch_size.max(1),
+        })
+    }
+
+    pub fn from_env(
+    ) -> Result<Option<Self>, Box<dyn std::error::Error + Send + Sync>> {
+        let Some(endpoint) = std::env::var(DAS_API_ENDPOINT_ENV).ok() else {
+            return Ok(None);
+        };
+
+        let batch_size = std::env::var(DAS_API_BATCH_ENV)
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(DEFAULT_DAS_BATCH_SIZE);
+
+        Ok(Some(Self::new(endpoint, batch_size)?))
+    }
+
+    pub async fn resolve_token_metadata(
+        &self,
+        mints: &[String],
+    ) -> Result<HashMap<String, Value>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut unique = HashSet::new();
+        let mut deduped = Vec::new();
+
+        for mint in mints {
+            if mint.is_empty() {
+                continue;
+            }
+            if unique.insert(mint.clone()) {
+                deduped.push(mint.clone());
+            }
+        }
+
+        let mut results = HashMap::new();
+        if deduped.is_empty() {
+            return Ok(results);
+        }
+
+        for chunk in deduped.chunks(self.batch_size) {
+            let assets = self.fetch_assets(chunk).await?;
+            for asset in assets {
+                if let Some((mint, value)) = Self::build_token_metadata(&asset) {
+                    results.insert(mint, value);
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    async fn fetch_assets(
+        &self,
+        ids: &[String],
+    ) -> Result<Vec<Value>, Box<dyn std::error::Error + Send + Sync>> {
+        let payload = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": "1",
+            "method": "getAssetBatch",
+            "params": {
+                "ids": ids,
+                "options": {
+                    "showFungible": true,
+                },
+            },
+        });
+
+        let response = self.client.post(&self.endpoint).json(&payload).send().await?;
+        let response = response.error_for_status()?;
+        let value = response.json::<Value>().await?;
+
+        if let Some(error) = value.get("error") {
+            return Err(format!("Resolver response error: {}", error).into());
+        }
+
+        let assets = value
+            .get("result")
+            .and_then(|result| match result {
+                Value::Array(items) => Some(items.clone()),
+                Value::Object(obj) => obj
+                    .get("items")
+                    .and_then(|items| items.as_array())
+                    .map(|items| items.clone()),
+                _ => None,
+            })
+            .ok_or_else(|| "Resolver response missing result".to_string())?;
+
+        let assets = assets.into_iter().filter(|a| !a.is_null()).collect();
+        Ok(assets)
+    }
+
+    fn build_token_metadata(asset: &Value) -> Option<(String, Value)> {
+        let mint = asset.get("id").and_then(|value| value.as_str())?.to_string();
+
+        let name = asset
+            .pointer("/content/metadata/name")
+            .and_then(|value| value.as_str());
+
+        let symbol = asset
+            .pointer("/content/metadata/symbol")
+            .and_then(|value| value.as_str());
+
+        let token_info = asset.get("token_info").or_else(|| asset.pointer("/content/token_info"));
+
+        let decimals = token_info
+            .and_then(|info| info.get("decimals"))
+            .and_then(|value| value.as_u64());
+
+        let logo_uri = asset
+            .pointer("/content/links/image")
+            .and_then(|value| value.as_str())
+            .or_else(|| asset.pointer("/content/links/image_uri").and_then(|value| value.as_str()));
+
+        let mut obj = serde_json::Map::new();
+        obj.insert("mint".to_string(), serde_json::json!(mint));
+        obj.insert(
+            "name".to_string(),
+            name.map(|value| serde_json::json!(value))
+                .unwrap_or(Value::Null),
+        );
+        obj.insert(
+            "symbol".to_string(),
+            symbol.map(|value| serde_json::json!(value))
+                .unwrap_or(Value::Null),
+        );
+        obj.insert(
+            "decimals".to_string(),
+            decimals
+                .map(|value| serde_json::json!(value))
+                .unwrap_or(Value::Null),
+        );
+        obj.insert(
+            "logo_uri".to_string(),
+            logo_uri
+                .map(|value| serde_json::json!(value))
+                .unwrap_or(Value::Null),
+        );
+
+        Some((mint, Value::Object(obj)))
+    }
 }
 
 struct TokenMetadataResolver;
