@@ -4,6 +4,7 @@ description: Programmable data feeds for Solana
 ---
 
 import { Card, CardGrid, Tabs, TabItem } from "@astrojs/starlight/components";
+import Workflow from "../../components/Workflow.astro";
 
 **Hyperstack is a system for programmable data feeds on Solana.**
 
@@ -99,13 +100,20 @@ npm install hyperstack-stacks hyperstack-react
 
 Hyperstack handles the full pipeline from chain to client:
 
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│     Solana       │ ──▶ │   Hyperstack    │ ──▶ │    Your App     │
-│   (on-chain)     │     │  (transform +   │     │   (live feed)   │
-│                  │     │    stream)       │     │                 │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-```
+<Workflow steps={[
+  {
+    title: "Solana",
+    description: "On-chain data"
+  },
+  {
+    title: "Hyperstack",
+    description: "Transform + stream"
+  },
+  {
+    title: "Your App",
+    description: "Live feed"
+  }
+]} />
 
 1. **Define** the data shape you need using a declarative Rust DSL
 2. **Deploy** your definition — Hyperstack manages the infrastructure

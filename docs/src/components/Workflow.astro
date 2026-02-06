@@ -1,0 +1,117 @@
+---
+interface Props {
+  steps: Array<{
+    title: string;
+    description: string;
+  }>;
+}
+
+const { steps } = Astro.props;
+---
+
+<div class="workflow-wrapper">
+  <div class="workflow-container">
+    {steps.map((step, index) => (
+      <>
+        <div class="workflow-step">
+          <div class="step-header">
+            <div class="step-number">{index + 1}</div>
+            <h3 class="step-title">{step.title}</h3>
+          </div>
+          <p class="step-description">{step.description}</p>
+        </div>
+        {index < steps.length - 1 && (
+          <div class="workflow-arrow">→</div>
+        )}
+      </>
+    ))}
+  </div>
+</div>
+
+<style is:global>
+  .sl-markdown-content .workflow-wrapper * {
+    margin-top: 0 !important;
+  }
+</style>
+
+<style>
+  .workflow-wrapper {
+    background: var(--sl-color-bg-sidebar);
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: var(--sl-border-radius-lg);
+    padding: 1rem;
+    margin: 1rem 0;
+  }
+
+  .workflow-container {
+    display: flex;
+    align-items: stretch;
+    gap: 0.25rem;
+  }
+
+  .workflow-step {
+    flex: 1 1 0;
+    padding: 1.75rem 1.5rem;
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: var(--sl-border-radius-md);
+    background: var(--sl-color-bg);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    background: var(--sl-color-accent);
+    color: var(--sl-color-bg);
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+  }
+
+  .step-title {
+    font-size: var(--sl-text-base);
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .step-description {
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+    line-height: 1.5;
+  }
+
+  .workflow-arrow {
+    color: var(--sl-color-accent);
+    font-size: 1.5rem;
+    flex-shrink: 0;
+    align-self: center;
+  }
+
+  @media (max-width: 768px) {
+    .workflow-container {
+      flex-direction: column;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .workflow-step {
+      width: 100%;
+    }
+
+    .workflow-arrow {
+      transform: rotate(90deg);
+    }
+  }
+</style>
