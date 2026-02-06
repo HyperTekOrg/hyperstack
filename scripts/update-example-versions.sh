@@ -114,4 +114,6 @@ done < <(find "$EXAMPLES_DIR" -name "Cargo.toml" -not -path "*/target/*" -print0
 echo ""
 echo "=== Summary ==="
 echo "Updated ${#UPDATED_FILES[@]} files"
-[[ "$DRY_RUN" == "--dry-run" ]] && echo "(dry run - no actual changes made)"
+if [[ "$DRY_RUN" == "--dry-run" ]]; then
+    echo "(dry run - no actual changes made)"
+fi
