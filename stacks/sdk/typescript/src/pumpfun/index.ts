@@ -319,7 +319,12 @@ export const PumpfunTokenSchema = z.object({
   bonding_curve_snapshot: BondingCurveSchema.nullable().optional(),
 });
 
-export const PumpfunTokenCompletedSchema = PumpfunTokenSchema.extend({
+export const PumpfunTokenCompletedSchema = z.object({
+  events: PumpfunTokenEventsSchema,
+  id: PumpfunTokenIdSchema,
+  info: PumpfunTokenInfoSchema,
+  reserves: PumpfunTokenReservesSchema,
+  trading: PumpfunTokenTradingSchema,
   bonding_curve_snapshot: BondingCurveSchema,
 });
 
