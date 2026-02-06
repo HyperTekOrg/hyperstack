@@ -11,20 +11,20 @@ const { steps } = Astro.props;
 
 <div class="workflow-wrapper">
   <div class="workflow-container">
-    {steps.map((step, index) => (
-      <>
-        <div class="workflow-step">
-          <div class="step-header">
-            <div class="step-number">{index + 1}</div>
-            <h3 class="step-title">{step.title}</h3>
+    {
+      steps.map((step, index) => (
+        <>
+          <div class="workflow-step">
+            <div class="step-header">
+              <div class="step-number">{index + 1}</div>
+              <h3 class="step-title">{step.title}</h3>
+            </div>
+            <p class="step-description">{step.description}</p>
           </div>
-          <p class="step-description">{step.description}</p>
-        </div>
-        {index < steps.length - 1 && (
-          <div class="workflow-arrow">→</div>
-        )}
-      </>
-    ))}
+          {index < steps.length - 1 && <div class="workflow-arrow">→</div>}
+        </>
+      ))
+    }
   </div>
 </div>
 
