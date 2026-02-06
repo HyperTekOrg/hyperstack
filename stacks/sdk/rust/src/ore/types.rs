@@ -15,21 +15,13 @@ pub struct OreRoundState {
     #[serde(default)]
     pub estimated_expires_at_unix: Option<Option<i64>>,
     #[serde(default)]
-    pub motherlode: Option<Option<u64>>,
+    pub motherlode: Option<Option<f64>>,
     #[serde(default)]
-    pub motherlode_ui: Option<Option<u64>>,
+    pub total_deployed: Option<Option<f64>>,
     #[serde(default)]
-    pub total_deployed: Option<Option<u64>>,
+    pub total_vaulted: Option<Option<f64>>,
     #[serde(default)]
-    pub total_deployed_ui: Option<Option<u64>>,
-    #[serde(default)]
-    pub total_vaulted: Option<Option<u64>>,
-    #[serde(default)]
-    pub total_vaulted_ui: Option<Option<u64>>,
-    #[serde(default)]
-    pub total_winnings: Option<Option<u64>>,
-    #[serde(default)]
-    pub total_winnings_ui: Option<Option<u64>>,
+    pub total_winnings: Option<Option<f64>>,
     #[serde(default)]
     pub total_miners: Option<Option<u64>>,
     #[serde(default)]
@@ -45,9 +37,7 @@ pub struct OreRoundResults {
     #[serde(default)]
     pub top_miner: Option<Option<String>>,
     #[serde(default)]
-    pub top_miner_reward: Option<Option<u64>>,
-    #[serde(default)]
-    pub top_miner_reward_ui: Option<Option<f64>>,
+    pub top_miner_reward: Option<Option<f64>>,
     #[serde(default)]
     pub rent_payer: Option<Option<String>>,
     #[serde(default)]
@@ -65,19 +55,13 @@ pub struct OreRoundMetrics {
     #[serde(default)]
     pub deploy_count: Option<Option<u64>>,
     #[serde(default)]
-    pub total_deployed_sol: Option<Option<u64>>,
-    #[serde(default)]
-    pub total_deployed_sol_ui: Option<Option<u64>>,
-    #[serde(default)]
     pub checkpoint_count: Option<Option<u64>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OreRoundTreasury {
     #[serde(default)]
-    pub motherlode: Option<Option<u64>>,
-    #[serde(default)]
-    pub motherlode_ui: Option<Option<f64>>,
+    pub motherlode: Option<Option<f64>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -127,21 +111,13 @@ pub struct OreTreasuryState {
     #[serde(default)]
     pub balance: Option<Option<u64>>,
     #[serde(default)]
-    pub motherlode: Option<Option<u64>>,
+    pub motherlode: Option<Option<f64>>,
     #[serde(default)]
-    pub motherlode_ui: Option<Option<f64>>,
+    pub total_refined: Option<Option<f64>>,
     #[serde(default)]
-    pub total_refined: Option<Option<u64>>,
+    pub total_staked: Option<Option<f64>>,
     #[serde(default)]
-    pub total_refined_ui: Option<Option<f64>>,
-    #[serde(default)]
-    pub total_staked: Option<Option<u64>>,
-    #[serde(default)]
-    pub total_staked_ui: Option<Option<f64>>,
-    #[serde(default)]
-    pub total_unclaimed: Option<Option<u64>>,
-    #[serde(default)]
-    pub total_unclaimed_ui: Option<Option<f64>>,
+    pub total_unclaimed: Option<Option<f64>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

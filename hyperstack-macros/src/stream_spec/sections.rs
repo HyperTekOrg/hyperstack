@@ -333,18 +333,56 @@ pub fn process_nested_struct(
                                 format!("{}.{}", section_name, map_attr.target_field_name);
                         }
 
-                        super::entity::process_map_attribute(
-                            &map_attr,
-                            field_name,
-                            field_type,
-                            &mut Vec::new(),
-                            accessor_defs,
-                            accessor_names,
-                            primary_keys,
-                            lookup_indexes,
-                            sources_by_type,
-                            field_mappings,
-                        );
+                        if let Some(rt) = map_attr.resolver_transform.take() {
+                            let visible_target = map_attr.target_field_name.clone();
+                            let raw_field_name = format!("__{}_raw", field_name);
+                            let raw_target = format!("{}.{}", section_name, raw_field_name);
+
+                            map_attr.target_field_name = raw_target.clone();
+                            map_attr.emit = false;
+
+                            super::entity::process_map_attribute(
+                                &map_attr,
+                                field_name,
+                                field_type,
+                                &mut Vec::new(),
+                                accessor_defs,
+                                accessor_names,
+                                primary_keys,
+                                lookup_indexes,
+                                sources_by_type,
+                                field_mappings,
+                            );
+
+                            let raw_ref = raw_target.clone();
+                            let computed_expr: proc_macro2::TokenStream = {
+                                let raw_ident: proc_macro2::TokenStream =
+                                    raw_ref.replace('.', " . ").parse().unwrap_or_default();
+                                let method_ident: proc_macro2::TokenStream =
+                                    rt.method.parse().unwrap_or_default();
+                                let args = &rt.args;
+                                quote::quote! { #raw_ident . #method_ident ( #args ) }
+                            };
+
+                            computed_fields.push((
+                                visible_target,
+                                computed_expr,
+                                field_type.clone(),
+                            ));
+                        } else {
+                            super::entity::process_map_attribute(
+                                &map_attr,
+                                field_name,
+                                field_type,
+                                &mut Vec::new(),
+                                accessor_defs,
+                                accessor_names,
+                                primary_keys,
+                                lookup_indexes,
+                                sources_by_type,
+                                field_mappings,
+                            );
+                        }
                     }
                 } else if let Ok(Some(map_attrs)) =
                     parse::parse_from_instruction_attribute(attr, &field_name.to_string())
@@ -353,6 +391,45 @@ pub fn process_nested_struct(
                         if !map_attr.target_field_name.contains('.') {
                             map_attr.target_field_name =
                                 format!("{}.{}", section_name, map_attr.target_field_name);
+                        }
+
+                        if let Some(rt) = map_attr.resolver_transform.take() {
+                            let visible_target = map_attr.target_field_name.clone();
+                            let raw_field_name = format!("__{}_raw", field_name);
+                            let raw_target = format!("{}.{}", section_name, raw_field_name);
+
+                            map_attr.target_field_name = raw_target.clone();
+                            map_attr.emit = false;
+
+                            super::entity::process_map_attribute(
+                                &map_attr,
+                                field_name,
+                                field_type,
+                                &mut Vec::new(),
+                                accessor_defs,
+                                accessor_names,
+                                primary_keys,
+                                lookup_indexes,
+                                sources_by_type,
+                                field_mappings,
+                            );
+
+                            let raw_ref = raw_target.clone();
+                            let computed_expr: proc_macro2::TokenStream = {
+                                let raw_ident: proc_macro2::TokenStream =
+                                    raw_ref.replace('.', " . ").parse().unwrap_or_default();
+                                let method_ident: proc_macro2::TokenStream =
+                                    rt.method.parse().unwrap_or_default();
+                                let args = &rt.args;
+                                quote::quote! { #raw_ident . #method_ident ( #args ) }
+                            };
+
+                            computed_fields.push((
+                                visible_target,
+                                computed_expr,
+                                field_type.clone(),
+                            ));
+                            continue;
                         }
 
                         super::entity::process_map_attribute(
@@ -453,6 +530,7 @@ pub fn process_nested_struct(
                                 .as_ref()
                                 .map(|fs| fs.ident.to_string()),
                             transform: None,
+                            resolver_transform: None,
                             is_instruction: false,
                             is_whole_source: true,
                             lookup_by: snapshot_attr.lookup_by.clone(),
@@ -502,6 +580,7 @@ pub fn process_nested_struct(
                             strategy: aggr_attr.strategy.clone(),
                             join_on: aggr_attr.join_on.as_ref().map(|fs| fs.ident.to_string()),
                             transform: aggr_attr.transform.as_ref().map(|t| t.to_string()),
+                            resolver_transform: None,
                             is_instruction: true,
                             is_whole_source: false,
                             lookup_by: aggr_attr.lookup_by.clone(),

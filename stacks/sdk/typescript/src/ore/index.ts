@@ -18,8 +18,6 @@ export interface OreRoundId {
 export interface OreRoundMetrics {
   checkpoint_count?: number | null;
   deploy_count?: number | null;
-  total_deployed_sol?: number | null;
-  total_deployed_sol_ui?: number | null;
 }
 
 export interface OreRoundResults {
@@ -29,7 +27,6 @@ export interface OreRoundResults {
   slot_hash?: string | null;
   top_miner?: string | null;
   top_miner_reward?: number | null;
-  top_miner_reward_ui?: number | null;
   winning_square?: number | null;
 }
 
@@ -40,19 +37,14 @@ export interface OreRoundState {
   estimated_expires_at_unix?: number | null;
   expires_at?: number | null;
   motherlode?: number | null;
-  motherlode_ui?: number | null;
   total_deployed?: number | null;
-  total_deployed_ui?: number | null;
-  total_miners?: number | null;
   total_vaulted?: number | null;
-  total_vaulted_ui?: number | null;
   total_winnings?: number | null;
-  total_winnings_ui?: number | null;
+  total_miners?: number | null;
 }
 
 export interface OreRoundTreasury {
   motherlode?: number | null;
-  motherlode_ui?: number | null;
 }
 
 export interface OreRound {
@@ -99,8 +91,6 @@ export const OreRoundIdSchema = z.object({
 export const OreRoundMetricsSchema = z.object({
   checkpoint_count: z.number().nullable().optional(),
   deploy_count: z.number().nullable().optional(),
-  total_deployed_sol: z.number().nullable().optional(),
-  total_deployed_sol_ui: z.number().nullable().optional(),
 });
 
 export const OreRoundResultsSchema = z.object({
@@ -110,7 +100,6 @@ export const OreRoundResultsSchema = z.object({
   slot_hash: z.string().nullable().optional(),
   top_miner: z.string().nullable().optional(),
   top_miner_reward: z.number().nullable().optional(),
-  top_miner_reward_ui: z.number().nullable().optional(),
   winning_square: z.number().nullable().optional(),
 });
 
@@ -121,19 +110,14 @@ export const OreRoundStateSchema = z.object({
   estimated_expires_at_unix: z.number().nullable().optional(),
   expires_at: z.number().nullable().optional(),
   motherlode: z.number().nullable().optional(),
-  motherlode_ui: z.number().nullable().optional(),
   total_deployed: z.number().nullable().optional(),
-  total_deployed_ui: z.number().nullable().optional(),
   total_miners: z.number().nullable().optional(),
   total_vaulted: z.number().nullable().optional(),
-  total_vaulted_ui: z.number().nullable().optional(),
   total_winnings: z.number().nullable().optional(),
-  total_winnings_ui: z.number().nullable().optional(),
 });
 
 export const OreRoundTreasurySchema = z.object({
   motherlode: z.number().nullable().optional(),
-  motherlode_ui: z.number().nullable().optional(),
 });
 
 export const OreRoundSchema = z.object({
@@ -163,13 +147,9 @@ export interface OreTreasuryId {
 export interface OreTreasuryState {
   balance?: number | null;
   motherlode?: number | null;
-  motherlode_ui?: number | null;
   total_refined?: number | null;
-  total_refined_ui?: number | null;
   total_staked?: number | null;
-  total_staked_ui?: number | null;
   total_unclaimed?: number | null;
-  total_unclaimed_ui?: number | null;
 }
 
 export interface OreTreasury {
@@ -209,13 +189,9 @@ export const OreTreasuryIdSchema = z.object({
 export const OreTreasuryStateSchema = z.object({
   balance: z.number().nullable().optional(),
   motherlode: z.number().nullable().optional(),
-  motherlode_ui: z.number().nullable().optional(),
   total_refined: z.number().nullable().optional(),
-  total_refined_ui: z.number().nullable().optional(),
   total_staked: z.number().nullable().optional(),
-  total_staked_ui: z.number().nullable().optional(),
   total_unclaimed: z.number().nullable().optional(),
-  total_unclaimed_ui: z.number().nullable().optional(),
 });
 
 export const OreTreasurySchema = z.object({

@@ -50,29 +50,21 @@ pub mod ore_stream {
         })]
         pub estimated_expires_at_unix: Option<i64>,
 
-        #[map(ore_sdk::accounts::Round::motherlode, strategy = LastWrite)]
-        pub motherlode: Option<u64>,
+        #[map(ore_sdk::accounts::Round::motherlode, strategy = LastWrite,
+              transform = ui_amount(ore_metadata.decimals))]
+        pub motherlode: Option<f64>,
 
-        #[computed(state.motherlode.ui_amount(ore_metadata.decimals))]
-        pub motherlode_ui: Option<u64>,
+        #[map(ore_sdk::accounts::Round::total_deployed, strategy = LastWrite,
+              transform = ui_amount(9))]
+        pub total_deployed: Option<f64>,
 
-        #[map(ore_sdk::accounts::Round::total_deployed, strategy = LastWrite)]
-        pub total_deployed: Option<u64>,
+        #[map(ore_sdk::accounts::Round::total_vaulted, strategy = LastWrite,
+              transform = ui_amount(9))]
+        pub total_vaulted: Option<f64>,
 
-        #[computed(state.total_deployed.ui_amount(9))]
-        pub total_deployed_ui: Option<u64>,
-
-        #[map(ore_sdk::accounts::Round::total_vaulted, strategy = LastWrite)]
-        pub total_vaulted: Option<u64>,
-
-        #[computed(state.total_vaulted.ui_amount(9))]
-        pub total_vaulted_ui: Option<u64>,
-
-        #[map(ore_sdk::accounts::Round::total_winnings, strategy = LastWrite)]
-        pub total_winnings: Option<u64>,
-
-        #[computed(state.total_winnings.ui_amount(9))]
-        pub total_winnings_ui: Option<u64>,
+        #[map(ore_sdk::accounts::Round::total_winnings, strategy = LastWrite,
+              transform = ui_amount(9))]
+        pub total_winnings: Option<f64>,
 
         #[map(ore_sdk::accounts::Round::total_miners, strategy = LastWrite)]
         pub total_miners: Option<u64>,
@@ -94,11 +86,9 @@ pub mod ore_stream {
         #[map(ore_sdk::accounts::Round::top_miner, strategy = LastWrite, transform = Base58Encode)]
         pub top_miner: Option<String>,
 
-        #[map(ore_sdk::accounts::Round::top_miner_reward, strategy = LastWrite)]
-        pub top_miner_reward: Option<u64>,
-
-        #[computed(results.top_miner_reward.ui_amount(ore_metadata.decimals))]
-        pub top_miner_reward_ui: Option<f64>,
+        #[map(ore_sdk::accounts::Round::top_miner_reward, strategy = LastWrite,
+              transform = ui_amount(ore_metadata.decimals))]
+        pub top_miner_reward: Option<f64>,
 
         #[map(ore_sdk::accounts::Round::rent_payer, strategy = LastWrite, transform = Base58Encode)]
         pub rent_payer: Option<String>,
@@ -139,13 +129,6 @@ pub mod ore_stream {
         #[aggregate(from = ore_sdk::instructions::Deploy, strategy = Count, lookup_by = accounts::round)]
         pub deploy_count: Option<u64>,
 
-        // Sum of all deployed SOL amounts
-        #[aggregate(from = ore_sdk::instructions::Deploy, field = amount, strategy = Sum, lookup_by = accounts::round)]
-        pub total_deployed_sol: Option<u64>,
-
-        #[computed(metrics.total_deployed_sol.ui_amount(9))]
-        pub total_deployed_sol_ui: Option<u64>,
-
         // Count of checkpoint instructions for this round
         #[aggregate(from = ore_sdk::instructions::Checkpoint, strategy = Count, lookup_by = accounts::round)]
         pub checkpoint_count: Option<u64>,
@@ -159,11 +142,9 @@ pub mod ore_stream {
               ]),
               stop = ore_sdk::instructions::Reset,
               stop_lookup_by = accounts::round,
-              strategy = SetOnce)]
-        pub motherlode: Option<u64>,
-
-        #[computed(treasury.motherlode.ui_amount(ore_metadata.decimals))]
-        pub motherlode_ui: Option<f64>,
+              strategy = SetOnce,
+              transform = ui_amount(ore_metadata.decimals))]
+        pub motherlode: Option<f64>,
     }
 
     // ========================================================================
@@ -236,34 +217,21 @@ pub mod ore_stream {
         #[map(ore_sdk::accounts::Treasury::balance, strategy = LastWrite)]
         pub balance: Option<u64>,
 
-        #[map(ore_sdk::accounts::Treasury::motherlode, strategy = LastWrite)]
-        pub motherlode: Option<u64>,
+        #[map(ore_sdk::accounts::Treasury::motherlode, strategy = LastWrite,
+              transform = ui_amount(11))]
+        pub motherlode: Option<f64>,
 
-        /// Motherlode formatted in ORE tokens (11 decimals)
-        /// Uses resolver-computed ui_amount method for decimal conversion
-        #[computed(state.motherlode.ui_amount(11))]
-        pub motherlode_ui: Option<f64>,
+        #[map(ore_sdk::accounts::Treasury::total_refined, strategy = LastWrite,
+              transform = ui_amount(11))]
+        pub total_refined: Option<f64>,
 
-        #[map(ore_sdk::accounts::Treasury::total_refined, strategy = LastWrite)]
-        pub total_refined: Option<u64>,
+        #[map(ore_sdk::accounts::Treasury::total_staked, strategy = LastWrite,
+              transform = ui_amount(11))]
+        pub total_staked: Option<f64>,
 
-        /// Total refined formatted in ORE tokens (11 decimals)
-        #[computed(state.total_refined.ui_amount(11))]
-        pub total_refined_ui: Option<f64>,
-
-        #[map(ore_sdk::accounts::Treasury::total_staked, strategy = LastWrite)]
-        pub total_staked: Option<u64>,
-
-        /// Total staked formatted in ORE tokens (11 decimals)
-        #[computed(state.total_staked.ui_amount(11))]
-        pub total_staked_ui: Option<f64>,
-
-        #[map(ore_sdk::accounts::Treasury::total_unclaimed, strategy = LastWrite)]
-        pub total_unclaimed: Option<u64>,
-
-        /// Total unclaimed formatted in ORE tokens (11 decimals)
-        #[computed(state.total_unclaimed.ui_amount(11))]
-        pub total_unclaimed_ui: Option<f64>,
+        #[map(ore_sdk::accounts::Treasury::total_unclaimed, strategy = LastWrite,
+              transform = ui_amount(11))]
+        pub total_unclaimed: Option<f64>,
     }
 
     // ========================================================================

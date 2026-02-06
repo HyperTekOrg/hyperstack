@@ -330,8 +330,9 @@ pub fn process_entity_struct_with_idl(
                                 .as_ref()
                                 .map(|fs| fs.ident.to_string()),
                             transform: None,
+                            resolver_transform: None,
                             is_instruction: false,
-                            is_whole_source: true, // Mark as whole source snapshot
+                            is_whole_source: true,
                             lookup_by: snapshot_attr.lookup_by.clone(),
                             condition: None,
                             when: snapshot_attr.when.clone(),
@@ -379,6 +380,7 @@ pub fn process_entity_struct_with_idl(
                             strategy: aggr_attr.strategy.clone(),
                             join_on: aggr_attr.join_on.as_ref().map(|fs| fs.ident.to_string()),
                             transform: aggr_attr.transform.as_ref().map(|t| t.to_string()),
+                            resolver_transform: None,
                             is_instruction: true,
                             is_whole_source: false,
                             lookup_by: aggr_attr.lookup_by.clone(),

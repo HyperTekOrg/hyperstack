@@ -29,6 +29,9 @@ pub struct MapAttribute {
     pub strategy: String,
     pub join_on: Option<String>,
     pub transform: Option<String>,
+    /// Resolver transform: a parameterized transform like `ui_amount(ore_metadata.decimals)`
+    /// that expands into a hidden raw field + synthesized computed field.
+    pub resolver_transform: Option<ResolverTransformSpec>,
     pub is_instruction: bool,
     pub is_whole_source: bool,
     pub lookup_by: Option<FieldSpec>,
@@ -37,6 +40,15 @@ pub struct MapAttribute {
     pub stop: Option<Path>,
     pub stop_lookup_by: Option<FieldSpec>,
     pub emit: bool,
+}
+
+/// A parameterized resolver transform like `ui_amount(ore_metadata.decimals)`.
+/// The method name is resolved via `resolver_for_method()` to a resolver name.
+/// The args are token streams that will be parsed as computed expressions.
+#[derive(Debug, Clone)]
+pub struct ResolverTransformSpec {
+    pub method: String,
+    pub args: proc_macro2::TokenStream,
 }
 
 #[derive(Debug, Clone)]
@@ -109,6 +121,7 @@ struct MapAttributeArgs {
     rename: Option<String>,
     join_on: Option<String>,
     transform: Option<String>,
+    resolver_transform: Option<ResolverTransformSpec>,
     condition: Option<String>,
     when: Option<Path>,
     stop: Option<Path>,
@@ -141,6 +154,7 @@ impl Parse for MapAttributeArgs {
         let mut rename = None;
         let mut join_on = None;
         let mut transform = None;
+        let mut resolver_transform = None;
         let mut condition = None;
         let mut when = None;
         let mut stop = None;
@@ -186,7 +200,17 @@ impl Parse for MapAttributeArgs {
                 } else if ident_str == "transform" {
                     input.parse::<Token![=]>()?;
                     let transform_ident: syn::Ident = input.parse()?;
-                    transform = Some(transform_ident.to_string());
+                    if input.peek(syn::token::Paren) {
+                        let content;
+                        syn::parenthesized!(content in input);
+                        let args: proc_macro2::TokenStream = content.parse()?;
+                        resolver_transform = Some(ResolverTransformSpec {
+                            method: transform_ident.to_string(),
+                            args,
+                        });
+                    } else {
+                        transform = Some(transform_ident.to_string());
+                    }
                 } else if ident_str == "condition" {
                     input.parse::<Token![=]>()?;
                     let condition_lit: syn::LitStr = input.parse()?;
@@ -227,6 +251,7 @@ impl Parse for MapAttributeArgs {
             rename,
             join_on,
             transform,
+            resolver_transform,
             condition,
             when,
             stop,
@@ -281,6 +306,7 @@ pub fn parse_map_attribute(
             strategy: strategy.clone(),
             join_on: args.join_on.clone(),
             transform: args.transform.clone(),
+            resolver_transform: args.resolver_transform.clone(),
             is_instruction: false,
             is_whole_source: false,
             lookup_by: None,
@@ -331,6 +357,7 @@ pub fn parse_from_instruction_attribute(
             strategy: strategy.clone(),
             join_on: args.join_on.clone(),
             transform: args.transform.clone(),
+            resolver_transform: args.resolver_transform.clone(),
             is_instruction: true,
             is_whole_source: false,
             lookup_by: None,
