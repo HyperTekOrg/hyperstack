@@ -1,16 +1,12 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
 
 jobs:
   rust:
     name: Rust
     runs-on: ubuntu-latest
-    # Skip CI for release-please commits (already tested on the source commit)
-    if: github.actor != 'release-please[bot]'
     steps:
       - uses: actions/checkout@v4
 
@@ -42,7 +38,6 @@ jobs:
   typescript-core:
     name: TypeScript Core
     runs-on: ubuntu-latest
-    if: github.actor != 'release-please[bot]'
     defaults:
       run:
         working-directory: typescript/core
@@ -68,7 +63,6 @@ jobs:
   typescript-react:
     name: TypeScript React
     runs-on: ubuntu-latest
-    if: github.actor != 'release-please[bot]'
     steps:
       - uses: actions/checkout@v4
 
@@ -96,7 +90,6 @@ jobs:
   typescript-stacks:
     name: TypeScript Stacks
     runs-on: ubuntu-latest
-    if: github.actor != 'release-please[bot]'
     defaults:
       run:
         working-directory: stacks/sdk/typescript
@@ -121,7 +114,6 @@ jobs:
   validate-generated-sdks:
     name: Validate Generated SDKs
     runs-on: ubuntu-latest
-    if: github.actor != 'release-please[bot]'
     steps:
       - uses: actions/checkout@v4
 
@@ -183,7 +175,6 @@ jobs:
   python:
     name: Python
     runs-on: ubuntu-latest
-    if: github.actor != 'release-please[bot]'
     defaults:
       run:
         working-directory: python/hyperstack-sdk
@@ -209,7 +200,6 @@ jobs:
   docs:
     name: Docs
     runs-on: ubuntu-latest
-    if: github.actor != 'release-please[bot]'
     defaults:
       run:
         working-directory: docs
