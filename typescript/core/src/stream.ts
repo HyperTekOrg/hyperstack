@@ -1,4 +1,4 @@
-import type { Update, RichUpdate, Subscription, UnsubscribeFn } from './types';
+import type { Update, RichUpdate, Subscription, UnsubscribeFn, WatchOptions } from './types';
 import type { StorageAdapter } from './storage/adapter';
 import type { SubscriptionRegistry } from './subscription';
 
@@ -96,12 +96,15 @@ export function createEntityStream<T>(
   storage: StorageAdapter,
   subscriptionRegistry: SubscriptionRegistry,
   subscription: Subscription,
+  options?: WatchOptions<any>,
   keyFilter?: string
 ): AsyncIterable<T> {
+  type TOut = any;
+  const schema = options?.schema;
   return {
-    [Symbol.asyncIterator](): AsyncIterator<T> {
-      const queue: T[] = [];
-      let waitingResolve: ((value: IteratorResult<T>) => void) | null = null;
+    [Symbol.asyncIterator]() {
+      const queue: TOut[] = [];
+      let waitingResolve: ((value: IteratorResult<TOut>) => void) | null = null;
       let unsubscribeStorage: UnsubscribeFn | null = null;
       let unsubscribeRegistry: UnsubscribeFn | null = null;
       let done = false;
@@ -112,16 +115,27 @@ export function createEntityStream<T>(
         if (update.type === 'deleted') return;
 
         const entity = (update.type === 'created' ? update.data : update.after) as T;
+        let output: TOut;
+
+        if (schema) {
+          const parsed = schema.safeParse(entity);
+          if (!parsed.success) {
+            return;
+          }
+          output = parsed.data as TOut;
+        } else {
+          output = entity as TOut;
+        }
 
         if (waitingResolve) {
           const resolve = waitingResolve;
           waitingResolve = null;
-          resolve({ value: entity, done: false });
+          resolve({ value: output, done: false });
         } else {
           if (queue.length >= MAX_QUEUE_SIZE) {
             queue.shift();
           }
-          queue.push(entity);
+          queue.push(output);
         }
       };
 
@@ -138,10 +152,10 @@ export function createEntityStream<T>(
 
       start();
 
-      return {
-        async next(): Promise<IteratorResult<T>> {
+      const iterator: AsyncIterator<TOut> = {
+        async next(): Promise<IteratorResult<TOut>> {
           if (done) {
-            return { value: undefined as unknown as T, done: true };
+            return { value: undefined as unknown as TOut, done: true };
           }
 
           const queued = queue.shift();
@@ -154,16 +168,18 @@ export function createEntityStream<T>(
           });
         },
 
-        async return(): Promise<IteratorResult<T>> {
+        async return(): Promise<IteratorResult<TOut>> {
           cleanup();
-          return { value: undefined as unknown as T, done: true };
+          return { value: undefined as unknown as TOut, done: true };
         },
 
-        async throw(error?: unknown): Promise<IteratorResult<T>> {
+        async throw(error?: unknown): Promise<IteratorResult<TOut>> {
           cleanup();
           throw error;
         },
       };
+
+      return iterator;
     },
   };
 }

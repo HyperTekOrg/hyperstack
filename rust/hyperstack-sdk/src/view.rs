@@ -403,6 +403,7 @@ where
 /// Builder for creating view handles.
 ///
 /// This is used internally by generated code to create properly configured view handles.
+#[derive(Clone)]
 pub struct ViewBuilder {
     connection: ConnectionManager,
     store: SharedStore,

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useSyncExternalStore, useRef } from 'react';
-import { ViewDef, ViewHookOptions, ViewHookResult, ListParams, ListParamsBase } from './types';
+import { ViewDef, ViewHookOptions, ViewHookResult, ListParams, ListParamsBase, Schema } from './types';
 import type { HyperStack } from 'hyperstack-typescript';
 
 function shallowArrayEqual<T>(a: T[] | undefined, b: T[] | undefined): boolean {
@@ -26,6 +26,7 @@ export function useStateView<T>(
 
   const keyString = key ? Object.values(key)[0] : undefined;
   const enabled = options?.enabled !== false;
+  const schema = options?.schema as Schema<T> | undefined;
 
   useEffect(() => {
     if (!enabled || !clientRef.current) return undefined;
@@ -81,12 +82,15 @@ export function useStateView<T>(
       ? clientRef.current.store.get(viewDef.view, keyString)
       : clientRef.current.store.getAll(viewDef.view)[0];
     
-    // Cache the result to return stable reference for useSyncExternalStore
-    if (entity !== cachedSnapshotRef.current) {
-      cachedSnapshotRef.current = entity as T | undefined;
+    const validated = entity && schema 
+      ? (schema.safeParse(entity).success ? entity : undefined)
+      : entity;
+    
+    if (validated !== cachedSnapshotRef.current) {
+      cachedSnapshotRef.current = validated as T | undefined;
     }
     return cachedSnapshotRef.current;
-  }, [viewDef.view, keyString, client]);
+  }, [viewDef.view, keyString, schema, client]);
 
   const data = useSyncExternalStore(subscribe, getSnapshot);
 
@@ -123,6 +127,7 @@ export function useListView<T>(
   const whereJson = params?.where ? JSON.stringify(params.where) : undefined;
   const filtersJson = params?.filters ? JSON.stringify(params.filters) : undefined;
   const limit = params?.limit;
+  const schema = params?.schema as Schema<T> | undefined;
 
   useEffect(() => {
     if (!enabled || !clientRef.current) return undefined;
@@ -215,18 +220,21 @@ export function useListView<T>(
       });
     }
 
+    if (schema) {
+      items = items.filter((item) => schema.safeParse(item).success);
+    }
+
     if (limit) {
       items = items.slice(0, limit);
     }
 
     const result = items as T[];
     
-    // Cache the result - only update if data actually changed
     if (!shallowArrayEqual(cachedSnapshotRef.current, result)) {
       cachedSnapshotRef.current = result;
     }
     return cachedSnapshotRef.current;
-  }, [viewDef.view, whereJson, limit, client]);
+  }, [viewDef.view, whereJson, limit, schema, client]);
 
   const data = useSyncExternalStore(subscribe, getSnapshot);
 
@@ -274,12 +282,12 @@ export function createListViewHook<T>(
     return result;
   }
 
-  function useOne(params?: Omit<ListParamsBase, 'take'>, options?: ViewHookOptions): ViewHookResult<T | undefined> {
+  function useOne<TSchema = T>(params?: Omit<ListParamsBase<TSchema>, 'take'>, options?: ViewHookOptions<TSchema>): ViewHookResult<TSchema | undefined> {
     const paramsWithTake = params ? { ...params, take: 1 as const } : { take: 1 as const };
-    const result = useListView(viewDef, client, paramsWithTake, options);
+    const result = useListView(viewDef as unknown as ViewDef<TSchema, 'list'>, client, paramsWithTake as ListParams, options as ViewHookOptions);
     
     return {
-      data: result.data?.[0],
+      data: result.data?.[0] as TSchema | undefined,
       isLoading: result.isLoading,
       error: result.error,
       refresh: result.refresh

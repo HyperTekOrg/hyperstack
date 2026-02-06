@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.5.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-sdk-v0.4.3...hyperstack-sdk-v0.5.0) (2026-02-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* Wire protocol simplified - list frames no longer wrap data in {id, order, item}. Data is now sent directly.
+
+### Features
+
+* add append hints to frame protocol for granular array updates ([ce2213f](https://github.com/HyperTekOrg/hyperstack/commit/ce2213fc5a2c242cb4833ab417ff3d71f918812f))
+* add gzip compression for large WebSocket payloads ([cb694e9](https://github.com/HyperTekOrg/hyperstack/commit/cb694e9ef74ff99345e5f054820207f743d55e1d))
+* add unified Views API to Rust SDK ([97afb97](https://github.com/HyperTekOrg/hyperstack/commit/97afb97f1f9d21030ba400fef5a7727d674a93e0))
+* implement proper unsubscribe support across server and all SDKs ([81118cb](https://github.com/HyperTekOrg/hyperstack/commit/81118cb103720bdf8424cb71aab63d24d26e434c))
+* Refactor API with Entity trait and connection management ([d5c010c](https://github.com/HyperTekOrg/hyperstack/commit/d5c010ca96e5a125943f742af424e2693e2afe47))
+* **rust-sdk:** add deep merge for patches and expose raw patch data ([000f2a2](https://github.com/HyperTekOrg/hyperstack/commit/000f2a2092872aca689e0c00b17f069704f506f6))
+* **rust-sdk:** add lazy streams with chainable filter/map operators ([e7fd71a](https://github.com/HyperTekOrg/hyperstack/commit/e7fd71a1a430a6e28db77fa79942c27aba29bf28))
+* **rust-sdk:** add prelude module, rich updates, batch key watching, and DX improvements ([ac8d513](https://github.com/HyperTekOrg/hyperstack/commit/ac8d513b234544c165a24def685533c9cc31f8be))
+* **sdk:** add configurable store size limits with LRU eviction ([3e91148](https://github.com/HyperTekOrg/hyperstack/commit/3e91148b68c02b97da60dc9d12f1a45369895e7d))
+* **sdk:** add snapshot frame support for batched initial data ([bf7cafe](https://github.com/HyperTekOrg/hyperstack/commit/bf7cafe9bcd0b8f255cd710b622d412476acb6a9))
+* **sdk:** add sorted view support with server-side subscribed frame ([1a7d83f](https://github.com/HyperTekOrg/hyperstack/commit/1a7d83fe4000c26d282f2df9ce95f9d79414014d))
+* **sdk:** add take/skip subscription filtering to Rust SDK ([8b55dad](https://github.com/HyperTekOrg/hyperstack/commit/8b55dad1615db82346eb60aec6990e2dd4ed1359))
+
+
+### Bug Fixes
+
+* Add hyperstack-sdk to CI ([e5f3f4c](https://github.com/HyperTekOrg/hyperstack/commit/e5f3f4c7ac144000683297ec79efd946bf626b07))
+* Broken streams after naming refactor ([64437b4](https://github.com/HyperTekOrg/hyperstack/commit/64437b4d80c3b2ec68468ce11bbeaab49678aa8b))
+* Extract entity name from view path and unwrap item data ([289ce66](https://github.com/HyperTekOrg/hyperstack/commit/289ce667c1f28bd67c8179e7113c130a347d7f2a))
+* remove deprecated kv mode from SDKs and documentation ([2097af0](https://github.com/HyperTekOrg/hyperstack/commit/2097af05165eed4a7d9b6ef4ede1b5722ab90215))
+* **sdk:** derive Clone for ViewBuilder ([5212150](https://github.com/HyperTekOrg/hyperstack/commit/5212150c6386ec07d078ea49085290054fee6973))
+* **sdk:** respect sort order for string fields in Rust SDK ([75f49b0](https://github.com/HyperTekOrg/hyperstack/commit/75f49b041f26bb1771bc688f9215fe740fac77b0))
+* **sdk:** subscribe to broadcast before server subscription ([0ecb0f1](https://github.com/HyperTekOrg/hyperstack/commit/0ecb0f139032bf241225a0a3c6a8f63a6a0833e1))
+* update SDKs to detect and decompress raw gzip binary frames ([2441b54](https://github.com/HyperTekOrg/hyperstack/commit/2441b54e7f3dbf53cea428e0aa6bcd81b9a06e60))
+* Use BroadcastStream for proper async polling ([9dbbc42](https://github.com/HyperTekOrg/hyperstack/commit/9dbbc4251d788d889adcbdb31f4e22987b48e05b))
+
+
+### Code Refactoring
+
+* remove Mode::Kv and simplify websocket frame structure ([f1a2b81](https://github.com/HyperTekOrg/hyperstack/commit/f1a2b81f24eeda9a81b5fc0738ef78a5741b687b))
+
 ## [0.4.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-sdk-v0.4.2...hyperstack-sdk-v0.4.3) (2026-02-03)
 
 

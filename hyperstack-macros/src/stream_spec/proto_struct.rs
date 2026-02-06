@@ -12,7 +12,7 @@ use syn::{Fields, ItemStruct, Type};
 use crate::parse;
 use crate::utils::{path_to_string, to_snake_case};
 
-use super::entity::process_map_attribute;
+use super::entity::{infer_resolver_type, parse_resolver_type_name, process_map_attribute};
 use super::handlers::{convert_event_to_map_attributes, determine_event_instruction};
 use super::sections::{is_primitive_or_wrapper, process_nested_struct};
 
@@ -45,6 +45,7 @@ pub fn process_struct_with_context(
     > = HashMap::new();
     let mut has_events = false;
     let mut computed_fields: Vec<(String, proc_macro2::TokenStream, Type)> = Vec::new();
+    let mut resolve_specs: Vec<parse::ResolveSpec> = Vec::new();
     let mut derive_from_mappings: HashMap<String, Vec<parse::DeriveFromAttribute>> = HashMap::new();
     let mut aggregate_conditions: HashMap<String, String> = HashMap::new();
 
@@ -124,6 +125,30 @@ pub fn process_struct_with_context(
                                 field_type.clone(),
                             ));
                     }
+                } else if let Ok(Some(resolve_attr)) =
+                    parse::parse_resolve_attribute(attr, &field_name.to_string())
+                {
+                    has_attrs = true;
+
+                    state_fields.push(quote! {
+                        pub #field_name: #field_type
+                    });
+
+                    let resolver = if let Some(name) = resolve_attr.resolver.as_deref() {
+                        parse_resolver_type_name(name, field_type)
+                    } else {
+                        infer_resolver_type(field_type)
+                    }
+                    .unwrap_or_else(|err| panic!("{}", err));
+
+                    resolve_specs.push(parse::ResolveSpec {
+                        resolver,
+                        from: resolve_attr.from,
+                        address: resolve_attr.address,
+                        extract: resolve_attr.extract,
+                        target_field_name: resolve_attr.target_field_name,
+                        strategy: resolve_attr.strategy,
+                    });
                 }
             }
 
@@ -146,6 +171,7 @@ pub fn process_struct_with_context(
                                 &mut events_by_instruction,
                                 &mut has_events,
                                 &mut computed_fields,
+                                &mut resolve_specs,
                                 &mut derive_from_mappings,
                                 &mut aggregate_conditions,
                                 None,
@@ -397,6 +423,89 @@ pub fn process_struct_with_context(
         })
         .collect();
 
+    let mut resolver_specs_by_key: HashMap<
+        (crate::ast::ResolverType, String, String),
+        Vec<parse::ResolveSpec>,
+    > = HashMap::new();
+    for spec in &resolve_specs {
+        let input_key = if let Some(from) = &spec.from {
+            format!("path:{}", from)
+        } else if let Some(address) = &spec.address {
+            format!("value:{}", address)
+        } else {
+            "value:".to_string()
+        };
+        resolver_specs_by_key
+            .entry((spec.resolver.clone(), input_key, spec.strategy.clone()))
+            .or_default()
+            .push(spec.clone());
+    }
+
+    let resolver_specs_code: Vec<_> = resolver_specs_by_key
+        .into_iter()
+        .map(|((resolver, _input_key, strategy), specs)| {
+            let resolver_code = match resolver {
+                crate::ast::ResolverType::Token => quote! {
+                    hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Token
+                },
+            };
+            let strategy_code = match strategy.as_str() {
+                "LastWrite" => quote! {
+                    hyperstack::runtime::hyperstack_interpreter::ast::ResolveStrategy::LastWrite
+                },
+                _ => quote! {
+                    hyperstack::runtime::hyperstack_interpreter::ast::ResolveStrategy::SetOnce
+                },
+            };
+            let input_path_code = match specs.first().and_then(|spec| spec.from.as_ref()) {
+                Some(value) => quote! { Some(#value.to_string()) },
+                None => quote! { None },
+            };
+            let input_value_code = match specs.first().and_then(|spec| spec.address.as_ref()) {
+                Some(value) => quote! {
+                    Some(hyperstack::runtime::serde_json::Value::String(#value.to_string()))
+                },
+                None => quote! { None },
+            };
+
+            let mut seen = HashSet::new();
+            let extracts_code: Vec<_> = specs
+                .iter()
+                .filter_map(|spec| {
+                    let key = format!("{}::{:?}", spec.target_field_name, spec.extract);
+                    if !seen.insert(key) {
+                        return None;
+                    }
+                    let target = &spec.target_field_name;
+                    let source = spec.extract.as_ref();
+                    let source_code = match source {
+                        Some(value) => quote! { Some(#value.to_string()) },
+                        None => quote! { None },
+                    };
+                    Some(quote! {
+                        hyperstack::runtime::hyperstack_interpreter::ast::ResolverExtractSpec {
+                            target_path: #target.to_string(),
+                            source_path: #source_code,
+                            transform: None,
+                        }
+                    })
+                })
+                .collect();
+
+            quote! {
+                hyperstack::runtime::hyperstack_interpreter::ast::ResolverSpec {
+                    resolver: #resolver_code,
+                    input_path: #input_path_code,
+                    input_value: #input_value_code,
+                    strategy: #strategy_code,
+                    extracts: vec![
+                        #(#extracts_code),*
+                    ],
+                }
+            }
+        })
+        .collect();
+
     let output = quote! {
         #[derive(Debug, Clone, hyperstack::runtime::serde::Serialize, hyperstack::runtime::serde::Deserialize)]
         pub struct #state_name {
@@ -424,6 +533,9 @@ pub fn process_struct_with_context(
                     #(#handler_calls),*
                 ],
             )
+            .with_resolver_specs(vec![
+                #(#resolver_specs_code),*
+            ])
         }
 
         #(#handler_fns)*

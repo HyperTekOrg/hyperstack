@@ -56,7 +56,7 @@
     {
       "type": "node-workspace",
       "merge": false,
-      "updatePeerDependencies": false
+      "updatePeerDependencies": true
     },
     {
       "type": "linked-versions",

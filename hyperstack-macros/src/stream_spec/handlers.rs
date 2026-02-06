@@ -304,11 +304,14 @@ pub fn convert_event_to_map_attributes(
             strategy: event_attr.strategy.clone(),
             join_on: get_join_on_field(&event_attr.join_on),
             transform: None,
+            resolver_transform: None,
             is_instruction: true,
             is_whole_source: true,
             lookup_by: event_attr.lookup_by.clone(),
             condition: None,
             when: None,
+            stop: None,
+            stop_lookup_by: None,
             emit: true,
         });
         return map_attrs;
@@ -333,11 +336,14 @@ pub fn convert_event_to_map_attributes(
             strategy: event_attr.strategy.clone(),
             join_on: get_join_on_field(&event_attr.join_on),
             transform,
+            resolver_transform: None,
             is_instruction: true,
             is_whole_source: false,
             lookup_by: event_attr.lookup_by.clone(),
             condition: None,
             when: None,
+            stop: None,
+            stop_lookup_by: None,
             emit: true,
         });
     }
@@ -360,11 +366,14 @@ pub fn convert_event_to_map_attributes(
             strategy: event_attr.strategy.clone(),
             join_on: get_join_on_field(&event_attr.join_on),
             transform,
+            resolver_transform: None,
             is_instruction: true,
             is_whole_source: false,
             lookup_by: event_attr.lookup_by.clone(),
             condition: None,
             when: None,
+            stop: None,
+            stop_lookup_by: None,
             emit: true,
         });
     }

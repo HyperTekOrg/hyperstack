@@ -85,6 +85,46 @@ impl IdlInstruction {
     }
 }
 
+/// PDA definition in Anchor IDL format
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct IdlPda {
+    pub seeds: Vec<IdlPdaSeed>,
+    #[serde(default)]
+    pub program: Option<IdlPdaProgram>,
+}
+
+/// PDA seed in Anchor IDL format
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum IdlPdaSeed {
+    /// Constant byte array seed
+    Const { value: Vec<u8> },
+    /// Reference to another account in the instruction
+    Account {
+        path: String,
+        #[serde(default)]
+        account: Option<String>,
+    },
+    /// Reference to an instruction argument
+    Arg {
+        path: String,
+        #[serde(rename = "type", default)]
+        arg_type: Option<String>,
+    },
+}
+
+/// Program reference for cross-program PDAs
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum IdlPdaProgram {
+    /// Reference to another account that holds the program ID
+    Account { kind: String, path: String },
+    /// Literal program ID
+    Literal { kind: String, value: String },
+    /// Constant program ID as bytes
+    Const { kind: String, value: Vec<u8> },
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IdlAccountArg {
     pub name: String,
@@ -99,7 +139,7 @@ pub struct IdlAccountArg {
     #[serde(default)]
     pub docs: Vec<String>,
     #[serde(default)]
-    pub pda: Option<serde_json::Value>,
+    pub pda: Option<IdlPda>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

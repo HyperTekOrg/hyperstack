@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.5.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.4.3...hyperstack-v0.5.0) (2026-02-06)
+
+
+### Features
+
+* add bytemuck serialization support and fix lookup index key resolution ([b2dcd1f](https://github.com/HyperTekOrg/hyperstack/commit/b2dcd1fa881644d7d4fdc909216fa1ef2995dd7b))
+* add token metadata resolver with DAS API integration ([ced55fe](https://github.com/HyperTekOrg/hyperstack/commit/ced55fe4981e0f36abbebe277438eb17ea01b519))
+* **macros:** add #[view] attribute for declarative view definitions on entities ([3f0bdc5](https://github.com/HyperTekOrg/hyperstack/commit/3f0bdc51d7945c32082ffa8997362328c7b26022))
+
+
+### Bug Fixes
+
+* Add hyperstack-sdk to CI ([e5f3f4c](https://github.com/HyperTekOrg/hyperstack/commit/e5f3f4c7ac144000683297ec79efd946bf626b07))
+* Update naming ([4381946](https://github.com/HyperTekOrg/hyperstack/commit/4381946147e9c51c7de0cb0e63a052c9e9379600))
+* Update prelude to re-export HyperStack instead of HyperStackClient ([17e76be](https://github.com/HyperTekOrg/hyperstack/commit/17e76be013dc770005a15aa86dd8dfce6f97eedd))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.4.3 to 0.5.0
+    * hyperstack-macros bumped from 0.4.3 to 0.5.0
+    * hyperstack-server bumped from 0.4.3 to 0.5.0
+    * hyperstack-sdk bumped from 0.4.3 to 0.5.0
+
 ## [0.4.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.4.2...hyperstack-v0.4.3) (2026-02-03)
 
 

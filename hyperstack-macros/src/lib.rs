@@ -112,7 +112,8 @@ pub fn hyperstack(attr: TokenStream, item: TokenStream) -> TokenStream {
         snapshot,
         aggregate,
         computed,
-        derive_from
+        derive_from,
+        resolve
     )
 )]
 pub fn stream_derive(_input: TokenStream) -> TokenStream {

@@ -90,6 +90,7 @@ class ViewData<T = unknown> {
     while (low < high) {
       const mid = Math.floor((low + high) / 2);
       const midKey = this.sortedKeys[mid];
+      if (midKey === undefined) break;
       const midEntity = this.entities.get(midKey);
       const midValue = getNestedValue(midEntity, this.sortConfig!.field);
 

@@ -72,6 +72,14 @@ impl Projector {
             let mut frames_published = 0u32;
             let mut errors = 0u32;
 
+            if let Some(ctx) = batch.event_context.as_ref() {
+                log.set("program", &ctx.program)
+                    .set("event_kind", &ctx.event_kind)
+                    .set("event_type", &ctx.event_type)
+                    .set("account", &ctx.account)
+                    .set("accounts_count", ctx.accounts_count);
+            }
+
             for mutation in batch.mutations.into_iter() {
                 #[cfg(feature = "otel")]
                 let export = mutation.export.clone();

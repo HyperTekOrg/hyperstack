@@ -3,6 +3,7 @@ use hyperstack::prelude::*;
 #[hyperstack(idl = ["idl/ore.json", "idl/entropy.json"])]
 pub mod ore_stream {
     use hyperstack::macros::Stream;
+    use hyperstack::resolvers::TokenMetadata;
 
     use serde::{Deserialize, Serialize};
 
@@ -13,7 +14,10 @@ pub mod ore_stream {
         pub state: RoundState,
         pub results: RoundResults,
         pub metrics: RoundMetrics,
+        pub treasury: RoundTreasury,
         pub entropy: EntropyState,
+        #[resolve(address = "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp")]
+        pub ore_metadata: Option<TokenMetadata>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
@@ -27,20 +31,54 @@ pub mod ore_stream {
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
     pub struct RoundState {
-        #[map(ore_sdk::accounts::Round::expires_at, strategy = LastWrite)]
+        #[map(entropy_sdk::accounts::Var::end_at,
+              lookup_index(register_from = [
+                  (ore_sdk::instructions::Deploy, accounts::entropyVar, accounts::round),
+                  (ore_sdk::instructions::Reset, accounts::entropyVar, accounts::round)
+              ]),
+              strategy = LastWrite)]
         pub expires_at: Option<u64>,
 
-        #[map(ore_sdk::accounts::Round::motherlode, strategy = LastWrite)]
-        pub motherlode: Option<u64>,
+        #[computed({
+            let expires_at_slot = state.expires_at.unwrap_or(0) as u64;
+            let current_slot = __slot;
+            if current_slot > 0 && expires_at_slot > current_slot {
+                Some(__timestamp + (((expires_at_slot - current_slot) * 400 / 1000) as i64))
+            } else {
+                None
+            }
+        })]
+        pub estimated_expires_at_unix: Option<i64>,
 
-        #[map(ore_sdk::accounts::Round::total_deployed, strategy = LastWrite)]
-        pub total_deployed: Option<u64>,
+        #[map(ore_sdk::accounts::Round::motherlode, strategy = LastWrite,
+              transform = ui_amount(ore_metadata.decimals))]
+        pub motherlode: Option<f64>,
 
-        #[map(ore_sdk::accounts::Round::total_vaulted, strategy = LastWrite)]
-        pub total_vaulted: Option<u64>,
+        #[map(ore_sdk::accounts::Round::total_deployed, strategy = LastWrite,
+              transform = ui_amount(9))]
+        pub total_deployed: Option<f64>,
 
-        #[map(ore_sdk::accounts::Round::total_winnings, strategy = LastWrite)]
-        pub total_winnings: Option<u64>,
+        #[map(ore_sdk::accounts::Round::total_vaulted, strategy = LastWrite,
+              transform = ui_amount(9))]
+        pub total_vaulted: Option<f64>,
+
+        #[map(ore_sdk::accounts::Round::total_winnings, strategy = LastWrite,
+              transform = ui_amount(9))]
+        pub total_winnings: Option<f64>,
+
+        #[map(ore_sdk::accounts::Round::total_miners, strategy = LastWrite)]
+        pub total_miners: Option<u64>,
+
+        // Per-square deployed SOL amounts (25 squares in 5x5 grid)
+        #[map(ore_sdk::accounts::Round::deployed, strategy = LastWrite)]
+        pub deployed_per_square: Option<Vec<u64>>,
+
+        #[computed(state.deployed_per_square.map(|x| x.ui_amount(9)))]
+        pub deployed_per_square_ui: Option<Vec<f64>>,
+
+        // Per-square miner counts (25 squares in 5x5 grid)
+        #[map(ore_sdk::accounts::Round::count, strategy = LastWrite)]
+        pub count_per_square: Option<Vec<u64>>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
@@ -48,8 +86,9 @@ pub mod ore_stream {
         #[map(ore_sdk::accounts::Round::top_miner, strategy = LastWrite, transform = Base58Encode)]
         pub top_miner: Option<String>,
 
-        #[map(ore_sdk::accounts::Round::top_miner_reward, strategy = LastWrite)]
-        pub top_miner_reward: Option<u64>,
+        #[map(ore_sdk::accounts::Round::top_miner_reward, strategy = LastWrite,
+              transform = ui_amount(ore_metadata.decimals))]
+        pub top_miner_reward: Option<f64>,
 
         #[map(ore_sdk::accounts::Round::rent_payer, strategy = LastWrite, transform = Base58Encode)]
         pub rent_payer: Option<String>,
@@ -57,8 +96,6 @@ pub mod ore_stream {
         #[map(ore_sdk::accounts::Round::slot_hash, strategy = LastWrite, transform = Base58Encode)]
         pub slot_hash: Option<String>,
 
-        // Computed field: Calculate RNG from slot_hash bytes
-        // XOR the 4 u64 values from the 32-byte hash to get a single random number
         #[computed(
             let hash = entropy.entropy_value_bytes.to_bytes();
             if (hash.len() as u64) != 32 {
@@ -79,11 +116,9 @@ pub mod ore_stream {
         )]
         pub rng: Option<u64>,
 
-        // Computed field: Winning square = rng mod 25 (5x5 grid)
         #[computed(results.rng.map(|r| r % 25))]
         pub winning_square: Option<u64>,
 
-        // Computed field: Did the round hit the motherlode (1/625 chance)
         #[computed(results.rng.map(|r| r.reverse_bits() % 625 == 0))]
         pub did_hit_motherlode: Option<bool>,
     }
@@ -94,13 +129,22 @@ pub mod ore_stream {
         #[aggregate(from = ore_sdk::instructions::Deploy, strategy = Count, lookup_by = accounts::round)]
         pub deploy_count: Option<u64>,
 
-        // Sum of all deployed SOL amounts
-        #[aggregate(from = ore_sdk::instructions::Deploy, field = amount, strategy = Sum, lookup_by = accounts::round)]
-        pub total_deployed_sol: Option<u64>,
-
         // Count of checkpoint instructions for this round
         #[aggregate(from = ore_sdk::instructions::Checkpoint, strategy = Count, lookup_by = accounts::round)]
         pub checkpoint_count: Option<u64>,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
+    pub struct RoundTreasury {
+        #[map(ore_sdk::accounts::Treasury::motherlode,
+              lookup_index(register_from = [
+                  (ore_sdk::instructions::Reset, accounts::treasury, accounts::roundNext)
+              ]),
+              stop = ore_sdk::instructions::Reset,
+              stop_lookup_by = accounts::round,
+              strategy = SetOnce,
+              transform = ui_amount(ore_metadata.decimals))]
+        pub motherlode: Option<f64>,
     }
 
     // ========================================================================
@@ -122,6 +166,7 @@ pub mod ore_stream {
               transform = Base58Encode)]
         pub entropy_value: Option<String>,
 
+        // Raw bytes for computed field (not emitted to clients)
         #[map(entropy_sdk::accounts::Var::value,
               when = entropy_sdk::instructions::Reveal,
               condition = "value != ZERO_32",
@@ -129,14 +174,23 @@ pub mod ore_stream {
               emit = false)]
         pub entropy_value_bytes: Option<Vec<u8>>,
 
-        #[map(entropy_sdk::accounts::Var::start_at, strategy = SetOnce)]
+        #[map(entropy_sdk::accounts::Var::seed, strategy = LastWrite, transform = Base58Encode)]
+        pub entropy_seed: Option<String>,
+
+        #[map(entropy_sdk::accounts::Var::slot_hash, strategy = LastWrite, transform = Base58Encode)]
+        pub entropy_slot_hash: Option<String>,
+
+        #[map(entropy_sdk::accounts::Var::start_at, strategy = LastWrite)]
         pub entropy_start_at: Option<u64>,
 
-        #[map(entropy_sdk::accounts::Var::end_at, strategy = SetOnce)]
+        #[map(entropy_sdk::accounts::Var::end_at, strategy = LastWrite)]
         pub entropy_end_at: Option<u64>,
 
-        #[map(entropy_sdk::accounts::Var::samples, strategy = SetOnce)]
+        #[map(entropy_sdk::accounts::Var::samples, strategy = LastWrite)]
         pub entropy_samples: Option<u64>,
+
+        #[map(entropy_sdk::accounts::Var::__account_address, strategy = SetOnce)]
+        pub entropy_var_address: Option<String>,
     }
 
     // ========================================================================
@@ -163,17 +217,21 @@ pub mod ore_stream {
         #[map(ore_sdk::accounts::Treasury::balance, strategy = LastWrite)]
         pub balance: Option<u64>,
 
-        #[map(ore_sdk::accounts::Treasury::motherlode, strategy = LastWrite)]
-        pub motherlode: Option<u64>,
+        #[map(ore_sdk::accounts::Treasury::motherlode, strategy = LastWrite,
+              transform = ui_amount(11))]
+        pub motherlode: Option<f64>,
 
-        #[map(ore_sdk::accounts::Treasury::total_refined, strategy = LastWrite)]
-        pub total_refined: Option<u64>,
+        #[map(ore_sdk::accounts::Treasury::total_refined, strategy = LastWrite,
+              transform = ui_amount(11))]
+        pub total_refined: Option<f64>,
 
-        #[map(ore_sdk::accounts::Treasury::total_staked, strategy = LastWrite)]
-        pub total_staked: Option<u64>,
+        #[map(ore_sdk::accounts::Treasury::total_staked, strategy = LastWrite,
+              transform = ui_amount(11))]
+        pub total_staked: Option<f64>,
 
-        #[map(ore_sdk::accounts::Treasury::total_unclaimed, strategy = LastWrite)]
-        pub total_unclaimed: Option<u64>,
+        #[map(ore_sdk::accounts::Treasury::total_unclaimed, strategy = LastWrite,
+              transform = ui_amount(11))]
+        pub total_unclaimed: Option<f64>,
     }
 
     // ========================================================================

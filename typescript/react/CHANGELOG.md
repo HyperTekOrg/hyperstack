@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.5.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.4.3...hyperstack-react-v0.5.0) (2026-02-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* EntityStore removed from core exports, replaced by StorageAdapter interface
+
+### Features
+
+* add append hints to frame protocol for granular array updates ([ce2213f](https://github.com/HyperTekOrg/hyperstack/commit/ce2213fc5a2c242cb4833ab417ff3d71f918812f))
+* add derived view support to React SDK and macros ([5f6414f](https://github.com/HyperTekOrg/hyperstack/commit/5f6414f879f2891be2d8ee5c16173cf83ddf2ea9))
+* add gzip compression for large WebSocket payloads ([cb694e9](https://github.com/HyperTekOrg/hyperstack/commit/cb694e9ef74ff99345e5f054820207f743d55e1d))
+* implement proper unsubscribe support across server and all SDKs ([81118cb](https://github.com/HyperTekOrg/hyperstack/commit/81118cb103720bdf8424cb71aab63d24d26e434c))
+* Pluggable storage adapter architecture for React SDK ([60dac5e](https://github.com/HyperTekOrg/hyperstack/commit/60dac5e2d22f2dc388fc229efdf4068a95aa756f))
+* **react:** add configurable frame buffering to reduce render churn ([c4bdb13](https://github.com/HyperTekOrg/hyperstack/commit/c4bdb13bf8efa085b8105c1fbbdc1e19127e6590))
+* **react:** add schema filtering support to view hooks ([790ad65](https://github.com/HyperTekOrg/hyperstack/commit/790ad6549be51084c2ba47e1c0001682485596ae))
+* **react:** add type narrowing for take: 1 and useOne() method ([52d3538](https://github.com/HyperTekOrg/hyperstack/commit/52d3538ab0ad76f9562c7cd927e095ff3590fab5))
+* **sdk:** add configurable store size limits with LRU eviction ([3e91148](https://github.com/HyperTekOrg/hyperstack/commit/3e91148b68c02b97da60dc9d12f1a45369895e7d))
+* **sdk:** add snapshot frame support for batched initial data ([bf7cafe](https://github.com/HyperTekOrg/hyperstack/commit/bf7cafe9bcd0b8f255cd710b622d412476acb6a9))
+* **sdk:** add sorted view support with server-side subscribed frame ([1a7d83f](https://github.com/HyperTekOrg/hyperstack/commit/1a7d83fe4000c26d282f2df9ce95f9d79414014d))
+
+
+### Bug Fixes
+
+* add connectionState and isConnected to useHyperstack return value ([03b7fd8](https://github.com/HyperTekOrg/hyperstack/commit/03b7fd80342675b20374ac1e24258abd5c15d5a1))
+* move hyperstack-typescript from peerDep to dependency in react SDK ([e994632](https://github.com/HyperTekOrg/hyperstack/commit/e994632866cf7b01a3ad01741e14911cc7139fff))
+* **react:** cache useSyncExternalStore snapshots to prevent infinite loops ([f8a9b4e](https://github.com/HyperTekOrg/hyperstack/commit/f8a9b4eaf1e52ddb08587f3f97ef5316ebb61b44))
+* **react:** correct types.test.ts imports and assertions ([c1634b4](https://github.com/HyperTekOrg/hyperstack/commit/c1634b4986b2509bbddff6e470585f6b74366c81))
+* **react:** invalidate cache when sortedKeys changes ([e1230fd](https://github.com/HyperTekOrg/hyperstack/commit/e1230fd785c8a5bf0795b8e88d7d4631579779c0))
+* **react:** restore ZustandAdapter and frame buffering lost in thin-wrapper refactor ([f65de70](https://github.com/HyperTekOrg/hyperstack/commit/f65de707e6d40e1ef33a952943f96df545e65a80))
+* **react:** use stack's embedded URL instead of provider config ([7d4c538](https://github.com/HyperTekOrg/hyperstack/commit/7d4c5387c835d332de3942ece7fcdd23a152a4c9))
+* restore active subscriptions on websocket reconnect ([ccabd0f](https://github.com/HyperTekOrg/hyperstack/commit/ccabd0f92b1936143273002d19c1a45537b58968))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-typescript bumped from ^0.4.3 to ^0.5.0
+
 ## [0.4.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-react-v0.4.2...hyperstack-react-v0.4.3) (2026-02-03)
 
 

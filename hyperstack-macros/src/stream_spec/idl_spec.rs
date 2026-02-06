@@ -4,12 +4,13 @@
 //! which generate SDK types, parsers, and entity processing from Anchor IDL files.
 //! Supports multiple IDLs for multi-program stacks.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Item, ItemMod};
 
+use crate::ast::writer::{extract_instructions_from_idl, extract_pdas_from_idl};
 use crate::ast::SerializableStackSpec;
 use crate::codegen::generate_multi_entity_builder;
 use crate::idl_codegen;
@@ -17,6 +18,8 @@ use crate::idl_parser_gen;
 use crate::idl_vixen_gen;
 use crate::parse;
 use crate::parse::idl as idl_parser;
+use crate::parse::pda_validation::PdaValidationContext;
+use crate::parse::pdas::PdasBlock;
 use crate::utils::{to_pascal_case, to_snake_case};
 
 use super::entity::process_entity_struct_with_idl;
@@ -101,6 +104,7 @@ pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStrea
     let mut entity_structs = Vec::new();
     let mut impl_blocks = Vec::new();
     let mut has_game_event = false;
+    let mut manual_pdas_blocks: Vec<PdasBlock> = Vec::new();
 
     if let Some((_, items)) = &module.content {
         for item in items {
@@ -127,6 +131,19 @@ pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStrea
                 }
             } else if let Item::Impl(impl_item) = item {
                 impl_blocks.push(impl_item.clone());
+            } else if let Item::Macro(item_macro) = item {
+                if item_macro.mac.path.is_ident("pdas") {
+                    match syn::parse2::<PdasBlock>(item_macro.mac.tokens.clone()) {
+                        Ok(block) => manual_pdas_blocks.push(block),
+                        Err(e) => {
+                            let err_msg = e.to_string();
+                            return quote! {
+                                compile_error!(#err_msg);
+                            }
+                            .into();
+                        }
+                    }
+                }
             }
         }
     }
@@ -392,6 +409,44 @@ pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStrea
                 })
                 .collect();
 
+            let mut all_pdas: BTreeMap<String, BTreeMap<String, crate::ast::PdaDefinition>> =
+                BTreeMap::new();
+            let mut all_instructions: Vec<crate::ast::InstructionDef> = Vec::new();
+            for info in &idl_infos {
+                let pdas = extract_pdas_from_idl(&info.idl);
+                let flat_pdas: BTreeMap<String, crate::ast::PdaDefinition> =
+                    pdas.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                let instructions = extract_instructions_from_idl(&info.idl, &flat_pdas);
+                all_pdas.insert(info.program_name.clone(), pdas);
+                all_instructions.extend(instructions);
+            }
+
+            let idl_map: HashMap<String, idl_parser::IdlSpec> = idl_infos
+                .iter()
+                .map(|info| (info.program_name.clone(), info.idl.clone()))
+                .collect();
+            let validation_ctx = PdaValidationContext::new(&idl_map);
+
+            for manual_block in &manual_pdas_blocks {
+                if let Err(e) = validation_ctx.validate(manual_block) {
+                    let err_msg = e.to_string();
+                    return quote! {
+                        compile_error!(#err_msg);
+                    }
+                    .into();
+                }
+
+                for program_pdas in &manual_block.programs {
+                    let program_entry = all_pdas
+                        .entry(program_pdas.program_name.clone())
+                        .or_default();
+
+                    for pda in &program_pdas.pdas {
+                        program_entry.insert(pda.name.clone(), pda.to_pda_definition());
+                    }
+                }
+            }
+
             let stack_spec = SerializableStackSpec {
                 stack_name: stack_name.clone(),
                 program_ids: all_program_ids,
@@ -403,6 +458,8 @@ pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStrea
                         e
                     })
                     .collect(),
+                pdas: all_pdas,
+                instructions: all_instructions,
                 content_hash: None,
             }
             .with_content_hash();

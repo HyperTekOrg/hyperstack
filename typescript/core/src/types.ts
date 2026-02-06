@@ -25,6 +25,7 @@ export interface StackDefinition {
   readonly name: string;
   readonly url: string;
   readonly views: Record<string, ViewGroup>;
+  readonly schemas?: Record<string, Schema<unknown>>;
   instructions?: Record<string, import('./instructions').InstructionHandler>;
 }
 
@@ -42,10 +43,19 @@ export interface Subscription {
   skip?: number;
 }
 
-export interface WatchOptions {
+export type SchemaResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: unknown };
+
+export interface Schema<T> {
+  safeParse: (input: unknown) => SchemaResult<T>;
+}
+
+export interface WatchOptions<TSchema = unknown> {
   take?: number;
   skip?: number;
   filters?: Record<string, string>;
+  schema?: Schema<TSchema>;
 }
 
 export interface HyperStackOptions<TStack extends StackDefinition> {
@@ -53,6 +63,7 @@ export interface HyperStackOptions<TStack extends StackDefinition> {
   autoReconnect?: boolean;
   reconnectIntervals?: number[];
   maxReconnectAttempts?: number;
+  validateFrames?: boolean;
 }
 
 export const DEFAULT_MAX_ENTRIES_PER_VIEW = 10_000;
@@ -97,7 +108,7 @@ export type TypedViewGroup<TGroup> = {
 };
 
 export interface TypedStateView<T> {
-  use(key: string, options?: WatchOptions): AsyncIterable<T>;
+  use<TSchema = T>(key: string, options?: WatchOptions<TSchema>): AsyncIterable<TSchema>;
   watch(key: string, options?: WatchOptions): AsyncIterable<Update<T>>;
   watchRich(key: string, options?: WatchOptions): AsyncIterable<RichUpdate<T>>;
   get(key: string): Promise<T | null>;
@@ -105,7 +116,7 @@ export interface TypedStateView<T> {
 }
 
 export interface TypedListView<T> {
-  use(options?: WatchOptions): AsyncIterable<T>;
+  use<TSchema = T>(options?: WatchOptions<TSchema>): AsyncIterable<TSchema>;
   watch(options?: WatchOptions): AsyncIterable<Update<T>>;
   watchRich(options?: WatchOptions): AsyncIterable<RichUpdate<T>>;
   get(): Promise<T[]>;

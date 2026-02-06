@@ -1,4 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
+
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// Context provided to primary key resolver functions
 pub struct ResolveContext<'a> {
@@ -82,6 +86,552 @@ pub trait ReverseLookupUpdater {
         seed_value: String,
     ) -> Vec<crate::vm::PendingAccountUpdate>;
     fn flush_pending(&mut self, pda_address: &str) -> Vec<crate::vm::PendingAccountUpdate>;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenMetadata {
+    pub mint: String,
+    pub name: Option<String>,
+    pub symbol: Option<String>,
+    pub decimals: Option<u8>,
+    pub logo_uri: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ResolverTypeScriptSchema {
+    pub name: &'static str,
+    pub definition: &'static str,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ResolverComputedMethod {
+    pub name: &'static str,
+    pub arg_count: usize,
+}
+
+pub trait ResolverDefinition: Send + Sync {
+    fn name(&self) -> &'static str;
+    fn output_type(&self) -> &'static str;
+    fn computed_methods(&self) -> &'static [ResolverComputedMethod];
+    fn evaluate_computed(
+        &self,
+        method: &str,
+        args: &[Value],
+    ) -> std::result::Result<Value, Box<dyn std::error::Error>>;
+    fn typescript_interface(&self) -> Option<&'static str> {
+        None
+    }
+    fn typescript_schema(&self) -> Option<ResolverTypeScriptSchema> {
+        None
+    }
+}
+
+pub struct ResolverRegistry {
+    resolvers: HashMap<String, Box<dyn ResolverDefinition>>,
+}
+
+impl Default for ResolverRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ResolverRegistry {
+    pub fn new() -> Self {
+        Self {
+            resolvers: HashMap::new(),
+        }
+    }
+
+    pub fn register(&mut self, resolver: Box<dyn ResolverDefinition>) {
+        self.resolvers.insert(resolver.name().to_string(), resolver);
+    }
+
+    pub fn resolver(&self, name: &str) -> Option<&dyn ResolverDefinition> {
+        self.resolvers.get(name).map(|resolver| resolver.as_ref())
+    }
+
+    pub fn definitions(&self) -> impl Iterator<Item = &dyn ResolverDefinition> {
+        self.resolvers.values().map(|resolver| resolver.as_ref())
+    }
+
+    pub fn is_output_type(&self, type_name: &str) -> bool {
+        self.resolvers
+            .values()
+            .any(|resolver| resolver.output_type() == type_name)
+    }
+
+    pub fn evaluate_computed(
+        &self,
+        resolver: &str,
+        method: &str,
+        args: &[Value],
+    ) -> std::result::Result<Value, Box<dyn std::error::Error>> {
+        let resolver_impl = self
+            .resolver(resolver)
+            .ok_or_else(|| format!("Unknown resolver '{}'", resolver))?;
+
+        let method_spec = resolver_impl
+            .computed_methods()
+            .iter()
+            .find(|spec| spec.name == method)
+            .ok_or_else(|| {
+                format!(
+                    "Resolver '{}' does not provide method '{}'",
+                    resolver, method
+                )
+            })?;
+
+        if method_spec.arg_count != args.len() {
+            return Err(format!(
+                "Resolver '{}' method '{}' expects {} args, got {}",
+                resolver,
+                method,
+                method_spec.arg_count,
+                args.len()
+            )
+            .into());
+        }
+
+        resolver_impl.evaluate_computed(method, args)
+    }
+
+    pub fn validate_computed_expr(
+        &self,
+        expr: &crate::ast::ComputedExpr,
+        errors: &mut Vec<String>,
+    ) {
+        match expr {
+            crate::ast::ComputedExpr::ResolverComputed {
+                resolver,
+                method,
+                args,
+            } => {
+                let resolver_impl = self.resolver(resolver);
+                if resolver_impl.is_none() {
+                    errors.push(format!("Unknown resolver '{}'", resolver));
+                } else if let Some(resolver_impl) = resolver_impl {
+                    let method_spec = resolver_impl
+                        .computed_methods()
+                        .iter()
+                        .find(|spec| spec.name == method);
+                    if let Some(method_spec) = method_spec {
+                        if method_spec.arg_count != args.len() {
+                            errors.push(format!(
+                                "Resolver '{}' method '{}' expects {} args, got {}",
+                                resolver,
+                                method,
+                                method_spec.arg_count,
+                                args.len()
+                            ));
+                        }
+                    } else {
+                        errors.push(format!(
+                            "Resolver '{}' does not provide method '{}'",
+                            resolver, method
+                        ));
+                    }
+                }
+
+                for arg in args {
+                    self.validate_computed_expr(arg, errors);
+                }
+            }
+            crate::ast::ComputedExpr::FieldRef { .. }
+            | crate::ast::ComputedExpr::Literal { .. }
+            | crate::ast::ComputedExpr::None
+            | crate::ast::ComputedExpr::Var { .. }
+            | crate::ast::ComputedExpr::ByteArray { .. }
+            | crate::ast::ComputedExpr::ContextSlot
+            | crate::ast::ComputedExpr::ContextTimestamp => {}
+            crate::ast::ComputedExpr::UnwrapOr { expr, .. }
+            | crate::ast::ComputedExpr::Cast { expr, .. }
+            | crate::ast::ComputedExpr::Paren { expr }
+            | crate::ast::ComputedExpr::Some { value: expr }
+            | crate::ast::ComputedExpr::Slice { expr, .. }
+            | crate::ast::ComputedExpr::Index { expr, .. }
+            | crate::ast::ComputedExpr::U64FromLeBytes { bytes: expr }
+            | crate::ast::ComputedExpr::U64FromBeBytes { bytes: expr }
+            | crate::ast::ComputedExpr::JsonToBytes { expr }
+            | crate::ast::ComputedExpr::Unary { expr, .. } => {
+                self.validate_computed_expr(expr, errors);
+            }
+            crate::ast::ComputedExpr::Binary { left, right, .. } => {
+                self.validate_computed_expr(left, errors);
+                self.validate_computed_expr(right, errors);
+            }
+            crate::ast::ComputedExpr::MethodCall { expr, args, .. } => {
+                self.validate_computed_expr(expr, errors);
+                for arg in args {
+                    self.validate_computed_expr(arg, errors);
+                }
+            }
+            crate::ast::ComputedExpr::Let { value, body, .. } => {
+                self.validate_computed_expr(value, errors);
+                self.validate_computed_expr(body, errors);
+            }
+            crate::ast::ComputedExpr::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                self.validate_computed_expr(condition, errors);
+                self.validate_computed_expr(then_branch, errors);
+                self.validate_computed_expr(else_branch, errors);
+            }
+            crate::ast::ComputedExpr::Closure { body, .. } => {
+                self.validate_computed_expr(body, errors);
+            }
+        }
+    }
+}
+
+static BUILTIN_RESOLVER_REGISTRY: OnceLock<ResolverRegistry> = OnceLock::new();
+
+pub fn register_builtin_resolvers(registry: &mut ResolverRegistry) {
+    registry.register(Box::new(TokenMetadataResolver));
+}
+
+pub fn builtin_resolver_registry() -> &'static ResolverRegistry {
+    BUILTIN_RESOLVER_REGISTRY.get_or_init(|| {
+        let mut registry = ResolverRegistry::new();
+        register_builtin_resolvers(&mut registry);
+        registry
+    })
+}
+
+pub fn evaluate_resolver_computed(
+    resolver: &str,
+    method: &str,
+    args: &[Value],
+) -> std::result::Result<Value, Box<dyn std::error::Error>> {
+    builtin_resolver_registry().evaluate_computed(resolver, method, args)
+}
+
+pub fn validate_resolver_computed_specs(
+    specs: &[crate::ast::ComputedFieldSpec],
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let registry = builtin_resolver_registry();
+    let mut errors = Vec::new();
+
+    for spec in specs {
+        registry.validate_computed_expr(&spec.expression, &mut errors);
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("\n").into())
+    }
+}
+
+pub fn is_resolver_output_type(type_name: &str) -> bool {
+    builtin_resolver_registry().is_output_type(type_name)
+}
+
+const DEFAULT_DAS_BATCH_SIZE: usize = 100;
+const DEFAULT_DAS_TIMEOUT_SECS: u64 = 10;
+const DAS_API_ENDPOINT_ENV: &str = "DAS_API_ENDPOINT";
+const DAS_API_BATCH_ENV: &str = "DAS_API_BATCH_SIZE";
+
+pub struct TokenMetadataResolverClient {
+    endpoint: String,
+    client: reqwest::Client,
+    batch_size: usize,
+}
+
+impl TokenMetadataResolverClient {
+    pub fn new(
+        endpoint: String,
+        batch_size: usize,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(DEFAULT_DAS_TIMEOUT_SECS))
+            .build()?;
+
+        Ok(Self {
+            endpoint,
+            client,
+            batch_size: batch_size.max(1),
+        })
+    }
+
+    pub fn from_env(
+    ) -> Result<Option<Self>, Box<dyn std::error::Error + Send + Sync>> {
+        let Some(endpoint) = std::env::var(DAS_API_ENDPOINT_ENV).ok() else {
+            return Ok(None);
+        };
+
+        let batch_size = std::env::var(DAS_API_BATCH_ENV)
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(DEFAULT_DAS_BATCH_SIZE);
+
+        Ok(Some(Self::new(endpoint, batch_size)?))
+    }
+
+    pub async fn resolve_token_metadata(
+        &self,
+        mints: &[String],
+    ) -> Result<HashMap<String, Value>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut unique = HashSet::new();
+        let mut deduped = Vec::new();
+
+        for mint in mints {
+            if mint.is_empty() {
+                continue;
+            }
+            if unique.insert(mint.clone()) {
+                deduped.push(mint.clone());
+            }
+        }
+
+        let mut results = HashMap::new();
+        if deduped.is_empty() {
+            return Ok(results);
+        }
+
+        for chunk in deduped.chunks(self.batch_size) {
+            let assets = self.fetch_assets(chunk).await?;
+            for asset in assets {
+                if let Some((mint, value)) = Self::build_token_metadata(&asset) {
+                    results.insert(mint, value);
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    async fn fetch_assets(
+        &self,
+        ids: &[String],
+    ) -> Result<Vec<Value>, Box<dyn std::error::Error + Send + Sync>> {
+        let payload = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": "1",
+            "method": "getAssetBatch",
+            "params": {
+                "ids": ids,
+                "options": {
+                    "showFungible": true,
+                },
+            },
+        });
+
+        let response = self.client.post(&self.endpoint).json(&payload).send().await?;
+        let response = response.error_for_status()?;
+        let value = response.json::<Value>().await?;
+
+        if let Some(error) = value.get("error") {
+            return Err(format!("Resolver response error: {}", error).into());
+        }
+
+        let assets = value
+            .get("result")
+            .and_then(|result| match result {
+                Value::Array(items) => Some(items.clone()),
+                Value::Object(obj) => obj
+                    .get("items")
+                    .and_then(|items| items.as_array())
+                    .cloned(),
+                _ => None,
+            })
+            .ok_or_else(|| "Resolver response missing result".to_string())?;
+
+        let assets = assets.into_iter().filter(|a| !a.is_null()).collect();
+        Ok(assets)
+    }
+
+    fn build_token_metadata(asset: &Value) -> Option<(String, Value)> {
+        let mint = asset.get("id").and_then(|value| value.as_str())?.to_string();
+
+        let name = asset
+            .pointer("/content/metadata/name")
+            .and_then(|value| value.as_str());
+
+        let symbol = asset
+            .pointer("/content/metadata/symbol")
+            .and_then(|value| value.as_str());
+
+        let token_info = asset.get("token_info").or_else(|| asset.pointer("/content/token_info"));
+
+        let decimals = token_info
+            .and_then(|info| info.get("decimals"))
+            .and_then(|value| value.as_u64());
+
+        let logo_uri = asset
+            .pointer("/content/links/image")
+            .and_then(|value| value.as_str())
+            .or_else(|| asset.pointer("/content/links/image_uri").and_then(|value| value.as_str()));
+
+        let mut obj = serde_json::Map::new();
+        obj.insert("mint".to_string(), serde_json::json!(mint));
+        obj.insert(
+            "name".to_string(),
+            name.map(|value| serde_json::json!(value))
+                .unwrap_or(Value::Null),
+        );
+        obj.insert(
+            "symbol".to_string(),
+            symbol.map(|value| serde_json::json!(value))
+                .unwrap_or(Value::Null),
+        );
+        obj.insert(
+            "decimals".to_string(),
+            decimals
+                .map(|value| serde_json::json!(value))
+                .unwrap_or(Value::Null),
+        );
+        obj.insert(
+            "logo_uri".to_string(),
+            logo_uri
+                .map(|value| serde_json::json!(value))
+                .unwrap_or(Value::Null),
+        );
+
+        Some((mint, Value::Object(obj)))
+    }
+}
+
+struct TokenMetadataResolver;
+
+const TOKEN_METADATA_METHODS: &[ResolverComputedMethod] = &[
+    ResolverComputedMethod {
+        name: "ui_amount",
+        arg_count: 2,
+    },
+    ResolverComputedMethod {
+        name: "raw_amount",
+        arg_count: 2,
+    },
+];
+
+impl TokenMetadataResolver {
+    fn optional_f64(value: &Value) -> Option<f64> {
+        if value.is_null() {
+            return None;
+        }
+        match value {
+            Value::Number(number) => number.as_f64(),
+            Value::String(text) => text.parse::<f64>().ok(),
+            _ => None,
+        }
+    }
+
+    fn optional_u8(value: &Value) -> Option<u8> {
+        if value.is_null() {
+            return None;
+        }
+        match value {
+            Value::Number(number) => number
+                .as_u64()
+                .or_else(|| {
+                    number
+                        .as_i64()
+                        .and_then(|v| if v >= 0 { Some(v as u64) } else { None })
+                })
+                .and_then(|v| u8::try_from(v).ok()),
+            Value::String(text) => text.parse::<u8>().ok(),
+            _ => None,
+        }
+    }
+
+    fn evaluate_ui_amount(
+        args: &[Value],
+    ) -> std::result::Result<Value, Box<dyn std::error::Error>> {
+        let raw_value = Self::optional_f64(&args[0]);
+        let decimals = Self::optional_u8(&args[1]);
+
+        match (raw_value, decimals) {
+            (Some(value), Some(decimals)) => {
+                let factor = 10_f64.powi(decimals as i32);
+                let result = value / factor;
+                if result.is_finite() {
+                    serde_json::Number::from_f64(result)
+                        .map(Value::Number)
+                        .ok_or_else(|| "Failed to serialize ui_amount".into())
+                } else {
+                    Err("ui_amount result is not finite".into())
+                }
+            }
+            _ => Ok(Value::Null),
+        }
+    }
+
+    fn evaluate_raw_amount(
+        args: &[Value],
+    ) -> std::result::Result<Value, Box<dyn std::error::Error>> {
+        let ui_value = Self::optional_f64(&args[0]);
+        let decimals = Self::optional_u8(&args[1]);
+
+        match (ui_value, decimals) {
+            (Some(value), Some(decimals)) => {
+                let factor = 10_f64.powi(decimals as i32);
+                let result = value * factor;
+                if !result.is_finite() || result < 0.0 {
+                    return Err("raw_amount result is not finite".into());
+                }
+                let rounded = result.round();
+                if rounded > u64::MAX as f64 {
+                    return Err("raw_amount result exceeds u64".into());
+                }
+                Ok(Value::Number(serde_json::Number::from(rounded as u64)))
+            }
+            _ => Ok(Value::Null),
+        }
+    }
+}
+
+impl ResolverDefinition for TokenMetadataResolver {
+    fn name(&self) -> &'static str {
+        "TokenMetadata"
+    }
+
+    fn output_type(&self) -> &'static str {
+        "TokenMetadata"
+    }
+
+    fn computed_methods(&self) -> &'static [ResolverComputedMethod] {
+        TOKEN_METADATA_METHODS
+    }
+
+    fn evaluate_computed(
+        &self,
+        method: &str,
+        args: &[Value],
+    ) -> std::result::Result<Value, Box<dyn std::error::Error>> {
+        match method {
+            "ui_amount" => Self::evaluate_ui_amount(args),
+            "raw_amount" => Self::evaluate_raw_amount(args),
+            _ => Err(format!("Unknown TokenMetadata method '{}'", method).into()),
+        }
+    }
+
+    fn typescript_interface(&self) -> Option<&'static str> {
+        Some(
+            r#"export interface TokenMetadata {
+  mint: string;
+  name?: string | null;
+  symbol?: string | null;
+  decimals?: number | null;
+  logo_uri?: string | null;
+}"#,
+        )
+    }
+
+    fn typescript_schema(&self) -> Option<ResolverTypeScriptSchema> {
+        Some(ResolverTypeScriptSchema {
+            name: "TokenMetadataSchema",
+            definition: r#"export const TokenMetadataSchema = z.object({
+  mint: z.string(),
+  name: z.string().nullable().optional(),
+  symbol: z.string().nullable().optional(),
+  decimals: z.number().nullable().optional(),
+  logo_uri: z.string().nullable().optional(),
+});"#,
+        })
+    }
 }
 
 impl<'a> InstructionContext<'a> {

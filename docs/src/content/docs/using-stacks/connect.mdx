@@ -39,8 +39,8 @@ import { HyperstackProvider, useHyperstack } from "hyperstack-react";
 import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
 
 function OreRounds() {
-  const stack = useHyperstack(ORE_STREAM_STACK);
-  const { data: rounds, isLoading } = stack.views.OreRound.latest.use({
+  const { views, isConnected } = useHyperstack(ORE_STREAM_STACK);
+  const { data: rounds, isLoading } = views.OreRound.latest.use({
     take: 5,
   });
 
@@ -48,7 +48,7 @@ function OreRounds() {
 
   return (
     <div>
-      <h1>Live ORE Mining Rounds</h1>
+      <h1>Live ORE Mining Rounds {isConnected && "🟢"}</h1>
       {rounds?.map((round) => (
         <div key={round.id?.round_id}>
           Round #{round.id?.round_id} — Motherlode: {round.state?.motherlode}

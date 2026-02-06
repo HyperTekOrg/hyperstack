@@ -49,6 +49,9 @@ export interface InstructionHandler {
   
   /** Error definitions - used by core SDK for error parsing */
   errors: ErrorMetadata[];
+  
+  /** Program ID for this instruction (used for PDA derivation) */
+  programId?: string;
 }
 
 /**
@@ -104,6 +107,7 @@ export async function executeInstruction(
   const resolutionOptions: AccountResolutionOptions = {
     accounts: options.accounts,
     wallet: options.wallet,
+    programId: handler.programId,  // Pass programId for PDA derivation
   };
   
   const resolution = resolveAccounts(

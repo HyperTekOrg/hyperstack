@@ -65,6 +65,7 @@ pub mod runtime {
     pub use dotenvy;
     pub use hyperstack_interpreter;
     pub use hyperstack_server;
+    pub use reqwest;
     pub use serde;
     pub use serde_json;
     pub use smallvec;
@@ -96,6 +97,10 @@ pub mod runtime {
     }
 }
 
+pub mod resolvers {
+    pub use hyperstack_interpreter::resolvers::TokenMetadata;
+}
+
 /// Prelude module for convenient imports
 pub mod prelude {
     // Re-export commonly used items from interpreter
@@ -106,6 +111,9 @@ pub mod prelude {
         vm::VmContext,
         Mutation, UpdateContext,
     };
+
+    #[cfg(feature = "interpreter")]
+    pub use hyperstack_interpreter::resolvers::TokenMetadata;
 
     #[cfg(feature = "macros")]
     pub use hyperstack_macros::{hyperstack, Stream};

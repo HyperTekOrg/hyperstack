@@ -1,7 +1,7 @@
 import type { Frame, SnapshotFrame, EntityFrame, SubscribedFrame } from './frame';
 import { isSnapshotFrame, isSubscribedFrame } from './frame';
 import type { StorageAdapter } from './storage/adapter';
-import type { RichUpdate } from './types';
+import type { RichUpdate, Schema } from './types';
 import { DEFAULT_MAX_ENTRIES_PER_VIEW } from './types';
 
 export interface FrameProcessorConfig {
@@ -15,6 +15,7 @@ export interface FrameProcessorConfig {
    * reduce unnecessary re-renders during high-frequency updates.
    */
   flushIntervalMs?: number;
+  schemas?: Record<string, Schema<unknown>>;
 }
 
 interface PendingUpdate<T = unknown> {
@@ -67,6 +68,7 @@ export class FrameProcessor {
   private storage: StorageAdapter;
   private maxEntriesPerView: number | null;
   private flushIntervalMs: number;
+  private schemas?: Record<string, Schema<unknown>>;
   private pendingUpdates: PendingUpdate[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private isProcessing = false;
@@ -77,6 +79,30 @@ export class FrameProcessor {
       ? DEFAULT_MAX_ENTRIES_PER_VIEW
       : config.maxEntriesPerView;
     this.flushIntervalMs = config.flushIntervalMs ?? 0;
+    this.schemas = config.schemas;
+  }
+
+  private getSchema(viewPath: string): Schema<unknown> | null {
+    const schemas = this.schemas;
+    if (!schemas) return null;
+    const entityName = viewPath.split('/')[0];
+    if (typeof entityName !== 'string' || entityName.length === 0) return null;
+    const entityKey: string = entityName;
+    return schemas[entityKey] ?? null;
+  }
+
+  private validateEntity(viewPath: string, data: unknown): boolean {
+    const schema = this.getSchema(viewPath);
+    if (!schema) return true;
+    const result = schema.safeParse(data);
+    if (!result.success) {
+      console.warn('[Hyperstack] Frame validation failed:', {
+        view: viewPath,
+        error: result.error,
+      });
+      return false;
+    }
+    return true;
   }
 
   handleFrame<T>(frame: Frame<T>): void {
@@ -187,6 +213,9 @@ export class FrameProcessor {
     const viewPath = frame.entity;
 
     for (const entity of frame.data) {
+      if (!this.validateEntity(viewPath, entity.data)) {
+        continue;
+      }
       const previousValue = this.storage.get<T>(viewPath, entity.key);
       this.storage.set(viewPath, entity.key, entity.data);
 
@@ -212,6 +241,9 @@ export class FrameProcessor {
     switch (frame.op) {
       case 'create':
       case 'upsert':
+        if (!this.validateEntity(viewPath, frame.data)) {
+          break;
+        }
         this.storage.set(viewPath, frame.key, frame.data);
         this.storage.notifyUpdate(viewPath, frame.key, {
           type: 'upsert',
@@ -227,6 +259,9 @@ export class FrameProcessor {
         const merged = existing
           ? deepMergeWithAppend(existing, frame.data as Partial<T>, appendPaths)
           : frame.data;
+        if (!this.validateEntity(viewPath, merged)) {
+          break;
+        }
         this.storage.set(viewPath, frame.key, merged);
         this.storage.notifyUpdate(viewPath, frame.key, {
           type: 'patch',
