@@ -1,5 +1,63 @@
 # Changelog
 
+## [0.5.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.4.3...hyperstack-macros-v0.5.0) (2026-02-06)
+
+
+### Features
+
+* add append hints to frame protocol for granular array updates ([ce2213f](https://github.com/HyperTekOrg/hyperstack/commit/ce2213fc5a2c242cb4833ab417ff3d71f918812f))
+* add bytemuck serialization support and fix lookup index key resolution ([b2dcd1f](https://github.com/HyperTekOrg/hyperstack/commit/b2dcd1fa881644d7d4fdc909216fa1ef2995dd7b))
+* add derived view support to React SDK and macros ([5f6414f](https://github.com/HyperTekOrg/hyperstack/commit/5f6414f879f2891be2d8ee5c16173cf83ddf2ea9))
+* Add deterministic sorting ([e775f59](https://github.com/HyperTekOrg/hyperstack/commit/e775f598a95165b2dd5504be67d24e7b1dabc766))
+* add gRPC stream reconnection with exponential backoff ([48e3ec7](https://github.com/HyperTekOrg/hyperstack/commit/48e3ec7a952399135a84323da78cdc499804bce9))
+* Add PDA and Instruction type definitions for SDK code generation ([6a74067](https://github.com/HyperTekOrg/hyperstack/commit/6a7406751d865b9e4caef3749779217e305636a5))
+* add PDA resolution hooks and multi-program stack support ([f4210a0](https://github.com/HyperTekOrg/hyperstack/commit/f4210a0a665f75f60fce09634e9ddbdde3f6898c))
+* add resolver support with resolve attribute and computed field methods ([aed45c8](https://github.com/HyperTekOrg/hyperstack/commit/aed45c81477267cb6a005d439ee30400c1e24e5c))
+* add resolver-declared transforms to #[map] attribute ([8f35bff](https://github.com/HyperTekOrg/hyperstack/commit/8f35bff8c3fa811e4bfb50a1c431ecc09822e2d2))
+* add resolver-provided computed methods (ui_amount, raw_amount) ([3729710](https://github.com/HyperTekOrg/hyperstack/commit/372971072f597625905a1365da4ec2e5e8d9d978))
+* add stop attribute for conditional field population ([441cfef](https://github.com/HyperTekOrg/hyperstack/commit/441cfef39760af9b3af78b992d1269eaeecd2f99))
+* add token metadata resolver with DAS API integration ([ced55fe](https://github.com/HyperTekOrg/hyperstack/commit/ced55fe4981e0f36abbebe277438eb17ea01b519))
+* add view pipeline for derived views like `latest`, `top10` ([f2f72fa](https://github.com/HyperTekOrg/hyperstack/commit/f2f72fa8894d2a38a13e8ee05791b7e4124977ea))
+* **computed:** add __slot and __timestamp context access in computed fields ([b707f95](https://github.com/HyperTekOrg/hyperstack/commit/b707f95058f74ae52c6003bc2d68e948e657e70e))
+* **computed:** support resolver computed fields inside array .map() closures ([1f571c0](https://github.com/HyperTekOrg/hyperstack/commit/1f571c08caa2da41192c3b45399f1abe747dda10))
+* **interpreter:** add memory limits and LRU eviction to prevent unbounded growth ([33198a6](https://github.com/HyperTekOrg/hyperstack/commit/33198a69833de6e57f0c5fe568b0714a2105e987))
+* **interpreter:** add staleness detection to reject out-of-order gRPC updates ([d693f42](https://github.com/HyperTekOrg/hyperstack/commit/d693f421742258bbbd3528ffbbd4731d638c992b))
+* **macros:** add #[view] attribute for declarative view definitions on entities ([3f0bdc5](https://github.com/HyperTekOrg/hyperstack/commit/3f0bdc51d7945c32082ffa8997362328c7b26022))
+* **macros:** support tuple structs, 8-byte discriminators, and optional error messages in IDL ([090b5d6](https://github.com/HyperTekOrg/hyperstack/commit/090b5d62999e7bbae2dfb577a0d028b6675def01))
+* multi-IDL support with always-scoped naming ([d752008](https://github.com/HyperTekOrg/hyperstack/commit/d752008c8662b8dd91a4b411e9f9ff4404630f81))
+* **sdk:** add sorted view support with server-side subscribed frame ([1a7d83f](https://github.com/HyperTekOrg/hyperstack/commit/1a7d83fe4000c26d282f2df9ce95f9d79414014d))
+* **server:** add slot-based sequence ordering for list views ([892c3d5](https://github.com/HyperTekOrg/hyperstack/commit/892c3d526c71df4c4d848142908ce511e302e082))
+* **server:** add trace context propagation and expanded telemetry ([0dbd8ed](https://github.com/HyperTekOrg/hyperstack/commit/0dbd8ed49780dd2f8f793b6af2425b47d9ccb151))
+* unified multi-entity stack spec format with SDK generation ([00194c5](https://github.com/HyperTekOrg/hyperstack/commit/00194c58b1d1bfc5d7dc9f46506ebd9c35af7338))
+
+
+### Bug Fixes
+
+* Account lookup ([bdf8b55](https://github.com/HyperTekOrg/hyperstack/commit/bdf8b5564619695575503e817507c0c8238cecac))
+* Broken streams after naming refactor ([64437b4](https://github.com/HyperTekOrg/hyperstack/commit/64437b4d80c3b2ec68468ce11bbeaab49678aa8b))
+* Clippy errors ([d6a9f4d](https://github.com/HyperTekOrg/hyperstack/commit/d6a9f4d27f619d05189f421e214f6eacb8c19542))
+* Codegen correct path for bytemuck ([ae1d6b5](https://github.com/HyperTekOrg/hyperstack/commit/ae1d6b52a6c1c216542888a7516fcd33fb619054))
+* convert field names to camelCase for JSON serialization ([3dc05a4](https://github.com/HyperTekOrg/hyperstack/commit/3dc05a4eddebca9636827562f9793fdf1c16c1c9))
+* correct lookup resolution and conditional mappings ([0c1ac80](https://github.com/HyperTekOrg/hyperstack/commit/0c1ac809d65eb6139b1208e041817ca9d0f73724))
+* flush queued account updates when lookup index is populated ([8a09279](https://github.com/HyperTekOrg/hyperstack/commit/8a09279c06a369d513c2b1d2f0cbf1560187db6f))
+* Logging ([b727602](https://github.com/HyperTekOrg/hyperstack/commit/b727602bd0a232fcede8bfdeea4c9ec3d060483d))
+* Logs ([163b5ff](https://github.com/HyperTekOrg/hyperstack/commit/163b5ff75dababdf17761b193b7f3b8d3d7bc30c))
+* **macros:** add explicit type annotation to account_names vector ([76a124e](https://github.com/HyperTekOrg/hyperstack/commit/76a124ef623c6aabd4d88ae688701403105a80dd))
+* **macros:** convert lookup_indexes field_name to camelCase ([0c65c07](https://github.com/HyperTekOrg/hyperstack/commit/0c65c071adb36a768708eb53d05f3dcf0fb3c3b6))
+* **macros:** recover from poisoned mutex and support block expressions in computed fields ([1106e77](https://github.com/HyperTekOrg/hyperstack/commit/1106e7774dd43639444b79c1d2fc2d8099e7fa5c))
+* **macros:** simplify account mapping and warn on IDL mismatch ([597ea1e](https://github.com/HyperTekOrg/hyperstack/commit/597ea1e155e9fa19572f1d32a4c3089a7c7c57ca))
+* Map syntax ([8a5eaad](https://github.com/HyperTekOrg/hyperstack/commit/8a5eaadf5642dc7e569b2591e8e051c728a6eb9f))
+* Module name snake case ([72348a4](https://github.com/HyperTekOrg/hyperstack/commit/72348a42ee3988e94873db0d24317f3e661e093d))
+* prefix unused variable with underscore to satisfy clippy ([06f1819](https://github.com/HyperTekOrg/hyperstack/commit/06f1819193721f48edd96723c4cc833745732070))
+* Preserve integer types in computed field expressions ([616f042](https://github.com/HyperTekOrg/hyperstack/commit/616f04288637a84a4eed0febebf9867e06d134cb))
+* preserve VM state across reconnections and add memory management ([7fba770](https://github.com/HyperTekOrg/hyperstack/commit/7fba770df913dd0fbd06e43b402c6c288b25acbb))
+* prevent entity field loss from partial patches in sorted cache ([1e3c8e6](https://github.com/HyperTekOrg/hyperstack/commit/1e3c8e6f25b2b7968e60754e8175c7a66f68c908))
+* Remove ast build log output ([67ebb21](https://github.com/HyperTekOrg/hyperstack/commit/67ebb21746b9142ef52c46caae5019a925db3a2b))
+* resolve clippy warnings across workspace ([565d92b](https://github.com/HyperTekOrg/hyperstack/commit/565d92b91552d92262cfaeca9674d0ad4d3f6b5d))
+* resolve clippy warnings for Rust 1.91 ([10c1611](https://github.com/HyperTekOrg/hyperstack/commit/10c1611282babb70bbe70d19fb599c83654caa6c))
+* Update naming ([4381946](https://github.com/HyperTekOrg/hyperstack/commit/4381946147e9c51c7de0cb0e63a052c9e9379600))
+* wire auto-generated lookup resolvers into IDL codegen path ([1175753](https://github.com/HyperTekOrg/hyperstack/commit/1175753d45a0cdf512e0f173df0964d9fddd889b))
+
 ## [0.4.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.4.2...hyperstack-macros-v0.4.3) (2026-02-03)
 
 
