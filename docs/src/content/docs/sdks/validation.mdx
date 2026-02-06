@@ -1,0 +1,192 @@
+---
+title: Schema Validation
+sidebar:
+  order: 4
+---
+
+Every Hyperstack stack ships with [Zod](https://zod.dev) schemas alongside its TypeScript interfaces. These schemas give you runtime validation at two levels: **automatic frame validation** on the wire, and **per-query validation** in your application code.
+
+---
+
+## Generated Schemas
+
+When you run `hs sdk create typescript`, the CLI generates a Zod schema for every entity and sub-type. These mirror the TypeScript interfaces exactly:
+
+```typescript
+import {
+  PumpfunTokenSchema,
+  PumpfunTokenIdSchema,
+  PumpfunTokenReservesSchema,
+  PumpfunTokenCompletedSchema,
+} from "hyperstack-stacks/pumpfun";
+```
+
+Each entity gets two schema variants:
+
+| Schema | Fields | Use Case |
+| --- | --- | --- |
+| `PumpfunTokenSchema` | All optional | Partial updates during streaming |
+| `PumpfunTokenCompletedSchema` | All required | Asserting a fully-hydrated entity |
+
+The "Completed" variant is useful when you want to guarantee every field is present before rendering — for example, filtering out tokens that haven't received all their data yet.
+
+---
+
+## Frame Validation
+
+Enable `validateFrames` when connecting to automatically validate every incoming WebSocket frame against the stack's schemas. Invalid frames are dropped with a console warning instead of corrupting your local store.
+
+### TypeScript (Core SDK)
+
+```typescript
+import { HyperStack } from "hyperstack-typescript";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
+
+const hs = await HyperStack.connect(ORE_STREAM_STACK, {
+  validateFrames: true,
+});
+```
+
+### React
+
+```tsx
+import { HyperstackProvider } from "hyperstack-react";
+
+function App() {
+  return (
+    <HyperstackProvider validateFrames>
+      <Dashboard />
+    </HyperstackProvider>
+  );
+}
+```
+
+When a frame fails validation, the SDK logs a warning with the view path and error details, then silently discards the update. Your application never sees malformed data.
+
+:::tip[When to enable]
+Frame validation adds a small overhead per update. Enable it during development to catch data issues early, and in production if data integrity is critical for your use case.
+:::
+
+---
+
+## Query-Level Validation
+
+Pass a `schema` option to any streaming method to filter entities that don't match. This works on both the core SDK and the React hooks.
+
+### TypeScript (Core SDK)
+
+The `.use()` method accepts a `schema` in its options. Entities that fail validation are silently skipped:
+
+```typescript
+import { HyperStack } from "hyperstack-typescript";
+import {
+  ORE_STREAM_STACK,
+  OreRoundCompletedSchema,
+} from "hyperstack-stacks/ore";
+
+const hs = await HyperStack.connect(ORE_STREAM_STACK);
+
+// Only emit rounds where every field is present
+for await (const round of hs.views.OreRound.latest.use({
+  schema: OreRoundCompletedSchema,
+})) {
+  // round is guaranteed to have all fields populated
+  console.log(round.id.round_id, round.state.motherlode);
+}
+```
+
+### React Hooks
+
+Both `.use()` and `.useOne()` accept `schema` in their params. Entities that fail validation are filtered out of the results:
+
+```tsx
+import { useHyperstack } from "hyperstack-react";
+import {
+  ORE_STREAM_STACK,
+  OreRoundCompletedSchema,
+} from "hyperstack-stacks/ore";
+
+function FullyLoadedRounds() {
+  const { views } = useHyperstack(ORE_STREAM_STACK);
+
+  // Only returns rounds where all fields are present
+  const { data: rounds } = views.OreRound.latest.use({
+    schema: OreRoundCompletedSchema,
+  });
+
+  return (
+    <ul>
+      {rounds?.map((round) => (
+        <li key={round.id.round_id}>
+          Round #{round.id.round_id} — {round.state.motherlode}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+## Custom Schemas
+
+You can define your own Zod schemas to validate only the fields you care about. This is useful for building views that require specific data to render:
+
+```typescript
+import { z } from "zod";
+
+// Only accept tokens with complete trading data
+const TradableTokenSchema = z.object({
+  id: z.object({
+    mint: z.string(),
+  }),
+  reserves: z.object({
+    current_price_sol: z.number(),
+    market_cap_sol: z.number(),
+  }),
+  trading: z.object({
+    total_volume: z.number(),
+    total_trades: z.number(),
+  }),
+});
+
+// Use in React
+const { data: tokens } = views.PumpfunToken.list.use({
+  schema: TradableTokenSchema,
+});
+
+// Or in core SDK
+for await (const token of hs.views.PumpfunToken.list.use({
+  schema: TradableTokenSchema,
+})) {
+  console.log(token.id.mint, token.reserves.current_price_sol);
+}
+```
+
+Any entity missing the required fields is silently excluded.
+
+---
+
+## The Schema Interface
+
+The SDK defines a minimal `Schema<T>` interface that is natively compatible with Zod:
+
+```typescript
+interface Schema<T> {
+  safeParse: (input: unknown) => SchemaResult<T>;
+}
+
+type SchemaResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: unknown };
+```
+
+Any object with a `safeParse` method works — Zod schemas satisfy this out of the box, but you can also use custom validators if needed.
+
+---
+
+## Next Steps
+
+- [TypeScript SDK](/sdks/typescript/) — Core streaming API reference
+- [React SDK](/sdks/react/) — Hooks and providers for React apps
+- [Resolvers](/building-stacks/rust-dsl/resolvers/) — How Hyperstack enriches entities with external data like token metadata

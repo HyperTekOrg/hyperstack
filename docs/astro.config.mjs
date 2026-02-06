@@ -53,6 +53,7 @@ export default defineConfig({
                 { slug: "building-stacks/rust-dsl/overview" },
                 { slug: "building-stacks/rust-dsl/macros" },
                 { slug: "building-stacks/rust-dsl/strategies" },
+                { slug: "building-stacks/rust-dsl/resolvers" },
               ],
             },
           ],
@@ -72,6 +73,10 @@ export default defineConfig({
             {
               label: "Rust",
               link: "/sdks/rust/",
+            },
+            {
+              label: "Schema Validation",
+              link: "/sdks/validation/",
             },
           ],
         },

@@ -544,6 +544,101 @@ export default OreDashboard;
 
 ---
 
+## Schema Validation
+
+Every stack ships with Zod schemas that you can use to filter entities at the hook level. Pass a `schema` to `.use()` or `.useOne()` — entities that fail validation are silently excluded from results.
+
+### Filter with Generated Schemas
+
+Use the "Completed" schema variant to only render entities where all fields are present:
+
+```tsx
+import { useHyperstack } from "hyperstack-react";
+import {
+  ORE_STREAM_STACK,
+  OreRoundCompletedSchema,
+} from "hyperstack-stacks/ore";
+
+function FullyLoadedRounds() {
+  const { views } = useHyperstack(ORE_STREAM_STACK);
+
+  const { data: rounds } = views.OreRound.latest.use({
+    schema: OreRoundCompletedSchema,
+  });
+
+  return (
+    <ul>
+      {rounds?.map((round) => (
+        <li key={round.id.round_id}>
+          Round #{round.id.round_id} — {round.state.motherlode}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Filter with Custom Schemas
+
+Define your own Zod schema to validate only the fields your component needs:
+
+```tsx
+import { z } from "zod";
+import { useHyperstack } from "hyperstack-react";
+import { PUMPFUN_STREAM_STACK } from "hyperstack-stacks/pumpfun";
+
+const TradableTokenSchema = z.object({
+  id: z.object({ mint: z.string() }),
+  reserves: z.object({ current_price_sol: z.number() }),
+  trading: z.object({ total_volume: z.number() }),
+});
+
+function TokenList() {
+  const { views } = useHyperstack(PUMPFUN_STREAM_STACK);
+
+  // Only tokens with price and volume data
+  const { data: tokens } = views.PumpfunToken.list.use({
+    schema: TradableTokenSchema,
+  });
+
+  return (
+    <ul>
+      {tokens?.map((token) => (
+        <li key={token.id.mint}>
+          {token.reserves.current_price_sol} SOL — Vol: {token.trading.total_volume}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+See [Schema Validation](/sdks/validation/) for the full guide on frame validation, generated schemas, and the `Schema<T>` interface.
+
+---
+
+## Resolved Data
+
+Stacks can include data resolved server-side that doesn't live on-chain. For example, the ORE stack enriches rounds with token metadata (name, symbol, decimals) — no extra API calls needed:
+
+```tsx
+function RoundWithMetadata() {
+  const { views } = useHyperstack(ORE_STREAM_STACK);
+  const { data: round } = views.OreRound.latest.useOne();
+
+  return (
+    <div>
+      <p>Token: {round?.ore_metadata?.name} ({round?.ore_metadata?.symbol})</p>
+      <p>Decimals: {round?.ore_metadata?.decimals}</p>
+    </div>
+  );
+}
+```
+
+Resolved data arrives as part of the entity alongside on-chain fields. See [Resolvers](/building-stacks/rust-dsl/resolvers/) for details on how resolved data works.
+
+---
+
 ## Accessing Core SDK
 
 The React SDK re-exports everything from `hyperstack-typescript`. Access low-level APIs when needed:
@@ -580,6 +675,7 @@ import { HyperStack, ConnectionManager } from "hyperstack-react";
 
 ## Next Steps
 
+- [Schema Validation](/sdks/validation/) — Zod schemas for runtime validation and filtering
 - [TypeScript SDK](/sdks/typescript/) — Use Hyperstack without React
+- [Resolvers](/building-stacks/rust-dsl/resolvers/) — Enrich entities with token metadata and computed fields
 - [Build Your Own Stack](/building-stacks/workflow) — Create custom data streams
-- [How It Works](/using-stacks/how-it-works/) — Understanding Stacks, Views, and architecture
