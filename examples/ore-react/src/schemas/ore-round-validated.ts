@@ -14,7 +14,7 @@ const ValidatedOreRoundStateSchema = OreRoundStateSchema.extend({
   estimated_expires_at_unix: z.number().nullable().optional(),
   deployed_per_square_ui: z.array(z.number()).length(25),
   count_per_square: z.array(z.number()).length(25),
-  total_deployed_ui: z.number(),
+  total_deployed: z.number(),
   total_miners: z.number(),
 });
 
@@ -25,3 +25,4 @@ export const ValidatedOreRoundSchema = z.object({
 });
 
 export type ValidatedOreRound = z.infer<typeof ValidatedOreRoundSchema>;
+

@@ -56,7 +56,7 @@ export function StatsPanel({ round, treasuryMotherlode, isConnected }: StatsPane
         <div className="bg-white dark:bg-stone-800 rounded-2xl p-6 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
           <div className="flex items-center gap-2 text-2xl font-semibold text-stone-800 dark:text-stone-100">
             <SolanaIcon size={20} />
-            <span>{round ? round.state.total_deployed_ui.toFixed(4) : '0.0000'}</span>
+            <span>{round ? round.state.total_deployed.toFixed(4) : '0.0000'}</span>
           </div>
           <div className="text-base text-stone-500 dark:text-stone-400 mt-2">Total deployed</div>
         </div>

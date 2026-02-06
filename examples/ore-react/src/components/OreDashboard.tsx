@@ -7,7 +7,7 @@ import { ConnectionBadge } from './ConnectionBadge';
 import { ThemeToggle } from './ThemeToggle';
 
 export function OreDashboard() {
-  const { views, isConnected } = useHyperstack(ORE_STREAM_STACK);
+  const { views, isConnected } = useHyperstack(ORE_STREAM_STACK, { url: "ws://localhost:8878" });
   const { data: latestRound } = views.OreRound.latest.useOne({ schema: ValidatedOreRoundSchema });
   const { data: treasuryData } = views.OreTreasury.list.useOne();
 
@@ -29,7 +29,7 @@ export function OreDashboard() {
         <div className="flex-1 min-w-[280px] max-w-md">
           <StatsPanel
             round={latestRound}
-            treasuryMotherlode={treasuryData?.state?.motherlode_ui}
+            treasuryMotherlode={treasuryData?.state?.motherlode}
             isConnected={isConnected}
           />
         </div>
