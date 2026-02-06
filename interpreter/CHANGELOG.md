@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.5.0...hyperstack-interpreter-v0.5.1) (2026-02-06)
+
+
+### Bug Fixes
+
+* **ci:** switch interpreter reqwest to rustls-tls for aarch64 cross-build ([ffe792d](https://github.com/HyperTekOrg/hyperstack/commit/ffe792d7d0b8eb6c09ea068afc0bc31965e5049e))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-macros bumped from 0.5.0 to 0.5.1
+
 ## [0.5.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.4.3...hyperstack-interpreter-v0.5.0) (2026-02-06)
 
 
