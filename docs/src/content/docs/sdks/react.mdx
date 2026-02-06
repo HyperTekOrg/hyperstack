@@ -365,14 +365,14 @@ function ConnectionStatus() {
 
 ### useHyperstack Return Values
 
-| Property          | Type              | Description                                    |
-| ----------------- | ----------------- | ---------------------------------------------- |
-| `views`           | `object`          | Typed view accessors                           |
-| `connectionState` | `ConnectionState` | Current WebSocket state                        |
+| Property          | Type              | Description                                      |
+| ----------------- | ----------------- | ------------------------------------------------ |
+| `views`           | `object`          | Typed view accessors                             |
+| `connectionState` | `ConnectionState` | Current WebSocket state                          |
 | `isConnected`     | `boolean`         | Convenience: `true` when `state === 'connected'` |
-| `isLoading`       | `boolean`         | `true` until client is ready                   |
-| `error`           | `Error \| null`   | Connection error if any                        |
-| `client`          | `HyperStack`      | Low-level client instance                      |
+| `isLoading`       | `boolean`         | `true` until client is ready                     |
+| `error`           | `Error \| null`   | Connection error if any                          |
+| `client`          | `HyperStack`      | Low-level client instance                        |
 
 ### Connection States
 
@@ -425,8 +425,8 @@ if (isConnected) {
 
 #### Options
 
-| Option | Type     | Description                    |
-| ------ | -------- | ------------------------------ |
+| Option | Type     | Description                      |
+| ------ | -------- | -------------------------------- |
 | `url`  | `string` | Override the stack's default URL |
 
 ```typescript
