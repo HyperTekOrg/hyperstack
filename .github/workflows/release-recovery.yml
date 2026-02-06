@@ -1,0 +1,174 @@
+name: Release Recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to recover (e.g. 0.5.0)"
+        required: true
+        type: string
+      release_name:
+        description: "Release name/tag override (default: hyperstack-cli-v<version>)"
+        required: false
+        default: ""
+        type: string
+      run_bundle_templates:
+        description: "Re-run template versioning, tarball, and upload"
+        required: true
+        default: true
+        type: boolean
+      run_build_binaries:
+        description: "Re-run cross-platform CLI binary builds and upload"
+        required: true
+        default: true
+        type: boolean
+      run_publish_npm_cli:
+        description: "Re-run npm publish for packages/hyperstack"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bundle-templates:
+    name: Bundle CLI Templates
+    runs-on: ubuntu-latest
+    if: ${{ inputs.run_bundle_templates }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Update example versions
+        run: |
+          VERSION="${{ inputs.version }}"
+          ./scripts/update-example-versions.sh "$VERSION"
+
+      - name: Create templates tarball
+        run: |
+          VERSION="${{ inputs.version }}"
+          echo "Bundling templates for version ${VERSION}"
+
+          tar -czvf "hyperstack-templates-v${VERSION}.tar.gz" \
+            --exclude='node_modules' \
+            --exclude='dist' \
+            --exclude='.env' \
+            --exclude='package-lock.json' \
+            --exclude='target' \
+            --exclude='Cargo.lock' \
+            -C examples \
+            ore-react \
+            ore-rust \
+            ore-typescript
+
+      - name: Upload templates to CLI release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          RELEASE_NAME="${{ inputs.release_name }}"
+          if [ -z "$RELEASE_NAME" ]; then
+            RELEASE_NAME="hyperstack-cli-v${VERSION}"
+          fi
+
+          gh release upload "$RELEASE_NAME" \
+            "hyperstack-templates-v${VERSION}.tar.gz" \
+            --clobber
+
+  build-cli-binaries:
+    name: Build CLI Binaries
+    if: ${{ inputs.run_build_binaries }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            binary_name: hs-darwin-arm64
+          - os: macos-15-large
+            target: x86_64-apple-darwin
+            binary_name: hs-darwin-x64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary_name: hs-linux-x64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            binary_name: hs-linux-arm64
+            cross: true
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary_name: hs-win32-x64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cargo-zigbuild
+        if: ${{ matrix.cross }}
+        run: |
+          pip3 install ziglang
+          cargo install cargo-zigbuild
+
+      - name: Build binary
+        run: |
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            cargo zigbuild --release --target ${{ matrix.target }} --package hyperstack-cli
+          else
+            cargo build --release --target ${{ matrix.target }} --package hyperstack-cli
+          fi
+        shell: bash
+
+      - name: Rename binary
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp target/${{ matrix.target }}/release/hs.exe ${{ matrix.binary_name }}
+          else
+            cp target/${{ matrix.target }}/release/hs ${{ matrix.binary_name }}
+          fi
+        shell: bash
+
+      - name: Upload binary to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          RELEASE_NAME="${{ inputs.release_name }}"
+          if [ -z "$RELEASE_NAME" ]; then
+            RELEASE_NAME="hyperstack-cli-v${VERSION}"
+          fi
+
+          gh release upload "$RELEASE_NAME" \
+            "${{ matrix.binary_name }}" \
+            --clobber
+        shell: bash
+
+  publish-npm-cli:
+    name: Publish CLI to npm
+    needs: build-cli-binaries
+    runs-on: ubuntu-latest
+    if: ${{ always() && inputs.run_publish_npm_cli && (needs.build-cli-binaries.result == 'success' || needs.build-cli-binaries.result == 'skipped') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish hyperstack CLI wrapper
+        run: npm publish --access public || echo "Package may already be published"
+        working-directory: packages/hyperstack
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
