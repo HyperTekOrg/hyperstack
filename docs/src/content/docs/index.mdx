@@ -30,19 +30,22 @@ function App() {
 }
 
 function LatestRounds() {
-  const stack = useHyperstack(ORE_STREAM_STACK);
-  const { data: rounds, isLoading } = stack.views.OreRound.latest.use({ take: 5 });
+  const { views, isConnected } = useHyperstack(ORE_STREAM_STACK);
+  const { data: rounds, isLoading } = views.OreRound.latest.use({ take: 5 });
 
   if (isLoading) return <div>Connecting...</div>;
 
   return (
-    <ul>
-      {rounds?.map((round) => (
-        <li key={round.id?.round_id}>
-          Round #{round.id?.round_id} — Motherlode: {round.state?.motherlode}
-        </li>
-      ))}
-    </ul>
+    <div>
+      <p>{isConnected ? "🟢 Live" : "Connecting..."}</p>
+      <ul>
+        {rounds?.map((round) => (
+          <li key={round.id?.round_id}>
+            Round #{round.id?.round_id} — Motherlode: {round.state?.motherlode}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 ```

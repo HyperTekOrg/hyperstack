@@ -47,7 +47,8 @@
     "node": ">=16.0.0"
   },
   "dependencies": {
-    "pako": "^2.1.0"
+    "pako": "^2.1.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/pako": "^2.0.3",

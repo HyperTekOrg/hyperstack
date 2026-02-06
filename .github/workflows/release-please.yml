@@ -152,11 +152,21 @@ jobs:
 
   bundle-templates:
     name: Bundle CLI Templates
-    needs: release-please
+    needs: [release-please, publish-npm, publish-rust]
     runs-on: ubuntu-latest
     if: needs.release-please.outputs.cli_release_created == 'true'
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Update example versions
+        run: |
+          VERSION="${{ needs.release-please.outputs.cli_version }}"
+          ./scripts/update-example-versions.sh "$VERSION"
 
       - name: Create templates tarball
         run: |

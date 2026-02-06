@@ -230,7 +230,7 @@ pub struct IdlEventSnapshot {
 }
 
 /// Error definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IdlErrorSnapshot {
     /// Error code
     pub code: u32,
@@ -359,6 +359,44 @@ pub struct ComputedFieldSpec {
     pub result_type: String,
 }
 
+// ============================================================================
+// Resolver Specifications
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum ResolverType {
+    Token,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolverExtractSpec {
+    pub target_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transform: Option<Transformation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum ResolveStrategy {
+    #[default]
+    SetOnce,
+    LastWrite,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolverSpec {
+    pub resolver: ResolverType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_value: Option<Value>,
+    #[serde(default)]
+    pub strategy: ResolveStrategy,
+    pub extracts: Vec<ResolverExtractSpec>,
+}
+
 /// AST for computed field expressions
 /// Supports a subset of Rust expressions needed for computed fields:
 /// - Field references (possibly from other sections)
@@ -398,6 +436,13 @@ pub enum ComputedExpr {
     /// Method call: expr.method(args)
     MethodCall {
         expr: Box<ComputedExpr>,
+        method: String,
+        args: Vec<ComputedExpr>,
+    },
+
+    /// Computation provided by a resolver
+    ResolverComputed {
+        resolver: String,
         method: String,
         args: Vec<ComputedExpr>,
     },
@@ -477,6 +522,12 @@ pub enum ComputedExpr {
     JsonToBytes {
         expr: Box<ComputedExpr>,
     },
+
+    // Context access - slot and timestamp from the update that triggered evaluation
+    /// Access the slot number from the current update context
+    ContextSlot,
+    /// Access the unix timestamp from the current update context
+    ContextTimestamp,
 }
 
 /// Binary operators for computed expressions
@@ -529,6 +580,8 @@ pub struct SerializableStreamSpec {
     pub field_mappings: BTreeMap<String, FieldTypeInfo>,
     pub resolver_hooks: Vec<ResolverHook>,
     pub instruction_hooks: Vec<InstructionHook>,
+    #[serde(default)]
+    pub resolver_specs: Vec<ResolverSpec>,
     /// Computed field paths (legacy, for backward compatibility)
     #[serde(default)]
     pub computed_fields: Vec<String>,
@@ -553,6 +606,7 @@ pub struct TypedStreamSpec<S> {
     pub field_mappings: BTreeMap<String, FieldTypeInfo>, // NEW: All field type info by target path
     pub resolver_hooks: Vec<ResolverHook>, // NEW: Resolver hooks for PDA key resolution
     pub instruction_hooks: Vec<InstructionHook>, // NEW: Instruction hooks for PDA registration
+    pub resolver_specs: Vec<ResolverSpec>,
     pub computed_fields: Vec<String>, // List of computed field paths
     _phantom: PhantomData<S>,
 }
@@ -571,6 +625,7 @@ impl<S> TypedStreamSpec<S> {
             field_mappings: BTreeMap::new(),
             resolver_hooks: Vec::new(),
             instruction_hooks: Vec::new(),
+            resolver_specs: Vec::new(),
             computed_fields: Vec::new(),
             _phantom: PhantomData,
         }
@@ -592,9 +647,15 @@ impl<S> TypedStreamSpec<S> {
             field_mappings,
             resolver_hooks: Vec::new(),
             instruction_hooks: Vec::new(),
+            resolver_specs: Vec::new(),
             computed_fields: Vec::new(),
             _phantom: PhantomData,
         }
+    }
+
+    pub fn with_resolver_specs(mut self, resolver_specs: Vec<ResolverSpec>) -> Self {
+        self.resolver_specs = resolver_specs;
+        self
     }
 
     /// Get type information for a specific field path
@@ -627,6 +688,7 @@ impl<S> TypedStreamSpec<S> {
             field_mappings: self.field_mappings.clone(),
             resolver_hooks: self.resolver_hooks.clone(),
             instruction_hooks: self.instruction_hooks.clone(),
+            resolver_specs: self.resolver_specs.clone(),
             computed_fields: self.computed_fields.clone(),
             computed_field_specs: Vec::new(),
             content_hash: None,
@@ -650,6 +712,7 @@ impl<S> TypedStreamSpec<S> {
             field_mappings: spec.field_mappings,
             resolver_hooks: spec.resolver_hooks,
             instruction_hooks: spec.instruction_hooks,
+            resolver_specs: spec.resolver_specs,
             computed_fields: spec.computed_fields,
             _phantom: PhantomData,
         }
@@ -880,6 +943,8 @@ pub struct SerializableFieldMapping {
     pub condition: Option<ConditionExpr>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub when: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop: Option<String>,
     #[serde(default = "default_emit", skip_serializing_if = "is_true")]
     pub emit: bool,
 }
@@ -900,6 +965,7 @@ pub struct TypedFieldMapping<S> {
     pub population: PopulationStrategy,
     pub condition: Option<ConditionExpr>,
     pub when: Option<String>,
+    pub stop: Option<String>,
     pub emit: bool,
     _phantom: PhantomData<S>,
 }
@@ -913,6 +979,7 @@ impl<S> TypedFieldMapping<S> {
             population,
             condition: None,
             when: None,
+            stop: None,
             emit: true,
             _phantom: PhantomData,
         }
@@ -933,6 +1000,11 @@ impl<S> TypedFieldMapping<S> {
         self
     }
 
+    pub fn with_stop(mut self, stop: String) -> Self {
+        self.stop = Some(stop);
+        self
+    }
+
     pub fn with_emit(mut self, emit: bool) -> Self {
         self.emit = emit;
         self
@@ -947,6 +1019,7 @@ impl<S> TypedFieldMapping<S> {
             population: self.population.clone(),
             condition: self.condition.clone(),
             when: self.when.clone(),
+            stop: self.stop.clone(),
             emit: self.emit,
         }
     }
@@ -960,6 +1033,7 @@ impl<S> TypedFieldMapping<S> {
             population: mapping.population,
             condition: mapping.condition,
             when: mapping.when,
+            stop: mapping.stop,
             emit: mapping.emit,
             _phantom: PhantomData,
         }
@@ -1274,6 +1348,145 @@ impl SerializableStreamSpec {
 }
 
 // ============================================================================
+// PDA and Instruction Types — For SDK code generation
+// ============================================================================
+
+/// PDA (Program-Derived Address) definition for the stack-level registry.
+/// PDAs defined here can be referenced by instructions via `pdaRef`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PdaDefinition {
+    /// Human-readable name (e.g., "miner", "bondingCurve")
+    pub name: String,
+
+    /// Seeds for PDA derivation, in order
+    pub seeds: Vec<PdaSeedDef>,
+
+    /// Program ID that owns this PDA.
+    /// If None, uses the stack's primary programId.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_id: Option<String>,
+}
+
+/// Single seed in a PDA derivation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum PdaSeedDef {
+    /// Static string seed: "miner" → "miner".as_bytes()
+    Literal { value: String },
+
+    /// Static byte array (for non-UTF8 seeds)
+    Bytes { value: Vec<u8> },
+
+    /// Reference to an instruction argument: arg("roundId") → args.roundId as bytes
+    ArgRef {
+        arg_name: String,
+        /// Optional type hint for serialization (e.g., "u64", "pubkey")
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        arg_type: Option<String>,
+    },
+
+    /// Reference to another account in the instruction: account("mint") → accounts.mint pubkey
+    AccountRef { account_name: String },
+}
+
+/// How an instruction account's address is determined.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "category", rename_all = "camelCase")]
+pub enum AccountResolution {
+    /// Must sign the transaction (uses wallet.publicKey)
+    Signer,
+
+    /// Fixed known address (e.g., System Program, Token Program)
+    Known { address: String },
+
+    /// Reference to a PDA in the stack's pdas registry
+    PdaRef { pda_name: String },
+
+    /// Inline PDA definition (for one-off PDAs not in the registry)
+    PdaInline {
+        seeds: Vec<PdaSeedDef>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        program_id: Option<String>,
+    },
+
+    /// User must provide at call time via options.accounts
+    UserProvided,
+}
+
+/// Account metadata for an instruction.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InstructionAccountDef {
+    /// Account name (e.g., "user", "mint", "bondingCurve")
+    pub name: String,
+
+    /// Whether this account must sign the transaction
+    #[serde(default)]
+    pub is_signer: bool,
+
+    /// Whether this account is writable
+    #[serde(default)]
+    pub is_writable: bool,
+
+    /// How this account's address is resolved
+    pub resolution: AccountResolution,
+
+    /// Whether this account can be omitted (optional accounts)
+    #[serde(default)]
+    pub is_optional: bool,
+
+    /// Documentation from IDL
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
+}
+
+/// Argument definition for an instruction.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InstructionArgDef {
+    /// Argument name
+    pub name: String,
+
+    /// Type from IDL (e.g., "u64", "bool", "pubkey", "Option<u64>")
+    #[serde(rename = "type")]
+    pub arg_type: String,
+
+    /// Documentation from IDL
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
+}
+
+/// Full instruction definition in the AST.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InstructionDef {
+    /// Instruction name (e.g., "buy", "sell", "automate")
+    pub name: String,
+
+    /// Discriminator bytes (8 bytes for Anchor, 1 byte for Steel)
+    pub discriminator: Vec<u8>,
+
+    /// Size of discriminator in bytes (for buffer allocation)
+    #[serde(default = "default_discriminant_size")]
+    pub discriminator_size: usize,
+
+    /// Accounts required by this instruction, in order
+    pub accounts: Vec<InstructionAccountDef>,
+
+    /// Arguments for this instruction, in order
+    pub args: Vec<InstructionArgDef>,
+
+    /// Error definitions specific to this instruction
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<IdlErrorSnapshot>,
+
+    /// Program ID for this instruction (usually same as stack's programId)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_id: Option<String>,
+
+    /// Documentation from IDL
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
+}
+
+// ============================================================================
 // Stack Spec — Unified multi-entity AST format
 // ============================================================================
 
@@ -1291,6 +1504,13 @@ pub struct SerializableStackSpec {
     pub idls: Vec<IdlSnapshot>,
     /// All entity specifications in this stack
     pub entities: Vec<SerializableStreamSpec>,
+    /// PDA registry - defines all PDAs for the stack, grouped by program name
+    /// Outer key is program name (e.g., "ore", "entropy"), inner key is PDA name
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub pdas: BTreeMap<String, BTreeMap<String, PdaDefinition>>,
+    /// Instruction definitions for SDK code generation
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub instructions: Vec<InstructionDef>,
     /// Deterministic content hash of the entire stack
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_hash: Option<String>,

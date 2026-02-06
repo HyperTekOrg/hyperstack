@@ -8,6 +8,8 @@ use std::collections::HashMap;
 use syn::parse::{Parse, ParseStream};
 use syn::{Attribute, Path, Token};
 
+use crate::ast::ResolverType;
+
 #[derive(Debug, Clone)]
 pub struct RegisterFromSpec {
     pub instruction_path: Path,
@@ -27,12 +29,26 @@ pub struct MapAttribute {
     pub strategy: String,
     pub join_on: Option<String>,
     pub transform: Option<String>,
+    /// Resolver transform: a parameterized transform like `ui_amount(ore_metadata.decimals)`
+    /// that expands into a hidden raw field + synthesized computed field.
+    pub resolver_transform: Option<ResolverTransformSpec>,
     pub is_instruction: bool,
     pub is_whole_source: bool,
     pub lookup_by: Option<FieldSpec>,
     pub condition: Option<String>,
     pub when: Option<Path>,
+    pub stop: Option<Path>,
+    pub stop_lookup_by: Option<FieldSpec>,
     pub emit: bool,
+}
+
+/// A parameterized resolver transform like `ui_amount(ore_metadata.decimals)`.
+/// The method name is resolved via `resolver_for_method()` to a resolver name.
+/// The args are token streams that will be parsed as computed expressions.
+#[derive(Debug, Clone)]
+pub struct ResolverTransformSpec {
+    pub method: String,
+    pub args: proc_macro2::TokenStream,
 }
 
 #[derive(Debug, Clone)]
@@ -105,8 +121,11 @@ struct MapAttributeArgs {
     rename: Option<String>,
     join_on: Option<String>,
     transform: Option<String>,
+    resolver_transform: Option<ResolverTransformSpec>,
     condition: Option<String>,
     when: Option<Path>,
+    stop: Option<Path>,
+    stop_lookup_by: Option<FieldSpec>,
     emit: Option<bool>,
 }
 
@@ -135,8 +154,11 @@ impl Parse for MapAttributeArgs {
         let mut rename = None;
         let mut join_on = None;
         let mut transform = None;
+        let mut resolver_transform = None;
         let mut condition = None;
         let mut when = None;
+        let mut stop = None;
+        let mut stop_lookup_by = None;
         let mut emit = None;
 
         while !input.is_empty() {
@@ -178,7 +200,17 @@ impl Parse for MapAttributeArgs {
                 } else if ident_str == "transform" {
                     input.parse::<Token![=]>()?;
                     let transform_ident: syn::Ident = input.parse()?;
-                    transform = Some(transform_ident.to_string());
+                    if input.peek(syn::token::Paren) {
+                        let content;
+                        syn::parenthesized!(content in input);
+                        let args: proc_macro2::TokenStream = content.parse()?;
+                        resolver_transform = Some(ResolverTransformSpec {
+                            method: transform_ident.to_string(),
+                            args,
+                        });
+                    } else {
+                        transform = Some(transform_ident.to_string());
+                    }
                 } else if ident_str == "condition" {
                     input.parse::<Token![=]>()?;
                     let condition_lit: syn::LitStr = input.parse()?;
@@ -187,6 +219,13 @@ impl Parse for MapAttributeArgs {
                     input.parse::<Token![=]>()?;
                     let when_path: Path = input.parse()?;
                     when = Some(when_path);
+                } else if ident_str == "stop" {
+                    input.parse::<Token![=]>()?;
+                    let stop_path: Path = input.parse()?;
+                    stop = Some(stop_path);
+                } else if ident_str == "stop_lookup_by" {
+                    input.parse::<Token![=]>()?;
+                    stop_lookup_by = Some(parse_field_spec(input)?);
                 } else if ident_str == "emit" {
                     input.parse::<Token![=]>()?;
                     let emit_lit: syn::LitBool = input.parse()?;
@@ -212,8 +251,11 @@ impl Parse for MapAttributeArgs {
             rename,
             join_on,
             transform,
+            resolver_transform,
             condition,
             when,
+            stop,
+            stop_lookup_by,
             emit,
         })
     }
@@ -237,6 +279,15 @@ pub fn parse_map_attribute(
     }
 
     let strategy = args.strategy.unwrap_or_else(|| "SetOnce".to_string());
+    if strategy != "SetOnce" && strategy != "LastWrite" {
+        return Err(syn::Error::new_spanned(
+            attr,
+            format!(
+                "Invalid strategy '{}' for #[resolve]. Only 'SetOnce' or 'LastWrite' are allowed.",
+                strategy
+            ),
+        ));
+    }
     let target_name = args.rename.unwrap_or_else(|| target_field_name.to_string());
     let emit = args.emit.unwrap_or(true);
 
@@ -255,11 +306,14 @@ pub fn parse_map_attribute(
             strategy: strategy.clone(),
             join_on: args.join_on.clone(),
             transform: args.transform.clone(),
+            resolver_transform: args.resolver_transform.clone(),
             is_instruction: false,
             is_whole_source: false,
             lookup_by: None,
             condition: args.condition.clone(),
             when: args.when.clone(),
+            stop: args.stop.clone(),
+            stop_lookup_by: args.stop_lookup_by.clone(),
             emit,
         });
     }
@@ -303,11 +357,14 @@ pub fn parse_from_instruction_attribute(
             strategy: strategy.clone(),
             join_on: args.join_on.clone(),
             transform: args.transform.clone(),
+            resolver_transform: args.resolver_transform.clone(),
             is_instruction: true,
             is_whole_source: false,
             lookup_by: None,
             condition: args.condition.clone(),
             when: args.when.clone(),
+            stop: args.stop.clone(),
+            stop_lookup_by: args.stop_lookup_by.clone(),
             emit,
         });
     }
@@ -942,6 +999,126 @@ pub fn parse_aggregate_attribute(
 // ============================================================================
 // Computed Macro - Declarative Computed Fields
 // ============================================================================
+
+#[derive(Debug, Clone)]
+pub struct ResolveAttribute {
+    pub from: Option<String>,
+    pub address: Option<String>,
+    pub extract: Option<String>,
+    pub target_field_name: String,
+    pub resolver: Option<String>,
+    pub strategy: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolveSpec {
+    pub resolver: ResolverType,
+    pub from: Option<String>,
+    pub address: Option<String>,
+    pub extract: Option<String>,
+    pub target_field_name: String,
+    pub strategy: String,
+}
+
+struct ResolveAttributeArgs {
+    from: Option<String>,
+    address: Option<String>,
+    extract: Option<String>,
+    resolver: Option<String>,
+    strategy: Option<String>,
+}
+
+impl Parse for ResolveAttributeArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut from = None;
+        let mut address = None;
+        let mut extract = None;
+        let mut resolver = None;
+        let mut strategy = None;
+
+        while !input.is_empty() {
+            let ident: syn::Ident = input.parse()?;
+            let ident_str = ident.to_string();
+
+            input.parse::<Token![=]>()?;
+
+            if ident_str == "from" {
+                let lit: syn::LitStr = input.parse()?;
+                from = Some(lit.value());
+            } else if ident_str == "address" {
+                let lit: syn::LitStr = input.parse()?;
+                address = Some(lit.value());
+            } else if ident_str == "extract" {
+                let lit: syn::LitStr = input.parse()?;
+                extract = Some(lit.value());
+            } else if ident_str == "resolver" {
+                if input.peek(syn::LitStr) {
+                    let lit: syn::LitStr = input.parse()?;
+                    resolver = Some(lit.value());
+                } else {
+                    let ident: syn::Ident = input.parse()?;
+                    resolver = Some(ident.to_string());
+                }
+            } else if ident_str == "strategy" {
+                let ident: syn::Ident = input.parse()?;
+                strategy = Some(ident.to_string());
+            } else {
+                return Err(syn::Error::new(
+                    ident.span(),
+                    format!("Unknown resolve attribute argument: {}", ident_str),
+                ));
+            }
+
+            if !input.is_empty() {
+                input.parse::<Token![,]>()?;
+            }
+        }
+
+        Ok(ResolveAttributeArgs {
+            from,
+            address,
+            extract,
+            resolver,
+            strategy,
+        })
+    }
+}
+
+pub fn parse_resolve_attribute(
+    attr: &Attribute,
+    target_field_name: &str,
+) -> syn::Result<Option<ResolveAttribute>> {
+    if !attr.path().is_ident("resolve") {
+        return Ok(None);
+    }
+
+    let args: ResolveAttributeArgs = attr.parse_args()?;
+
+    if args.from.is_some() && args.address.is_some() {
+        return Err(syn::Error::new_spanned(
+            attr,
+            "#[resolve] cannot specify both 'from' and 'address'",
+        ));
+    }
+
+    if args.from.is_none() && args.address.is_none() {
+        return Err(syn::Error::new_spanned(
+            attr,
+            "#[resolve] requires either 'from' or 'address' parameter",
+        ));
+    }
+
+    let strategy = args.strategy.unwrap_or_else(|| "SetOnce".to_string());
+
+    Ok(Some(ResolveAttribute {
+        from: args.from,
+        address: args.address,
+        extract: args.extract,
+        target_field_name: target_field_name.to_string(),
+        resolver: args.resolver,
+        strategy,
+    }))
+}
 
 #[derive(Debug, Clone)]
 pub struct ComputedAttribute {

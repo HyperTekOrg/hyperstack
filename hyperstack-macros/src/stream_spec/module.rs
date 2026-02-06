@@ -3,7 +3,7 @@
 //! This module handles processing of `#[hyperstack]` attributes applied to modules,
 //! coordinating the processing of multiple entity structs within a module.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use proc_macro::TokenStream;
 use quote::quote;
@@ -134,6 +134,8 @@ pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
                 program_ids: vec![],
                 idls: vec![],
                 entities: entity_asts,
+                pdas: BTreeMap::new(),
+                instructions: vec![],
                 content_hash: None,
             }
             .with_content_hash();

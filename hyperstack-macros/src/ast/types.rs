@@ -224,7 +224,7 @@ pub struct IdlEventSnapshot {
     pub docs: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IdlErrorSnapshot {
     pub code: u32,
     pub name: String,
@@ -241,6 +241,44 @@ pub struct ComputedFieldSpec {
     pub target_path: String,
     pub expression: ComputedExpr,
     pub result_type: String,
+}
+
+// ==========================================================================
+// Resolver Specifications
+// ==========================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum ResolverType {
+    Token,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolverExtractSpec {
+    pub target_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transform: Option<Transformation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum ResolveStrategy {
+    #[default]
+    SetOnce,
+    LastWrite,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolverSpec {
+    pub resolver: ResolverType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_value: Option<serde_json::Value>,
+    #[serde(default)]
+    pub strategy: ResolveStrategy,
+    pub extracts: Vec<ResolverExtractSpec>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -264,6 +302,11 @@ pub enum ComputedExpr {
     },
     MethodCall {
         expr: Box<ComputedExpr>,
+        method: String,
+        args: Vec<ComputedExpr>,
+    },
+    ResolverComputed {
+        resolver: String,
         method: String,
         args: Vec<ComputedExpr>,
     },
@@ -339,6 +382,10 @@ pub enum ComputedExpr {
     JsonToBytes {
         expr: Box<ComputedExpr>,
     },
+
+    // Context access - slot and timestamp from the update that triggered evaluation
+    ContextSlot,
+    ContextTimestamp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -390,6 +437,8 @@ pub struct SerializableStreamSpec {
     pub field_mappings: BTreeMap<String, FieldTypeInfo>,
     pub resolver_hooks: Vec<ResolverHook>,
     pub instruction_hooks: Vec<InstructionHook>,
+    #[serde(default)]
+    pub resolver_specs: Vec<ResolverSpec>,
     #[serde(default)]
     pub computed_fields: Vec<String>,
     #[serde(default)]
@@ -463,6 +512,8 @@ pub struct SerializableFieldMapping {
     pub condition: Option<ConditionExpr>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub when: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop: Option<String>,
     #[serde(default = "default_emit", skip_serializing_if = "is_true")]
     pub emit: bool,
 }
@@ -845,24 +896,110 @@ impl SerializableStreamSpec {
 }
 
 // ============================================================================
+// PDA and Instruction Types — For SDK code generation
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PdaDefinition {
+    pub name: String,
+    pub seeds: Vec<PdaSeedDef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum PdaSeedDef {
+    Literal {
+        value: String,
+    },
+    Bytes {
+        value: Vec<u8>,
+    },
+    ArgRef {
+        arg_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        arg_type: Option<String>,
+    },
+    AccountRef {
+        account_name: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "category", rename_all = "camelCase")]
+pub enum AccountResolution {
+    Signer,
+    Known {
+        address: String,
+    },
+    PdaRef {
+        pda_name: String,
+    },
+    PdaInline {
+        seeds: Vec<PdaSeedDef>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        program_id: Option<String>,
+    },
+    UserProvided,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InstructionAccountDef {
+    pub name: String,
+    #[serde(default)]
+    pub is_signer: bool,
+    #[serde(default)]
+    pub is_writable: bool,
+    pub resolution: AccountResolution,
+    #[serde(default)]
+    pub is_optional: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InstructionArgDef {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub arg_type: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InstructionDef {
+    pub name: String,
+    pub discriminator: Vec<u8>,
+    #[serde(default = "default_discriminant_size")]
+    pub discriminator_size: usize,
+    pub accounts: Vec<InstructionAccountDef>,
+    pub args: Vec<InstructionArgDef>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<IdlErrorSnapshot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
+}
+
+// ============================================================================
 // Stack Spec — Unified multi-entity AST format
 // ============================================================================
 
-/// A unified stack specification containing all entities.
-/// Written to `.hyperstack/{StackName}.stack.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerializableStackSpec {
-    /// Stack name (PascalCase, derived from module ident)
     pub stack_name: String,
-    /// Program IDs (one per IDL, in order)
     #[serde(default)]
     pub program_ids: Vec<String>,
-    /// IDL snapshots (one per program)
     #[serde(default)]
     pub idls: Vec<IdlSnapshot>,
-    /// All entity specifications in this stack
     pub entities: Vec<SerializableStreamSpec>,
-    /// Deterministic content hash of the entire stack
+    /// Outer key = program name, inner key = PDA name
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub pdas: BTreeMap<String, BTreeMap<String, PdaDefinition>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub instructions: Vec<InstructionDef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_hash: Option<String>,
 }

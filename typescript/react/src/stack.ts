@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import type { ConnectionState } from 'hyperstack-typescript';
 import type { StoreApi, UseBoundStore } from 'zustand';
 import { useHyperstackContext } from './provider';
 import { createStateViewHook, createListViewHook } from './view-hooks';
@@ -21,32 +22,32 @@ import type { HyperStack } from 'hyperstack-typescript';
 
 type ViewHookForDef<TDef> = TDef extends ViewDef<infer T, 'state'>
   ? {
-      use: (
+      use: <TSchema = T>(
         key?: Record<string, string>,
-        options?: ViewHookOptions
-      ) => ViewHookResult<T>;
+        options?: ViewHookOptions<TSchema>
+      ) => ViewHookResult<TSchema>;
     }
   : TDef extends ViewDef<infer T, 'list'>
   ? {
       use: {
-        (params: ListParamsSingle, options?: ViewHookOptions): ViewHookResult<T | undefined>;
-        (params?: ListParamsMultiple, options?: ViewHookOptions): ViewHookResult<T[]>;
+        <TSchema = T>(params: ListParamsSingle<TSchema>, options?: ViewHookOptions<TSchema>): ViewHookResult<TSchema | undefined>;
+        <TSchema = T>(params?: ListParamsMultiple<TSchema>, options?: ViewHookOptions<TSchema>): ViewHookResult<TSchema[]>;
       };
-      useOne: (
-        params?: Omit<ListParamsBase, 'take'>,
-        options?: ViewHookOptions
-      ) => ViewHookResult<T | undefined>;
+      useOne: <TSchema = T>(
+        params?: Omit<ListParamsBase<TSchema>, 'take'>,
+        options?: ViewHookOptions<TSchema>
+      ) => ViewHookResult<TSchema | undefined>;
     }
   : TDef extends ViewDef<infer T, 'state' | 'list'>
   ? {
       use: {
-        (params: ListParamsSingle, options?: ViewHookOptions): ViewHookResult<T | undefined>;
-        (params?: ListParamsMultiple | Record<string, string>, options?: ViewHookOptions): ViewHookResult<T | T[]>;
+        <TSchema = T>(params: ListParamsSingle<TSchema>, options?: ViewHookOptions<TSchema>): ViewHookResult<TSchema | undefined>;
+        <TSchema = T>(params?: ListParamsMultiple<TSchema> | Record<string, string>, options?: ViewHookOptions<TSchema>): ViewHookResult<TSchema | TSchema[]>;
       };
-      useOne: (
-        params?: Omit<ListParamsBase, 'take'>,
-        options?: ViewHookOptions
-      ) => ViewHookResult<T | undefined>;
+      useOne: <TSchema = T>(
+        params?: Omit<ListParamsBase<TSchema>, 'take'>,
+        options?: ViewHookOptions<TSchema>
+      ) => ViewHookResult<TSchema | undefined>;
     }
   : never;
 
@@ -71,6 +72,8 @@ type StackClient<TStack extends StackDefinition> = {
   instructions: BuildInstructionInterface<TStack['instructions']>;
   zustandStore: UseBoundStore<StoreApi<HyperStackStore>>;
   client: HyperStack<TStack>;
+  connectionState: ConnectionState;
+  isConnected: boolean;
   isLoading: boolean;
   error: Error | null;
 };
@@ -84,6 +87,9 @@ export function useHyperstack<TStack extends StackDefinition>(
   const [client, setClient] = useState<HyperStack<TStack> | null>(getClient(stack) as HyperStack<TStack> | null);
   const [isLoading, setIsLoading] = useState(!client);
   const [error, setError] = useState<Error | null>(null);
+  const [connectionState, setConnectionState] = useState<ConnectionState>(() => 
+    client?.connectionState ?? 'disconnected'
+  );
 
   useEffect(() => {
     const existingClient = getClient(stack);
@@ -106,6 +112,20 @@ export function useHyperstack<TStack extends StackDefinition>(
         setIsLoading(false);
       });
   }, [stack, getOrCreateClient, getClient, urlOverride]);
+
+  useEffect(() => {
+    if (!client) {
+      setConnectionState('disconnected');
+      return;
+    }
+    
+    setConnectionState(client.connectionState);
+    const unsubscribe = client.onConnectionStateChange((state) => {
+      setConnectionState(state);
+    });
+    
+    return unsubscribe;
+  }, [client]);
 
   const views = useMemo(() => {
     const result: Record<string, Record<string, unknown>> = {};
@@ -149,6 +169,8 @@ export function useHyperstack<TStack extends StackDefinition>(
     instructions: instructions as BuildInstructionInterface<TStack['instructions']>,
     zustandStore: (client?.store as ZustandAdapter | undefined)?.store as UseBoundStore<StoreApi<HyperStackStore>>,
     client: client!,
+    connectionState,
+    isConnected: connectionState === 'connected',
     isLoading,
     error
   };

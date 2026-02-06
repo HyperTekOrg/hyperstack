@@ -305,6 +305,7 @@ pub fn process_nested_struct(
     events_by_instruction: &mut HashMap<String, Vec<(String, parse::EventAttribute, Type)>>,
     has_events: &mut bool,
     computed_fields: &mut Vec<(String, proc_macro2::TokenStream, Type)>,
+    resolve_specs: &mut Vec<parse::ResolveSpec>,
     derive_from_mappings: &mut HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &mut HashMap<String, String>,
     program_name: Option<&str>,
@@ -332,18 +333,56 @@ pub fn process_nested_struct(
                                 format!("{}.{}", section_name, map_attr.target_field_name);
                         }
 
-                        super::entity::process_map_attribute(
-                            &map_attr,
-                            field_name,
-                            field_type,
-                            &mut Vec::new(),
-                            accessor_defs,
-                            accessor_names,
-                            primary_keys,
-                            lookup_indexes,
-                            sources_by_type,
-                            field_mappings,
-                        );
+                        if let Some(rt) = map_attr.resolver_transform.take() {
+                            let visible_target = map_attr.target_field_name.clone();
+                            let raw_field_name = format!("__{}_raw", field_name);
+                            let raw_target = format!("{}.{}", section_name, raw_field_name);
+
+                            map_attr.target_field_name = raw_target.clone();
+                            map_attr.emit = false;
+
+                            super::entity::process_map_attribute(
+                                &map_attr,
+                                field_name,
+                                field_type,
+                                &mut Vec::new(),
+                                accessor_defs,
+                                accessor_names,
+                                primary_keys,
+                                lookup_indexes,
+                                sources_by_type,
+                                field_mappings,
+                            );
+
+                            let raw_ref = raw_target.clone();
+                            let computed_expr: proc_macro2::TokenStream = {
+                                let raw_ident: proc_macro2::TokenStream =
+                                    raw_ref.replace('.', " . ").parse().unwrap_or_default();
+                                let method_ident: proc_macro2::TokenStream =
+                                    rt.method.parse().unwrap_or_default();
+                                let args = &rt.args;
+                                quote::quote! { #raw_ident . #method_ident ( #args ) }
+                            };
+
+                            computed_fields.push((
+                                visible_target,
+                                computed_expr,
+                                field_type.clone(),
+                            ));
+                        } else {
+                            super::entity::process_map_attribute(
+                                &map_attr,
+                                field_name,
+                                field_type,
+                                &mut Vec::new(),
+                                accessor_defs,
+                                accessor_names,
+                                primary_keys,
+                                lookup_indexes,
+                                sources_by_type,
+                                field_mappings,
+                            );
+                        }
                     }
                 } else if let Ok(Some(map_attrs)) =
                     parse::parse_from_instruction_attribute(attr, &field_name.to_string())
@@ -352,6 +391,45 @@ pub fn process_nested_struct(
                         if !map_attr.target_field_name.contains('.') {
                             map_attr.target_field_name =
                                 format!("{}.{}", section_name, map_attr.target_field_name);
+                        }
+
+                        if let Some(rt) = map_attr.resolver_transform.take() {
+                            let visible_target = map_attr.target_field_name.clone();
+                            let raw_field_name = format!("__{}_raw", field_name);
+                            let raw_target = format!("{}.{}", section_name, raw_field_name);
+
+                            map_attr.target_field_name = raw_target.clone();
+                            map_attr.emit = false;
+
+                            super::entity::process_map_attribute(
+                                &map_attr,
+                                field_name,
+                                field_type,
+                                &mut Vec::new(),
+                                accessor_defs,
+                                accessor_names,
+                                primary_keys,
+                                lookup_indexes,
+                                sources_by_type,
+                                field_mappings,
+                            );
+
+                            let raw_ref = raw_target.clone();
+                            let computed_expr: proc_macro2::TokenStream = {
+                                let raw_ident: proc_macro2::TokenStream =
+                                    raw_ref.replace('.', " . ").parse().unwrap_or_default();
+                                let method_ident: proc_macro2::TokenStream =
+                                    rt.method.parse().unwrap_or_default();
+                                let args = &rt.args;
+                                quote::quote! { #raw_ident . #method_ident ( #args ) }
+                            };
+
+                            computed_fields.push((
+                                visible_target,
+                                computed_expr,
+                                field_type.clone(),
+                            ));
+                            continue;
                         }
 
                         super::entity::process_map_attribute(
@@ -452,11 +530,14 @@ pub fn process_nested_struct(
                                 .as_ref()
                                 .map(|fs| fs.ident.to_string()),
                             transform: None,
+                            resolver_transform: None,
                             is_instruction: false,
                             is_whole_source: true,
                             lookup_by: snapshot_attr.lookup_by.clone(),
                             condition: None,
                             when: snapshot_attr.when.clone(),
+                            stop: None,
+                            stop_lookup_by: None,
                             emit: true,
                         };
 
@@ -499,11 +580,14 @@ pub fn process_nested_struct(
                             strategy: aggr_attr.strategy.clone(),
                             join_on: aggr_attr.join_on.as_ref().map(|fs| fs.ident.to_string()),
                             transform: aggr_attr.transform.as_ref().map(|t| t.to_string()),
+                            resolver_transform: None,
                             is_instruction: true,
                             is_whole_source: false,
                             lookup_by: aggr_attr.lookup_by.clone(),
                             condition: None,
                             when: None,
+                            stop: None,
+                            stop_lookup_by: None,
                             emit: true,
                         };
 
@@ -546,6 +630,29 @@ pub fn process_nested_struct(
                         computed_attr.expression.clone(),
                         field_type.clone(),
                     ));
+                } else if let Ok(Some(resolve_attr)) =
+                    parse::parse_resolve_attribute(attr, &field_name.to_string())
+                {
+                    let resolver = if let Some(name) = resolve_attr.resolver.as_deref() {
+                        super::entity::parse_resolver_type_name(name, field_type)
+                    } else {
+                        super::entity::infer_resolver_type(field_type)
+                    }
+                    .unwrap_or_else(|err| panic!("{}", err));
+
+                    let mut target_field_name = resolve_attr.target_field_name;
+                    if !target_field_name.contains('.') {
+                        target_field_name = format!("{}.{}", section_name, target_field_name);
+                    }
+
+                    resolve_specs.push(parse::ResolveSpec {
+                        resolver,
+                        from: resolve_attr.from,
+                        address: resolve_attr.address,
+                        extract: resolve_attr.extract,
+                        target_field_name,
+                        strategy: resolve_attr.strategy,
+                    });
                 }
             }
         }

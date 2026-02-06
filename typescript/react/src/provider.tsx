@@ -12,6 +12,7 @@ interface ClientEntry {
 interface HyperstackContextValue {
   getOrCreateClient: <TStack extends StackDefinition>(stack: TStack, urlOverride?: string) => Promise<HyperStack<TStack>>;
   getClient: <TStack extends StackDefinition>(stack: TStack | undefined) => HyperStack<TStack> | null;
+  subscribeToClientChanges: (callback: () => void) => () => void;
   config: HyperstackConfig;
 }
 
@@ -27,6 +28,18 @@ export function HyperstackProvider({
 }) {
   const clientsRef = useRef<Map<string, ClientEntry>>(new Map());
   const connectingRef = useRef<Map<string, Promise<HyperStack<any>>>>(new Map());
+  const clientChangeListenersRef = useRef<Set<() => void>>(new Set());
+  
+  const notifyClientChange = useCallback(() => {
+    clientChangeListenersRef.current.forEach(cb => { cb(); });
+  }, []);
+  
+  const subscribeToClientChanges = useCallback((callback: () => void) => {
+    clientChangeListenersRef.current.add(callback);
+    return () => {
+      clientChangeListenersRef.current.delete(callback);
+    };
+  }, []);
 
   const getOrCreateClient = useCallback(async <TStack extends StackDefinition>(stack: TStack, urlOverride?: string): Promise<HyperStack<TStack>> => {
     const cacheKey = urlOverride ? `${stack.name}:${urlOverride}` : stack.name;
@@ -61,15 +74,22 @@ export function HyperstackProvider({
         disconnect: () => client.disconnect()
       });
       connectingRef.current.delete(cacheKey);
+      notifyClientChange();
       return client;
     });
 
     connectingRef.current.set(cacheKey, connectionPromise);
     return connectionPromise as Promise<HyperStack<TStack>>;
-  }, [config.autoConnect, config.reconnectIntervals, config.maxReconnectAttempts, config.maxEntriesPerView]);
+  }, [config.autoConnect, config.reconnectIntervals, config.maxReconnectAttempts, config.maxEntriesPerView, notifyClientChange]);
 
   const getClient = useCallback(<TStack extends StackDefinition>(stack: TStack | undefined): HyperStack<TStack> | null => {
-    if (!stack) return null;
+    if (!stack) {
+      if (clientsRef.current.size === 1) {
+        const firstEntry = clientsRef.current.values().next().value;
+        return firstEntry ? (firstEntry.client as HyperStack<TStack>) : null;
+      }
+      return null;
+    }
     const entry = clientsRef.current.get(stack.name);
     return entry ? (entry.client as HyperStack<TStack>) : null;
   }, []);
@@ -87,6 +107,7 @@ export function HyperstackProvider({
   const value: HyperstackContextValue = {
     getOrCreateClient,
     getClient,
+    subscribeToClientChanges,
     config,
   };
 
@@ -106,16 +127,42 @@ export function useHyperstackContext() {
 }
 
 export function useConnectionState(stack?: StackDefinition): ConnectionState {
-  const { getClient } = useHyperstackContext();
-  const client = stack ? getClient(stack) : null;
+  const { getClient, subscribeToClientChanges } = useHyperstackContext();
+  const [state, setState] = React.useState<ConnectionState>(() => {
+    const client = getClient(stack);
+    return client?.connectionState ?? 'disconnected';
+  });
+  const unsubscribeRef = React.useRef<(() => void) | undefined>(undefined);
   
-  return useSyncExternalStore(
-    (callback) => {
-      if (!client) return () => {};
-      return client.onConnectionStateChange(callback);
-    },
-    () => client?.connectionState ?? 'disconnected'
-  );
+  React.useEffect(() => {
+    let mounted = true;
+    
+    const setupClientSubscription = () => {
+      unsubscribeRef.current?.();
+      unsubscribeRef.current = undefined;
+      
+      const client = getClient(stack);
+      if (client && mounted) {
+        setState(client.connectionState);
+        unsubscribeRef.current = client.onConnectionStateChange((newState) => {
+          if (mounted) setState(newState);
+        });
+      } else if (mounted) {
+        setState('disconnected');
+      }
+    };
+    
+    const unsubscribeFromClientChanges = subscribeToClientChanges(setupClientSubscription);
+    setupClientSubscription();
+    
+    return () => {
+      mounted = false;
+      unsubscribeFromClientChanges();
+      unsubscribeRef.current?.();
+    };
+  }, [getClient, subscribeToClientChanges, stack]);
+  
+  return state;
 }
 
 export function useView<T>(stack: StackDefinition, viewPath: string): T[] {

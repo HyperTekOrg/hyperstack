@@ -39,11 +39,14 @@ pub mod vm_metrics;
 
 pub use canonical_log::{CanonicalLog, LogLevel};
 pub use metrics_context::{FieldAccessor, FieldRef, MetricsContext};
-pub use resolvers::{InstructionContext, KeyResolution, ResolveContext, ReverseLookupUpdater};
+pub use resolvers::{
+    InstructionContext, KeyResolution, ResolveContext, ReverseLookupUpdater, TokenMetadata,
+};
 pub use typescript::{write_typescript_to_file, TypeScriptCompiler, TypeScriptConfig};
 pub use vm::{
     CapacityWarning, CleanupResult, DirtyTracker, FieldChange, PendingAccountUpdate,
-    PendingQueueStats, QueuedAccountUpdate, StateTableConfig, UpdateContext, VmMemoryStats,
+    PendingQueueStats, QueuedAccountUpdate, ResolverRequest, StateTableConfig, UpdateContext,
+    VmMemoryStats,
 };
 
 // Re-export macros for convenient use

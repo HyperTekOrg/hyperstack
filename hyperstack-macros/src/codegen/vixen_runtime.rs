@@ -56,6 +56,201 @@ pub fn generate_vm_handler(
     let entity_name_lit = entity_name;
 
     quote! {
+        const DEFAULT_DAS_BATCH_SIZE: usize = 100;
+        const DEFAULT_DAS_TIMEOUT_SECS: u64 = 10;
+
+        struct ResolverClient {
+            endpoint: String,
+            client: hyperstack::runtime::reqwest::Client,
+            batch_size: usize,
+        }
+
+        impl ResolverClient {
+            fn new(endpoint: String, batch_size: usize) -> hyperstack::runtime::anyhow::Result<Self> {
+                let client = hyperstack::runtime::reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(DEFAULT_DAS_TIMEOUT_SECS))
+                    .build()
+                    .map_err(|err| {
+                        hyperstack::runtime::anyhow::anyhow!(
+                            "Failed to build resolver HTTP client: {}",
+                            err
+                        )
+                    })?;
+
+                Ok(Self {
+                    endpoint,
+                    client,
+                    batch_size: batch_size.max(1),
+                })
+            }
+
+            async fn resolve_token_metadata(
+                &self,
+                mints: &[String],
+            ) -> hyperstack::runtime::anyhow::Result<
+                std::collections::HashMap<String, hyperstack::runtime::serde_json::Value>,
+            > {
+                let mut unique = std::collections::HashSet::new();
+                let mut deduped = Vec::new();
+
+                for mint in mints {
+                    if mint.is_empty() {
+                        continue;
+                    }
+                    if unique.insert(mint.clone()) {
+                        deduped.push(mint.clone());
+                    }
+                }
+
+                let mut results = std::collections::HashMap::new();
+                if deduped.is_empty() {
+                    return Ok(results);
+                }
+
+                for chunk in deduped.chunks(self.batch_size) {
+                    let assets = self.fetch_assets(chunk).await?;
+                    for asset in assets {
+                        if let Some((mint, value)) = Self::build_token_metadata(&asset) {
+                            results.insert(mint, value);
+                        }
+                    }
+                }
+
+                Ok(results)
+            }
+
+            async fn fetch_assets(
+                &self,
+                ids: &[String],
+            ) -> hyperstack::runtime::anyhow::Result<Vec<hyperstack::runtime::serde_json::Value>> {
+                let payload = hyperstack::runtime::serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": "1",
+                    "method": "getAssetBatch",
+                    "params": {
+                        "ids": ids,
+                        "options": {
+                            "showFungible": true,
+                        },
+                    },
+                });
+
+                let response = self
+                    .client
+                    .post(&self.endpoint)
+                    .json(&payload)
+                    .send()
+                    .await
+                    .map_err(|err| {
+                        hyperstack::runtime::anyhow::anyhow!(
+                            "Resolver request failed: {}",
+                            err
+                        )
+                    })?;
+
+                let response = response.error_for_status().map_err(|err| {
+                    hyperstack::runtime::anyhow::anyhow!("Resolver request failed: {}", err)
+                })?;
+
+                let value = response
+                    .json::<hyperstack::runtime::serde_json::Value>()
+                    .await
+                    .map_err(|err| {
+                        hyperstack::runtime::anyhow::anyhow!(
+                            "Resolver response parse failed: {}",
+                            err
+                        )
+                    })?;
+
+                if let Some(error) = value.get("error") {
+                    return Err(hyperstack::runtime::anyhow::anyhow!(
+                        "Resolver response error: {}",
+                        error
+                    ));
+                }
+
+                let assets = value
+                    .get("result")
+                    .and_then(|result| match result {
+                        hyperstack::runtime::serde_json::Value::Array(items) => Some(items.clone()),
+                        hyperstack::runtime::serde_json::Value::Object(obj) => obj
+                            .get("items")
+                            .and_then(|items| items.as_array())
+                            .map(|items| items.clone()),
+                        _ => None,
+                    })
+                    .ok_or_else(|| {
+                        hyperstack::runtime::anyhow::anyhow!("Resolver response missing result")
+                    })?;
+
+                // Filter out null entries (DAS returns null for assets not in the index)
+                let assets = assets.into_iter().filter(|a| !a.is_null()).collect();
+
+                Ok(assets)
+            }
+
+            fn build_token_metadata(
+                asset: &hyperstack::runtime::serde_json::Value,
+            ) -> Option<(String, hyperstack::runtime::serde_json::Value)> {
+                let mint = asset.get("id").and_then(|value| value.as_str())?.to_string();
+
+                let name = asset
+                    .pointer("/content/metadata/name")
+                    .and_then(|value| value.as_str());
+
+                let symbol = asset
+                    .pointer("/content/metadata/symbol")
+                    .and_then(|value| value.as_str());
+
+                let token_info = asset
+                    .get("token_info")
+                    .or_else(|| asset.pointer("/content/token_info"));
+
+                let decimals = token_info
+                    .and_then(|info| info.get("decimals"))
+                    .and_then(|value| value.as_u64());
+
+                let logo_uri = asset
+                    .pointer("/content/links/image")
+                    .and_then(|value| value.as_str())
+                    .or_else(|| {
+                        asset
+                            .pointer("/content/links/image_uri")
+                            .and_then(|value| value.as_str())
+                    });
+
+                let mut obj = hyperstack::runtime::serde_json::Map::new();
+                obj.insert(
+                    "mint".to_string(),
+                    hyperstack::runtime::serde_json::json!(mint),
+                );
+                obj.insert(
+                    "name".to_string(),
+                    name.map(|value| hyperstack::runtime::serde_json::json!(value))
+                        .unwrap_or(hyperstack::runtime::serde_json::Value::Null),
+                );
+                obj.insert(
+                    "symbol".to_string(),
+                    symbol.map(|value| hyperstack::runtime::serde_json::json!(value))
+                        .unwrap_or(hyperstack::runtime::serde_json::Value::Null),
+                );
+                obj.insert(
+                    "decimals".to_string(),
+                    decimals
+                        .map(|value| hyperstack::runtime::serde_json::json!(value))
+                        .unwrap_or(hyperstack::runtime::serde_json::Value::Null),
+                );
+                obj.insert(
+                    "logo_uri".to_string(),
+                    logo_uri
+                        .map(|value| hyperstack::runtime::serde_json::json!(value))
+                        .unwrap_or(hyperstack::runtime::serde_json::Value::Null),
+                );
+
+                Some((mint, hyperstack::runtime::serde_json::Value::Object(obj)))
+            }
+        }
+
         #[derive(Clone)]
         pub struct VmHandler {
             vm: std::sync::Arc<std::sync::Mutex<hyperstack::runtime::hyperstack_interpreter::vm::VmContext>>,
@@ -63,6 +258,7 @@ pub fn generate_vm_handler(
             mutations_tx: hyperstack::runtime::tokio::sync::mpsc::Sender<hyperstack::runtime::hyperstack_server::MutationBatch>,
             health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
             slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
+            resolver_client: Option<std::sync::Arc<ResolverClient>>,
         }
 
         impl std::fmt::Debug for VmHandler {
@@ -81,6 +277,7 @@ pub fn generate_vm_handler(
                 mutations_tx: hyperstack::runtime::tokio::sync::mpsc::Sender<hyperstack::runtime::hyperstack_server::MutationBatch>,
                 health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
                 slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
+                resolver_client: Option<std::sync::Arc<ResolverClient>>,
             ) -> Self {
                 Self {
                     vm,
@@ -88,19 +285,161 @@ pub fn generate_vm_handler(
                     mutations_tx,
                     health_monitor,
                     slot_tracker,
+                    resolver_client,
                 }
             }
 
             #[inline]
-            async fn send_mutations_with_context(&self, mutations: Vec<hyperstack::runtime::hyperstack_interpreter::Mutation>, slot: u64, ordering: u64) {
+            async fn send_mutations_with_context(
+                &self,
+                mutations: Vec<hyperstack::runtime::hyperstack_interpreter::Mutation>,
+                slot: u64,
+                ordering: u64,
+                event_context: Option<hyperstack::runtime::hyperstack_server::EventContext>,
+            ) {
                 if !mutations.is_empty() {
                     let slot_context = hyperstack::runtime::hyperstack_server::SlotContext::new(slot, ordering);
-                    let batch = hyperstack::runtime::hyperstack_server::MutationBatch::with_slot_context(
+                    let mut batch = hyperstack::runtime::hyperstack_server::MutationBatch::with_slot_context(
                         hyperstack::runtime::smallvec::SmallVec::from_vec(mutations),
                         slot_context,
                     );
+                    if let Some(ctx) = event_context {
+                        batch = batch.with_event_context(ctx);
+                    }
                     let _ = self.mutations_tx.send(batch).await;
                 }
+            }
+
+            fn extract_mint_from_input(
+                input: &hyperstack::runtime::serde_json::Value,
+            ) -> Option<String> {
+                match input {
+                    hyperstack::runtime::serde_json::Value::String(value) => Some(value.clone()),
+                    hyperstack::runtime::serde_json::Value::Object(map) => map
+                        .get("mint")
+                        .and_then(|value| value.as_str())
+                        .map(|value| value.to_string()),
+                    _ => None,
+                }
+            }
+
+            async fn resolve_and_apply_resolvers(
+                &self,
+                requests: Vec<hyperstack::runtime::hyperstack_interpreter::vm::ResolverRequest>,
+            ) -> Vec<hyperstack::runtime::hyperstack_interpreter::Mutation> {
+                if requests.is_empty() {
+                    return Vec::new();
+                }
+
+                let total_requests = requests.len();
+
+                let resolver_client = match self.resolver_client.as_ref() {
+                    Some(client) => client.clone(),
+                    None => {
+                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                        vm.restore_resolver_requests(requests);
+                        hyperstack::runtime::tracing::warn!(
+                            "DAS_API_ENDPOINT not set; resolver requests re-queued (count={})",
+                            total_requests
+                        );
+                        return Vec::new();
+                    }
+                };
+
+                let mut token_requests = Vec::new();
+                let mut other_requests = Vec::new();
+
+                for request in requests {
+                    match request.resolver {
+                        hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Token => {
+                            token_requests.push(request)
+                        }
+                        _ => other_requests.push(request),
+                    }
+                }
+
+                let mut mutations = Vec::new();
+
+                if !token_requests.is_empty() {
+                    let mints: Vec<String> = token_requests
+                        .iter()
+                        .filter_map(|request| Self::extract_mint_from_input(&request.input))
+                        .collect();
+
+                    if mints.is_empty() {
+                        let token_count = token_requests.len();
+                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                        vm.restore_resolver_requests(token_requests);
+                        hyperstack::runtime::tracing::warn!(
+                            "Resolver token requests missing mint values; re-queued (count={})",
+                            token_count
+                        );
+                    } else {
+                        match resolver_client.resolve_token_metadata(&mints).await {
+                            Ok(resolved_map) => {
+                                let mut unresolved = Vec::new();
+                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+
+                                for request in token_requests {
+                                    let Some(mint) =
+                                        Self::extract_mint_from_input(&request.input)
+                                    else {
+                                        unresolved.push(request);
+                                        continue;
+                                    };
+
+                                    let Some(resolved_value) = resolved_map.get(&mint) else {
+                                        unresolved.push(request);
+                                        continue;
+                                    };
+
+                                    match vm.apply_resolver_result(
+                                        self.bytecode.as_ref(),
+                                        &request.cache_key,
+                                        resolved_value.clone(),
+                                    ) {
+                                        Ok(mut new_mutations) => {
+                                            mutations.append(&mut new_mutations);
+                                        }
+                                        Err(err) => {
+                                            hyperstack::runtime::tracing::warn!(
+                                                "Failed to apply resolver result: {}",
+                                                err
+                                            );
+                                            unresolved.push(request);
+                                        }
+                                    }
+                                }
+
+                                if !unresolved.is_empty() {
+                                    vm.restore_resolver_requests(unresolved);
+                                }
+                            }
+                            Err(err) => {
+                                let token_count = token_requests.len();
+                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                                vm.restore_resolver_requests(token_requests);
+                                hyperstack::runtime::tracing::warn!(
+                                    "Resolver request failed (count={}): {}",
+                                    token_count,
+                                    err
+                                );
+                            }
+                        }
+                    }
+                }
+
+                if !other_requests.is_empty() {
+                    let other_count = other_requests.len();
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                    vm.restore_resolver_requests(other_requests);
+                    hyperstack::runtime::tracing::warn!(
+                        "Resolver type unsupported; requests re-queued (count={})",
+                        other_count
+                    );
+                }
+
+                mutations
             }
         }
 
@@ -122,6 +461,13 @@ pub fn generate_vm_handler(
                 let account_address = hyperstack::runtime::bs58::encode(&account.pubkey).into_string();
 
                 let event_type = value.event_type();
+                let mut log = hyperstack::runtime::hyperstack_interpreter::CanonicalLog::new();
+                log.set("phase", "vixen")
+                    .set("event_kind", "account")
+                    .set("event_type", event_type)
+                    .set("slot", slot)
+                    .set("program", #entity_name_lit)
+                    .set("account", account_address);
                 let mut event_value = value.to_value();
 
                 if let Some(obj) = event_value.as_object_mut() {
@@ -129,7 +475,7 @@ pub fn generate_vm_handler(
                 }
 
                 let resolver_result = {
-                    let mut vm = self.vm.lock().unwrap();
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     if let Some(state_table) = vm.get_state_table_mut(0) {
                         let mut ctx = hyperstack::runtime::hyperstack_interpreter::resolvers::ResolveContext::new(
@@ -158,7 +504,7 @@ pub fn generate_vm_handler(
                         }
                     }
                     hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(_discriminators) => {
-                        let mut vm = self.vm.lock().unwrap();
+                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                         let _ = vm.queue_account_update(
                             0,
@@ -178,19 +524,53 @@ pub fn generate_vm_handler(
                     }
                 }
 
-                let mutations_result = {
-                    let mut vm = self.vm.lock().unwrap();
+                let (mutations_result, resolver_requests) = {
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
 
-                    vm.process_event(&self.bytecode, event_value, event_type, Some(&context), None)
-                        .map_err(|e| e.to_string())
+                    let result = vm.process_event(&self.bytecode, event_value, event_type, Some(&context), Some(&mut log))
+                        .map_err(|e| e.to_string());
+
+                    let requests = if result.is_ok() {
+                        vm.take_resolver_requests()
+                    } else {
+                        Vec::new()
+                    };
+
+                    (result, requests)
+                };
+
+                let resolver_mutations = if mutations_result.is_ok() {
+                    self.resolve_and_apply_resolvers(resolver_requests).await
+                } else {
+                    Vec::new()
                 };
 
                 match mutations_result {
                     Ok(mutations) => {
                         self.slot_tracker.record(slot);
-                        self.send_mutations_with_context(mutations, slot, write_version).await;
+                        let event_context = hyperstack::runtime::hyperstack_server::EventContext {
+                            program: #entity_name_lit.to_string(),
+                            event_kind: "account".to_string(),
+                            event_type: event_type.to_string(),
+                            account: Some(account_address),
+                            accounts_count: None,
+                        };
+                        self.send_mutations_with_context(
+                            mutations,
+                            slot,
+                            write_version,
+                            Some(event_context.clone()),
+                        )
+                        .await;
+                        self.send_mutations_with_context(
+                            resolver_mutations,
+                            slot,
+                            write_version,
+                            Some(event_context),
+                        )
+                        .await;
                         Ok(())
                     }
                     Err(e) => {
@@ -219,15 +599,30 @@ pub fn generate_vm_handler(
 
                 let static_keys_vec = &raw_update.accounts;
                 let event_type = value.event_type();
+                let account_keys: Vec<String> = static_keys_vec
+                    .iter()
+                    .map(|key| {
+                        let key_bytes: &[u8] = AsRef::<[u8]>::as_ref(key);
+                        hyperstack::runtime::bs58::encode(key_bytes).into_string()
+                    })
+                    .collect();
+                let mut log = hyperstack::runtime::hyperstack_interpreter::CanonicalLog::new();
+                log.set("phase", "vixen")
+                    .set("event_kind", "instruction")
+                    .set("event_type", event_type)
+                    .set("slot", slot)
+                    .set("txn_index", txn_index)
+                    .set("program", #entity_name_lit)
+                    .set("accounts", account_keys);
                 let event_value = value.to_value_with_accounts(static_keys_vec);
 
                 let bytecode = self.bytecode.clone();
-                let mutations_result = {
-                    let mut vm = self.vm.lock().unwrap();
+                let (mutations_result, resolver_requests) = {
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
 
-                    let mut result = vm.process_event(&bytecode, event_value.clone(), event_type, Some(&context), None)
+                    let mut result = vm.process_event(&bytecode, event_value.clone(), event_type, Some(&context), Some(&mut log))
                         .map_err(|e| e.to_string());
 
                     if result.is_ok() {
@@ -313,13 +708,45 @@ pub fn generate_vm_handler(
                         }
                     }
 
-                    result
+                    let requests = if result.is_ok() {
+                        vm.take_resolver_requests()
+                    } else {
+                        Vec::new()
+                    };
+
+                    (result, requests)
+                };
+
+                let resolver_mutations = if mutations_result.is_ok() {
+                    self.resolve_and_apply_resolvers(resolver_requests).await
+                } else {
+                    Vec::new()
                 };
 
                 match mutations_result {
                     Ok(mutations) => {
                         self.slot_tracker.record(slot);
-                        self.send_mutations_with_context(mutations, slot, txn_index as u64).await;
+                        let event_context = hyperstack::runtime::hyperstack_server::EventContext {
+                            program: #entity_name_lit.to_string(),
+                            event_kind: "instruction".to_string(),
+                            event_type: event_type.to_string(),
+                            account: None,
+                            accounts_count: Some(static_keys_vec.len()),
+                        };
+                        self.send_mutations_with_context(
+                            mutations,
+                            slot,
+                            txn_index as u64,
+                            Some(event_context.clone()),
+                        )
+                        .await;
+                        self.send_mutations_with_context(
+                            resolver_mutations,
+                            slot,
+                            txn_index as u64,
+                            Some(event_context),
+                        )
+                        .await;
                         Ok(())
                     }
                     Err(e) => {
@@ -424,6 +851,21 @@ pub fn generate_spec_function(
                 ))?;
             let x_token = std::env::var("YELLOWSTONE_X_TOKEN").ok();
 
+            let resolver_batch_size = std::env::var("DAS_API_BATCH_SIZE")
+                .ok()
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(DEFAULT_DAS_BATCH_SIZE);
+
+            let resolver_client = match std::env::var("DAS_API_ENDPOINT").ok() {
+                Some(endpoint) => Some(Arc::new(ResolverClient::new(endpoint, resolver_batch_size)?)),
+                None => {
+                    hyperstack::runtime::tracing::warn!(
+                        "DAS_API_ENDPOINT not set; token resolver disabled."
+                    );
+                    None
+                }
+            };
+
             let slot_tracker = hyperstack::runtime::hyperstack_server::SlotTracker::new();
             let mut attempt = 0u32;
             let mut backoff = reconnection_config.initial_delay;
@@ -464,6 +906,7 @@ pub fn generate_spec_function(
                     mutations_tx.clone(),
                     health_monitor.clone(),
                     slot_tracker.clone(),
+                    resolver_client.clone(),
                 );
 
                 let account_parser = parsers::AccountParser;
@@ -529,6 +972,201 @@ pub fn generate_spec_function(
 
 pub fn generate_vm_handler_struct() -> TokenStream {
     quote! {
+        const DEFAULT_DAS_BATCH_SIZE: usize = 100;
+        const DEFAULT_DAS_TIMEOUT_SECS: u64 = 10;
+
+        struct ResolverClient {
+            endpoint: String,
+            client: hyperstack::runtime::reqwest::Client,
+            batch_size: usize,
+        }
+
+        impl ResolverClient {
+            fn new(endpoint: String, batch_size: usize) -> hyperstack::runtime::anyhow::Result<Self> {
+                let client = hyperstack::runtime::reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(DEFAULT_DAS_TIMEOUT_SECS))
+                    .build()
+                    .map_err(|err| {
+                        hyperstack::runtime::anyhow::anyhow!(
+                            "Failed to build resolver HTTP client: {}",
+                            err
+                        )
+                    })?;
+
+                Ok(Self {
+                    endpoint,
+                    client,
+                    batch_size: batch_size.max(1),
+                })
+            }
+
+            async fn resolve_token_metadata(
+                &self,
+                mints: &[String],
+            ) -> hyperstack::runtime::anyhow::Result<
+                std::collections::HashMap<String, hyperstack::runtime::serde_json::Value>,
+            > {
+                let mut unique = std::collections::HashSet::new();
+                let mut deduped = Vec::new();
+
+                for mint in mints {
+                    if mint.is_empty() {
+                        continue;
+                    }
+                    if unique.insert(mint.clone()) {
+                        deduped.push(mint.clone());
+                    }
+                }
+
+                let mut results = std::collections::HashMap::new();
+                if deduped.is_empty() {
+                    return Ok(results);
+                }
+
+                for chunk in deduped.chunks(self.batch_size) {
+                    let assets = self.fetch_assets(chunk).await?;
+                    for asset in assets {
+                        if let Some((mint, value)) = Self::build_token_metadata(&asset) {
+                            results.insert(mint, value);
+                        }
+                    }
+                }
+
+                Ok(results)
+            }
+
+            async fn fetch_assets(
+                &self,
+                ids: &[String],
+            ) -> hyperstack::runtime::anyhow::Result<Vec<hyperstack::runtime::serde_json::Value>> {
+                let payload = hyperstack::runtime::serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": "1",
+                    "method": "getAssetBatch",
+                    "params": {
+                        "ids": ids,
+                        "options": {
+                            "showFungible": true,
+                        },
+                    },
+                });
+
+                let response = self
+                    .client
+                    .post(&self.endpoint)
+                    .json(&payload)
+                    .send()
+                    .await
+                    .map_err(|err| {
+                        hyperstack::runtime::anyhow::anyhow!(
+                            "Resolver request failed: {}",
+                            err
+                        )
+                    })?;
+
+                let response = response.error_for_status().map_err(|err| {
+                    hyperstack::runtime::anyhow::anyhow!("Resolver request failed: {}", err)
+                })?;
+
+                let value = response
+                    .json::<hyperstack::runtime::serde_json::Value>()
+                    .await
+                    .map_err(|err| {
+                        hyperstack::runtime::anyhow::anyhow!(
+                            "Resolver response parse failed: {}",
+                            err
+                        )
+                    })?;
+
+                if let Some(error) = value.get("error") {
+                    return Err(hyperstack::runtime::anyhow::anyhow!(
+                        "Resolver response error: {}",
+                        error
+                    ));
+                }
+
+                let assets = value
+                    .get("result")
+                    .and_then(|result| match result {
+                        hyperstack::runtime::serde_json::Value::Array(items) => Some(items.clone()),
+                        hyperstack::runtime::serde_json::Value::Object(obj) => obj
+                            .get("items")
+                            .and_then(|items| items.as_array())
+                            .map(|items| items.clone()),
+                        _ => None,
+                    })
+                    .ok_or_else(|| {
+                        hyperstack::runtime::anyhow::anyhow!("Resolver response missing result")
+                    })?;
+
+                // Filter out null entries (DAS returns null for assets not in the index)
+                let assets = assets.into_iter().filter(|a| !a.is_null()).collect();
+
+                Ok(assets)
+            }
+
+            fn build_token_metadata(
+                asset: &hyperstack::runtime::serde_json::Value,
+            ) -> Option<(String, hyperstack::runtime::serde_json::Value)> {
+                let mint = asset.get("id").and_then(|value| value.as_str())?.to_string();
+
+                let name = asset
+                    .pointer("/content/metadata/name")
+                    .and_then(|value| value.as_str());
+
+                let symbol = asset
+                    .pointer("/content/metadata/symbol")
+                    .and_then(|value| value.as_str());
+
+                let token_info = asset
+                    .get("token_info")
+                    .or_else(|| asset.pointer("/content/token_info"));
+
+                let decimals = token_info
+                    .and_then(|info| info.get("decimals"))
+                    .and_then(|value| value.as_u64());
+
+                let logo_uri = asset
+                    .pointer("/content/links/image")
+                    .and_then(|value| value.as_str())
+                    .or_else(|| {
+                        asset
+                            .pointer("/content/links/image_uri")
+                            .and_then(|value| value.as_str())
+                    });
+
+                let mut obj = hyperstack::runtime::serde_json::Map::new();
+                obj.insert(
+                    "mint".to_string(),
+                    hyperstack::runtime::serde_json::json!(mint),
+                );
+                obj.insert(
+                    "name".to_string(),
+                    name.map(|value| hyperstack::runtime::serde_json::json!(value))
+                        .unwrap_or(hyperstack::runtime::serde_json::Value::Null),
+                );
+                obj.insert(
+                    "symbol".to_string(),
+                    symbol.map(|value| hyperstack::runtime::serde_json::json!(value))
+                        .unwrap_or(hyperstack::runtime::serde_json::Value::Null),
+                );
+                obj.insert(
+                    "decimals".to_string(),
+                    decimals
+                        .map(|value| hyperstack::runtime::serde_json::json!(value))
+                        .unwrap_or(hyperstack::runtime::serde_json::Value::Null),
+                );
+                obj.insert(
+                    "logo_uri".to_string(),
+                    logo_uri
+                        .map(|value| hyperstack::runtime::serde_json::json!(value))
+                        .unwrap_or(hyperstack::runtime::serde_json::Value::Null),
+                );
+
+                Some((mint, hyperstack::runtime::serde_json::Value::Object(obj)))
+            }
+        }
+
         #[derive(Clone)]
         pub struct VmHandler {
             vm: std::sync::Arc<std::sync::Mutex<hyperstack::runtime::hyperstack_interpreter::vm::VmContext>>,
@@ -536,6 +1174,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
             mutations_tx: hyperstack::runtime::tokio::sync::mpsc::Sender<hyperstack::runtime::hyperstack_server::MutationBatch>,
             health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
             slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
+            resolver_client: Option<std::sync::Arc<ResolverClient>>,
         }
 
         impl std::fmt::Debug for VmHandler {
@@ -554,6 +1193,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                 mutations_tx: hyperstack::runtime::tokio::sync::mpsc::Sender<hyperstack::runtime::hyperstack_server::MutationBatch>,
                 health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
                 slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
+                resolver_client: Option<std::sync::Arc<ResolverClient>>,
             ) -> Self {
                 Self {
                     vm,
@@ -561,19 +1201,161 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                     mutations_tx,
                     health_monitor,
                     slot_tracker,
+                    resolver_client,
                 }
             }
 
             #[inline]
-            async fn send_mutations_with_context(&self, mutations: Vec<hyperstack::runtime::hyperstack_interpreter::Mutation>, slot: u64, ordering: u64) {
+            async fn send_mutations_with_context(
+                &self,
+                mutations: Vec<hyperstack::runtime::hyperstack_interpreter::Mutation>,
+                slot: u64,
+                ordering: u64,
+                event_context: Option<hyperstack::runtime::hyperstack_server::EventContext>,
+            ) {
                 if !mutations.is_empty() {
                     let slot_context = hyperstack::runtime::hyperstack_server::SlotContext::new(slot, ordering);
-                    let batch = hyperstack::runtime::hyperstack_server::MutationBatch::with_slot_context(
+                    let mut batch = hyperstack::runtime::hyperstack_server::MutationBatch::with_slot_context(
                         hyperstack::runtime::smallvec::SmallVec::from_vec(mutations),
                         slot_context,
                     );
+                    if let Some(ctx) = event_context {
+                        batch = batch.with_event_context(ctx);
+                    }
                     let _ = self.mutations_tx.send(batch).await;
                 }
+            }
+
+            fn extract_mint_from_input(
+                input: &hyperstack::runtime::serde_json::Value,
+            ) -> Option<String> {
+                match input {
+                    hyperstack::runtime::serde_json::Value::String(value) => Some(value.clone()),
+                    hyperstack::runtime::serde_json::Value::Object(map) => map
+                        .get("mint")
+                        .and_then(|value| value.as_str())
+                        .map(|value| value.to_string()),
+                    _ => None,
+                }
+            }
+
+            async fn resolve_and_apply_resolvers(
+                &self,
+                requests: Vec<hyperstack::runtime::hyperstack_interpreter::vm::ResolverRequest>,
+            ) -> Vec<hyperstack::runtime::hyperstack_interpreter::Mutation> {
+                if requests.is_empty() {
+                    return Vec::new();
+                }
+
+                let total_requests = requests.len();
+
+                let resolver_client = match self.resolver_client.as_ref() {
+                    Some(client) => client.clone(),
+                    None => {
+                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                        vm.restore_resolver_requests(requests);
+                        hyperstack::runtime::tracing::warn!(
+                            "DAS_API_ENDPOINT not set; resolver requests re-queued (count={})",
+                            total_requests
+                        );
+                        return Vec::new();
+                    }
+                };
+
+                let mut token_requests = Vec::new();
+                let mut other_requests = Vec::new();
+
+                for request in requests {
+                    match request.resolver {
+                        hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Token => {
+                            token_requests.push(request)
+                        }
+                        _ => other_requests.push(request),
+                    }
+                }
+
+                let mut mutations = Vec::new();
+
+                if !token_requests.is_empty() {
+                    let mints: Vec<String> = token_requests
+                        .iter()
+                        .filter_map(|request| Self::extract_mint_from_input(&request.input))
+                        .collect();
+
+                    if mints.is_empty() {
+                        let token_count = token_requests.len();
+                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                        vm.restore_resolver_requests(token_requests);
+                        hyperstack::runtime::tracing::warn!(
+                            "Resolver token requests missing mint values; re-queued (count={})",
+                            token_count
+                        );
+                    } else {
+                        match resolver_client.resolve_token_metadata(&mints).await {
+                            Ok(resolved_map) => {
+                                let mut unresolved = Vec::new();
+                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+
+                                for request in token_requests {
+                                    let Some(mint) =
+                                        Self::extract_mint_from_input(&request.input)
+                                    else {
+                                        unresolved.push(request);
+                                        continue;
+                                    };
+
+                                    let Some(resolved_value) = resolved_map.get(&mint) else {
+                                        unresolved.push(request);
+                                        continue;
+                                    };
+
+                                    match vm.apply_resolver_result(
+                                        self.bytecode.as_ref(),
+                                        &request.cache_key,
+                                        resolved_value.clone(),
+                                    ) {
+                                        Ok(mut new_mutations) => {
+                                            mutations.append(&mut new_mutations);
+                                        }
+                                        Err(err) => {
+                                            hyperstack::runtime::tracing::warn!(
+                                                "Failed to apply resolver result: {}",
+                                                err
+                                            );
+                                            unresolved.push(request);
+                                        }
+                                    }
+                                }
+
+                                if !unresolved.is_empty() {
+                                    vm.restore_resolver_requests(unresolved);
+                                }
+                            }
+                            Err(err) => {
+                                let token_count = token_requests.len();
+                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                                vm.restore_resolver_requests(token_requests);
+                                hyperstack::runtime::tracing::warn!(
+                                    "Resolver request failed (count={}): {}",
+                                    token_count,
+                                    err
+                                );
+                            }
+                        }
+                    }
+                }
+
+                if !other_requests.is_empty() {
+                    let other_count = other_requests.len();
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                    vm.restore_resolver_requests(other_requests);
+                    hyperstack::runtime::tracing::warn!(
+                        "Resolver type unsupported; requests re-queued (count={})",
+                        other_count
+                    );
+                }
+
+                mutations
             }
         }
     }
@@ -585,6 +1367,7 @@ pub fn generate_account_handler_impl(
 ) -> TokenStream {
     let parser_mod = format_ident!("{}", parser_module_name);
     let state_enum = format_ident!("{}", state_enum_name);
+    let program_name_lit = parser_module_name;
 
     quote! {
         impl hyperstack::runtime::yellowstone_vixen::Handler<#parser_mod::#state_enum, hyperstack::runtime::yellowstone_vixen_core::AccountUpdate> for VmHandler {
@@ -605,6 +1388,13 @@ pub fn generate_account_handler_impl(
                 let account_address = hyperstack::runtime::bs58::encode(&account.pubkey).into_string();
 
                 let event_type = value.event_type();
+                let mut log = hyperstack::runtime::hyperstack_interpreter::CanonicalLog::new();
+                log.set("phase", "vixen")
+                    .set("event_kind", "account")
+                    .set("event_type", event_type)
+                    .set("slot", slot)
+                    .set("program", #program_name_lit)
+                    .set("account", &account_address);
                 let mut event_value = value.to_value();
 
                 if let Some(obj) = event_value.as_object_mut() {
@@ -612,7 +1402,7 @@ pub fn generate_account_handler_impl(
                 }
 
                 let resolver_result = {
-                    let mut vm = self.vm.lock().unwrap();
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     if let Some(state_table) = vm.get_state_table_mut(0) {
                         let mut ctx = hyperstack::runtime::hyperstack_interpreter::resolvers::ResolveContext::new(
@@ -641,7 +1431,7 @@ pub fn generate_account_handler_impl(
                         }
                     }
                     hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(_discriminators) => {
-                        let mut vm = self.vm.lock().unwrap();
+                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                         let _ = vm.queue_account_update(
                             0,
@@ -661,19 +1451,53 @@ pub fn generate_account_handler_impl(
                     }
                 }
 
-                let mutations_result = {
-                    let mut vm = self.vm.lock().unwrap();
+                let (mutations_result, resolver_requests) = {
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
 
-                    vm.process_event(&self.bytecode, event_value, event_type, Some(&context), None)
-                        .map_err(|e| e.to_string())
+                    let result = vm.process_event(&self.bytecode, event_value, event_type, Some(&context), Some(&mut log))
+                        .map_err(|e| e.to_string());
+
+                    let requests = if result.is_ok() {
+                        vm.take_resolver_requests()
+                    } else {
+                        Vec::new()
+                    };
+
+                    (result, requests)
+                };
+
+                let resolver_mutations = if mutations_result.is_ok() {
+                    self.resolve_and_apply_resolvers(resolver_requests).await
+                } else {
+                    Vec::new()
                 };
 
                 match mutations_result {
                     Ok(mutations) => {
                         self.slot_tracker.record(slot);
-                        self.send_mutations_with_context(mutations, slot, write_version).await;
+                        let event_context = hyperstack::runtime::hyperstack_server::EventContext {
+                            program: #program_name_lit.to_string(),
+                            event_kind: "account".to_string(),
+                            event_type: event_type.to_string(),
+                            account: Some(account_address),
+                            accounts_count: None,
+                        };
+                        self.send_mutations_with_context(
+                            mutations,
+                            slot,
+                            write_version,
+                            Some(event_context.clone()),
+                        )
+                        .await;
+                        self.send_mutations_with_context(
+                            resolver_mutations,
+                            slot,
+                            write_version,
+                            Some(event_context),
+                        )
+                        .await;
                         Ok(())
                     }
                     Err(e) => {
@@ -714,15 +1538,23 @@ pub fn generate_instruction_handler_impl(
 
                 let static_keys_vec = &raw_update.accounts;
                 let event_type = value.event_type();
+                let mut log = hyperstack::runtime::hyperstack_interpreter::CanonicalLog::new();
+                log.set("phase", "vixen")
+                    .set("event_kind", "instruction")
+                    .set("event_type", event_type)
+                    .set("slot", slot)
+                    .set("txn_index", txn_index)
+                    .set("program", #entity_name_lit)
+                    .set("accounts_count", static_keys_vec.len());
                 let event_value = value.to_value_with_accounts(static_keys_vec);
 
                 let bytecode = self.bytecode.clone();
-                let mutations_result = {
-                    let mut vm = self.vm.lock().unwrap();
+                let (mutations_result, resolver_requests) = {
+                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
 
-                    let mut result = vm.process_event(&bytecode, event_value.clone(), event_type, Some(&context), None)
+                    let mut result = vm.process_event(&bytecode, event_value.clone(), event_type, Some(&context), Some(&mut log))
                         .map_err(|e| e.to_string());
 
                     if result.is_ok() {
@@ -805,13 +1637,45 @@ pub fn generate_instruction_handler_impl(
                         }
                     }
 
-                    result
+                    let requests = if result.is_ok() {
+                        vm.take_resolver_requests()
+                    } else {
+                        Vec::new()
+                    };
+
+                    (result, requests)
+                };
+
+                let resolver_mutations = if mutations_result.is_ok() {
+                    self.resolve_and_apply_resolvers(resolver_requests).await
+                } else {
+                    Vec::new()
                 };
 
                 match mutations_result {
                     Ok(mutations) => {
                         self.slot_tracker.record(slot);
-                        self.send_mutations_with_context(mutations, slot, txn_index as u64).await;
+                        let event_context = hyperstack::runtime::hyperstack_server::EventContext {
+                            program: #entity_name_lit.to_string(),
+                            event_kind: "instruction".to_string(),
+                            event_type: event_type.to_string(),
+                            account: None,
+                            accounts_count: Some(static_keys_vec.len()),
+                        };
+                        self.send_mutations_with_context(
+                            mutations,
+                            slot,
+                            txn_index as u64,
+                            Some(event_context.clone()),
+                        )
+                        .await;
+                        self.send_mutations_with_context(
+                            resolver_mutations,
+                            slot,
+                            txn_index as u64,
+                            Some(event_context),
+                        )
+                        .await;
                         Ok(())
                     }
                     Err(e) => {
@@ -971,6 +1835,21 @@ pub fn generate_multi_pipeline_spec_function(
                 ))?;
             let x_token = std::env::var("YELLOWSTONE_X_TOKEN").ok();
 
+            let resolver_batch_size = std::env::var("DAS_API_BATCH_SIZE")
+                .ok()
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(DEFAULT_DAS_BATCH_SIZE);
+
+            let resolver_client = match std::env::var("DAS_API_ENDPOINT").ok() {
+                Some(endpoint) => Some(Arc::new(ResolverClient::new(endpoint, resolver_batch_size)?)),
+                None => {
+                    hyperstack::runtime::tracing::warn!(
+                        "DAS_API_ENDPOINT not set; token resolver disabled."
+                    );
+                    None
+                }
+            };
+
             let slot_tracker = hyperstack::runtime::hyperstack_server::SlotTracker::new();
             let mut attempt = 0u32;
             let mut backoff = reconnection_config.initial_delay;
@@ -1011,6 +1890,7 @@ pub fn generate_multi_pipeline_spec_function(
                     mutations_tx.clone(),
                     health_monitor.clone(),
                     slot_tracker.clone(),
+                    resolver_client.clone(),
                 );
 
                 if attempt == 0 {

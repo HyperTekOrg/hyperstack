@@ -5,6 +5,10 @@ use tracing;
 
 pub type Register = usize;
 
+fn stop_field_path(target_path: &str) -> String {
+    format!("__stop:{}", target_path)
+}
+
 #[derive(Debug, Clone)]
 pub enum OpCode {
     LoadEventField {
@@ -148,6 +152,17 @@ pub enum OpCode {
         condition_op: Option<ComparisonOp>,
         condition_value: Option<Value>,
     },
+    /// Set field unless stopped by a specific instruction.
+    /// Stop is tracked by a per-entity stop flag.
+    SetFieldUnlessStopped {
+        object: Register,
+        path: String,
+        value: Register,
+        stop_field: String,
+        stop_instruction: String,
+        entity_name: String,
+        key_reg: Register,
+    },
     /// Add value to unique set and update count
     /// Maintains internal Set, field stores count
     AddToUniqueSet {
@@ -180,6 +195,18 @@ pub enum OpCode {
         state: Register,
         computed_paths: Vec<String>,
     },
+    /// Queue a resolver for asynchronous enrichment
+    QueueResolver {
+        state_id: u32,
+        entity_name: String,
+        resolver: ResolverType,
+        input_path: Option<String>,
+        input_value: Option<Value>,
+        strategy: ResolveStrategy,
+        extracts: Vec<ResolverExtractSpec>,
+        state: Register,
+        key: Register,
+    },
     /// Update PDA reverse lookup table
     /// Maps a PDA address to its primary key for reverse lookups
     UpdatePdaReverseLookup {
@@ -196,11 +223,19 @@ pub struct EntityBytecode {
     pub entity_name: String,
     pub when_events: HashSet<String>,
     pub non_emitted_fields: HashSet<String>,
+    pub computed_paths: Vec<String>,
     /// Optional callback for evaluating computed fields
+    /// Parameters: state, context_slot (Option<u64>), context_timestamp (i64)
     #[allow(clippy::type_complexity)]
     pub computed_fields_evaluator: Option<
         Box<
-            dyn Fn(&mut Value) -> std::result::Result<(), Box<dyn std::error::Error>> + Send + Sync,
+            dyn Fn(
+                    &mut Value,
+                    Option<u64>,
+                    i64,
+                ) -> std::result::Result<(), Box<dyn std::error::Error>>
+                + Send
+                + Sync,
         >,
     >,
 }
@@ -213,6 +248,7 @@ impl std::fmt::Debug for EntityBytecode {
             .field("entity_name", &self.entity_name)
             .field("when_events", &self.when_events)
             .field("non_emitted_fields", &self.non_emitted_fields)
+            .field("computed_paths", &self.computed_paths)
             .field(
                 "computed_fields_evaluator",
                 &self.computed_fields_evaluator.is_some(),
@@ -303,7 +339,13 @@ impl MultiEntityBytecodeBuilder {
             entity_name,
             spec,
             state_id,
-            None::<fn(&mut Value) -> std::result::Result<(), Box<dyn std::error::Error>>>,
+            None::<
+                fn(
+                    &mut Value,
+                    Option<u64>,
+                    i64,
+                ) -> std::result::Result<(), Box<dyn std::error::Error>>,
+            >,
         )
     }
 
@@ -315,7 +357,7 @@ impl MultiEntityBytecodeBuilder {
         evaluator: Option<F>,
     ) -> Self
     where
-        F: Fn(&mut Value) -> std::result::Result<(), Box<dyn std::error::Error>>
+        F: Fn(&mut Value, Option<u64>, i64) -> std::result::Result<(), Box<dyn std::error::Error>>
             + Send
             + Sync
             + 'static,
@@ -439,6 +481,11 @@ impl<S> TypedCompiler<S> {
                     .entry(mapping.target_path.clone())
                     .or_insert(false);
                 *entry |= mapping.emit;
+                if mapping.stop.is_some() {
+                    emit_by_path
+                        .entry(stop_field_path(&mapping.target_path))
+                        .or_insert(false);
+                }
             }
             let opcodes = self.compile_handler(handler_spec);
             let event_type = self.get_event_type(&handler_spec.source);
@@ -602,6 +649,7 @@ impl<S> TypedCompiler<S> {
             entity_name: self.entity_name.clone(),
             when_events,
             non_emitted_fields,
+            computed_paths: self.spec.computed_fields.clone(),
             computed_fields_evaluator: None,
         }
     }
@@ -636,6 +684,8 @@ impl<S> TypedCompiler<S> {
             ops.extend(self.compile_mapping(mapping, state_reg, key_reg));
         }
 
+        ops.extend(self.compile_resolvers(state_reg, key_reg));
+
         // Evaluate computed fields after all mappings but before updating state
         ops.push(OpCode::EvaluateComputedFields {
             state: state_reg,
@@ -659,6 +709,26 @@ impl<S> TypedCompiler<S> {
         ops
     }
 
+    fn compile_resolvers(&self, state_reg: Register, key_reg: Register) -> Vec<OpCode> {
+        let mut ops = Vec::new();
+
+        for resolver_spec in &self.spec.resolver_specs {
+            ops.push(OpCode::QueueResolver {
+                state_id: self.state_id,
+                entity_name: self.entity_name.clone(),
+                resolver: resolver_spec.resolver.clone(),
+                input_path: resolver_spec.input_path.clone(),
+                input_value: resolver_spec.input_value.clone(),
+                strategy: resolver_spec.strategy.clone(),
+                extracts: resolver_spec.extracts.clone(),
+                state: state_reg,
+                key: key_reg,
+            });
+        }
+
+        ops
+    }
+
     fn compile_mapping(
         &self,
         mapping: &TypedFieldMapping<S>,
@@ -676,6 +746,34 @@ impl<S> TypedCompiler<S> {
                 dest: temp_reg,
                 transformation: transform.clone(),
             });
+        }
+
+        if let Some(stop_instruction) = &mapping.stop {
+            if mapping.when.is_some() {
+                tracing::warn!(
+                    "#[map] stop and when both set for {}. Ignoring when.",
+                    mapping.target_path
+                );
+            }
+            if !matches!(mapping.population, PopulationStrategy::LastWrite)
+                && !matches!(mapping.population, PopulationStrategy::Merge)
+            {
+                tracing::warn!(
+                    "#[map] stop ignores population strategy {:?}",
+                    mapping.population
+                );
+            }
+
+            ops.push(OpCode::SetFieldUnlessStopped {
+                object: state_reg,
+                path: mapping.target_path.clone(),
+                value: temp_reg,
+                stop_field: stop_field_path(&mapping.target_path),
+                stop_instruction: stop_instruction.clone(),
+                entity_name: self.entity_name.clone(),
+                key_reg,
+            });
+            return ops;
         }
 
         if let Some(when_instruction) = &mapping.when {

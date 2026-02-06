@@ -15,8 +15,9 @@ use crate::ast::writer::{
 use crate::ast::{
     ComputedFieldSpec, ConditionExpr, EntitySection, FieldPath, HookAction, IdentitySpec,
     IdlSerializationSnapshot, InstructionHook, KeyResolutionStrategy, LookupIndexSpec,
-    MappingSource, ResolverHook, ResolverStrategy, SerializableFieldMapping,
-    SerializableHandlerSpec, SerializableStreamSpec, SourceSpec,
+    MappingSource, ResolveStrategy, ResolverExtractSpec, ResolverHook, ResolverSpec,
+    ResolverStrategy, ResolverType, SerializableFieldMapping, SerializableHandlerSpec,
+    SerializableStreamSpec, SourceSpec,
 };
 use crate::event_type_helpers::{find_idl_for_type, program_name_for_type, IdlLookup};
 use crate::parse;
@@ -65,6 +66,7 @@ pub fn build_ast(
     derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
+    resolve_specs: &[parse::ResolveSpec],
     section_specs: &[EntitySection],
     idls: IdlLookup,
     views: Vec<crate::ast::ViewDef>,
@@ -131,6 +133,8 @@ pub fn build_ast(
         })
         .collect();
 
+    let resolver_specs = build_resolver_specs(resolve_specs);
+
     // Build field_mappings from sections - this provides type information for ALL fields
     let mut field_mappings = BTreeMap::new();
     for section in section_specs {
@@ -164,6 +168,7 @@ pub fn build_ast(
         field_mappings,
         resolver_hooks: resolver_hooks_ast,
         instruction_hooks: instruction_hooks_ast,
+        resolver_specs,
         computed_fields: computed_field_paths,
         computed_field_specs,
         content_hash: None,
@@ -172,6 +177,65 @@ pub fn build_ast(
     // Compute and set the content hash
     spec.content_hash = Some(spec.compute_content_hash());
     spec
+}
+
+fn build_resolver_specs(resolve_specs: &[parse::ResolveSpec]) -> Vec<ResolverSpec> {
+    let mut grouped: BTreeMap<String, ResolverSpec> = BTreeMap::new();
+
+    for spec in resolve_specs {
+        let input_key = if let Some(from) = &spec.from {
+            format!("path:{}", from)
+        } else if let Some(address) = &spec.address {
+            format!("value:{}", address)
+        } else {
+            "value:".to_string()
+        };
+        let key = format!(
+            "{}::{}::{}",
+            resolver_type_key(&spec.resolver),
+            input_key,
+            spec.strategy
+        );
+
+        let entry = grouped.entry(key).or_insert_with(|| ResolverSpec {
+            resolver: spec.resolver.clone(),
+            input_path: spec.from.clone(),
+            input_value: spec
+                .address
+                .as_ref()
+                .map(|value| serde_json::Value::String(value.clone())),
+            strategy: parse_resolve_strategy(&spec.strategy),
+            extracts: Vec::new(),
+        });
+
+        let extract = ResolverExtractSpec {
+            target_path: spec.target_field_name.clone(),
+            source_path: spec.extract.clone(),
+            transform: None,
+        };
+
+        if !entry.extracts.iter().any(|existing| {
+            existing.target_path == extract.target_path
+                && existing.source_path == extract.source_path
+        }) {
+            entry.extracts.push(extract);
+        }
+    }
+
+    grouped.into_values().collect()
+}
+
+fn parse_resolve_strategy(strategy: &str) -> ResolveStrategy {
+    match strategy {
+        "LastWrite" => ResolveStrategy::LastWrite,
+        _ => ResolveStrategy::SetOnce,
+    }
+}
+
+fn resolver_type_key(resolver: &ResolverType) -> &'static str {
+    match resolver {
+        ResolverType::Token => "token",
+    }
 }
 
 // ============================================================================
@@ -191,6 +255,7 @@ pub fn build_and_write_ast(
     derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
+    resolve_specs: &[parse::ResolveSpec],
     section_specs: &[EntitySection],
     idls: IdlLookup,
     views: Vec<crate::ast::ViewDef>,
@@ -206,6 +271,7 @@ pub fn build_and_write_ast(
         derive_from_mappings,
         aggregate_conditions,
         computed_fields,
+        resolve_specs,
         section_specs,
         idls,
         views,
@@ -393,6 +459,17 @@ fn build_source_handler(
             }
         });
 
+        let stop = mapping.stop.as_ref().map(|stop_path| {
+            let instr_type = path_to_string(stop_path);
+            let instr_base = instr_type.split("::").last().unwrap_or(&instr_type);
+            let program_name = program_name_for_type(&instr_type, idls);
+            if let Some(program_name) = program_name {
+                format!("{}::{}IxState", program_name, instr_base)
+            } else {
+                format!("{}IxState", instr_base)
+            }
+        });
+
         serializable_mappings.push(SerializableFieldMapping {
             target_path: mapping.target_field_name.clone(),
             source,
@@ -400,6 +477,7 @@ fn build_source_handler(
             population,
             condition,
             when,
+            stop,
             emit: mapping.emit,
         });
 
@@ -662,6 +740,7 @@ fn build_event_handler(
             population,
             condition: None,
             when: None,
+            stop: None,
             emit: true,
         });
     }
@@ -1014,10 +1093,78 @@ fn build_instruction_hooks_ast(
         }
     }
 
-    let mut sorted_aggregate_conditions: Vec<_> = aggregate_conditions.iter().collect();
-    sorted_aggregate_conditions.sort_by_key(|(k, _)| *k);
     let mut sorted_sources: Vec<_> = sources_by_type.iter().collect();
     sorted_sources.sort_by_key(|(k, _)| *k);
+    for (_source_type, mappings) in &sorted_sources {
+        for mapping in *mappings {
+            let Some(stop_path) = &mapping.stop else {
+                continue;
+            };
+
+            let stop_type = path_to_string(stop_path);
+            let stop_base = stop_type.split("::").last().unwrap_or(&stop_type);
+            let stop_program = program_name_for_type(&stop_type, idls);
+            let stop_type_state = if let Some(program_name) = stop_program {
+                format!("{}::{}IxState", program_name, stop_base)
+            } else {
+                format!("{}IxState", stop_base)
+            };
+
+            let stop_field = format!("__stop:{}", mapping.target_field_name);
+
+            let lookup_by = mapping
+                .stop_lookup_by
+                .as_ref()
+                .map(|field_spec| {
+                    let prefix = match &field_spec.explicit_location {
+                        Some(parse::FieldLocation::InstructionArg) => "data",
+                        _ => "accounts",
+                    };
+                    FieldPath::new(&[prefix, &field_spec.ident.to_string()])
+                })
+                .or_else(|| {
+                    mapping.lookup_by.as_ref().map(|field_spec| {
+                        FieldPath::new(&["accounts", &field_spec.ident.to_string()])
+                    })
+                })
+                .or_else(|| {
+                    mapping
+                        .register_from
+                        .iter()
+                        .find(|reg| path_to_string(&reg.instruction_path) == stop_type)
+                        .map(|reg| {
+                            let prefix = match &reg.primary_key_field.explicit_location {
+                                Some(parse::FieldLocation::InstructionArg) => "data",
+                                _ => "accounts",
+                            };
+                            FieldPath::new(&[prefix, &reg.primary_key_field.ident.to_string()])
+                        })
+                });
+
+            let action = HookAction::SetField {
+                target_field: stop_field,
+                source: MappingSource::Constant(serde_json::Value::Bool(true)),
+                condition: None,
+            };
+
+            let hook = instruction_hooks_map
+                .entry(stop_type_state.clone())
+                .or_insert_with(|| InstructionHook {
+                    instruction_type: stop_type_state.clone(),
+                    actions: Vec::new(),
+                    lookup_by: lookup_by.clone(),
+                });
+
+            hook.actions.push(action);
+
+            if hook.lookup_by.is_none() {
+                hook.lookup_by = lookup_by;
+            }
+        }
+    }
+
+    let mut sorted_aggregate_conditions: Vec<_> = aggregate_conditions.iter().collect();
+    sorted_aggregate_conditions.sort_by_key(|(k, _)| *k);
     for (field_path, condition_str) in sorted_aggregate_conditions {
         for (source_type, mappings) in &sorted_sources {
             for mapping in *mappings {

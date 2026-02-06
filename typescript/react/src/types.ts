@@ -1,4 +1,4 @@
-import type { WalletAdapter } from 'hyperstack-typescript';
+import type { WalletAdapter, Schema } from 'hyperstack-typescript';
 
 export type {
   ConnectionState,
@@ -13,6 +13,7 @@ export type {
   ViewDef,
   ViewGroup,
   WalletAdapter,
+  Schema,
 } from 'hyperstack-typescript';
 
 export { DEFAULT_MAX_ENTRIES_PER_VIEW } from 'hyperstack-typescript';
@@ -53,10 +54,12 @@ export interface UseHyperstackOptions {
   url?: string;
 }
 
-export interface ViewHookOptions {
+export interface ViewHookOptions<TSchema = unknown> {
   enabled?: boolean;
   initialData?: unknown;
   refreshOnReconnect?: boolean;
+  /** Schema to validate entities. Returns undefined if validation fails. */
+  schema?: Schema<TSchema>;
 }
 
 export interface ViewHookResult<T> {
@@ -66,23 +69,25 @@ export interface ViewHookResult<T> {
   refresh: () => void;
 }
 
-export interface ListParamsBase {
+export interface ListParamsBase<TSchema = unknown> {
   key?: string;
   where?: Record<string, unknown>;
   limit?: number;
   filters?: Record<string, string>;
   skip?: number;
+  /** Schema to validate/filter entities. Only entities passing safeParse will be returned. */
+  schema?: Schema<TSchema>;
 }
 
-export interface ListParamsSingle extends ListParamsBase {
+export interface ListParamsSingle<TSchema = unknown> extends ListParamsBase<TSchema> {
   take: 1;
 }
 
-export interface ListParamsMultiple extends ListParamsBase {
+export interface ListParamsMultiple<TSchema = unknown> extends ListParamsBase<TSchema> {
   take?: number;
 }
 
-export type ListParams = ListParamsSingle | ListParamsMultiple;
+export type ListParams<TSchema = unknown> = ListParamsSingle<TSchema> | ListParamsMultiple<TSchema>;
 
 export interface UseMutationReturn {
   submit: (instructionOrTx: unknown | unknown[]) => Promise<string>;
@@ -97,7 +102,7 @@ export interface StateViewHook<T> {
 }
 
 export interface ListViewHook<T> {
-  use(params: ListParamsSingle, options?: ViewHookOptions): ViewHookResult<T | undefined>;
-  use(params?: ListParamsMultiple, options?: ViewHookOptions): ViewHookResult<T[]>;
-  useOne: (params?: Omit<ListParamsBase, 'take'>, options?: ViewHookOptions) => ViewHookResult<T | undefined>;
+  use<TSchema = T>(params: ListParamsSingle<TSchema>, options?: ViewHookOptions): ViewHookResult<TSchema | undefined>;
+  use<TSchema = T>(params?: ListParamsMultiple<TSchema>, options?: ViewHookOptions): ViewHookResult<TSchema[]>;
+  useOne: <TSchema = T>(params?: Omit<ListParamsBase<TSchema>, 'take'>, options?: ViewHookOptions) => ViewHookResult<TSchema | undefined>;
 }

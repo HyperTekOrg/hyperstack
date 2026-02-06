@@ -125,7 +125,6 @@ function serializePrimitive(value: unknown, type: string): Buffer {
       return Buffer.concat([strLen, strBytes]);
     case 'pubkey':
       // Public key is 32 bytes
-      const pubkey = value as string;
       // In production, decode base58 to 32 bytes
       return Buffer.alloc(32, 0);
     default:

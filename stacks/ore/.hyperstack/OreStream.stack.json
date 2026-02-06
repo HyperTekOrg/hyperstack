@@ -775,6 +775,22 @@
               "optional": false,
               "address": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X",
               "docs": []
+            },
+            {
+              "name": "mintAuthority",
+              "writable": true,
+              "signer": false,
+              "optional": false,
+              "address": null,
+              "docs": []
+            },
+            {
+              "name": "oreMintProgram",
+              "writable": false,
+              "signer": false,
+              "optional": false,
+              "address": "mintzxW6Kckmeyh1h6Zfdj9QcYgCzhPSGiC8ChZ6fCx",
+              "docs": []
             }
           ],
           "args": []
@@ -2332,6 +2348,14 @@
             "temporal_field": null
           },
           {
+            "field_name": "state.expires_at",
+            "temporal_field": null
+          },
+          {
+            "field_name": "treasury.__motherlode_raw",
+            "temporal_field": null
+          },
+          {
             "field_name": "entropy.entropy_value",
             "temporal_field": null
           }
@@ -2357,6 +2381,23 @@
             }
           },
           "mappings": [
+            {
+              "target_path": "state.expires_at",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "end_at"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": null
+                }
+              },
+              "transform": null,
+              "population": "LastWrite"
+            },
             {
               "target_path": "entropy.entropy_value",
               "source": {
@@ -2491,6 +2532,40 @@
               "emit": false
             },
             {
+              "target_path": "entropy.entropy_seed",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "seed"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": "Base58Encode"
+                }
+              },
+              "transform": null,
+              "population": "LastWrite"
+            },
+            {
+              "target_path": "entropy.entropy_slot_hash",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "slot_hash"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": "Base58Encode"
+                }
+              },
+              "transform": null,
+              "population": "LastWrite"
+            },
+            {
               "target_path": "entropy.entropy_start_at",
               "source": {
                 "FromSource": {
@@ -2505,7 +2580,7 @@
                 }
               },
               "transform": null,
-              "population": "SetOnce"
+              "population": "LastWrite"
             },
             {
               "target_path": "entropy.entropy_end_at",
@@ -2522,7 +2597,7 @@
                 }
               },
               "transform": null,
-              "population": "SetOnce"
+              "population": "LastWrite"
             },
             {
               "target_path": "entropy.entropy_samples",
@@ -2531,6 +2606,23 @@
                   "path": {
                     "segments": [
                       "samples"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": null
+                }
+              },
+              "transform": null,
+              "population": "LastWrite"
+            },
+            {
+              "target_path": "entropy.entropy_var_address",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "__account_address"
                     ],
                     "offsets": null
                   },
@@ -2599,24 +2691,7 @@
               "population": "SetOnce"
             },
             {
-              "target_path": "state.expires_at",
-              "source": {
-                "FromSource": {
-                  "path": {
-                    "segments": [
-                      "expires_at"
-                    ],
-                    "offsets": null
-                  },
-                  "default": null,
-                  "transform": null
-                }
-              },
-              "transform": null,
-              "population": "LastWrite"
-            },
-            {
-              "target_path": "state.motherlode",
+              "target_path": "state.__motherlode_raw",
               "source": {
                 "FromSource": {
                   "path": {
@@ -2630,10 +2705,11 @@
                 }
               },
               "transform": null,
-              "population": "LastWrite"
+              "population": "LastWrite",
+              "emit": false
             },
             {
-              "target_path": "state.total_deployed",
+              "target_path": "state.__total_deployed_raw",
               "source": {
                 "FromSource": {
                   "path": {
@@ -2647,10 +2723,11 @@
                 }
               },
               "transform": null,
-              "population": "LastWrite"
+              "population": "LastWrite",
+              "emit": false
             },
             {
-              "target_path": "state.total_vaulted",
+              "target_path": "state.__total_vaulted_raw",
               "source": {
                 "FromSource": {
                   "path": {
@@ -2664,15 +2741,68 @@
                 }
               },
               "transform": null,
-              "population": "LastWrite"
+              "population": "LastWrite",
+              "emit": false
             },
             {
-              "target_path": "state.total_winnings",
+              "target_path": "state.__total_winnings_raw",
               "source": {
                 "FromSource": {
                   "path": {
                     "segments": [
                       "total_winnings"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": null
+                }
+              },
+              "transform": null,
+              "population": "LastWrite",
+              "emit": false
+            },
+            {
+              "target_path": "state.total_miners",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "total_miners"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": null
+                }
+              },
+              "transform": null,
+              "population": "LastWrite"
+            },
+            {
+              "target_path": "state.deployed_per_square",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "deployed"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": null
+                }
+              },
+              "transform": null,
+              "population": "LastWrite"
+            },
+            {
+              "target_path": "state.count_per_square",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "count"
                     ],
                     "offsets": null
                   },
@@ -2701,7 +2831,7 @@
               "population": "LastWrite"
             },
             {
-              "target_path": "results.top_miner_reward",
+              "target_path": "results.__top_miner_reward_raw",
               "source": {
                 "FromSource": {
                   "path": {
@@ -2715,7 +2845,8 @@
                 }
               },
               "transform": null,
-              "population": "LastWrite"
+              "population": "LastWrite",
+              "emit": false
             },
             {
               "target_path": "results.rent_payer",
@@ -2750,6 +2881,48 @@
               },
               "transform": null,
               "population": "LastWrite"
+            }
+          ],
+          "conditions": [],
+          "emit": true
+        },
+        {
+          "source": {
+            "Source": {
+              "program_id": null,
+              "discriminator": null,
+              "type_name": "ore::TreasuryState"
+            }
+          },
+          "key_resolution": {
+            "Lookup": {
+              "primary_field": {
+                "segments": [
+                  "__account_address"
+                ],
+                "offsets": null
+              }
+            }
+          },
+          "mappings": [
+            {
+              "target_path": "treasury.__motherlode_raw",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "motherlode"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": null
+                }
+              },
+              "transform": null,
+              "population": "SetOnce",
+              "stop": "ore::ResetIxState",
+              "emit": false
             }
           ],
           "conditions": [],
@@ -2832,24 +3005,6 @@
               },
               "transform": null,
               "population": "Count"
-            },
-            {
-              "target_path": "metrics.total_deployed_sol",
-              "source": {
-                "FromSource": {
-                  "path": {
-                    "segments": [
-                      "data",
-                      "amount"
-                    ],
-                    "offsets": null
-                  },
-                  "default": null,
-                  "transform": null
-                }
-              },
-              "transform": null,
-              "population": "Sum"
             }
           ],
           "conditions": [],
@@ -2898,27 +3053,57 @@
               "resolved_type": null
             },
             {
-              "field_name": "motherlode",
-              "rust_type_name": "Option < u64 >",
+              "field_name": "estimated_expires_at_unix",
+              "rust_type_name": "Option < i64 >",
               "base_type": "Integer",
               "is_optional": true,
               "is_array": false,
-              "inner_type": "u64",
+              "inner_type": "i64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "motherlode",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "f64",
               "source_path": null,
               "resolved_type": null
             },
             {
               "field_name": "total_deployed",
-              "rust_type_name": "Option < u64 >",
-              "base_type": "Integer",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
               "is_optional": true,
               "is_array": false,
-              "inner_type": "u64",
+              "inner_type": "f64",
               "source_path": null,
               "resolved_type": null
             },
             {
               "field_name": "total_vaulted",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "f64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "total_winnings",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "f64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "total_miners",
               "rust_type_name": "Option < u64 >",
               "base_type": "Integer",
               "is_optional": true,
@@ -2928,12 +3113,32 @@
               "resolved_type": null
             },
             {
-              "field_name": "total_winnings",
-              "rust_type_name": "Option < u64 >",
-              "base_type": "Integer",
+              "field_name": "deployed_per_square",
+              "rust_type_name": "Option < Vec < u64 > >",
+              "base_type": "Array",
               "is_optional": true,
-              "is_array": false,
-              "inner_type": "u64",
+              "is_array": true,
+              "inner_type": "Vec < u64 >",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "deployed_per_square_ui",
+              "rust_type_name": "Option < Vec < f64 > >",
+              "base_type": "Array",
+              "is_optional": true,
+              "is_array": true,
+              "inner_type": "Vec < f64 >",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "count_per_square",
+              "rust_type_name": "Option < Vec < u64 > >",
+              "base_type": "Array",
+              "is_optional": true,
+              "is_array": true,
+              "inner_type": "Vec < u64 >",
               "source_path": null,
               "resolved_type": null
             }
@@ -2956,11 +3161,11 @@
             },
             {
               "field_name": "top_miner_reward",
-              "rust_type_name": "Option < u64 >",
-              "base_type": "Integer",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
               "is_optional": true,
               "is_array": false,
-              "inner_type": "u64",
+              "inner_type": "f64",
               "source_path": null,
               "resolved_type": null
             },
@@ -3032,7 +3237,7 @@
               "resolved_type": null
             },
             {
-              "field_name": "total_deployed_sol",
+              "field_name": "checkpoint_count",
               "rust_type_name": "Option < u64 >",
               "base_type": "Integer",
               "is_optional": true,
@@ -3040,14 +3245,21 @@
               "inner_type": "u64",
               "source_path": null,
               "resolved_type": null
-            },
+            }
+          ],
+          "is_nested_struct": false,
+          "parent_field": null
+        },
+        {
+          "name": "treasury",
+          "fields": [
             {
-              "field_name": "checkpoint_count",
-              "rust_type_name": "Option < u64 >",
-              "base_type": "Integer",
+              "field_name": "motherlode",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
               "is_optional": true,
               "is_array": false,
-              "inner_type": "u64",
+              "inner_type": "f64",
               "source_path": null,
               "resolved_type": null
             }
@@ -3080,6 +3292,26 @@
               "emit": false
             },
             {
+              "field_name": "entropy_seed",
+              "rust_type_name": "Option < String >",
+              "base_type": "String",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "String",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "entropy_slot_hash",
+              "rust_type_name": "Option < String >",
+              "base_type": "String",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "String",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
               "field_name": "entropy_start_at",
               "rust_type_name": "Option < u64 >",
               "base_type": "Timestamp",
@@ -3108,6 +3340,33 @@
               "inner_type": "u64",
               "source_path": null,
               "resolved_type": null
+            },
+            {
+              "field_name": "entropy_var_address",
+              "rust_type_name": "Option < String >",
+              "base_type": "String",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "String",
+              "source_path": null,
+              "resolved_type": null
+            }
+          ],
+          "is_nested_struct": false,
+          "parent_field": null
+        },
+        {
+          "name": "root",
+          "fields": [
+            {
+              "field_name": "ore_metadata",
+              "rust_type_name": "Option < TokenMetadata >",
+              "base_type": "Object",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "TokenMetadata",
+              "source_path": null,
+              "resolved_type": null
             }
           ],
           "is_nested_struct": false,
@@ -3132,6 +3391,26 @@
           "is_optional": true,
           "is_array": false,
           "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "entropy.entropy_seed": {
+          "field_name": "entropy_seed",
+          "rust_type_name": "Option < String >",
+          "base_type": "String",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "String",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "entropy.entropy_slot_hash": {
+          "field_name": "entropy_slot_hash",
+          "rust_type_name": "Option < String >",
+          "base_type": "String",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "String",
           "source_path": null,
           "resolved_type": null
         },
@@ -3165,6 +3444,16 @@
           "source_path": null,
           "resolved_type": null,
           "emit": false
+        },
+        "entropy.entropy_var_address": {
+          "field_name": "entropy_var_address",
+          "rust_type_name": "Option < String >",
+          "base_type": "String",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "String",
+          "source_path": null,
+          "resolved_type": null
         },
         "id.round_address": {
           "field_name": "round_address",
@@ -3206,13 +3495,13 @@
           "source_path": null,
           "resolved_type": null
         },
-        "metrics.total_deployed_sol": {
-          "field_name": "total_deployed_sol",
-          "rust_type_name": "Option < u64 >",
-          "base_type": "Integer",
+        "ore_metadata": {
+          "field_name": "ore_metadata",
+          "rust_type_name": "Option < TokenMetadata >",
+          "base_type": "Object",
           "is_optional": true,
           "is_array": false,
-          "inner_type": "u64",
+          "inner_type": "TokenMetadata",
           "source_path": null,
           "resolved_type": null
         },
@@ -3268,11 +3557,11 @@
         },
         "results.top_miner_reward": {
           "field_name": "top_miner_reward",
-          "rust_type_name": "Option < u64 >",
-          "base_type": "Integer",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
           "is_optional": true,
           "is_array": false,
-          "inner_type": "u64",
+          "inner_type": "f64",
           "source_path": null,
           "resolved_type": null
         },
@@ -3283,6 +3572,46 @@
           "is_optional": true,
           "is_array": false,
           "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "state.count_per_square": {
+          "field_name": "count_per_square",
+          "rust_type_name": "Option < Vec < u64 > >",
+          "base_type": "Array",
+          "is_optional": true,
+          "is_array": true,
+          "inner_type": "Vec < u64 >",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "state.deployed_per_square": {
+          "field_name": "deployed_per_square",
+          "rust_type_name": "Option < Vec < u64 > >",
+          "base_type": "Array",
+          "is_optional": true,
+          "is_array": true,
+          "inner_type": "Vec < u64 >",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "state.deployed_per_square_ui": {
+          "field_name": "deployed_per_square_ui",
+          "rust_type_name": "Option < Vec < f64 > >",
+          "base_type": "Array",
+          "is_optional": true,
+          "is_array": true,
+          "inner_type": "Vec < f64 >",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "state.estimated_expires_at_unix": {
+          "field_name": "estimated_expires_at_unix",
+          "rust_type_name": "Option < i64 >",
+          "base_type": "Integer",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "i64",
           "source_path": null,
           "resolved_type": null
         },
@@ -3298,16 +3627,26 @@
         },
         "state.motherlode": {
           "field_name": "motherlode",
-          "rust_type_name": "Option < u64 >",
-          "base_type": "Integer",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
           "is_optional": true,
           "is_array": false,
-          "inner_type": "u64",
+          "inner_type": "f64",
           "source_path": null,
           "resolved_type": null
         },
         "state.total_deployed": {
           "field_name": "total_deployed",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "f64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "state.total_miners": {
+          "field_name": "total_miners",
           "rust_type_name": "Option < u64 >",
           "base_type": "Integer",
           "is_optional": true,
@@ -3318,21 +3657,31 @@
         },
         "state.total_vaulted": {
           "field_name": "total_vaulted",
-          "rust_type_name": "Option < u64 >",
-          "base_type": "Integer",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
           "is_optional": true,
           "is_array": false,
-          "inner_type": "u64",
+          "inner_type": "f64",
           "source_path": null,
           "resolved_type": null
         },
         "state.total_winnings": {
           "field_name": "total_winnings",
-          "rust_type_name": "Option < u64 >",
-          "base_type": "Integer",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
           "is_optional": true,
           "is_array": false,
-          "inner_type": "u64",
+          "inner_type": "f64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "treasury.motherlode": {
+          "field_name": "motherlode",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "f64",
           "source_path": null,
           "resolved_type": null
         }
@@ -3346,12 +3695,51 @@
               "queue_discriminators": []
             }
           }
+        },
+        {
+          "account_type": "ore::TreasuryState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": [
+                [
+                  9,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              ]
+            }
+          }
         }
       ],
       "instruction_hooks": [
         {
           "instruction_type": "ore::DeployIxState",
           "actions": [
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            },
             {
               "RegisterPdaMapping": {
                 "pda_field": {
@@ -3395,17 +3783,371 @@
                 },
                 "lookup_name": "default_pda_lookup"
               }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "treasury"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "roundNext"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            },
+            {
+              "SetField": {
+                "target_field": "__stop:treasury.__motherlode_raw",
+                "source": {
+                  "Constant": true
+                },
+                "condition": null
+              }
             }
           ],
-          "lookup_by": null
+          "lookup_by": {
+            "segments": [
+              "accounts",
+              "round"
+            ],
+            "offsets": null
+          }
+        }
+      ],
+      "resolver_specs": [
+        {
+          "resolver": "token",
+          "input_value": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp",
+          "strategy": "SetOnce",
+          "extracts": [
+            {
+              "target_path": "ore_metadata"
+            }
+          ]
         }
       ],
       "computed_fields": [
+        "state.estimated_expires_at_unix",
+        "state.motherlode",
+        "state.total_deployed",
+        "state.total_vaulted",
+        "state.total_winnings",
+        "state.deployed_per_square_ui",
+        "results.top_miner_reward",
         "results.rng",
         "results.winning_square",
-        "results.did_hit_motherlode"
+        "results.did_hit_motherlode",
+        "treasury.motherlode"
       ],
       "computed_field_specs": [
+        {
+          "target_path": "state.estimated_expires_at_unix",
+          "expression": {
+            "Let": {
+              "name": "expires_at_slot",
+              "value": {
+                "Cast": {
+                  "expr": {
+                    "UnwrapOr": {
+                      "expr": {
+                        "FieldRef": {
+                          "path": "state.expires_at"
+                        }
+                      },
+                      "default": 0
+                    }
+                  },
+                  "to_type": "u64"
+                }
+              },
+              "body": {
+                "Let": {
+                  "name": "current_slot",
+                  "value": "ContextSlot",
+                  "body": {
+                    "If": {
+                      "condition": {
+                        "Binary": {
+                          "op": "And",
+                          "left": {
+                            "Binary": {
+                              "op": "Gt",
+                              "left": {
+                                "Var": {
+                                  "name": "current_slot"
+                                }
+                              },
+                              "right": {
+                                "Literal": {
+                                  "value": 0
+                                }
+                              }
+                            }
+                          },
+                          "right": {
+                            "Binary": {
+                              "op": "Gt",
+                              "left": {
+                                "Var": {
+                                  "name": "expires_at_slot"
+                                }
+                              },
+                              "right": {
+                                "Var": {
+                                  "name": "current_slot"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "then_branch": {
+                        "Some": {
+                          "value": {
+                            "Binary": {
+                              "op": "Add",
+                              "left": "ContextTimestamp",
+                              "right": {
+                                "Paren": {
+                                  "expr": {
+                                    "Cast": {
+                                      "expr": {
+                                        "Paren": {
+                                          "expr": {
+                                            "Binary": {
+                                              "op": "Div",
+                                              "left": {
+                                                "Binary": {
+                                                  "op": "Mul",
+                                                  "left": {
+                                                    "Paren": {
+                                                      "expr": {
+                                                        "Binary": {
+                                                          "op": "Sub",
+                                                          "left": {
+                                                            "Var": {
+                                                              "name": "expires_at_slot"
+                                                            }
+                                                          },
+                                                          "right": {
+                                                            "Var": {
+                                                              "name": "current_slot"
+                                                            }
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "right": {
+                                                    "Literal": {
+                                                      "value": 400
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              "right": {
+                                                "Literal": {
+                                                  "value": 1000
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      "to_type": "i64"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "else_branch": "None"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "result_type": "Option < i64 >"
+        },
+        {
+          "target_path": "state.motherlode",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.__motherlode_raw"
+                  }
+                },
+                {
+                  "FieldRef": {
+                    "path": "ore_metadata.decimals"
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
+        },
+        {
+          "target_path": "state.total_deployed",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.__total_deployed_raw"
+                  }
+                },
+                {
+                  "Literal": {
+                    "value": 9
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
+        },
+        {
+          "target_path": "state.total_vaulted",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.__total_vaulted_raw"
+                  }
+                },
+                {
+                  "Literal": {
+                    "value": 9
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
+        },
+        {
+          "target_path": "state.total_winnings",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.__total_winnings_raw"
+                  }
+                },
+                {
+                  "Literal": {
+                    "value": 9
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
+        },
+        {
+          "target_path": "state.deployed_per_square_ui",
+          "expression": {
+            "MethodCall": {
+              "expr": {
+                "FieldRef": {
+                  "path": "state.deployed_per_square"
+                }
+              },
+              "method": "map",
+              "args": [
+                {
+                  "Closure": {
+                    "param": "x",
+                    "body": {
+                      "ResolverComputed": {
+                        "resolver": "TokenMetadata",
+                        "method": "ui_amount",
+                        "args": [
+                          {
+                            "Var": {
+                              "name": "x"
+                            }
+                          },
+                          {
+                            "Literal": {
+                              "value": 9
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < Vec < f64 > >"
+        },
+        {
+          "target_path": "results.top_miner_reward",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "results.__top_miner_reward_raw"
+                  }
+                },
+                {
+                  "FieldRef": {
+                    "path": "ore_metadata.decimals"
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
+        },
         {
           "target_path": "results.rng",
           "expression": {
@@ -3790,9 +4532,31 @@
             }
           },
           "result_type": "Option < bool >"
+        },
+        {
+          "target_path": "treasury.motherlode",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "treasury.__motherlode_raw"
+                  }
+                },
+                {
+                  "FieldRef": {
+                    "path": "ore_metadata.decimals"
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "1bad9f3330387eaec2a86baccb8138a028500608ad6f55a9955b8636288da450",
+      "content_hash": "fee0e768222fd6bab78adf26826ac1111fe5fd95dead39939b03b22e9e184eea",
       "views": [
         {
           "id": "OreRound/latest",
@@ -3884,7 +4648,7 @@
               "population": "LastWrite"
             },
             {
-              "target_path": "state.motherlode",
+              "target_path": "state.__motherlode_raw",
               "source": {
                 "FromSource": {
                   "path": {
@@ -3898,10 +4662,11 @@
                 }
               },
               "transform": null,
-              "population": "LastWrite"
+              "population": "LastWrite",
+              "emit": false
             },
             {
-              "target_path": "state.total_refined",
+              "target_path": "state.__total_refined_raw",
               "source": {
                 "FromSource": {
                   "path": {
@@ -3915,10 +4680,11 @@
                 }
               },
               "transform": null,
-              "population": "LastWrite"
+              "population": "LastWrite",
+              "emit": false
             },
             {
-              "target_path": "state.total_staked",
+              "target_path": "state.__total_staked_raw",
               "source": {
                 "FromSource": {
                   "path": {
@@ -3932,10 +4698,11 @@
                 }
               },
               "transform": null,
-              "population": "LastWrite"
+              "population": "LastWrite",
+              "emit": false
             },
             {
-              "target_path": "state.total_unclaimed",
+              "target_path": "state.__total_unclaimed_raw",
               "source": {
                 "FromSource": {
                   "path": {
@@ -3949,7 +4716,8 @@
                 }
               },
               "transform": null,
-              "population": "LastWrite"
+              "population": "LastWrite",
+              "emit": false
             },
             {
               "target_path": "treasury_snapshot",
@@ -3999,41 +4767,41 @@
             },
             {
               "field_name": "motherlode",
-              "rust_type_name": "Option < u64 >",
-              "base_type": "Integer",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
               "is_optional": true,
               "is_array": false,
-              "inner_type": "u64",
+              "inner_type": "f64",
               "source_path": null,
               "resolved_type": null
             },
             {
               "field_name": "total_refined",
-              "rust_type_name": "Option < u64 >",
-              "base_type": "Integer",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
               "is_optional": true,
               "is_array": false,
-              "inner_type": "u64",
+              "inner_type": "f64",
               "source_path": null,
               "resolved_type": null
             },
             {
               "field_name": "total_staked",
-              "rust_type_name": "Option < u64 >",
-              "base_type": "Integer",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
               "is_optional": true,
               "is_array": false,
-              "inner_type": "u64",
+              "inner_type": "f64",
               "source_path": null,
               "resolved_type": null
             },
             {
               "field_name": "total_unclaimed",
-              "rust_type_name": "Option < u64 >",
-              "base_type": "Integer",
+              "rust_type_name": "Option < f64 >",
+              "base_type": "Float",
               "is_optional": true,
               "is_array": false,
-              "inner_type": "u64",
+              "inner_type": "f64",
               "source_path": null,
               "resolved_type": null
             }
@@ -4154,41 +4922,41 @@
         },
         "state.motherlode": {
           "field_name": "motherlode",
-          "rust_type_name": "Option < u64 >",
-          "base_type": "Integer",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
           "is_optional": true,
           "is_array": false,
-          "inner_type": "u64",
+          "inner_type": "f64",
           "source_path": null,
           "resolved_type": null
         },
         "state.total_refined": {
           "field_name": "total_refined",
-          "rust_type_name": "Option < u64 >",
-          "base_type": "Integer",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
           "is_optional": true,
           "is_array": false,
-          "inner_type": "u64",
+          "inner_type": "f64",
           "source_path": null,
           "resolved_type": null
         },
         "state.total_staked": {
           "field_name": "total_staked",
-          "rust_type_name": "Option < u64 >",
-          "base_type": "Integer",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
           "is_optional": true,
           "is_array": false,
-          "inner_type": "u64",
+          "inner_type": "f64",
           "source_path": null,
           "resolved_type": null
         },
         "state.total_unclaimed": {
           "field_name": "total_unclaimed",
-          "rust_type_name": "Option < u64 >",
-          "base_type": "Integer",
+          "rust_type_name": "Option < f64 >",
+          "base_type": "Float",
           "is_optional": true,
           "is_array": false,
-          "inner_type": "u64",
+          "inner_type": "f64",
           "source_path": null,
           "resolved_type": null
         },
@@ -4284,12 +5052,51 @@
               "queue_discriminators": []
             }
           }
+        },
+        {
+          "account_type": "ore::TreasuryState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": [
+                [
+                  9,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              ]
+            }
+          }
         }
       ],
       "instruction_hooks": [
         {
           "instruction_type": "ore::DeployIxState",
           "actions": [
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            },
             {
               "RegisterPdaMapping": {
                 "pda_field": {
@@ -4333,14 +5140,147 @@
                 },
                 "lookup_name": "default_pda_lookup"
               }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "treasury"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "roundNext"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
             }
           ],
           "lookup_by": null
         }
       ],
-      "computed_fields": [],
-      "computed_field_specs": [],
-      "content_hash": "b9cab3603ab972db756d8143f16d632b6a5b1c135aeec99251ebb2638065e650",
+      "resolver_specs": [],
+      "computed_fields": [
+        "state.motherlode",
+        "state.total_refined",
+        "state.total_staked",
+        "state.total_unclaimed"
+      ],
+      "computed_field_specs": [
+        {
+          "target_path": "state.motherlode",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.__motherlode_raw"
+                  }
+                },
+                {
+                  "Literal": {
+                    "value": 11
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
+        },
+        {
+          "target_path": "state.total_refined",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.__total_refined_raw"
+                  }
+                },
+                {
+                  "Literal": {
+                    "value": 11
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
+        },
+        {
+          "target_path": "state.total_staked",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.__total_staked_raw"
+                  }
+                },
+                {
+                  "Literal": {
+                    "value": 11
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
+        },
+        {
+          "target_path": "state.total_unclaimed",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "TokenMetadata",
+              "method": "ui_amount",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.__total_unclaimed_raw"
+                  }
+                },
+                {
+                  "Literal": {
+                    "value": 11
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < f64 >"
+        }
+      ],
+      "content_hash": "c409570174a695cd8b4b2e0b8ac65181ffe477b99943e419af878d34f61cddce",
       "views": []
     },
     {
@@ -5672,12 +6612,51 @@
               "queue_discriminators": []
             }
           }
+        },
+        {
+          "account_type": "ore::TreasuryState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": [
+                [
+                  9,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              ]
+            }
+          }
         }
       ],
       "instruction_hooks": [
         {
           "instruction_type": "ore::DeployIxState",
           "actions": [
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            },
             {
               "RegisterPdaMapping": {
                 "pda_field": {
@@ -5721,16 +6700,2159 @@
                 },
                 "lookup_name": "default_pda_lookup"
               }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "treasury"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "roundNext"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
+            },
+            {
+              "RegisterPdaMapping": {
+                "pda_field": {
+                  "segments": [
+                    "accounts",
+                    "entropyVar"
+                  ],
+                  "offsets": null
+                },
+                "seed_field": {
+                  "segments": [
+                    "accounts",
+                    "round"
+                  ],
+                  "offsets": null
+                },
+                "lookup_name": "default_pda_lookup"
+              }
             }
           ],
           "lookup_by": null
         }
       ],
+      "resolver_specs": [],
       "computed_fields": [],
       "computed_field_specs": [],
-      "content_hash": "8e12bc8dde1601c0ca8325710a21a6fa2c6d5bd64603836dffa90e618b1caa57",
+      "content_hash": "fa965125488f32c6c794a56c517d6455d2b04d90f29250d419b73efd957ea3d3",
       "views": []
     }
   ],
-  "content_hash": "604ea3e38ae5e0fc487b8f542f20fea1fcf5965169a4d1665f16d7abd4bb2889"
+  "pdas": {
+    "entropy": {},
+    "ore": {}
+  },
+  "instructions": [
+    {
+      "name": "automate",
+      "discriminator": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "automation",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "executor",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "miner",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "systemProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "11111111111111111111111111111111"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "deposit",
+          "type": "u64"
+        },
+        {
+          "name": "fee",
+          "type": "u64"
+        },
+        {
+          "name": "mask",
+          "type": "u64"
+        },
+        {
+          "name": "strategy",
+          "type": "u8"
+        },
+        {
+          "name": "reload",
+          "type": "u64"
+        }
+      ],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Configures or closes a miner automation account.",
+        "Automation PDA seeds: [\"automation\", signer].",
+        "Miner PDA seeds: [\"miner\", signer]."
+      ]
+    },
+    {
+      "name": "checkpoint",
+      "discriminator": [
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "board",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "miner",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "round",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "treasury",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "systemProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "11111111111111111111111111111111"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Settles miner rewards for a completed round.",
+        "Treasury PDA seeds: [\"treasury\"]."
+      ]
+    },
+    {
+      "name": "claimSol",
+      "discriminator": [
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "miner",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "systemProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "11111111111111111111111111111111"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Claims SOL rewards from the miner account."
+      ]
+    },
+    {
+      "name": "claimOre",
+      "discriminator": [
+        4,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "miner",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "mint",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "recipient",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "treasury",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "treasuryTokens",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "systemProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "11111111111111111111111111111111"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "tokenProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "associatedTokenProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Claims ORE token rewards from the treasury vault."
+      ]
+    },
+    {
+      "name": "close",
+      "discriminator": [
+        5,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": false,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "board",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "rentPayer",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "round",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "treasury",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "systemProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "11111111111111111111111111111111"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Closes an expired round account and returns rent to the payer.",
+        "Round PDA seeds: [\"round\", round_id].",
+        "Treasury PDA seeds: [\"treasury\"]."
+      ]
+    },
+    {
+      "name": "deploy",
+      "discriminator": [
+        6,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "authority",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "automation",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "board",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "config",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "miner",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "round",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "systemProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "11111111111111111111111111111111"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "oreProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "entropyVar",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "entropyProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "squares",
+          "type": "u32"
+        }
+      ],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Deploys SOL to selected squares for the current round.",
+        "Automation PDA seeds: [\"automation\", authority].",
+        "Config PDA seeds: [\"config\"].",
+        "Miner PDA seeds: [\"miner\", authority].",
+        "Round PDA seeds: [\"round\", board.round_id]."
+      ]
+    },
+    {
+      "name": "log",
+      "discriminator": [
+        8,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "board",
+          "is_signer": true,
+          "is_writable": false,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Emits an arbitrary log message from the board PDA.",
+        "Bytes following the discriminator are logged verbatim."
+      ]
+    },
+    {
+      "name": "reset",
+      "discriminator": [
+        9,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "board",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "config",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "feeCollector",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "mint",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "known",
+            "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "round",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "roundNext",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "topMiner",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "treasury",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "treasuryTokens",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "systemProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "11111111111111111111111111111111"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "tokenProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "oreProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "slotHashesSysvar",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "SysvarS1otHashes111111111111111111111111111"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "entropyVar",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "entropyProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "mintAuthority",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "oreMintProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "mintzxW6Kckmeyh1h6Zfdj9QcYgCzhPSGiC8ChZ6fCx"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Finalizes the current round, mints rewards, and opens the next round.",
+        "Board PDA seeds: [\"board\"].",
+        "Treasury PDA seeds: [\"treasury\"].",
+        "Round PDA seeds: [\"round\", board.round_id] and [\"round\", board.round_id + 1]."
+      ]
+    },
+    {
+      "name": "deposit",
+      "discriminator": [
+        10,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "payer",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "mint",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "sender",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "stake",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "stakeTokens",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "treasury",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "systemProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "11111111111111111111111111111111"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "tokenProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "associatedTokenProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "compound_fee",
+          "type": "u64"
+        }
+      ],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Deposits ORE into a staking account.",
+        "Stake PDA seeds: [\"stake\", signer]."
+      ]
+    },
+    {
+      "name": "withdraw",
+      "discriminator": [
+        11,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "mint",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "recipient",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "stake",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "stakeTokens",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "treasury",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "systemProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "11111111111111111111111111111111"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "tokenProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "associatedTokenProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Withdraws ORE from a staking account.",
+        "Stake PDA seeds: [\"stake\", signer]."
+      ]
+    },
+    {
+      "name": "claimYield",
+      "discriminator": [
+        12,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "mint",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "recipient",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "stake",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "treasury",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "treasuryTokens",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "systemProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "11111111111111111111111111111111"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "tokenProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "associatedTokenProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Claims accrued staking rewards.",
+        "Stake PDA seeds: [\"stake\", signer].",
+        "Treasury PDA seeds: [\"treasury\"]."
+      ]
+    },
+    {
+      "name": "buyback",
+      "discriminator": [
+        13,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [],
+      "args": [],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Buys back ORE from the market."
+      ]
+    },
+    {
+      "name": "bury",
+      "discriminator": [
+        24,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": false,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "board",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "config",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "mint",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "treasury",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "treasuryOre",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "treasurySol",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "tokenProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "oreProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Swaps vaulted SOL for ORE via a CPI and burns the proceeds.",
+        "Treasury PDA seeds: [\"treasury\"].",
+        "Additional swap accounts are passed through as remaining accounts."
+      ]
+    },
+    {
+      "name": "wrap",
+      "discriminator": [
+        14,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": false,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "config",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "treasury",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "treasurySol",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "systemProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "11111111111111111111111111111111"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Wraps SOL held by the treasury into WSOL for swapping.",
+        "Treasury PDA seeds: [\"treasury\"]."
+      ]
+    },
+    {
+      "name": "setAdmin",
+      "discriminator": [
+        15,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": false,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "config",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "systemProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "11111111111111111111111111111111"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [
+        {
+          "name": "admin",
+          "type": "solana_pubkey::Pubkey"
+        }
+      ],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Updates the program admin address."
+      ]
+    },
+    {
+      "name": "newVar",
+      "discriminator": [
+        19,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": false,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "board",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "config",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "provider",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "var",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "systemProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "11111111111111111111111111111111"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "entropyProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u64"
+        },
+        {
+          "name": "commit",
+          "type": "[u8; 32]"
+        },
+        {
+          "name": "samples",
+          "type": "u64"
+        }
+      ],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Creates a new entropy var account through the entropy program."
+      ]
+    },
+    {
+      "name": "reloadSol",
+      "discriminator": [
+        21,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [],
+      "args": [],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Reloads SOL into the automation account."
+      ]
+    },
+    {
+      "name": "compoundYield",
+      "discriminator": [
+        22,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [],
+      "args": [],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Compounds staking yield."
+      ]
+    },
+    {
+      "name": "liq",
+      "discriminator": [
+        25,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [],
+      "args": [],
+      "errors": [
+        {
+          "code": 0,
+          "name": "AmountTooSmall",
+          "msg": "Amount too small"
+        },
+        {
+          "code": 1,
+          "name": "NotAuthorized",
+          "msg": "Not authorized"
+        }
+      ],
+      "program_id": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
+      "docs": [
+        "Liquidation instruction."
+      ]
+    },
+    {
+      "name": "open",
+      "discriminator": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "authority",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "payer",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "provider",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "var",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "systemProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "11111111111111111111111111111111"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u64"
+        },
+        {
+          "name": "commit",
+          "type": "[u8; 32]"
+        },
+        {
+          "name": "isAuto",
+          "type": "u64"
+        },
+        {
+          "name": "samples",
+          "type": "u64"
+        },
+        {
+          "name": "endAt",
+          "type": "u64"
+        }
+      ],
+      "errors": [
+        {
+          "code": 0,
+          "name": "IncompleteDigest",
+          "msg": "Incomplete digest"
+        },
+        {
+          "code": 1,
+          "name": "InvalidSeed",
+          "msg": "Invalid seed"
+        }
+      ],
+      "program_id": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X",
+      "docs": [
+        "Creates a new entropy var account.",
+        "Var PDA seeds: [\"var\", authority, id]."
+      ]
+    },
+    {
+      "name": "close",
+      "discriminator": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "var",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "systemProgram",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "11111111111111111111111111111111"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [],
+      "errors": [
+        {
+          "code": 0,
+          "name": "IncompleteDigest",
+          "msg": "Incomplete digest"
+        },
+        {
+          "code": 1,
+          "name": "InvalidSeed",
+          "msg": "Invalid seed"
+        }
+      ],
+      "program_id": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X",
+      "docs": [
+        "Closes an entropy var account and returns rent to the authority."
+      ]
+    },
+    {
+      "name": "next",
+      "discriminator": [
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "var",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [
+        {
+          "name": "endAt",
+          "type": "u64"
+        }
+      ],
+      "errors": [
+        {
+          "code": 0,
+          "name": "IncompleteDigest",
+          "msg": "Incomplete digest"
+        },
+        {
+          "code": 1,
+          "name": "InvalidSeed",
+          "msg": "Invalid seed"
+        }
+      ],
+      "program_id": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X",
+      "docs": [
+        "Updates the var for the next random value sample.",
+        "Resets the commit to the previous seed and clears slot_hash, seed, and value."
+      ]
+    },
+    {
+      "name": "reveal",
+      "discriminator": [
+        4,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "var",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [
+        {
+          "name": "seed",
+          "type": "[u8; 32]"
+        }
+      ],
+      "errors": [
+        {
+          "code": 0,
+          "name": "IncompleteDigest",
+          "msg": "Incomplete digest"
+        },
+        {
+          "code": 1,
+          "name": "InvalidSeed",
+          "msg": "Invalid seed"
+        }
+      ],
+      "program_id": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X",
+      "docs": [
+        "Reveals the seed and finalizes the random value.",
+        "The seed must hash to the commit stored in the var account."
+      ]
+    },
+    {
+      "name": "sample",
+      "discriminator": [
+        5,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "discriminator_size": 1,
+      "accounts": [
+        {
+          "name": "signer",
+          "is_signer": true,
+          "is_writable": true,
+          "resolution": {
+            "category": "signer"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "var",
+          "is_signer": false,
+          "is_writable": true,
+          "resolution": {
+            "category": "userProvided"
+          },
+          "is_optional": false
+        },
+        {
+          "name": "slotHashesSysvar",
+          "is_signer": false,
+          "is_writable": false,
+          "resolution": {
+            "category": "known",
+            "address": "SysvarS1otHashes111111111111111111111111111"
+          },
+          "is_optional": false
+        }
+      ],
+      "args": [],
+      "errors": [
+        {
+          "code": 0,
+          "name": "IncompleteDigest",
+          "msg": "Incomplete digest"
+        },
+        {
+          "code": 1,
+          "name": "InvalidSeed",
+          "msg": "Invalid seed"
+        }
+      ],
+      "program_id": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X",
+      "docs": [
+        "Samples the slot hash at the end_at slot.",
+        "Must be called after the end_at slot has passed."
+      ]
+    }
+  ],
+  "content_hash": "23b682bb628f14e33ffc389f62dc06cac3119d72ee29b59da9535e96d8acea8d"
 }
