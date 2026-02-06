@@ -90,9 +90,6 @@ jobs:
   typescript-stacks:
     name: TypeScript Stacks
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: stacks/sdk/typescript
     steps:
       - uses: actions/checkout@v4
 
@@ -100,13 +97,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: stacks/sdk/typescript/package-lock.json
+
+      - name: Build core dependency
+        working-directory: typescript/core
+        run: npm ci && npm run build
 
       - name: Install dependencies
+        working-directory: stacks/sdk/typescript
         run: npm ci
 
       - name: Build
+        working-directory: stacks/sdk/typescript
         run: npm run build
 
   # Validates that generated SDKs are up-to-date with their source ASTs.
