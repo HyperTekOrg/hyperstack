@@ -38,9 +38,9 @@ export interface OreRoundState {
   expires_at?: number | null;
   motherlode?: number | null;
   total_deployed?: number | null;
+  total_miners?: number | null;
   total_vaulted?: number | null;
   total_winnings?: number | null;
-  total_miners?: number | null;
 }
 
 export interface OreRoundTreasury {
