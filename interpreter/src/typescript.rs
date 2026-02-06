@@ -1885,6 +1885,7 @@ pub fn write_stack_typescript_to_file(
 ///   },
 /// } as const;
 /// ```
+#[allow(clippy::too_many_arguments)]
 fn generate_stack_definition_multi(
     stack_name: &str,
     stack_kebab: &str,

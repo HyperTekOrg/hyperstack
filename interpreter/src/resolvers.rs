@@ -130,6 +130,12 @@ pub struct ResolverRegistry {
     resolvers: HashMap<String, Box<dyn ResolverDefinition>>,
 }
 
+impl Default for ResolverRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ResolverRegistry {
     pub fn new() -> Self {
         Self {
@@ -428,7 +434,7 @@ impl TokenMetadataResolverClient {
                 Value::Object(obj) => obj
                     .get("items")
                     .and_then(|items| items.as_array())
-                    .map(|items| items.clone()),
+                    .cloned(),
                 _ => None,
             })
             .ok_or_else(|| "Resolver response missing result".to_string())?;

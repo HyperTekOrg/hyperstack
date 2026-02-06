@@ -262,16 +262,11 @@ pub struct ResolverExtractSpec {
     pub transform: Option<Transformation>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum ResolveStrategy {
+    #[default]
     SetOnce,
     LastWrite,
-}
-
-impl Default for ResolveStrategy {
-    fn default() -> Self {
-        ResolveStrategy::SetOnce
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

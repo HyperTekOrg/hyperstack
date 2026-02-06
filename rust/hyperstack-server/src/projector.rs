@@ -77,7 +77,7 @@ impl Projector {
                     .set("event_kind", &ctx.event_kind)
                     .set("event_type", &ctx.event_type)
                     .set("account", &ctx.account)
-                    .set("accounts_count", &ctx.accounts_count);
+                    .set("accounts_count", ctx.accounts_count);
             }
 
             for mutation in batch.mutations.into_iter() {

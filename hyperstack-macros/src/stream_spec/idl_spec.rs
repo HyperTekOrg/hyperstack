@@ -439,7 +439,7 @@ pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStrea
                 for program_pdas in &manual_block.programs {
                     let program_entry = all_pdas
                         .entry(program_pdas.program_name.clone())
-                        .or_insert_with(BTreeMap::new);
+                        .or_default();
 
                     for pda in &program_pdas.pdas {
                         program_entry.insert(pda.name.clone(), pda.to_pda_definition());

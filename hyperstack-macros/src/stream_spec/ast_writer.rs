@@ -1095,7 +1095,7 @@ fn build_instruction_hooks_ast(
 
     let mut sorted_sources: Vec<_> = sources_by_type.iter().collect();
     sorted_sources.sort_by_key(|(k, _)| *k);
-    for (source_type, mappings) in &sorted_sources {
+    for (_source_type, mappings) in &sorted_sources {
         for mapping in *mappings {
             let Some(stop_path) = &mapping.stop else {
                 continue;
