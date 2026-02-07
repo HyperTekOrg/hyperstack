@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.5.1...hyperstack-server-v0.5.2) (2026-02-07)
+
+
+### Bug Fixes
+
+* exclude derived views from projector export index ([53e2ea9](https://github.com/HyperTekOrg/hyperstack/commit/53e2ea905c59303ef9126b969d3f7168082cf076))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.5.1 to 0.5.2
+
 ## [0.5.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.5.0...hyperstack-server-v0.5.1) (2026-02-06)
 
 

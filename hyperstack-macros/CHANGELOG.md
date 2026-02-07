@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.5.1...hyperstack-macros-v0.5.2) (2026-02-07)
+
+
+### Bug Fixes
+
+* batch primary and resolver mutations to avoid duplicate frames ([160feee](https://github.com/HyperTekOrg/hyperstack/commit/160feee69c8e9429939f13cdf81359278750f241))
+
 ## [0.5.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.5.0...hyperstack-macros-v0.5.1) (2026-02-06)
 
 
