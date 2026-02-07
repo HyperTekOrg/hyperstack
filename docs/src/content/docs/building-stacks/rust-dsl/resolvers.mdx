@@ -39,13 +39,13 @@ for await (const round of hs.views.OreRound.latest.use()) {
 
 ### TokenMetadata Fields
 
-| Field      | Type               | Description                          |
-| ---------- | ------------------ | ------------------------------------ |
-| `mint`     | `string`           | The mint address (always present)    |
-| `name`     | `string \| null`   | Token name from on-chain metadata    |
-| `symbol`   | `string \| null`   | Token ticker symbol                  |
-| `decimals` | `number \| null`   | Number of decimal places             |
-| `logo_uri` | `string \| null`   | URL to the token's logo image        |
+| Field      | Type             | Description                       |
+| ---------- | ---------------- | --------------------------------- |
+| `mint`     | `string`         | The mint address (always present) |
+| `name`     | `string \| null` | Token name from on-chain metadata |
+| `symbol`   | `string \| null` | Token ticker symbol               |
+| `decimals` | `number \| null` | Number of decimal places          |
+| `logo_uri` | `string \| null` | URL to the token's logo image     |
 
 ### Generated TypeScript
 
@@ -78,10 +78,10 @@ Resolvers also provide **computed methods** — functions that derive new values
 
 The `TokenMetadata` resolver provides two computed methods:
 
-| Method       | Description                                            | Example                                     |
-| ------------ | ------------------------------------------------------ | ------------------------------------------- |
-| `ui_amount`  | Converts raw token amount to human-readable UI amount  | `1_000_000_000` with 9 decimals → `1.0`     |
-| `raw_amount` | Converts human-readable UI amount to raw token amount  | `1.0` with 9 decimals → `1_000_000_000`     |
+| Method       | Description                                           | Example                                 |
+| ------------ | ----------------------------------------------------- | --------------------------------------- |
+| `ui_amount`  | Converts raw token amount to human-readable UI amount | `1_000_000_000` with 9 decimals → `1.0` |
+| `raw_amount` | Converts human-readable UI amount to raw token amount | `1.0` with 9 decimals → `1_000_000_000` |
 
 Use these in `#[computed]` expressions:
 

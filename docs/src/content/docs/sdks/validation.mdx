@@ -23,9 +23,9 @@ import {
 
 Each entity gets two schema variants:
 
-| Schema | Fields | Use Case |
-| --- | --- | --- |
-| `PumpfunTokenSchema` | All optional | Partial updates during streaming |
+| Schema                        | Fields       | Use Case                          |
+| ----------------------------- | ------------ | --------------------------------- |
+| `PumpfunTokenSchema`          | All optional | Partial updates during streaming  |
 | `PumpfunTokenCompletedSchema` | All required | Asserting a fully-hydrated entity |
 
 The "Completed" variant is useful when you want to guarantee every field is present before rendering — for example, filtering out tokens that haven't received all their data yet.

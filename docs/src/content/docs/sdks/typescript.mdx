@@ -74,11 +74,11 @@ const hs = await HyperStack.connect(ORE_STREAM_STACK, {
 });
 ```
 
-| Option              | Type             | Default     | Description                                                        |
-| ------------------- | ---------------- | ----------- | ------------------------------------------------------------------ |
-| `url`               | `string`         | `stack.url` | Override the stack's default URL                                   |
-| `maxEntriesPerView` | `number \| null` | `10000`     | Max entries per view before LRU eviction                           |
-| `validateFrames`    | `boolean`        | `false`     | Validate incoming frames against Zod schemas before storing        |
+| Option              | Type             | Default     | Description                                                 |
+| ------------------- | ---------------- | ----------- | ----------------------------------------------------------- |
+| `url`               | `string`         | `stack.url` | Override the stack's default URL                            |
+| `maxEntriesPerView` | `number \| null` | `10000`     | Max entries per view before LRU eviction                    |
+| `validateFrames`    | `boolean`        | `false`     | Validate incoming frames against Zod schemas before storing |
 
 ### Connection State
 
