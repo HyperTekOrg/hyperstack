@@ -6,6 +6,7 @@ description: Add Hyperstack to your existing project and stream live Solana data
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
+import Workflow from "../../../components/Workflow.astro";
 
 Add Hyperstack to an existing project and start streaming live Solana data in minutes. Connect to stacks you have deployed or to one of our managed feeds like Ore. The Ore feed is available with no account required — just install the SDK and connect to the public Ore stack.
 
@@ -204,12 +205,20 @@ You just connected to a live Hyperstack stack. The ORE mining stack watches the 
 
 The stack is public — no API key or account needed. Point your SDK at the WebSocket URL and start receiving data immediately.
 
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│     Solana      │ ──▶ │   Hyperstack    │ ──▶ │    Your App     │
-│   (on-chain)    │     │   (streaming)   │     │   (live feed)   │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-```
+<Workflow steps={[
+  {
+    title: "Solana",
+    description: "On-chain"
+  },
+  {
+    title: "Hyperstack",
+    description: "Streaming"
+  },
+  {
+    title: "Your App",
+    description: "Live feed"
+  }
+]} />
 
 ### The Data You're Receiving
 

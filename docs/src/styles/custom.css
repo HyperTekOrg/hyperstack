@@ -439,3 +439,10 @@ starlight-tabs [role="tab"][aria-selected="true"] {
     font-size: var(--sl-text-xl);
   }
 }
+
+/* ============================================
+   Heading Anchor Links - Fix Overlap
+   ============================================ */
+.sl-markdown-content .sl-heading-wrapper {
+  --sl-anchor-icon-gap: 0.75em;
+}
