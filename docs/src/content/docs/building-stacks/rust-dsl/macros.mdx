@@ -173,6 +173,27 @@ pub total_volume: u64,
 **Arguments:**
 Takes a single Rust expression. Can reference other fields in the entity.
 
+### `TokenMetadata` (Resolver)
+
+Add a field typed as `TokenMetadata` to automatically enrich your entity with off-chain token metadata. Hyperstack resolves this server-side from the entity's mint address — no configuration needed beyond adding the field.
+
+```rust
+#[entity]
+pub struct Token {
+    #[map(pump_sdk::accounts::BondingCurve::__account_address, primary_key)]
+    pub mint: String,
+
+    // Resolved automatically from the mint
+    pub token_metadata: Option<TokenMetadata>,
+
+    // Use resolver computed methods in #[computed] expressions
+    #[computed(TokenMetadata::ui_amount(raw_balance, token_metadata.decimals))]
+    pub balance_ui: Option<f64>,
+}
+```
+
+See [Resolvers](./resolvers) for the full reference on `TokenMetadata` fields and computed methods.
+
 ### `#[derive_from]`
 
 Derives values from instruction metadata or arguments.
@@ -351,3 +372,12 @@ struct PdaMapper;
 | `HexDecode`    | Decode Hex string to bytes.                          |
 | `ToString`     | Convert value to string.                             |
 | `ToNumber`     | Convert value to number.                             |
+
+### Resolver Computed Methods
+
+These methods are available in `#[computed]` expressions when using the `TokenMetadata` resolver. See [Resolvers](./resolvers) for details.
+
+| Method                                    | Description                                           |
+| ----------------------------------------- | ----------------------------------------------------- |
+| `TokenMetadata::ui_amount(raw, decimals)` | Convert raw token amount to human-readable UI amount. |
+| `TokenMetadata::raw_amount(ui, decimals)` | Convert UI amount back to raw token amount.           |

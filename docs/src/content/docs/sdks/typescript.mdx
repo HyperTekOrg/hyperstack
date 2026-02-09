@@ -74,10 +74,11 @@ const hs = await HyperStack.connect(ORE_STREAM_STACK, {
 });
 ```
 
-| Option              | Type             | Default     | Description                              |
-| ------------------- | ---------------- | ----------- | ---------------------------------------- |
-| `url`               | `string`         | `stack.url` | Override the stack's default URL         |
-| `maxEntriesPerView` | `number \| null` | `10000`     | Max entries per view before LRU eviction |
+| Option              | Type             | Default     | Description                                                 |
+| ------------------- | ---------------- | ----------- | ----------------------------------------------------------- |
+| `url`               | `string`         | `stack.url` | Override the stack's default URL                            |
+| `maxEntriesPerView` | `number \| null` | `10000`     | Max entries per view before LRU eviction                    |
+| `validateFrames`    | `boolean`        | `false`     | Validate incoming frames against Zod schemas before storing |
 
 ### Connection State
 
@@ -356,12 +357,13 @@ const hs = await HyperStack.connect(ORE_STREAM_STACK, {
 
 ## Subscription Options
 
-The streaming methods (`.use()`, `.watch()`, `.watchRich()`) accept options for server-side pagination:
+The streaming methods (`.use()`, `.watch()`, `.watchRich()`) accept options for pagination and validation:
 
 ```typescript
 interface WatchOptions {
-  take?: number;    // Limit number of entities
-  skip?: number;    // Skip first N entities
+  take?: number;         // Limit number of entities
+  skip?: number;         // Skip first N entities
+  schema?: Schema<T>;    // Validate and filter entities with a Zod schema
 }
 ```
 
@@ -440,6 +442,58 @@ for await (const update of hs.views.OreRound.latest.watch()) {
 
 ---
 
+## Schema Validation
+
+Every stack ships with [Zod](https://zod.dev) schemas alongside its TypeScript interfaces. Use them to validate data at two levels:
+
+### Frame Validation
+
+Enable `validateFrames` on connect to automatically drop malformed data before it enters your local store:
+
+```typescript
+const hs = await HyperStack.connect(ORE_STREAM_STACK, {
+  validateFrames: true,
+});
+```
+
+### Query-Level Validation
+
+Pass a `schema` to `.use()` to filter out entities that don't match:
+
+```typescript
+import { OreRoundCompletedSchema } from "hyperstack-stacks/ore";
+
+// Only emit rounds where every field is present
+for await (const round of hs.views.OreRound.latest.use({
+  schema: OreRoundCompletedSchema,
+})) {
+  console.log(round.id.round_id, round.state.motherlode);
+}
+```
+
+See [Schema Validation](/sdks/validation/) for the full guide on generated schemas, custom schemas, and the "Completed" schema pattern.
+
+---
+
+## Resolved Data
+
+Hyperstack can automatically enrich your entities with data that doesn't live on-chain. For example, the ORE stack includes token metadata (name, symbol, decimals, logo) resolved server-side from the DAS API:
+
+```typescript
+for await (const round of hs.views.OreRound.latest.use()) {
+  // Token metadata is resolved automatically — no extra API calls
+  console.log(round.ore_metadata?.name);     // "Ore"
+  console.log(round.ore_metadata?.symbol);   // "ORE"
+  console.log(round.ore_metadata?.decimals); // 11
+}
+```
+
+Resolved data arrives as part of the entity alongside on-chain fields. Your client code reads it the same way — no distinction between on-chain and resolved data.
+
+See [Resolvers](/building-stacks/rust-dsl/resolvers/) for how to add resolved data when building your own stack.
+
+---
+
 ## Error Handling
 
 ```typescript
@@ -471,6 +525,7 @@ Establishes a WebSocket connection to a Hyperstack stack.
 - `stack` — Stack definition (includes URL and typed views)
 - `options.url` — Override the stack's default URL (optional)
 - `options.maxEntriesPerView` — Max entries per view before LRU eviction (optional)
+- `options.validateFrames` — Validate incoming frames against Zod schemas (optional)
 
 **Returns:** `Promise<HyperStack>`
 
@@ -516,10 +571,13 @@ Options for streaming methods:
 
 ```typescript
 interface WatchOptions {
-  take?: number;    // Limit number of entities
-  skip?: number;    // Skip first N entities
+  take?: number;         // Limit number of entities
+  skip?: number;         // Skip first N entities
+  schema?: Schema<T>;    // Validate and filter entities with a Zod schema
 }
 ```
+
+See [Schema Validation](/sdks/validation/) for details on using schemas to filter and validate streamed data.
 
 ### `hs.connectionState`
 
@@ -543,7 +601,8 @@ Close the WebSocket connection gracefully.
 
 ## Next Steps
 
+- [Schema Validation](/sdks/validation/) — Zod schemas for runtime validation and filtering
 - [React SDK](/sdks/react/) — Hooks and providers for React apps
 - [Rust SDK](/sdks/rust/) — Native Rust client
+- [Resolvers](/building-stacks/rust-dsl/resolvers/) — Enrich entities with token metadata and computed fields
 - [Build Your Own Stack](/building-stacks/workflow) — Create custom data streams
-- [How It Works](/using-stacks/how-it-works/) — Understanding Stacks, Views, and architecture

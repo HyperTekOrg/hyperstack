@@ -2,6 +2,38 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": true,
+  "extra-files": [
+    {
+      "type": "json",
+      "path": "examples/ore-react/package.json",
+      "jsonpath": "$.dependencies['hyperstack-react']"
+    },
+    {
+      "type": "json",
+      "path": "examples/ore-react/package.json",
+      "jsonpath": "$.dependencies['hyperstack-stacks']"
+    },
+    {
+      "type": "json",
+      "path": "examples/ore-typescript/package.json",
+      "jsonpath": "$.dependencies['hyperstack-typescript']"
+    },
+    {
+      "type": "json",
+      "path": "examples/ore-typescript/package.json",
+      "jsonpath": "$.dependencies['hyperstack-stacks']"
+    },
+    {
+      "type": "toml",
+      "path": "examples/ore-rust/Cargo.toml",
+      "jsonpath": "$.dependencies['hyperstack-sdk']"
+    },
+    {
+      "type": "toml",
+      "path": "examples/ore-rust/Cargo.toml",
+      "jsonpath": "$.dependencies['hyperstack-stacks'].version"
+    }
+  ],
   "packages": {
     "hyperstack": {
       "release-type": "rust",

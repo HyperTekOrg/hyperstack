@@ -15,6 +15,7 @@ Instead of writing complex ETL pipelines with manual account parsing and event h
 - **Entities** — Structured data objects that project on-chain state
 - **Field Mappings** — How data flows from Solana accounts into your entities
 - **Aggregations** — Computed metrics that update automatically
+- **Resolvers** — External data (like token metadata) enriched automatically
 - **Strategies** — How incoming data merges with existing state
 
 The macros transform your Rust code into a JSON-based stack spec (`.stack.json`), which Hyperstack compiles into optimized bytecode for real-time execution.
@@ -39,6 +40,9 @@ pub mod my_stream {
         // Derive computed values
         #[computed(balance * price)]
         pub tvl: u64,
+
+        // Enrich with off-chain token metadata (name, symbol, decimals, logo)
+        pub token_metadata: Option<TokenMetadata>,
     }
 }
 ```
@@ -66,15 +70,16 @@ Field paths use the `{name}_sdk::accounts::` and `{name}_sdk::instructions::` pr
 
 ### Field-Level
 
-| Macro                 | Purpose                                    |
-| --------------------- | ------------------------------------------ |
-| `#[map]`              | Maps fields from Solana account state      |
-| `#[from_instruction]` | Extracts data from instruction arguments   |
-| `#[aggregate]`        | Computes running values (Sum, Count, etc.) |
-| `#[event]`            | Captures instructions as structured events |
-| `#[snapshot]`         | Captures complete account state            |
-| `#[computed]`         | Derives values from other entity fields    |
-| `#[derive_from]`      | Populates from instruction metadata        |
+| Macro                 | Purpose                                      |
+| --------------------- | -------------------------------------------- |
+| `#[map]`              | Maps fields from Solana account state        |
+| `#[from_instruction]` | Extracts data from instruction arguments     |
+| `#[aggregate]`        | Computes running values (Sum, Count, etc.)   |
+| `#[event]`            | Captures instructions as structured events   |
+| `#[snapshot]`         | Captures complete account state              |
+| `#[computed]`         | Derives values from other entity fields      |
+| `#[derive_from]`      | Populates from instruction metadata          |
+| `TokenMetadata`       | Resolves off-chain token metadata for a mint |
 
 ### Cross-Account Resolution
 
@@ -105,3 +110,4 @@ When data arrives, **strategies** determine how it's merged with existing state:
 
 - **[Macro Reference](./macros)** — Complete documentation of every macro and its arguments
 - **[Population Strategies](./strategies)** — Deep dive into update strategies and when to use each
+- **[Resolvers](./resolvers)** — Enrich entities with token metadata and computed fields

@@ -230,9 +230,9 @@ checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
 
 [[package]]
 name = "hyperstack-sdk"
-version = "0.4.3"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "275013d551dd338f106214466e7961cd44f2ac9eb60683ab5b9dbee5fca01d0a"
+checksum = "bac9f88c11e1b81567e6de7014dc8695831757ddd475cb894b658fb8fe90e959"
 dependencies = [
  "anyhow",
  "flate2",
@@ -249,9 +249,9 @@ dependencies = [
 
 [[package]]
 name = "hyperstack-stacks"
-version = "0.4.3"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60b291e5e95c628c26362720c1f23d4fa7f68cda62d67a6aa2631dfcc7bad848"
+checksum = "5ee138ede9bae5b9bc25ed24612695336a3a25547c0c930947086f9d8b8242ed"
 dependencies = [
  "hyperstack-sdk",
  "serde",

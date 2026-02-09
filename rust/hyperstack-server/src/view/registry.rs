@@ -41,10 +41,15 @@ impl ViewIndex {
             }
         }
 
-        self.by_export
-            .entry(spec.export.clone())
-            .or_default()
-            .push(spec.clone());
+        // Only add non-derived views to by_export.
+        // Derived views receive updates via their source_view subscription,
+        // not directly from the projector.
+        if !spec.is_derived() {
+            self.by_export
+                .entry(spec.export.clone())
+                .or_default()
+                .push(spec.clone());
+        }
         self.by_id.insert(spec.id.clone(), spec);
     }
 

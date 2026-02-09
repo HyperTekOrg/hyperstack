@@ -548,8 +548,11 @@ pub fn generate_vm_handler(
                 };
 
                 match mutations_result {
-                    Ok(mutations) => {
+                    Ok(mut mutations) => {
                         self.slot_tracker.record(slot);
+                        // Combine primary mutations with resolver mutations into a single batch
+                        // to avoid duplicate frames for the same entity key
+                        mutations.extend(resolver_mutations);
                         let event_context = hyperstack::runtime::hyperstack_server::EventContext {
                             program: #entity_name_lit.to_string(),
                             event_kind: "account".to_string(),
@@ -559,13 +562,6 @@ pub fn generate_vm_handler(
                         };
                         self.send_mutations_with_context(
                             mutations,
-                            slot,
-                            write_version,
-                            Some(event_context.clone()),
-                        )
-                        .await;
-                        self.send_mutations_with_context(
-                            resolver_mutations,
                             slot,
                             write_version,
                             Some(event_context),
@@ -724,8 +720,11 @@ pub fn generate_vm_handler(
                 };
 
                 match mutations_result {
-                    Ok(mutations) => {
+                    Ok(mut mutations) => {
                         self.slot_tracker.record(slot);
+                        // Combine primary mutations with resolver mutations into a single batch
+                        // to avoid duplicate frames for the same entity key
+                        mutations.extend(resolver_mutations);
                         let event_context = hyperstack::runtime::hyperstack_server::EventContext {
                             program: #entity_name_lit.to_string(),
                             event_kind: "instruction".to_string(),
@@ -735,13 +734,6 @@ pub fn generate_vm_handler(
                         };
                         self.send_mutations_with_context(
                             mutations,
-                            slot,
-                            txn_index as u64,
-                            Some(event_context.clone()),
-                        )
-                        .await;
-                        self.send_mutations_with_context(
-                            resolver_mutations,
                             slot,
                             txn_index as u64,
                             Some(event_context),
@@ -1475,8 +1467,11 @@ pub fn generate_account_handler_impl(
                 };
 
                 match mutations_result {
-                    Ok(mutations) => {
+                    Ok(mut mutations) => {
                         self.slot_tracker.record(slot);
+                        // Combine primary mutations with resolver mutations into a single batch
+                        // to avoid duplicate frames for the same entity key
+                        mutations.extend(resolver_mutations);
                         let event_context = hyperstack::runtime::hyperstack_server::EventContext {
                             program: #program_name_lit.to_string(),
                             event_kind: "account".to_string(),
@@ -1486,13 +1481,6 @@ pub fn generate_account_handler_impl(
                         };
                         self.send_mutations_with_context(
                             mutations,
-                            slot,
-                            write_version,
-                            Some(event_context.clone()),
-                        )
-                        .await;
-                        self.send_mutations_with_context(
-                            resolver_mutations,
                             slot,
                             write_version,
                             Some(event_context),
@@ -1653,8 +1641,11 @@ pub fn generate_instruction_handler_impl(
                 };
 
                 match mutations_result {
-                    Ok(mutations) => {
+                    Ok(mut mutations) => {
                         self.slot_tracker.record(slot);
+                        // Combine primary mutations with resolver mutations into a single batch
+                        // to avoid duplicate frames for the same entity key
+                        mutations.extend(resolver_mutations);
                         let event_context = hyperstack::runtime::hyperstack_server::EventContext {
                             program: #entity_name_lit.to_string(),
                             event_kind: "instruction".to_string(),
@@ -1664,13 +1655,6 @@ pub fn generate_instruction_handler_impl(
                         };
                         self.send_mutations_with_context(
                             mutations,
-                            slot,
-                            txn_index as u64,
-                            Some(event_context.clone()),
-                        )
-                        .await;
-                        self.send_mutations_with_context(
-                            resolver_mutations,
                             slot,
                             txn_index as u64,
                             Some(event_context),
