@@ -30,11 +30,24 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
   const checkpoint = stack.instructions?.checkpoint?.useMutation();
   const deploy = stack.instructions?.deploy?.useMutation();
   
-  // Check if checkpoint is needed
-  const needsCheckpoint = 
-    minerData?.state?.round_id != null &&
-    currentRound?.id?.round_id != null &&
-    minerData.state.round_id < currentRound.id.round_id;
+  const minerRoundId = minerData?.state?.round_id;
+  const checkpointId = minerData?.state?.checkpoint_id;
+  const currentRoundId = currentRound?.id?.round_id;
+
+  const hasUncheckpointedRound =
+    minerRoundId != null &&
+    checkpointId != null &&
+    checkpointId < minerRoundId;
+
+  const canCheckpointNow =
+    hasUncheckpointedRound &&
+    currentRoundId != null &&
+    minerRoundId < currentRoundId;
+
+  const waitingForRoundToEnd =
+    hasUncheckpointedRound &&
+    currentRoundId != null &&
+    minerRoundId === currentRoundId;
 
   const handleDeploy = async () => {
     if (!wallet.connected || !wallet.publicKey) {
@@ -46,7 +59,7 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
     }
 
     setIsProcessing(true);
-    setProcessingStep(needsCheckpoint ? 'checkpoint' : 'deploy');
+    setProcessingStep(canCheckpointNow ? 'checkpoint' : 'deploy');
     setResult(null);
 
     try {
@@ -74,12 +87,12 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
 
       let checkpointSig: string | undefined;
 
-      // Call checkpoint first if needed
-      if (needsCheckpoint) {
-        const oldRound = recentRounds?.find(r => r.id?.round_id === minerData.state.round_id);
+      // Call checkpoint first only when the miner round is already completed
+      if (canCheckpointNow) {
+        const oldRound = recentRounds?.find(r => r.id?.round_id === minerRoundId);
         
         if (!oldRound?.id?.round_address) {
-          throw new Error(`Round ${minerData.state.round_id} not available. Cannot checkpoint.`);
+          throw new Error(`Round ${minerRoundId} not available. Cannot checkpoint.`);
         }
 
         const checkpointResult = await checkpoint.submit(
@@ -127,9 +140,15 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
     <div className="bg-white dark:bg-stone-800 rounded-2xl p-6 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
       <h3 className="text-lg font-semibold text-stone-800 dark:text-stone-100 mb-4">Deploy</h3>
       
-      {needsCheckpoint && (
+      {canCheckpointNow && (
         <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-300">
-          ℹ️ Will checkpoint round {minerData?.state?.round_id} first
+          ℹ️ Round {minerRoundId} is completed and uncheckpointed. It will be checkpointed before deploy.
+        </div>
+      )}
+
+      {waitingForRoundToEnd && (
+        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-xs text-blue-700 dark:text-blue-300">
+          ⏳ You have uncheckpointed positions in active round {minerRoundId}. Checkpoint becomes available after this round ends.
         </div>
       )}
       
@@ -173,7 +192,7 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
                    transition-all duration-200 hover:shadow-md active:scale-[0.98]"
         >
           {!wallet.connected ? 'Connect Wallet' : 
-           isProcessing ? (needsCheckpoint ? 'Checkpointing + Deploying...' : 'Deploying...') : 
+            isProcessing ? (canCheckpointNow ? 'Checkpointing + Deploying...' : 'Deploying...') : 
            `Deploy ${amount} SOL`}
         </button>
 

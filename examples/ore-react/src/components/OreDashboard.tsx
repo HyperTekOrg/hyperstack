@@ -15,10 +15,10 @@ export function OreDashboard() {
   const { views, isConnected } = useHyperstack(ORE_STREAM_STACK);
   const { data: latestRound } = views.OreRound.latest.useOne({ schema: ValidatedOreRoundSchema });
   const { data: treasuryData } = views.OreTreasury.list.useOne();
-  
-  const { data: minerData } = views.OreMiner.list.useOne({
-    filters: wallet.publicKey ? { authority: wallet.publicKey.toBase58() } : undefined,
-  });
+
+  const { data: minerData } = views.OreMiner.state.use(
+    wallet.publicKey ? { authority: wallet.publicKey.toBase58() } : undefined
+  );
 
   const { data: recentRounds } = views.OreRound.list.use({ take: 10 });
   
