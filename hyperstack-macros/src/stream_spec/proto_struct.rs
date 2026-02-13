@@ -448,6 +448,30 @@ pub fn process_struct_with_context(
                 crate::ast::ResolverType::Token => quote! {
                     hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Token
                 },
+                crate::ast::ResolverType::Url(config) => {
+                    let url_path = &config.url_path;
+                    let method_code = match config.method {
+                        crate::ast::HttpMethod::Get => quote! {
+                            hyperstack::runtime::hyperstack_interpreter::ast::HttpMethod::Get
+                        },
+                        crate::ast::HttpMethod::Post => quote! {
+                            hyperstack::runtime::hyperstack_interpreter::ast::HttpMethod::Post
+                        },
+                    };
+                    let extract_path_code = match &config.extract_path {
+                        Some(path) => quote! { Some(#path.to_string()) },
+                        None => quote! { None },
+                    };
+                    quote! {
+                        hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(
+                            hyperstack::runtime::hyperstack_interpreter::ast::UrlResolverConfig {
+                                url_path: #url_path.to_string(),
+                                method: #method_code,
+                                extract_path: #extract_path_code,
+                            }
+                        )
+                    }
+                },
             };
             let strategy_code = match strategy.as_str() {
                 "LastWrite" => quote! {

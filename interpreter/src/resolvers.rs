@@ -494,6 +494,137 @@ impl TokenMetadataResolverClient {
     }
 }
 
+// ============================================================================
+// URL Resolver Client - Fetch and parse data from external URLs
+// ============================================================================
+
+const DEFAULT_URL_TIMEOUT_SECS: u64 = 30;
+
+pub struct UrlResolverClient {
+    client: reqwest::Client,
+}
+
+impl Default for UrlResolverClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl UrlResolverClient {
+    pub fn new() -> Self {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(DEFAULT_URL_TIMEOUT_SECS))
+            .build()
+            .expect("Failed to create HTTP client for URL resolver");
+
+        Self { client }
+    }
+
+    pub fn with_timeout(timeout_secs: u64) -> Self {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(timeout_secs))
+            .build()
+            .expect("Failed to create HTTP client for URL resolver");
+
+        Self { client }
+    }
+
+    /// Resolve a URL and return the parsed JSON response
+    pub async fn resolve(
+        &self,
+        url: &str,
+        method: &crate::ast::HttpMethod,
+    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+        if url.is_empty() {
+            return Err("URL is empty".into());
+        }
+
+        let response = match method {
+            crate::ast::HttpMethod::Get => self.client.get(url).send().await?,
+            crate::ast::HttpMethod::Post => self.client.post(url).send().await?,
+        };
+
+        let response = response.error_for_status()?;
+        let value = response.json::<Value>().await?;
+
+        Ok(value)
+    }
+
+    /// Resolve a URL and extract a specific JSON path from the response
+    pub async fn resolve_with_extract(
+        &self,
+        url: &str,
+        method: &crate::ast::HttpMethod,
+        extract_path: Option<&str>,
+    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+        let response = self.resolve(url, method).await?;
+
+        if let Some(path) = extract_path {
+            Self::extract_json_path(&response, path)
+        } else {
+            Ok(response)
+        }
+    }
+
+    /// Extract a value from a JSON object using dot-notation path
+    /// e.g., "data.image" extracts response["data"]["image"]
+    pub fn extract_json_path(
+        value: &Value,
+        path: &str,
+    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+        if path.is_empty() {
+            return Ok(value.clone());
+        }
+
+        let mut current = value;
+        for segment in path.split('.') {
+            // Try as object key first
+            if let Some(next) = current.get(segment) {
+                current = next;
+            } else if let Ok(index) = segment.parse::<usize>() {
+                // Try as array index
+                if let Some(next) = current.get(index) {
+                    current = next;
+                } else {
+                    return Ok(Value::Null);
+                }
+            } else {
+                return Ok(Value::Null);
+            }
+        }
+
+        Ok(current.clone())
+    }
+
+    /// Batch resolve multiple URLs (each URL resolved independently)
+    pub async fn resolve_batch(
+        &self,
+        urls: &[(String, crate::ast::HttpMethod, Option<String>)],
+    ) -> HashMap<String, Value> {
+        let mut results = HashMap::new();
+
+        for (url, method, extract_path) in urls {
+            if url.is_empty() {
+                continue;
+            }
+
+            match self
+                .resolve_with_extract(url, method, extract_path.as_deref())
+                .await
+            {
+                Ok(value) => {
+                    results.insert(url.clone(), value);
+                }
+                Err(e) => {
+                    tracing::warn!(url = %url, error = %e, "Failed to resolve URL");
+                }
+            }
+        }
+
+        results
+    }
+}
+
 struct TokenMetadataResolver;
 
 const TOKEN_METADATA_METHODS: &[ResolverComputedMethod] = &[

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use syn::parse::{Parse, ParseStream};
 use syn::{Attribute, Path, Token};
 
-use crate::ast::ResolverType;
+use crate::ast::{HttpMethod, ResolverType};
 
 #[derive(Debug, Clone)]
 pub struct RegisterFromSpec {
@@ -1143,6 +1143,137 @@ pub fn parse_computed_attribute(
 
     Ok(Some(ComputedAttribute {
         expression,
+        target_field_name: target_field_name.to_string(),
+    }))
+}
+
+// ============================================================================
+// URL Resolve Macro - Fetch and parse data from external URLs
+// ============================================================================
+
+#[derive(Debug, Clone)]
+pub struct UrlResolveAttribute {
+    /// Field path to get the URL from (e.g., "info.uri")
+    pub url_path: String,
+    /// HTTP method to use (default: GET)
+    pub method: HttpMethod,
+    /// JSON path to extract from response (None = full payload)
+    pub extract_path: Option<String>,
+    /// Strategy for updates (SetOnce or LastWrite)
+    pub strategy: String,
+    /// Target field name
+    pub target_field_name: String,
+}
+
+struct UrlResolveAttributeArgs {
+    url: Option<String>,
+    method: Option<syn::Ident>,
+    extract: Option<String>,
+    strategy: Option<syn::Ident>,
+}
+
+impl Parse for UrlResolveAttributeArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut url = None;
+        let mut method = None;
+        let mut extract = None;
+        let mut strategy = None;
+
+        while !input.is_empty() {
+            let ident: syn::Ident = input.parse()?;
+            let ident_str = ident.to_string();
+
+            input.parse::<Token![=]>()?;
+
+            if ident_str == "url" {
+                // Parse as path (e.g., info.uri) and convert to string
+                let path: Path = input.parse()?;
+                url = Some(
+                    path.segments
+                        .iter()
+                        .map(|seg| seg.ident.to_string())
+                        .collect::<Vec<_>>()
+                        .join("."),
+                );
+            } else if ident_str == "method" {
+                method = Some(input.parse()?);
+            } else if ident_str == "extract" {
+                let lit: syn::LitStr = input.parse()?;
+                extract = Some(lit.value());
+            } else if ident_str == "strategy" {
+                strategy = Some(input.parse()?);
+            } else {
+                return Err(syn::Error::new(
+                    ident.span(),
+                    format!("Unknown url_resolve attribute argument: {}", ident_str),
+                ));
+            }
+
+            if !input.is_empty() {
+                input.parse::<Token![,]>()?;
+            }
+        }
+
+        Ok(UrlResolveAttributeArgs {
+            url,
+            method,
+            extract,
+            strategy,
+        })
+    }
+}
+
+/// Parse #[url_resolve(url = info.uri, method = GET, extract = "image", strategy = SetOnce)] attribute
+pub fn parse_url_resolve_attribute(
+    attr: &Attribute,
+    target_field_name: &str,
+) -> syn::Result<Option<UrlResolveAttribute>> {
+    if !attr.path().is_ident("url_resolve") {
+        return Ok(None);
+    }
+
+    let args: UrlResolveAttributeArgs = attr.parse_args()?;
+
+    let url_path = args.url.ok_or_else(|| {
+        syn::Error::new_spanned(attr, "#[url_resolve] requires 'url' parameter specifying the field path to get the URL from")
+    })?;
+
+    let method = if let Some(method_ident) = args.method {
+        match method_ident.to_string().to_lowercase().as_str() {
+            "get" => HttpMethod::Get,
+            "post" => HttpMethod::Post,
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    method_ident,
+                    "Invalid HTTP method. Only 'GET' or 'POST' are supported.",
+                ));
+            }
+        }
+    } else {
+        HttpMethod::Get
+    };
+
+    let strategy = args
+        .strategy
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "SetOnce".to_string());
+
+    // Validate strategy
+    if strategy != "SetOnce" && strategy != "LastWrite" {
+        return Err(syn::Error::new_spanned(
+            attr,
+            format!(
+                "Invalid strategy '{}' for #[url_resolve]. Only 'SetOnce' or 'LastWrite' are allowed.",
+                strategy
+            ),
+        ));
+    }
+
+    Ok(Some(UrlResolveAttribute {
+        url_path,
+        method,
+        extract_path: args.extract,
+        strategy,
         target_field_name: target_field_name.to_string(),
     }))
 }

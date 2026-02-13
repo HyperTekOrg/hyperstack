@@ -653,6 +653,33 @@ pub fn process_nested_struct(
                         target_field_name,
                         strategy: resolve_attr.strategy,
                     });
+                } else if let Ok(Some(url_resolve_attr)) =
+                    parse::parse_url_resolve_attribute(attr, &field_name.to_string())
+                {
+                    let mut target_field_name = url_resolve_attr.target_field_name.clone();
+                    if !target_field_name.contains('.') {
+                        target_field_name = format!("{}.{}", section_name, target_field_name);
+                    }
+
+                    // Qualify the url_path with section name if needed
+                    let url_path = if url_resolve_attr.url_path.contains('.') {
+                        url_resolve_attr.url_path.clone()
+                    } else {
+                        format!("{}.{}", section_name, url_resolve_attr.url_path)
+                    };
+
+                    resolve_specs.push(parse::ResolveSpec {
+                        resolver: crate::ast::ResolverType::Url(crate::ast::UrlResolverConfig {
+                            url_path: url_path.clone(),
+                            method: url_resolve_attr.method.clone(),
+                            extract_path: url_resolve_attr.extract_path.clone(),
+                        }),
+                        from: Some(url_path),
+                        address: None,
+                        extract: url_resolve_attr.extract_path,
+                        target_field_name,
+                        strategy: url_resolve_attr.strategy,
+                    });
                 }
             }
         }

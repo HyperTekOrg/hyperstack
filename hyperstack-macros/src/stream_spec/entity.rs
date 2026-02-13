@@ -18,7 +18,7 @@ use std::collections::{HashMap, HashSet};
 use quote::{format_ident, quote};
 use syn::{Fields, GenericArgument, ItemStruct, PathArguments, Type};
 
-use crate::ast::{EntitySection, FieldTypeInfo, ResolverHook, ResolverType};
+use crate::ast::{EntitySection, FieldTypeInfo, ResolverHook, ResolverType, UrlResolverConfig};
 use crate::codegen;
 use crate::event_type_helpers::IdlLookup;
 use crate::parse;
@@ -454,6 +454,28 @@ pub fn process_entity_struct_with_idl(
                         computed_attr.expression.clone(),
                         field_type.clone(),
                     ));
+                } else if let Ok(Some(url_resolve_attr)) =
+                    parse::parse_url_resolve_attribute(attr, &field_name.to_string())
+                {
+                    has_attrs = true;
+
+                    state_fields.push(quote! {
+                        pub #field_name: #field_type
+                    });
+
+                    // Create URL resolver spec
+                    resolve_specs.push(parse::ResolveSpec {
+                        resolver: ResolverType::Url(UrlResolverConfig {
+                            url_path: url_resolve_attr.url_path.clone(),
+                            method: url_resolve_attr.method.clone(),
+                            extract_path: url_resolve_attr.extract_path.clone(),
+                        }),
+                        from: Some(url_resolve_attr.url_path),
+                        address: None,
+                        extract: url_resolve_attr.extract_path,
+                        target_field_name: url_resolve_attr.target_field_name,
+                        strategy: url_resolve_attr.strategy,
+                    });
                 }
             }
 

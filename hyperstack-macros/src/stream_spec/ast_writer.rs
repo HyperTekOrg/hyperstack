@@ -232,9 +232,10 @@ fn parse_resolve_strategy(strategy: &str) -> ResolveStrategy {
     }
 }
 
-fn resolver_type_key(resolver: &ResolverType) -> &'static str {
+fn resolver_type_key(resolver: &ResolverType) -> String {
     match resolver {
-        ResolverType::Token => "token",
+        ResolverType::Token => "token".to_string(),
+        ResolverType::Url(config) => format!("url:{}", config.url_path),
     }
 }
 
