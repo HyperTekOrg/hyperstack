@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use syn::parse::{Parse, ParseStream};
 use syn::{Attribute, Path, Token};
 
-use crate::ast::{HttpMethod, ResolverType};
+use crate::ast::ResolverType;
 
 #[derive(Debug, Clone)]
 pub struct RegisterFromSpec {
@@ -1004,6 +1004,8 @@ pub fn parse_aggregate_attribute(
 pub struct ResolveAttribute {
     pub from: Option<String>,
     pub address: Option<String>,
+    pub url: Option<String>,
+    pub method: Option<String>,
     pub extract: Option<String>,
     pub target_field_name: String,
     pub resolver: Option<String>,
@@ -1023,6 +1025,8 @@ pub struct ResolveSpec {
 struct ResolveAttributeArgs {
     from: Option<String>,
     address: Option<String>,
+    url: Option<String>,
+    method: Option<syn::Ident>,
     extract: Option<String>,
     resolver: Option<String>,
     strategy: Option<String>,
@@ -1032,6 +1036,8 @@ impl Parse for ResolveAttributeArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut from = None;
         let mut address = None;
+        let mut url = None;
+        let mut method = None;
         let mut extract = None;
         let mut resolver = None;
         let mut strategy = None;
@@ -1048,6 +1054,22 @@ impl Parse for ResolveAttributeArgs {
             } else if ident_str == "address" {
                 let lit: syn::LitStr = input.parse()?;
                 address = Some(lit.value());
+            } else if ident_str == "url" {
+                // Parse as dotted path (e.g., info.uri) - handle both dot-separated and single identifiers
+                let mut parts = Vec::new();
+                let first: syn::Ident = input.parse()?;
+                parts.push(first.to_string());
+
+                // Parse any additional .identifier segments
+                while input.peek(Token![.]) {
+                    input.parse::<Token![.]>()?;
+                    let next: syn::Ident = input.parse()?;
+                    parts.push(next.to_string());
+                }
+
+                url = Some(parts.join("."));
+            } else if ident_str == "method" {
+                method = Some(input.parse()?);
             } else if ident_str == "extract" {
                 let lit: syn::LitStr = input.parse()?;
                 extract = Some(lit.value());
@@ -1077,6 +1099,8 @@ impl Parse for ResolveAttributeArgs {
         Ok(ResolveAttributeArgs {
             from,
             address,
+            url,
+            method,
             extract,
             resolver,
             strategy,
@@ -1094,6 +1118,25 @@ pub fn parse_resolve_attribute(
 
     let args: ResolveAttributeArgs = attr.parse_args()?;
 
+    // Check for mutually exclusive parameters: url vs (from/address)
+    let has_url = args.url.is_some();
+    let has_token_source = args.from.is_some() || args.address.is_some();
+
+    if has_url && has_token_source {
+        return Err(syn::Error::new_spanned(
+            attr,
+            "#[resolve] cannot specify 'url' together with 'from' or 'address'",
+        ));
+    }
+
+    if !has_url && !has_token_source {
+        return Err(syn::Error::new_spanned(
+            attr,
+            "#[resolve] requires either 'url' or 'from'/'address' parameter",
+        ));
+    }
+
+    // Token resolvers: cannot have both from and address
     if args.from.is_some() && args.address.is_some() {
         return Err(syn::Error::new_spanned(
             attr,
@@ -1101,10 +1144,11 @@ pub fn parse_resolve_attribute(
         ));
     }
 
-    if args.from.is_none() && args.address.is_none() {
+    // URL resolvers require extract parameter
+    if has_url && args.extract.is_none() {
         return Err(syn::Error::new_spanned(
             attr,
-            "#[resolve] requires either 'from' or 'address' parameter",
+            "#[resolve] with 'url' requires 'extract' parameter",
         ));
     }
 
@@ -1113,6 +1157,8 @@ pub fn parse_resolve_attribute(
     Ok(Some(ResolveAttribute {
         from: args.from,
         address: args.address,
+        url: args.url,
+        method: args.method.map(|m| m.to_string()),
         extract: args.extract,
         target_field_name: target_field_name.to_string(),
         resolver: args.resolver,
@@ -1146,121 +1192,6 @@ pub fn parse_computed_attribute(
         target_field_name: target_field_name.to_string(),
     }))
 }
-
-// ============================================================================
-// URL Resolve Macro - Fetch and parse data from external URLs
-// ============================================================================
-
-#[derive(Debug, Clone)]
-pub struct UrlResolveAttribute {
-    /// Field path to get the URL from (e.g., "info.uri")
-    pub url_path: String,
-    /// HTTP method to use (default: GET)
-    pub method: HttpMethod,
-    /// JSON path to extract from response (None = full payload)
-    pub extract_path: Option<String>,
-    /// Strategy for updates (SetOnce or LastWrite)
-    pub strategy: String,
-    /// Target field name
-    pub target_field_name: String,
-}
-
-struct UrlResolveAttributeArgs {
-    url: Option<String>,
-    method: Option<syn::Ident>,
-    extract: Option<String>,
-}
-
-impl Parse for UrlResolveAttributeArgs {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let mut url = None;
-        let mut method = None;
-        let mut extract = None;
-
-        while !input.is_empty() {
-            let ident: syn::Ident = input.parse()?;
-            let ident_str = ident.to_string();
-
-            input.parse::<Token![=]>()?;
-
-            if ident_str == "url" {
-                // Parse as dotted path (e.g., info.uri) - handle both dot-separated and single identifiers
-                let mut parts = Vec::new();
-                let first: syn::Ident = input.parse()?;
-                parts.push(first.to_string());
-                
-                // Parse any additional .identifier segments
-                while input.peek(Token![.]) {
-                    input.parse::<Token![.]>()?;
-                    let next: syn::Ident = input.parse()?;
-                    parts.push(next.to_string());
-                }
-                
-                url = Some(parts.join("."));
-            } else if ident_str == "method" {
-                method = Some(input.parse()?);
-            } else if ident_str == "extract" {
-                let lit: syn::LitStr = input.parse()?;
-                extract = Some(lit.value());
-            } else {
-                return Err(syn::Error::new(
-                    ident.span(),
-                    format!("Unknown url_resolve attribute argument: {}", ident_str),
-                ));
-            }
-
-            if !input.is_empty() {
-                input.parse::<Token![,]>()?;
-            }
-        }
-
-        Ok(UrlResolveAttributeArgs {
-            url,
-            method,
-            extract,
-        })
-    }
-}
-
-/// Parse #[url_resolve(url = info.uri, method = GET, extract = "image", strategy = SetOnce)] attribute
-pub fn parse_url_resolve_attribute(
-    attr: &Attribute,
-    target_field_name: &str,
-) -> syn::Result<Option<UrlResolveAttribute>> {
-    if !attr.path().is_ident("url_resolve") {
-        return Ok(None);
-    }
-
-    let args: UrlResolveAttributeArgs = attr.parse_args()?;
-
-    let url_path = args.url.ok_or_else(|| {
-        syn::Error::new_spanned(attr, "#[url_resolve] requires 'url' parameter specifying the field path to get the URL from")
-    })?;
-
-    let method = if let Some(method_ident) = args.method {
-        match method_ident.to_string().to_lowercase().as_str() {
-            "get" => HttpMethod::Get,
-            "post" => HttpMethod::Post,
-            _ => {
-                return Err(syn::Error::new_spanned(
-                    method_ident,
-                    "Invalid HTTP method. Only 'GET' or 'POST' are supported.",
-                ));
-            }
-        }
-    } else {
-        HttpMethod::Get
-    };
-
-    Ok(Some(UrlResolveAttribute {
-        url_path,
-        method,
-        extract_path: args.extract,
-        strategy: "SetOnce".to_string(),
-        target_field_name: target_field_name.to_string(),
-    }))
-}
-
 pub fn has_entity_attribute(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("entity"))
 }

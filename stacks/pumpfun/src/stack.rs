@@ -60,8 +60,8 @@ pub mod pumpfun_stream {
         #[map(pump_sdk::accounts::BondingCurve::complete, strategy = LastWrite)]
         pub is_complete: Option<bool>,
 
-        // URL resolver test: fetch and extract image from metadata URI
-        #[url_resolve(url = info.uri, extract = "image")]
+        // URL resolver: fetch and extract image from metadata URI
+        #[resolve(url = info.uri, extract = "image")]
         pub resolved_image: Option<String>,
     }
 

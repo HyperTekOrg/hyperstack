@@ -633,52 +633,59 @@ pub fn process_nested_struct(
                 } else if let Ok(Some(resolve_attr)) =
                     parse::parse_resolve_attribute(attr, &field_name.to_string())
                 {
-                    let resolver = if let Some(name) = resolve_attr.resolver.as_deref() {
+                    // Determine resolver type: URL resolver if url is present, otherwise Token resolver
+                    let resolver = if let Some(url_path_raw) = resolve_attr.url.clone() {
+                        // Qualify the url_path with section name if needed
+                        let url_path = if url_path_raw.contains('.') {
+                            url_path_raw
+                        } else {
+                            format!("{}.{}", section_name, url_path_raw)
+                        };
+
+                        let method = resolve_attr.method.as_deref().map(|m| {
+                            match m.to_lowercase().as_str() {
+                                "post" => crate::ast::HttpMethod::Post,
+                                _ => crate::ast::HttpMethod::Get,
+                            }
+                        }).unwrap_or(crate::ast::HttpMethod::Get);
+
+                        crate::ast::ResolverType::Url(crate::ast::UrlResolverConfig {
+                            url_path,
+                            method,
+                            extract_path: resolve_attr.extract.clone(),
+                        })
+                    } else if let Some(name) = resolve_attr.resolver.as_deref() {
                         super::entity::parse_resolver_type_name(name, field_type)
+                            .unwrap_or_else(|err| panic!("{}", err))
                     } else {
                         super::entity::infer_resolver_type(field_type)
-                    }
-                    .unwrap_or_else(|err| panic!("{}", err));
+                            .unwrap_or_else(|err| panic!("{}", err))
+                    };
 
                     let mut target_field_name = resolve_attr.target_field_name;
                     if !target_field_name.contains('.') {
                         target_field_name = format!("{}.{}", section_name, target_field_name);
                     }
 
+                    // For URL resolvers, qualify the url with section name if needed
+                    let from = if let Some(url) = resolve_attr.url.clone() {
+                        let url_path = if url.contains('.') {
+                            url
+                        } else {
+                            format!("{}.{}", section_name, url)
+                        };
+                        Some(url_path)
+                    } else {
+                        resolve_attr.from
+                    };
+
                     resolve_specs.push(parse::ResolveSpec {
                         resolver,
-                        from: resolve_attr.from,
+                        from,
                         address: resolve_attr.address,
                         extract: resolve_attr.extract,
                         target_field_name,
                         strategy: resolve_attr.strategy,
-                    });
-                } else if let Ok(Some(url_resolve_attr)) =
-                    parse::parse_url_resolve_attribute(attr, &field_name.to_string())
-                {
-                    let mut target_field_name = url_resolve_attr.target_field_name.clone();
-                    if !target_field_name.contains('.') {
-                        target_field_name = format!("{}.{}", section_name, target_field_name);
-                    }
-
-                    // Qualify the url_path with section name if needed
-                    let url_path = if url_resolve_attr.url_path.contains('.') {
-                        url_resolve_attr.url_path.clone()
-                    } else {
-                        format!("{}.{}", section_name, url_resolve_attr.url_path)
-                    };
-
-                    resolve_specs.push(parse::ResolveSpec {
-                        resolver: crate::ast::ResolverType::Url(crate::ast::UrlResolverConfig {
-                            url_path: url_path.clone(),
-                            method: url_resolve_attr.method.clone(),
-                            extract_path: url_resolve_attr.extract_path.clone(),
-                        }),
-                        from: Some(url_path),
-                        address: None,
-                        extract: url_resolve_attr.extract_path,
-                        target_field_name,
-                        strategy: url_resolve_attr.strategy,
                     });
                 }
             }

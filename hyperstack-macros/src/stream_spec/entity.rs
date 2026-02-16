@@ -18,7 +18,7 @@ use std::collections::{HashMap, HashSet};
 use quote::{format_ident, quote};
 use syn::{Fields, GenericArgument, ItemStruct, PathArguments, Type};
 
-use crate::ast::{EntitySection, FieldTypeInfo, ResolverHook, ResolverType, UrlResolverConfig};
+use crate::ast::{EntitySection, FieldTypeInfo, HttpMethod, ResolverHook, ResolverType, UrlResolverConfig};
 use crate::codegen;
 use crate::event_type_helpers::IdlLookup;
 use crate::parse;
@@ -424,16 +424,34 @@ pub fn process_entity_struct_with_idl(
                         pub #field_name: #field_type
                     });
 
-                    let resolver = if let Some(name) = resolve_attr.resolver.as_deref() {
+                    // Determine resolver type: URL resolver if url is present, otherwise Token resolver
+                    let resolver = if let Some(url_path) = resolve_attr.url.clone() {
+                        // URL resolver
+                        let method = resolve_attr.method.as_deref().map(|m| {
+                            match m.to_lowercase().as_str() {
+                                "post" => HttpMethod::Post,
+                                _ => HttpMethod::Get,
+                            }
+                        }).unwrap_or(HttpMethod::Get);
+
+                        ResolverType::Url(UrlResolverConfig {
+                            url_path,
+                            method,
+                            extract_path: resolve_attr.extract.clone(),
+                        })
+                    } else if let Some(name) = resolve_attr.resolver.as_deref() {
+                        // Token resolver with explicit type
                         parse_resolver_type_name(name, field_type)
+                            .unwrap_or_else(|err| panic!("{}", err))
                     } else {
+                        // Token resolver with inferred type
                         infer_resolver_type(field_type)
-                    }
-                    .unwrap_or_else(|err| panic!("{}", err));
+                            .unwrap_or_else(|err| panic!("{}", err))
+                    };
 
                     resolve_specs.push(parse::ResolveSpec {
                         resolver,
-                        from: resolve_attr.from,
+                        from: resolve_attr.url.clone().or(resolve_attr.from),
                         address: resolve_attr.address,
                         extract: resolve_attr.extract,
                         target_field_name: resolve_attr.target_field_name,
@@ -454,28 +472,6 @@ pub fn process_entity_struct_with_idl(
                         computed_attr.expression.clone(),
                         field_type.clone(),
                     ));
-                } else if let Ok(Some(url_resolve_attr)) =
-                    parse::parse_url_resolve_attribute(attr, &field_name.to_string())
-                {
-                    has_attrs = true;
-
-                    state_fields.push(quote! {
-                        pub #field_name: #field_type
-                    });
-
-                    // Create URL resolver spec
-                    resolve_specs.push(parse::ResolveSpec {
-                        resolver: ResolverType::Url(UrlResolverConfig {
-                            url_path: url_resolve_attr.url_path.clone(),
-                            method: url_resolve_attr.method.clone(),
-                            extract_path: url_resolve_attr.extract_path.clone(),
-                        }),
-                        from: Some(url_resolve_attr.url_path),
-                        address: None,
-                        extract: url_resolve_attr.extract_path,
-                        target_field_name: url_resolve_attr.target_field_name,
-                        strategy: url_resolve_attr.strategy,
-                    });
                 }
             }
 
