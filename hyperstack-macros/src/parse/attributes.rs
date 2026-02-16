@@ -1169,7 +1169,6 @@ struct UrlResolveAttributeArgs {
     url: Option<String>,
     method: Option<syn::Ident>,
     extract: Option<String>,
-    strategy: Option<syn::Ident>,
 }
 
 impl Parse for UrlResolveAttributeArgs {
@@ -1177,7 +1176,6 @@ impl Parse for UrlResolveAttributeArgs {
         let mut url = None;
         let mut method = None;
         let mut extract = None;
-        let mut strategy = None;
 
         while !input.is_empty() {
             let ident: syn::Ident = input.parse()?;
@@ -1186,22 +1184,24 @@ impl Parse for UrlResolveAttributeArgs {
             input.parse::<Token![=]>()?;
 
             if ident_str == "url" {
-                // Parse as path (e.g., info.uri) and convert to string
-                let path: Path = input.parse()?;
-                url = Some(
-                    path.segments
-                        .iter()
-                        .map(|seg| seg.ident.to_string())
-                        .collect::<Vec<_>>()
-                        .join("."),
-                );
+                // Parse as dotted path (e.g., info.uri) - handle both dot-separated and single identifiers
+                let mut parts = Vec::new();
+                let first: syn::Ident = input.parse()?;
+                parts.push(first.to_string());
+                
+                // Parse any additional .identifier segments
+                while input.peek(Token![.]) {
+                    input.parse::<Token![.]>()?;
+                    let next: syn::Ident = input.parse()?;
+                    parts.push(next.to_string());
+                }
+                
+                url = Some(parts.join("."));
             } else if ident_str == "method" {
                 method = Some(input.parse()?);
             } else if ident_str == "extract" {
                 let lit: syn::LitStr = input.parse()?;
                 extract = Some(lit.value());
-            } else if ident_str == "strategy" {
-                strategy = Some(input.parse()?);
             } else {
                 return Err(syn::Error::new(
                     ident.span(),
@@ -1218,7 +1218,6 @@ impl Parse for UrlResolveAttributeArgs {
             url,
             method,
             extract,
-            strategy,
         })
     }
 }
@@ -1253,27 +1252,11 @@ pub fn parse_url_resolve_attribute(
         HttpMethod::Get
     };
 
-    let strategy = args
-        .strategy
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| "SetOnce".to_string());
-
-    // Validate strategy
-    if strategy != "SetOnce" && strategy != "LastWrite" {
-        return Err(syn::Error::new_spanned(
-            attr,
-            format!(
-                "Invalid strategy '{}' for #[url_resolve]. Only 'SetOnce' or 'LastWrite' are allowed.",
-                strategy
-            ),
-        ));
-    }
-
     Ok(Some(UrlResolveAttribute {
         url_path,
         method,
         extract_path: args.extract,
-        strategy,
+        strategy: "SetOnce".to_string(),
         target_field_name: target_field_name.to_string(),
     }))
 }

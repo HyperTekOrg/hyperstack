@@ -103,6 +103,7 @@ pub fn hyperstack(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - `#[aggregate(...)]` - Aggregate field values
 /// - `#[computed(...)]` - Computed fields from other fields
 /// - `#[derive_from(...)]` - Derive values from instructions
+/// - `#[url_resolve(...)]` - Fetch and extract data from external URLs
 #[proc_macro_derive(
     Stream,
     attributes(
@@ -113,7 +114,8 @@ pub fn hyperstack(attr: TokenStream, item: TokenStream) -> TokenStream {
         aggregate,
         computed,
         derive_from,
-        resolve
+        resolve,
+        url_resolve
     )
 )]
 pub fn stream_derive(_input: TokenStream) -> TokenStream {
