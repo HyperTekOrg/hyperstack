@@ -1,0 +1,178 @@
+---
+title: Schema Discovery
+sidebar:
+  order: 3
+description: How agents use hs explore to discover stacks and get live schema information.
+---
+
+The `hs explore` command is how agents (and humans) discover available stacks and introspect their schemas. Agent skills instruct the AI to run this command before writing any Hyperstack code, so it always has accurate entity names, field paths, and types.
+
+---
+
+## Usage
+
+```bash
+# List all available stacks
+hs explore
+
+# Show entities and views for a stack
+hs explore <stack-name>
+
+# Show fields and types for a specific entity
+hs explore <stack-name> <EntityName>
+```
+
+Add `--json` to any command for machine-readable output (this is what agents use):
+
+```bash
+hs explore --json
+hs explore ore --json
+hs explore ore OreRound --json
+```
+
+---
+
+## Listing Stacks
+
+```bash
+$ hs explore
+
+Public Registry
+────────────────────────────────────────────────────────
+  ore    wss://ore.stack.usehyperstack.com
+    Entities: OreRound, OreTreasury, OreMiner
+
+Your Stacks
+────────────────────────────────────────────────────────
+  my-game    wss://my-game-abc123.stack.usehyperstack.com  [active]
+```
+
+Without authentication, you see public registry stacks only. When logged in (`hs auth login`), you also see your own stacks.
+
+---
+
+## Exploring a Stack
+
+```bash
+$ hs explore ore
+
+Stack: ore (OreStream)
+  URL: wss://ore.stack.usehyperstack.com
+
+Entities
+────────────────────────────────────────────────────────
+  OreRound     3 views  (state, list, latest)
+    Primary key: id.round_id
+    Fields: 15
+
+  OreTreasury  2 views  (state, list)
+    Primary key: id.treasury_address
+    Fields: 8
+
+  OreMiner     2 views  (state, list)
+    Primary key: id.miner_address
+    Fields: 12
+
+Tip: Run `hs explore ore OreRound` for field details
+```
+
+---
+
+## Entity Fields
+
+```bash
+$ hs explore ore OreRound
+
+Entity: OreRound
+  Primary key: id.round_id
+
+Fields
+──────────────────────────────────────────────────────────────────
+  ● id
+    id.round_id                              u64
+    id.round_address                         Pubkey?
+
+  ● state
+    state.motherlode                         u64?
+    state.total_miners                       u64?
+    state.total_deployed                     u64?
+    state.expires_at                         i64?
+
+  ● metrics
+    metrics.deploy_count                     u64?
+    metrics.checkpoint_count                 u64?
+
+  ● results
+    results.top_miner                        Pubkey?
+    results.top_miner_reward                 u64?
+
+Views
+──────────────────────────────────────────────────────────────────
+  state                State
+  list                 List
+  latest               List    (sort by id.round_id desc)
+```
+
+Field types with `?` are nullable (wrapped in `Option` on the Rust side, optional in TypeScript).
+
+---
+
+## JSON Output
+
+Agents use the `--json` flag to get structured output they can parse:
+
+```bash
+$ hs explore ore OreRound --json
+```
+
+```json
+{
+  "name": "OreRound",
+  "primary_keys": ["id.round_id"],
+  "fields": [
+    { "path": "id.round_id", "rust_type": "u64", "nullable": false, "section": "id" },
+    { "path": "id.round_address", "rust_type": "Pubkey", "nullable": true, "section": "id" },
+    { "path": "state.motherlode", "rust_type": "u64", "nullable": true, "section": "state" }
+  ],
+  "views": [
+    { "id": "OreRound/state", "mode": "state", "pipeline": [] },
+    { "id": "OreRound/list", "mode": "list", "pipeline": [] },
+    { "id": "OreRound/latest", "mode": "list", "pipeline": [{"Sort": {"key": "id.round_id", "order": "desc"}}] }
+  ]
+}
+```
+
+This is what the agent skills instruct the AI to call. The AI then uses the field paths and types to write correct SDK code.
+
+---
+
+## How Authentication Affects Results
+
+| State | What you see |
+| ----- | ------------ |
+| Not logged in | Public stacks only |
+| Logged in | Public stacks + global stacks + your own stacks |
+
+Public stacks like `ore` are always available to everyone. Global stacks are available to all authenticated users. Your own deployed stacks are only visible when logged in.
+
+```bash
+# Log in to see all stacks
+hs auth login
+
+# Now explore shows everything
+hs explore
+```
+
+---
+
+## Why This Matters for Agents
+
+The core problem with AI coding tools is stale context. If an agent has outdated schema information, it writes code with wrong field names or missing types.
+
+`hs explore` solves this because:
+- It queries the live Hyperstack API, not static files
+- It reflects the exact schema of the deployed stack
+- The CLI version you have installed determines the API compatibility
+- Agent skills tell the AI to always run it before writing code
+
+This means you never need to update the skill files when a stack changes. The agent gets fresh data every time.

@@ -1,0 +1,103 @@
+---
+title: Agent Skills
+sidebar:
+  order: 1
+description: Teach AI coding agents how to build with Hyperstack using agent skills.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Agent skills teach AI coding assistants like Cursor, Claude Code, Windsurf, and GitHub Copilot how to use Hyperstack. Once installed, your agent knows the SDK patterns, can discover available stacks, and writes correct code without you needing to look up docs.
+
+---
+
+## Install Skills
+
+One command installs skills for your editor:
+
+```bash
+npx skills add usehyperstack/skills
+```
+
+This installs three skills:
+
+| Skill | What It Teaches |
+| ----- | --------------- |
+| `hyperstack` | Router skill that detects your intent and points the agent to the right sub-skill |
+| `hyperstack-consume` | SDK patterns for connecting to streams and building UIs (TypeScript, React, Rust) |
+| `hyperstack-build` | Rust DSL syntax for building custom stacks from Anchor IDLs |
+
+The installer auto-detects your editor and puts the skill files in the right location.
+
+---
+
+## How It Works
+
+Agent skills are markdown files that give your AI coding agent context about Hyperstack. They contain SDK syntax, CLI commands, and patterns so the agent can write working code without guessing.
+
+The skills reference the `hs` CLI for live data. When your agent needs to know what entities a stack has or what fields are available, it runs `hs explore --json` and gets the exact schema. This means type information stays accurate for whatever CLI version you have installed.
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Agent Skills   │ ──▶ │   AI Agent      │ ──▶ │   Your Code     │
+│  (SDK patterns  │     │   (Cursor,      │     │   (correct      │
+│   + CLI usage)  │     │    Claude, etc.) │     │    from start)  │
+└─────────────────┘     └─────────┬───────┘     └─────────────────┘
+                                  │
+                         hs explore --json
+                                  │
+                        ┌─────────▼───────┐
+                        │  Hyperstack API  │
+                        │  (live schemas)  │
+                        └─────────────────┘
+```
+
+---
+
+## What the Agent Can Do
+
+After installing skills, try asking your agent:
+
+- "Build a React dashboard that displays live ORE mining rounds"
+- "Show me the current ORE motherlode and total miners in real-time"
+- "Create a custom stack from this Anchor IDL that tracks token balances"
+- "What entities does the ore stack have? Show me all fields."
+
+The agent will use `hs explore` to discover available stacks and schemas, then write the correct SDK code.
+
+---
+
+## Try It
+
+<Tabs>
+<TabItem label="New Project">
+
+```bash
+# Scaffold an app, then install skills
+npx hyperstack-cli create my-app
+cd my-app
+npx skills add usehyperstack/skills
+```
+
+Now ask your agent: "Stream live ORE mining data and display the latest rounds"
+
+</TabItem>
+<TabItem label="Existing Project">
+
+```bash
+# In your project directory
+npx skills add usehyperstack/skills
+```
+
+Now ask your agent: "Add Hyperstack and stream live ORE mining rounds"
+
+</TabItem>
+</Tabs>
+
+---
+
+## Next Steps
+
+- [Editor Setup](/agent-skills/setup/), detailed setup for each editor (Cursor, Claude Code, VS Code, etc.)
+- [Schema Discovery](/agent-skills/explore/), how agents use `hs explore` to get live schema data
+- [Quickstart](/using-stacks/quickstart/), build an app from scratch in 2 minutes
