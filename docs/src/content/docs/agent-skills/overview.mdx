@@ -21,6 +21,7 @@ Read https://docs.usehyperstack.com/agent.md and follow the instructions to set 
 </CopyPrompt>
 
 That's it. Your agent will:
+
 1. Install the Hyperstack CLI (prefers Cargo, falls back to npm)
 2. Install agent skills so it knows the SDK patterns
 3. Run `hs explore --json` to discover available data streams
@@ -58,11 +59,11 @@ Agent skills are markdown files that teach your agent the SDK syntax, CLI comman
 
 Three skills are installed:
 
-| Skill | What It Teaches |
-| ----- | --------------- |
-| `hyperstack` | Router skill that detects your intent and points the agent to the right sub-skill |
+| Skill                | What It Teaches                                                                   |
+| -------------------- | --------------------------------------------------------------------------------- |
+| `hyperstack`         | Router skill that detects your intent and points the agent to the right sub-skill |
 | `hyperstack-consume` | SDK patterns for connecting to streams and building UIs (TypeScript, React, Rust) |
-| `hyperstack-build` | Rust DSL syntax for building custom stacks from Solana program IDLs |
+| `hyperstack-build`   | Rust DSL syntax for building custom stacks from Solana program IDLs               |
 
 ---
 

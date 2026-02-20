@@ -148,10 +148,10 @@ This is what the agent skills instruct the AI to call. The AI then uses the fiel
 
 ## How Authentication Affects Results
 
-| State | What you see |
-| ----- | ------------ |
-| Not logged in | Public stacks only |
-| Logged in | Public stacks + global stacks + your own stacks |
+| State         | What you see                                    |
+| ------------- | ----------------------------------------------- |
+| Not logged in | Public stacks only                              |
+| Logged in     | Public stacks + global stacks + your own stacks |
 
 Public stacks like `ore` are always available to everyone. Global stacks are available to all authenticated users. Your own deployed stacks are only visible when logged in.
 
@@ -170,6 +170,7 @@ hs explore
 The core problem with AI coding tools is stale context. If an agent has outdated schema information, it writes code with wrong field names or missing types.
 
 `hs explore` solves this because:
+
 - It queries the live Hyperstack API, not static files
 - It reflects the exact schema of the deployed stack
 - The CLI version you have installed determines the API compatibility

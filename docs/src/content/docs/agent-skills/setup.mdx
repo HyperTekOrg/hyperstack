@@ -141,13 +141,13 @@ Skills are installed in `.cline/skills/`:
 
 The `npx skills` CLI supports 35+ agents. Common options:
 
-| Agent | Flag |
-| ----- | ---- |
-| Codex | `--agent codex` |
+| Agent      | Flag                 |
+| ---------- | -------------------- |
+| Codex      | `--agent codex`      |
 | Gemini CLI | `--agent gemini-cli` |
-| Roo Code | `--agent roo` |
-| Goose | `--agent goose` |
-| Continue | `--agent continue` |
+| Roo Code   | `--agent roo`        |
+| Goose      | `--agent goose`      |
+| Continue   | `--agent continue`   |
 
 Run without `--agent` to auto-detect your environment:
 
@@ -196,6 +196,7 @@ What stacks are available on Hyperstack? Show me the entities and fields for the
 </CopyPrompt>
 
 The agent should:
+
 1. Run `hs explore --json` to list available stacks
 2. Run `hs explore ore --json` to get the ore stack schema
 3. Present the entity names, field paths, and types

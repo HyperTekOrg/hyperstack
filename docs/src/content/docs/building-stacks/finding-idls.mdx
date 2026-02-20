@@ -14,12 +14,15 @@ To build a custom stack, you need the IDL for the program you want to track.
 Follow these steps in order to find the IDL for any Solana program.
 
 ### 1. Program GitHub Repository
+
 Most Solana projects are open source. Search GitHub for the protocol name followed by "idl.json" or look in the project's repository. Common locations include:
+
 - `target/idl/program_name.json`
 - `idl/program_name.json`
 - The "Releases" page as an attached asset
 
 ### 2. Anchor CLI Fetch
+
 If a program is built with Anchor and the developers uploaded the IDL on-chain, you can fetch it directly using the Anchor CLI:
 
 ```bash
@@ -29,14 +32,18 @@ anchor idl fetch <PROGRAM_ID> --provider.cluster mainnet -o idl/program.json
 Replace `<PROGRAM_ID>` with the program's on-chain address. Not every program has an IDL on-chain, so this may return an error if it's missing.
 
 ### 3. NPM or Rust Packages
+
 Many protocols publish SDKs for developers. These packages often include the IDL file so the SDK can encode and decode instructions.
+
 - **NPM:** Check `node_modules/@protocol-name/sdk/dist/idl.json` or similar paths.
 - **Crates.io:** Some Rust crates include the IDL as a resource.
 
 ### 4. Block Explorers
+
 Explorers like Solscan or Solana.fm sometimes host IDLs for verified programs. Look for a "Contract" or "IDL" tab when viewing a program address. You can often download the JSON directly from these pages.
 
 ### 5. Manual Creation
+
 If an IDL isn't available, you can create one manually by examining the program's source code. Tools like Kinobi or Codama can generate IDLs by parsing the Rust source.
 
 ---
@@ -66,8 +73,8 @@ pub struct MyStack;
 
 ## Common IDL Locations
 
-| Protocol | Program ID | Source |
-| -------- | ---------- | ------ |
-| ORE | `oreo7nRnU86QCen6Np3iH6q8C6c6K6c6K6c6K6c6K6c` | [GitHub](https://github.com/regolith-labs/ore) |
-| System Program | `11111111111111111111111111111111` | Built-in |
-| Token Program | `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | Built-in |
+| Protocol       | Program ID                                    | Source                                         |
+| -------------- | --------------------------------------------- | ---------------------------------------------- |
+| ORE            | `oreo7nRnU86QCen6Np3iH6q8C6c6K6c6K6c6K6c6K6c` | [GitHub](https://github.com/regolith-labs/ore) |
+| System Program | `11111111111111111111111111111111`            | Built-in                                       |
+| Token Program  | `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | Built-in                                       |
