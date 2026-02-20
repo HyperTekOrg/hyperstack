@@ -184,7 +184,7 @@ pub fn show(name: &str, entity: Option<&str>, json: bool) -> Result<()> {
         let view_names: Vec<&str> = entity_schema
             .views
             .iter()
-            .map(|v| v.id.split('/').last().unwrap_or(v.id.as_str()))
+            .map(|v| v.id.split('/').next_back().unwrap_or(v.id.as_str()))
             .collect();
 
         println!(
@@ -236,7 +236,7 @@ fn print_entity_detail(entity: &EntitySchema) {
     println!("{}", "-".repeat(70).dimmed());
 
     for view in &entity.views {
-        let view_short = view.id.split('/').last().unwrap_or(view.id.as_str());
+        let view_short = view.id.split('/').next_back().unwrap_or(view.id.as_str());
         let pipeline_str = if view.pipeline.is_empty() {
             String::new()
         } else {
