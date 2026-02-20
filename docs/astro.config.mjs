@@ -14,7 +14,21 @@ export default defineConfig({
       expressiveCode: {
         plugins: [ecVersionPlugin()],
       },
-      plugins: [starlightLlmsTxt()],
+      plugins: [
+        starlightLlmsTxt({
+          projectName: "Hyperstack",
+          description:
+            "Hyperstack is a system for programmable real-time data feeds on Solana. Stream any on-chain data to your app via WebSocket. Define data shapes in a Rust DSL, deploy, and consume with typed TypeScript, React, or Rust SDKs.",
+          promote: [
+            "using-stacks/quickstart",
+            "using-stacks/connect",
+            "agent-skills/overview",
+            "agent-skills/prompts",
+            "sdks/typescript",
+            "sdks/react",
+          ],
+        }),
+      ],
       title: "Hyperstack",
       social: [
         {
@@ -40,6 +54,10 @@ export default defineConfig({
           autogenerate: { directory: "using-stacks" },
         },
         {
+          label: "Build with AI",
+          autogenerate: { directory: "agent-skills" },
+        },
+        {
           label: "Building Stacks",
           items: [
             { slug: "building-stacks/workflow" },
@@ -47,6 +65,7 @@ export default defineConfig({
             { slug: "building-stacks/installation" },
             { slug: "building-stacks/configuration" },
             { slug: "building-stacks/your-first-stack" },
+            { slug: "building-stacks/finding-idls" },
             {
               label: "Rust DSL",
               items: [

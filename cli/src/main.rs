@@ -105,6 +105,15 @@ enum Commands {
     /// Show overview of stacks, builds, and deployments
     Status,
 
+    /// Discover stacks and explore their schemas
+    Explore {
+        /// Stack name to explore
+        name: Option<String>,
+
+        /// Entity name to show field details
+        entity: Option<String>,
+    },
+
     /// Push local stacks to remote (alias for 'stack push')
     Push {
         /// Name of specific stack to push (pushes all if not specified)
@@ -397,6 +406,7 @@ fn command_name(cmd: &Commands) -> &'static str {
         Commands::Init => "init",
         Commands::Up { .. } => "up",
         Commands::Status => "status",
+        Commands::Explore { .. } => "explore",
         Commands::Push { .. } => "push",
         Commands::Sdk(_) => "sdk",
         Commands::Config(_) => "config",
@@ -429,6 +439,10 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             dry_run,
         } => commands::up::up(&cli.config, stack_name.as_deref(), branch, preview, dry_run),
         Commands::Status => commands::status::status(cli.json),
+        Commands::Explore { name, entity } => match name {
+            Some(name) => commands::explore::show(&name, entity.as_deref(), cli.json),
+            None => commands::explore::list(cli.json),
+        },
         Commands::Push { stack_name } => commands::stack::push(&cli.config, stack_name.as_deref()),
         Commands::Sdk(sdk_cmd) => match sdk_cmd {
             SdkCommands::Create(create_cmd) => match create_cmd {

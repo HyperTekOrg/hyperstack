@@ -269,6 +269,57 @@ pub struct StopDeploymentResponse {
     pub status: DeploymentStatus,
 }
 
+// ========================================================================
+// Registry DTOs
+// ========================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegistryStackItem {
+    pub name: String,
+    pub description: Option<String>,
+    pub websocket_url: String,
+    pub entities: Vec<String>,
+    #[serde(default)]
+    pub visibility: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegistrySchemaResponse {
+    pub name: String,
+    pub websocket_url: String,
+    pub description: Option<String>,
+    pub schema: StackSchema,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StackSchema {
+    pub stack_name: String,
+    pub entities: Vec<EntitySchema>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntitySchema {
+    pub name: String,
+    pub primary_keys: Vec<String>,
+    pub fields: Vec<FieldSchema>,
+    pub views: Vec<ViewSchema>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FieldSchema {
+    pub path: String,
+    pub rust_type: String,
+    pub nullable: bool,
+    pub section: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewSchema {
+    pub id: String,
+    pub mode: String,
+    pub pipeline: Vec<serde_json::Value>,
+}
+
 impl ApiClient {
     pub fn new() -> Result<Self> {
         let base_url =
@@ -453,6 +504,62 @@ impl ApiClient {
     pub fn get_spec_by_name(&self, name: &str) -> Result<Option<Spec>> {
         let specs = self.list_specs()?;
         Ok(specs.into_iter().find(|s| s.name == name))
+    }
+
+    // ========================================================================
+    // Registry endpoints (public, no auth required)
+    // ========================================================================
+
+    /// List all public stacks in the registry (no auth required)
+    pub fn list_registry(&self) -> Result<Vec<RegistryStackItem>> {
+        let response = self
+            .client
+            .get(format!("{}/api/registry", self.base_url))
+            .send()
+            .context("Failed to send registry list request")?;
+
+        Self::handle_response(response)
+    }
+
+    /// Get a public stack's info from the registry (no auth required)
+    #[allow(dead_code)]
+    pub fn get_registry_stack(&self, name: &str) -> Result<RegistryStackItem> {
+        let response = self
+            .client
+            .get(format!("{}/api/registry/{}", self.base_url, name))
+            .send()
+            .context("Failed to send registry get request")?;
+
+        Self::handle_response(response)
+    }
+
+    /// Get full schema for a public stack (no auth required)
+    pub fn get_registry_schema(&self, name: &str) -> Result<RegistrySchemaResponse> {
+        let response = self
+            .client
+            .get(format!("{}/api/registry/{}/schema", self.base_url, name))
+            .send()
+            .context("Failed to send registry schema request")?;
+
+        Self::handle_response(response)
+    }
+
+    // ========================================================================
+    // Authenticated schema endpoints
+    // ========================================================================
+
+    /// Get schema for user's own spec (requires auth)
+    pub fn get_spec_schema(&self, spec_id: i32) -> Result<RegistrySchemaResponse> {
+        let api_key = self.require_api_key()?;
+
+        let response = self
+            .client
+            .get(format!("{}/api/specs/{}/schema", self.base_url, spec_id))
+            .bearer_auth(api_key)
+            .send()
+            .context("Failed to send spec schema request")?;
+
+        Self::handle_response(response)
     }
 
     // ========================================================================
