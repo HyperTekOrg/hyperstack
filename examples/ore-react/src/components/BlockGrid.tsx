@@ -3,9 +3,11 @@ import { MinerIcon, SolanaIcon } from './icons';
 
 interface BlockGridProps {
   round: ValidatedOreRound | undefined;
+  selectedSquares: number[];
+  onSquareClick: (squareId: number) => void;
 }
 
-export function BlockGrid({ round }: BlockGridProps) {
+export function BlockGrid({ round, selectedSquares, onSquareClick }: BlockGridProps) {
   const blocks = round
     ? round.state.deployed_per_square_ui.map((deployedUi, i) => ({
       id: i + 1,
@@ -28,15 +30,21 @@ export function BlockGrid({ round }: BlockGridProps) {
         width: 'calc((100vh - 120px - 4 * 0.5rem) / 5 * 5 + 4 * 0.5rem)'
       }}
     >
-      {blocks.map((block) => (
-        <div
+      {blocks.map((block) => {
+        const isSelected = selectedSquares.includes(block.id);
+        return (
+        <button
           key={block.id}
+          onClick={() => onSquareClick(block.id)}
           style={{ aspectRatio: '1' }}
           className={`
-            bg-white dark:bg-stone-800 rounded-2xl p-4 flex flex-col justify-between
+            relative bg-white dark:bg-stone-800 rounded-2xl p-4 flex flex-col justify-between
             transition-all duration-200 hover:shadow-md dark:hover:bg-stone-750
+            cursor-pointer hover:scale-[1.02] active:scale-[0.98]
             ${block.isWinner
               ? 'bg-amber-50 dark:bg-amber-900/30 ring-2 ring-amber-400 shadow-lg'
+              : isSelected
+              ? 'bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-500 shadow-lg'
               : 'shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700'
             }
           `}
@@ -52,8 +60,13 @@ export function BlockGrid({ round }: BlockGridProps) {
             <SolanaIcon size={18} />
             <span>{Number(block.deployedUi).toFixed(4)}</span>
           </div>
-        </div>
-      ))}
+          {isSelected && (
+            <div className="absolute top-2 right-2 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+              ✓
+            </div>
+          )}
+        </button>
+      )})}
     </div>
   );
 }
