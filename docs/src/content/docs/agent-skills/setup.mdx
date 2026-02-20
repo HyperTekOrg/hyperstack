@@ -2,18 +2,26 @@
 title: Editor Setup
 sidebar:
   order: 2
-description: Set up Hyperstack agent skills in Cursor, Claude Code, VS Code, Windsurf, and other AI coding tools.
+description: Manual setup for Hyperstack agent skills in Cursor, Claude Code, VS Code, Windsurf, and other AI coding tools.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
-The quickest way to install skills is the universal command:
+:::tip[Let your agent handle this]
+The easiest setup is to paste this into your agent and let it do everything:
+
+> Read https://docs.usehyperstack.com/agent.md and follow the instructions to set up Hyperstack in this project
+
+See [Build with AI](/agent-skills/overview/) for details. The instructions below are for manual setup.
+:::
+
+If you prefer to install skills yourself, the universal command is:
 
 ```bash
 npx skills add usehyperstack/skills
 ```
 
-This auto-detects your editor and installs the skill files to the right location. If you prefer to set things up manually, or want to understand what gets installed, see the editor-specific instructions below.
+This auto-detects your editor and installs the skill files to the right location. For editor-specific details or manual placement, see below.
 
 ---
 
