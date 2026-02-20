@@ -17,6 +17,7 @@ export interface PumpfunTokenId {
 export interface PumpfunTokenInfo {
   is_complete?: boolean | null;
   name?: string | null;
+  resolved_image?: string | null;
   symbol?: string | null;
   uri?: string | null;
 }
@@ -278,6 +279,7 @@ export const PumpfunTokenIdSchema = z.object({
 export const PumpfunTokenInfoSchema = z.object({
   is_complete: z.boolean().nullable().optional(),
   name: z.string().nullable().optional(),
+  resolved_image: z.string().nullable().optional(),
   symbol: z.string().nullable().optional(),
   uri: z.string().nullable().optional(),
 });

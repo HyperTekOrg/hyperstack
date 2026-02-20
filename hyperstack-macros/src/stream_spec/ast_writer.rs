@@ -208,9 +208,16 @@ fn build_resolver_specs(resolve_specs: &[parse::ResolveSpec]) -> Vec<ResolverSpe
             extracts: Vec::new(),
         });
 
+        // For URL resolvers with extract_path, the value is already extracted by
+        // resolve_with_extract, so source_path should be None to use the value directly
+        let source_path = match &spec.resolver {
+            ResolverType::Url(config) if config.extract_path.is_some() => None,
+            _ => spec.extract.clone(),
+        };
+
         let extract = ResolverExtractSpec {
             target_path: spec.target_field_name.clone(),
-            source_path: spec.extract.clone(),
+            source_path,
             transform: None,
         };
 
@@ -232,9 +239,10 @@ fn parse_resolve_strategy(strategy: &str) -> ResolveStrategy {
     }
 }
 
-fn resolver_type_key(resolver: &ResolverType) -> &'static str {
+fn resolver_type_key(resolver: &ResolverType) -> String {
     match resolver {
-        ResolverType::Token => "token",
+        ResolverType::Token => "token".to_string(),
+        ResolverType::Url(config) => format!("url:{}", config.url_path),
     }
 }
 

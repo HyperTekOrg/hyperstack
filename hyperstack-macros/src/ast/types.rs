@@ -251,6 +251,27 @@ pub struct ComputedFieldSpec {
 #[serde(rename_all = "lowercase")]
 pub enum ResolverType {
     Token,
+    Url(UrlResolverConfig),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum HttpMethod {
+    #[default]
+    Get,
+    Post,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct UrlResolverConfig {
+    /// Field path to get the URL from (e.g., "info.uri")
+    pub url_path: String,
+    /// HTTP method to use (default: GET)
+    #[serde(default)]
+    pub method: HttpMethod,
+    /// JSON path to extract from response (None = full payload)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extract_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

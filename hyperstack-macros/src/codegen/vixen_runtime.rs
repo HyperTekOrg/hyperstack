@@ -347,13 +347,18 @@ pub fn generate_vm_handler(
                 };
 
                 let mut token_requests = Vec::new();
+                let mut url_requests = Vec::new();
                 let mut other_requests = Vec::new();
 
                 for request in requests {
-                    match request.resolver {
+                    match &request.resolver {
                         hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Token => {
                             token_requests.push(request)
                         }
+                        hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(_) => {
+                            url_requests.push(request)
+                        }
+                        #[allow(unreachable_patterns)]
                         _ => other_requests.push(request),
                     }
                 }
@@ -424,6 +429,62 @@ pub fn generate_vm_handler(
                                     token_count,
                                     err
                                 );
+                            }
+                        }
+                    }
+                }
+
+                // Process URL resolver requests
+                if !url_requests.is_empty() {
+                    let url_client = hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient::new();
+
+                    for request in url_requests {
+                        if let hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(config) = &request.resolver {
+                            // Get the URL from the input value
+                            let url = match &request.input {
+                                hyperstack::runtime::serde_json::Value::String(s) => s.clone(),
+                                _ => {
+                                    hyperstack::runtime::tracing::warn!(
+                                        "URL resolver input is not a string: {:?}",
+                                        request.input
+                                    );
+                                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                                    vm.restore_resolver_requests(vec![request]);
+                                    continue;
+                                }
+                            };
+
+                            if url.is_empty() {
+                                continue;
+                            }
+
+                            match url_client.resolve_with_extract(&url, &config.method, config.extract_path.as_deref()).await {
+                                Ok(resolved_value) => {
+                                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                                    match vm.apply_resolver_result(
+                                        self.bytecode.as_ref(),
+                                        &request.cache_key,
+                                        resolved_value,
+                                    ) {
+                                        Ok(mut new_mutations) => {
+                                            mutations.append(&mut new_mutations);
+                                        }
+                                        Err(err) => {
+                                            hyperstack::runtime::tracing::warn!(
+                                                url = %url,
+                                                "Failed to apply URL resolver result: {}",
+                                                err
+                                            );
+                                        }
+                                    }
+                                }
+                                Err(err) => {
+                                    hyperstack::runtime::tracing::warn!(
+                                        url = %url,
+                                        "URL resolver request failed: {}",
+                                        err
+                                    );
+                                }
                             }
                         }
                     }
@@ -1255,13 +1316,18 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                 };
 
                 let mut token_requests = Vec::new();
+                let mut url_requests = Vec::new();
                 let mut other_requests = Vec::new();
 
                 for request in requests {
-                    match request.resolver {
+                    match &request.resolver {
                         hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Token => {
                             token_requests.push(request)
                         }
+                        hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(_) => {
+                            url_requests.push(request)
+                        }
+                        #[allow(unreachable_patterns)]
                         _ => other_requests.push(request),
                     }
                 }
@@ -1332,6 +1398,62 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                                     token_count,
                                     err
                                 );
+                            }
+                        }
+                    }
+                }
+
+                // Process URL resolver requests
+                if !url_requests.is_empty() {
+                    let url_client = hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient::new();
+
+                    for request in url_requests {
+                        if let hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(config) = &request.resolver {
+                            // Get the URL from the input value
+                            let url = match &request.input {
+                                hyperstack::runtime::serde_json::Value::String(s) => s.clone(),
+                                _ => {
+                                    hyperstack::runtime::tracing::warn!(
+                                        "URL resolver input is not a string: {:?}",
+                                        request.input
+                                    );
+                                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                                    vm.restore_resolver_requests(vec![request]);
+                                    continue;
+                                }
+                            };
+
+                            if url.is_empty() {
+                                continue;
+                            }
+
+                            match url_client.resolve_with_extract(&url, &config.method, config.extract_path.as_deref()).await {
+                                Ok(resolved_value) => {
+                                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                                    match vm.apply_resolver_result(
+                                        self.bytecode.as_ref(),
+                                        &request.cache_key,
+                                        resolved_value,
+                                    ) {
+                                        Ok(mut new_mutations) => {
+                                            mutations.append(&mut new_mutations);
+                                        }
+                                        Err(err) => {
+                                            hyperstack::runtime::tracing::warn!(
+                                                url = %url,
+                                                "Failed to apply URL resolver result: {}",
+                                                err
+                                            );
+                                        }
+                                    }
+                                }
+                                Err(err) => {
+                                    hyperstack::runtime::tracing::warn!(
+                                        url = %url,
+                                        "URL resolver request failed: {}",
+                                        err
+                                    );
+                                }
                             }
                         }
                     }

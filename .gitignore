@@ -152,3 +152,4 @@ docs/.astro
 
 # Examples - ignore lock files since they use local file: links
 examples/*/package-lock.json
+examples/pumpfun-server/
