@@ -1,11 +1,9 @@
 ---
 title: Finding IDLs
-sidebar:
-  order: 5
-description: How to find Anchor IDL files for Solana programs when building custom Hyperstack stacks.
+description: How to find IDL files for Solana programs when building custom Hyperstack stacks.
 ---
 
-Hyperstack uses Anchor IDL files to generate type-safe bindings for your data streams. An IDL (Interface Definition Language) is a JSON file that describes a Solana program's accounts, instructions, and custom types. 
+Hyperstack uses IDL (Interface Definition Language) files to generate type-safe bindings for your data streams. An IDL is a JSON file that describes a Solana program's accounts, instructions, and custom types. Hyperstack supports Anchor and other framework IDL formats.
 
 To build a custom stack, you need the IDL for the program you want to track.
 
@@ -39,7 +37,7 @@ Many protocols publish SDKs for developers. These packages often include the IDL
 Explorers like Solscan or Solana.fm sometimes host IDLs for verified programs. Look for a "Contract" or "IDL" tab when viewing a program address. You can often download the JSON directly from these pages.
 
 ### 5. Manual Creation
-If a program is not built with Anchor or the IDL is unavailable, you can create one manually by examining the program's source code. Tools like Kinobi or Codama can help generate IDLs for non-Anchor programs by parsing the Rust source.
+If an IDL isn't available, you can create one manually by examining the program's source code. Tools like Kinobi or Codama can generate IDLs by parsing the Rust source.
 
 ---
 

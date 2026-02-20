@@ -6,6 +6,7 @@ description: Let your AI agent set up and build with Hyperstack. One prompt, ful
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
+import CopyPrompt from "../../../components/CopyPrompt.astro";
 
 The fastest way to start with Hyperstack is to let your AI agent handle everything. Paste one prompt and your agent installs the CLI, sets up skills, discovers available data, and starts building.
 
@@ -15,7 +16,9 @@ The fastest way to start with Hyperstack is to let your AI agent handle everythi
 
 Paste this into your AI coding agent (Cursor, Claude Code, OpenCode, Windsurf, or any agent that can read URLs):
 
-> Read https://docs.usehyperstack.com/agent.md and follow the instructions to set up Hyperstack in this project
+<CopyPrompt>
+Read https://docs.usehyperstack.com/agent.md and follow the instructions to set up Hyperstack in this project
+</CopyPrompt>
 
 That's it. Your agent will:
 1. Install the Hyperstack CLI (prefers Cargo, falls back to npm)
@@ -27,7 +30,7 @@ Once setup is complete, try asking:
 
 - "Build a React dashboard that displays live ORE mining rounds"
 - "Show me the current ORE motherlode and total miners in real-time"
-- "Create a custom stack from this Anchor IDL that tracks token balances"
+- "Create a custom stack from this IDL that tracks token balances"
 - "What entities does the ore stack have? Show me all fields."
 
 ---
@@ -59,7 +62,7 @@ Three skills are installed:
 | ----- | --------------- |
 | `hyperstack` | Router skill that detects your intent and points the agent to the right sub-skill |
 | `hyperstack-consume` | SDK patterns for connecting to streams and building UIs (TypeScript, React, Rust) |
-| `hyperstack-build` | Rust DSL syntax for building custom stacks from Anchor IDLs |
+| `hyperstack-build` | Rust DSL syntax for building custom stacks from Solana program IDLs |
 
 ---
 

@@ -6,11 +6,14 @@ description: Manual setup for Hyperstack agent skills in Cursor, Claude Code, VS
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
+import CopyPrompt from "../../../components/CopyPrompt.astro";
 
 :::tip[Let your agent handle this]
 The easiest setup is to paste this into your agent and let it do everything:
 
-> Read https://docs.usehyperstack.com/agent.md and follow the instructions to set up Hyperstack in this project
+<CopyPrompt>
+Read https://docs.usehyperstack.com/agent.md and follow the instructions to set up Hyperstack in this project
+</CopyPrompt>
 
 See [Build with AI](/agent-skills/overview/) for details. The instructions below are for manual setup.
 :::
@@ -30,29 +33,33 @@ This auto-detects your editor and installs the skill files to the right location
 <Tabs>
 <TabItem label="Cursor">
 
-The `npx skills add` command creates skill files in `.cursor/rules/` in your project directory:
-
-```
-.cursor/rules/
-├── hyperstack.mdc
-├── hyperstack-consume.mdc
-└── hyperstack-build.mdc
+```bash
+npx skills add usehyperstack/skills --agent cursor
 ```
 
-Cursor uses `.mdc` files (markdown with YAML frontmatter). To install manually, download the SKILL.md files from the [skills repo](https://github.com/usehyperstack/skills), rename them to `.mdc`, and place them in `.cursor/rules/`.
+Skill files are created in `.agents/skills/` in your project directory:
 
-:::note[Restart may be needed]
-After adding new rule files, you may need to reload the Cursor window (`Cmd+Shift+P` then "Reload Window") for the skills to take effect.
-:::
+```
+.agents/skills/
+├── hyperstack/SKILL.md
+├── hyperstack-consume/SKILL.md
+└── hyperstack-build/SKILL.md
+```
+
+To install manually, download the SKILL.md files from the [skills repo](https://github.com/usehyperstack/skills) and place them in `.agents/skills/`.
 
 :::tip[Allow CLI access]
-When Cursor asks to run `hs explore`, approve it. The skills declare `allowed-tools: Bash(hs:*)` which tells Cursor the CLI commands are safe to run.
+When Cursor asks to run `hs explore`, approve it. The CLI commands are safe to run.
 :::
 
 </TabItem>
 <TabItem label="Claude Code">
 
-For Claude Code, skills are installed in the `.claude/skills/` directory:
+```bash
+npx skills add usehyperstack/skills --agent claude-code
+```
+
+Skills are installed in the `.claude/skills/` directory:
 
 ```
 .claude/skills/
@@ -61,67 +68,94 @@ For Claude Code, skills are installed in the `.claude/skills/` directory:
 └── hyperstack-build/SKILL.md
 ```
 
-The `npx skills add` command handles this automatically. You can also set project-level context in `CLAUDE.md` at the project root.
+You can also set project-level context in `CLAUDE.md` at the project root.
 
 </TabItem>
 <TabItem label="Windsurf">
 
-Windsurf reads rules from `.windsurfrules` or `.windsurf/rules/`:
+```bash
+npx skills add usehyperstack/skills --agent windsurf
+```
+
+Skills are installed in `.windsurf/skills/`:
 
 ```
-.windsurf/rules/
-├── hyperstack.md
-├── hyperstack-consume.md
-└── hyperstack-build.md
+.windsurf/skills/
+├── hyperstack/SKILL.md
+├── hyperstack-consume/SKILL.md
+└── hyperstack-build/SKILL.md
 ```
 
 </TabItem>
-<TabItem label="VS Code + Copilot">
+<TabItem label="GitHub Copilot">
 
-GitHub Copilot reads instructions from `.github/copilot-instructions.md` or from individual instruction files. The `npx skills add` command places files in the correct location.
+```bash
+npx skills add usehyperstack/skills --agent github-copilot
+```
+
+Skills are installed in `.agents/skills/`:
+
+```
+.agents/skills/
+├── hyperstack/SKILL.md
+├── hyperstack-consume/SKILL.md
+└── hyperstack-build/SKILL.md
+```
 
 </TabItem>
 <TabItem label="OpenCode">
 
-OpenCode loads skills from the `.opencode/skills/` directory or from project-level `AGENTS.md`:
-
-```
-.opencode/skills/
-├── hyperstack.md
-├── hyperstack-consume.md
-└── hyperstack-build.md
+```bash
+npx skills add usehyperstack/skills --agent opencode
 ```
 
-You can also load skills directly in OpenCode using the `/skill` command. The `npx skills add` command handles placement automatically.
+Skills are installed in `.agents/skills/`:
 
-:::tip[CLI access]
-OpenCode agents can run CLI commands directly. The skills instruct the agent to call `hs explore --json` for live schema discovery, which works without any extra configuration.
-:::
+```
+.agents/skills/
+├── hyperstack/SKILL.md
+├── hyperstack-consume/SKILL.md
+└── hyperstack-build/SKILL.md
+```
+
+You can also load skills directly in OpenCode using the `/skill` command.
 
 </TabItem>
-<TabItem label="Cline / Roo Code">
+<TabItem label="Cline">
 
-Cline and Roo Code read from a rules directory in your project:
-
-```
-.clinerules/
-├── hyperstack.md
-├── hyperstack-consume.md
-└── hyperstack-build.md
+```bash
+npx skills add usehyperstack/skills --agent cline
 ```
 
-Both editors also support the `AGENTS.md` standard at the project root as a fallback.
+Skills are installed in `.cline/skills/`:
+
+```
+.cline/skills/
+├── hyperstack/SKILL.md
+├── hyperstack-consume/SKILL.md
+└── hyperstack-build/SKILL.md
+```
 
 </TabItem>
-<TabItem label="Other Editors">
+<TabItem label="Other">
 
-The `npx skills` tool supports 30+ editors and agents, including Codex, OpenCode, Aider, and more. Run:
+The `npx skills` CLI supports 35+ agents. Common options:
+
+| Agent | Flag |
+| ----- | ---- |
+| Codex | `--agent codex` |
+| Gemini CLI | `--agent gemini-cli` |
+| Roo Code | `--agent roo` |
+| Goose | `--agent goose` |
+| Continue | `--agent continue` |
+
+Run without `--agent` to auto-detect your environment:
 
 ```bash
 npx skills add usehyperstack/skills
 ```
 
-It will auto-detect your environment. If your editor isn't supported, you can manually copy the SKILL.md files from the [skills repository](https://github.com/usehyperstack/skills) into whatever location your editor reads custom context from.
+If your editor isn't supported, manually copy the SKILL.md files from the [skills repository](https://github.com/usehyperstack/skills) into whatever location your editor reads custom context from.
 
 </TabItem>
 </Tabs>
@@ -133,17 +167,17 @@ It will auto-detect your environment. If your editor isn't supported, you can ma
 Agent skills reference the Hyperstack CLI for live schema discovery. Make sure the CLI is installed:
 
 <Tabs>
-<TabItem label="npm">
-
-```bash
-npm install -g hyperstack-cli
-```
-
-</TabItem>
 <TabItem label="Cargo">
 
 ```bash
 cargo install hyperstack-cli
+```
+
+</TabItem>
+<TabItem label="npm">
+
+```bash
+npm install -g hyperstack-cli
 ```
 
 </TabItem>
@@ -157,7 +191,9 @@ The skills tell your agent to run `hs explore --json` to discover stacks and sch
 
 After installing, ask your agent a Hyperstack question. For example:
 
-> "What stacks are available on Hyperstack? Show me the entities and fields for the ore stack."
+<CopyPrompt>
+What stacks are available on Hyperstack? Show me the entities and fields for the ore stack.
+</CopyPrompt>
 
 The agent should:
 1. Run `hs explore --json` to list available stacks

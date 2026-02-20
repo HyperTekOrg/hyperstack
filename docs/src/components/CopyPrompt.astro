@@ -1,0 +1,131 @@
+---
+/**
+ * CopyPrompt - A prompt box with a floating copy button
+ * 
+ * Usage in MDX:
+ * <CopyPrompt>
+ * Your prompt text here. Can be multi-line.
+ * Just write naturally without escaping.
+ * </CopyPrompt>
+ */
+---
+
+<copy-prompt class="not-content">
+  <div class="prompt-content">
+    <slot />
+  </div>
+  <button class="copy-btn" title="Copy prompt">
+    <svg class="icon-copy" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+    </svg>
+    <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"></polyline>
+    </svg>
+  </button>
+</copy-prompt>
+
+<style>
+  copy-prompt {
+    display: block;
+    position: relative;
+    margin: 1rem 0;
+    padding: 1rem 3rem 1rem 1.25rem;
+    background: var(--sl-color-accent-low);
+    border: 1px solid var(--sl-color-hairline);
+    border-left: 3px solid var(--sl-color-accent);
+    border-radius: var(--sl-border-radius-lg);
+    font-size: var(--sl-text-sm);
+    line-height: 1.6;
+  }
+
+  .prompt-content {
+    color: var(--sl-color-text);
+  }
+
+  /* Reset paragraph margins inside prompt */
+  .prompt-content :global(p) {
+    margin: 0 0 0.5rem 0;
+  }
+
+  .prompt-content :global(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  .copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    background: var(--sl-color-bg);
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: var(--sl-border-radius-md);
+    color: var(--sl-color-gray-3);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .copy-btn:hover {
+    color: var(--sl-color-text);
+    border-color: var(--sl-color-gray-4);
+    background: var(--sl-color-gray-7);
+  }
+
+  .copy-btn:active {
+    transform: scale(0.95);
+  }
+
+  .icon-check {
+    display: none;
+    color: #22c55e;
+  }
+
+  copy-prompt.copied .icon-copy {
+    display: none;
+  }
+
+  copy-prompt.copied .icon-check {
+    display: block;
+  }
+
+  copy-prompt.copied .copy-btn {
+    border-color: #22c55e;
+    background: rgba(34, 197, 94, 0.1);
+  }
+</style>
+
+<script>
+  class CopyPrompt extends HTMLElement {
+    constructor() {
+      super();
+      
+      const btn = this.querySelector('.copy-btn');
+      const content = this.querySelector('.prompt-content');
+      
+      btn?.addEventListener('click', async () => {
+        if (!content) return;
+        
+        // Get text content, preserving line breaks but trimming excess whitespace
+        const text = content.textContent?.trim() || '';
+        
+        try {
+          await navigator.clipboard.writeText(text);
+          this.classList.add('copied');
+          
+          setTimeout(() => {
+            this.classList.remove('copied');
+          }, 2000);
+        } catch (err) {
+          console.error('Failed to copy:', err);
+        }
+      });
+    }
+  }
+  
+  customElements.define('copy-prompt', CopyPrompt);
+</script>
