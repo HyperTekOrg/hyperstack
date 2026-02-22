@@ -1,26 +1,77 @@
 ---
 title: Hyperstack
-description: Programmable data feeds for Solana
+description: Build Solana apps with live blockchain data
 ---
 
 import { Card, CardGrid, Tabs, TabItem } from "@astrojs/starlight/components";
 import Workflow from "../../components/Workflow.astro";
 
-**Hyperstack is a system for programmable data feeds on Solana.**
+**Build Solana apps with live blockchain data.** No indexers. No polling. No infrastructure to manage.
 
-Stream any on-chain data to your app as it happens. No custom indexers. No RPC polling. No infrastructure to manage.
+Hyperstack streams real-time data from the Solana blockchain directly to your app. Whether you're new to coding or a seasoned developer, there's a path for you.
+
+---
+
+## Choose Your Path
+
+<CardGrid>
+  <Card title="I'm New to Coding" icon="rocket">
+    **Start here if you've never built an app.** We'll walk you through setting up AI tools that write code for you.
+
+    No programming experience required.
+
+    [Get started →](/getting-started/setup-tools/)
+
+  </Card>
+  <Card title="I Use AI Coding Tools" icon="star">
+    **Already have Cursor, Claude Code, or similar?** Paste one prompt and your AI handles the rest.
+
+    Works with 30+ AI coding assistants.
+
+    [Build with AI →](/agent-skills/overview/)
+
+  </Card>
+  <Card title="I'm a Developer" icon="laptop">
+    **Know React, TypeScript, or Rust?** Jump straight to the SDK and start streaming data in minutes.
+
+    Full API reference available.
+
+    [Quickstart →](/using-stacks/quickstart/)
+
+  </Card>
+</CardGrid>
+
+---
+
+## What is Hyperstack?
+
+Hyperstack connects your app to live Solana blockchain data. Instead of polling RPCs or building custom indexers, you define what data you want and Hyperstack streams it to you as it happens on-chain.
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│     Solana      │ ──▶ │   Hyperstack    │ ──▶ │    Your App     │
+│   (on-chain)    │     │  (transforms +  │     │   (live feed)   │
+│                 │     │    streams)     │     │                 │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+**Think of it like a live database query against the blockchain** — you subscribe once and get updates pushed to you automatically.
+
+:::note[What is Solana?]
+Solana is a fast blockchain (like Ethereum, but quicker). Apps built on Solana include trading platforms, games, and financial tools. Hyperstack lets you build apps that display and react to what's happening on Solana in real-time.
+:::
 
 ---
 
 ## See It In Action
 
-Connect to the public ORE mining rounds stack — anyone can use it, no account required.
+Connect to the public ORE mining stack — a live feed of blockchain mining activity. No account required.
 
 <Tabs>
 <TabItem label="React">
 ```tsx
 import { HyperstackProvider, useHyperstack } from 'hyperstack-react';
-import { ORE_STREAM_STACK, type OreRound } from 'hyperstack-stacks/ore';
+import { ORE_STREAM_STACK } from 'hyperstack-stacks/ore';
 
 function App() {
   return (
@@ -54,7 +105,7 @@ function LatestRounds() {
 <TabItem label="TypeScript">
 ```typescript
 import { HyperStack } from 'hyperstack-typescript';
-import { ORE_STREAM_STACK, type OreRound } from 'hyperstack-stacks/ore';
+import { ORE_STREAM_STACK } from 'hyperstack-stacks/ore';
 
 // Connect using the stack (URL is embedded in the stack definition)
 const hs = await HyperStack.connect(ORE_STREAM_STACK);
@@ -89,12 +140,12 @@ async fn main() -> anyhow::Result<()> {
 </TabItem>
 </Tabs>
 
-:::note[Stack SDKs]
-The `hyperstack-stacks` package provides ready-to-use SDKs for popular Solana protocols. You can also [generate your own SDK](/building-stacks/workflow) from any stack you build. Install it alongside your SDK:
-```bash
-npm install hyperstack-stacks hyperstack-react
-```
+:::tip[Don't want to write code?]
+If you're using an AI coding assistant, just paste this prompt:
 
+*"Connect to the Hyperstack ORE stack and show me live mining round data in a React dashboard"*
+
+Your AI will write everything for you. See [Build with AI](/agent-skills/overview/) to get started.
 :::
 
 ---
@@ -138,13 +189,13 @@ Hyperstack handles the full pipeline from chain to client:
 
 ---
 
-## I Want to Read Data
+## For Developers
 
-Connect to existing stacks and stream live Solana data into your app.
+Already comfortable with code? Here are the fastest paths:
 
 <CardGrid>
   <Card title="Quickstart" icon="rocket">
-    **Create a new app** — The CLI scaffolds a complete working project in under 2 minutes.
+    **Scaffold a new app** — The CLI creates a complete working project in under 2 minutes.
 
     Choose React, TypeScript, or Rust templates.
 
@@ -163,34 +214,9 @@ Connect to existing stacks and stream live Solana data into your app.
 
 ---
 
-## I'm Using an AI Coding Agent
+## Build Custom Data Pipelines
 
-Let your AI write the code. Agent skills teach Cursor, Claude Code, Windsurf, and other AI tools how to use Hyperstack.
-
-<CardGrid>
-  <Card title="Agent Skills" icon="star">
-    **One command setup** — Install skills and your agent knows all the SDK patterns and CLI commands.
-
-    Works with Cursor, Claude Code, Windsurf, VS Code Copilot, and 30+ other agents.
-
-    [Install skills →](/agent-skills/overview/)
-
-  </Card>
-  <Card title="Schema Discovery" icon="magnifier">
-    **Live type info** — Agents use `hs explore` to get exact entity names, field paths, and types from deployed stacks.
-
-    Always accurate, always up to date.
-
-    [Learn more →](/agent-skills/explore/)
-
-  </Card>
-</CardGrid>
-
----
-
-## I Want to Build Stacks
-
-Create custom data pipelines that transform on-chain events into structured, streaming feeds.
+Want to create your own data feeds? Build stacks that transform on-chain events into structured, streaming data.
 
 <CardGrid>
   <Card title="Your First Stack" icon="seti:rust">
