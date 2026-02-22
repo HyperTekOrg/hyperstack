@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useHyperstack } from 'hyperstack-react';
-import { ORE_STREAM_STACK } from 'hyperstack-stacks/ore';
-import { ValidatedOreRoundSchema } from '../schemas/ore-round-validated';
+import { ORE_STREAM_STACK, type OreRound } from 'hyperstack-stacks/ore';
+import { ValidatedOreRoundSchema, type ValidatedOreRound } from '../schemas/ore-round-validated';
 import { BlockGrid } from './BlockGrid';
 import { StatsPanel } from './StatsPanel';
 import { ConnectionBadge } from './ConnectionBadge';
@@ -9,6 +9,76 @@ import { ThemeToggle } from './ThemeToggle';
 import { DeployButton } from './DeployButton';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useWallet } from '@solana/wallet-adapter-react';
+
+type WinnerInfo = {
+  winnerSquare: number | null;
+  winnerRoundId: number | null;
+};
+
+function getCurrentRoundWinner(round: ValidatedOreRound | undefined, nowUnix: number): WinnerInfo {
+  const roundId = round?.id?.round_id;
+  const finished =
+    typeof round?.state?.estimated_expires_at_unix === 'number' &&
+    round.state.estimated_expires_at_unix <= nowUnix;
+
+  if (!finished || typeof round?.results?.winning_square !== 'number') {
+    return { winnerSquare: null, winnerRoundId: null };
+  }
+
+  return {
+    winnerSquare: round.results.winning_square,
+    winnerRoundId: roundId ?? null,
+  };
+}
+
+function getLastCompletedWinner(recentRounds: OreRound[] | undefined, currentRoundId: number | null): WinnerInfo {
+  const bestRound = recentRounds?.reduce<OreRound | undefined>((best, round) => {
+    const roundId = round?.id?.round_id;
+    const winner = round?.results?.winning_square;
+
+    if (typeof roundId !== 'number' || typeof winner !== 'number') {
+      return best;
+    }
+
+    if (currentRoundId != null && roundId >= currentRoundId) {
+      return best;
+    }
+
+    if (!best) {
+      return round;
+    }
+
+    const bestRoundId = best.id?.round_id;
+    if (typeof bestRoundId !== 'number' || roundId > bestRoundId) {
+      return round;
+    }
+
+    return best;
+  }, undefined);
+
+  return {
+    winnerSquare:
+      typeof bestRound?.results?.winning_square === 'number'
+        ? bestRound.results.winning_square
+        : null,
+    winnerRoundId: bestRound?.id?.round_id ?? null,
+  };
+}
+
+function getStatsWinner(
+  currentRound: ValidatedOreRound | undefined,
+  recentRounds: OreRound[] | undefined,
+  nowUnix: number
+): WinnerInfo {
+  const currentRoundId = currentRound?.id?.round_id ?? null;
+  const currentWinner = getCurrentRoundWinner(currentRound, nowUnix);
+
+  if (currentWinner.winnerSquare != null) {
+    return currentWinner;
+  }
+
+  return getLastCompletedWinner(recentRounds, currentRoundId);
+}
 
 export function OreDashboard() {
   const wallet = useWallet();
@@ -21,6 +91,9 @@ export function OreDashboard() {
   );
 
   const { data: recentRounds } = views.OreRound.list.use({ take: 10 });
+  const nowUnix = Math.floor(Date.now() / 1000);
+  const { winnerSquare: statsWinnerSquare, winnerRoundId: statsWinnerRoundId } =
+    getStatsWinner(latestRound, recentRounds, nowUnix);
   
   const [selectedSquares, setSelectedSquares] = useState<number[]>([]);
 
@@ -59,6 +132,8 @@ export function OreDashboard() {
             round={latestRound}
             treasuryMotherlode={treasuryData?.state?.motherlode}
             isConnected={isConnected}
+            winnerSquare={statsWinnerSquare}
+            winnerRoundId={statsWinnerRoundId}
           />
           <DeployButton 
             currentRound={latestRound}

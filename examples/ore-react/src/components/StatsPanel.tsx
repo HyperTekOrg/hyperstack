@@ -6,9 +6,11 @@ interface StatsPanelProps {
   round: ValidatedOreRound | undefined;
   treasuryMotherlode: number | null | undefined;
   isConnected: boolean;
+  winnerSquare?: number | null;
+  winnerRoundId?: number | null;
 }
 
-export function StatsPanel({ round, treasuryMotherlode, isConnected }: StatsPanelProps) {
+export function StatsPanel({ round, treasuryMotherlode, isConnected, winnerSquare, winnerRoundId }: StatsPanelProps) {
   const [timeRemaining, setTimeRemaining] = useState<string>('00:00');
 
   useEffect(() => {
@@ -69,7 +71,17 @@ export function StatsPanel({ round, treasuryMotherlode, isConnected }: StatsPane
         </div>
       </div>
 
-      <div className="flex items-center gap-4 px-2 text-base text-stone-500 dark:text-stone-400 mt-auto">
+      <div className="bg-white dark:bg-stone-800 rounded-2xl p-4 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
+        <div className="text-sm font-medium text-stone-700 dark:text-stone-300">Current / Last winner block</div>
+        <div className="text-xl font-semibold text-green-700 dark:text-green-400 mt-1">
+          {winnerSquare != null ? `#${winnerSquare + 1}` : '—'}
+        </div>
+        <div className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+          {winnerRoundId != null ? `Round ${winnerRoundId}` : 'Winner pending'}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-4 px-2 text-base text-stone-500 dark:text-stone-400">
         <span>Round {round?.id.round_id ?? '–'}</span>
         {round && (
           <>
