@@ -5,15 +5,33 @@
 import { useState } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useHyperstack } from 'hyperstack-react';
-import { ORE_STREAM_STACK } from 'hyperstack-stacks/ore';
+import { ORE_STREAM_STACK, type OreMiner, type OreRound } from 'hyperstack-stacks/ore';
 import { Transaction, PublicKey } from '@solana/web3.js';
 
-export function DeployButton({ currentRound, minerData, recentRounds, selectedSquares }: {
-  currentRound?: any;
-  minerData?: any;
-  recentRounds?: any[];
+const LAMPORTS_PER_SOL = 1_000_000_000n;
+
+function parseSolToLamports(value: string): bigint | null {
+  const normalized = value.trim();
+  if (!/^(?:\d+|\d*\.\d{1,9})$/.test(normalized)) {
+    return null;
+  }
+
+  const [wholePart, fractionalPart = ''] = normalized.split('.');
+  const whole = BigInt(wholePart || '0');
+  const fractional = BigInt(fractionalPart.padEnd(9, '0'));
+  const lamports = whole * LAMPORTS_PER_SOL + fractional;
+
+  return lamports > 0n ? lamports : null;
+}
+
+type DeployButtonProps = {
+  currentRound?: OreRound;
+  minerData?: OreMiner;
+  recentRounds?: OreRound[];
   selectedSquares: number[];
-}) {
+};
+
+export function DeployButton({ currentRound, minerData, recentRounds, selectedSquares }: DeployButtonProps) {
   const wallet = useWallet();
   const { connection } = useConnection();
   const [amount, setAmount] = useState('0.001');
@@ -47,6 +65,9 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
     hasUncheckpointedRound &&
     currentRoundId != null &&
     minerRoundId === currentRoundId;
+
+  const parsedAmountLamports = parseSolToLamports(amount);
+  const isAmountValid = parsedAmountLamports !== null;
 
   const buildWalletAdapter = () => ({
     publicKey: wallet.publicKey!.toBase58(),
@@ -121,12 +142,16 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
       return;
     }
 
+    if (!isAmountValid || parsedAmountLamports === null) {
+      setResult({ status: 'error', error: 'Enter a valid amount greater than 0 (up to 9 decimals).' });
+      return;
+    }
+
     setIsProcessing(true);
     setProcessingStep(canCheckpointNow ? 'checkpoint' : 'deploy');
     setResult(null);
 
     try {
-      const amountLamports = BigInt(Math.floor(parseFloat(amount) * 1e9));
       const walletAdapter = buildWalletAdapter();
 
       let checkpointSig: string | undefined;
@@ -141,7 +166,7 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
       // Then deploy
       const deployResult = await deploy.submit(
         {
-          amount: amountLamports,
+          amount: parsedAmountLamports,
           squares: selectedSquares.length,
         },
         {
@@ -222,7 +247,7 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
 
         <button
           onClick={handleDeploy}
-          disabled={!wallet.connected || isProcessing || selectedSquares.length === 0 || !amount}
+          disabled={!wallet.connected || isProcessing || selectedSquares.length === 0 || !amount || !isAmountValid}
           className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 
                    text-white font-semibold rounded-xl shadow-sm
                    disabled:bg-stone-300 dark:disabled:bg-stone-700 
