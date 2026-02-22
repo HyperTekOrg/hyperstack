@@ -53,9 +53,7 @@ export default defineConfig({
       sidebar: [
         {
           label: "Getting Started",
-          items: [
-            { slug: "getting-started/setup-tools" },
-          ],
+          items: [{ slug: "getting-started/setup-tools" }],
         },
         {
           label: "Build with AI",
