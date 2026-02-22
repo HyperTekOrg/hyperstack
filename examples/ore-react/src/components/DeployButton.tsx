@@ -36,8 +36,7 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
 
   const hasUncheckpointedRound =
     minerRoundId != null &&
-    checkpointId != null &&
-    checkpointId < minerRoundId;
+    (checkpointId == null || checkpointId < minerRoundId);
 
   const canCheckpointNow =
     hasUncheckpointedRound &&
@@ -48,6 +47,70 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
     hasUncheckpointedRound &&
     currentRoundId != null &&
     minerRoundId === currentRoundId;
+
+  const buildWalletAdapter = () => ({
+    publicKey: wallet.publicKey!.toBase58(),
+    signAndSend: async (transaction: any) => {
+      const tx = new Transaction();
+      for (const ix of transaction.instructions) {
+        tx.add({
+          programId: new PublicKey(ix.programId),
+          keys: ix.keys.map((key: any) => ({
+            pubkey: new PublicKey(key.pubkey),
+            isSigner: key.isSigner,
+            isWritable: key.isWritable,
+          })),
+          data: Buffer.from(ix.data),
+        });
+      }
+      return await wallet.sendTransaction!(tx, connection);
+    }
+  });
+
+  const runCheckpoint = async (walletAdapter: ReturnType<typeof buildWalletAdapter>) => {
+    if (!checkpoint) {
+      throw new Error('Checkpoint instruction is not ready yet.');
+    }
+
+    const oldRound = recentRounds?.find(r => r.id?.round_id === minerRoundId);
+    if (!oldRound?.id?.round_address) {
+      throw new Error(`Round ${minerRoundId} not available. Cannot checkpoint.`);
+    }
+
+    return checkpoint.submit(
+      {},
+      {
+        wallet: walletAdapter,
+        accounts: { round: oldRound.id.round_address },
+      }
+    );
+  };
+
+  const handleCheckpointNow = async () => {
+    if (!wallet.connected || !wallet.publicKey || !wallet.sendTransaction || !canCheckpointNow) {
+      return;
+    }
+
+    setIsProcessing(true);
+    setProcessingStep('checkpoint');
+    setResult(null);
+
+    try {
+      const walletAdapter = buildWalletAdapter();
+      const checkpointResult = await runCheckpoint(walletAdapter);
+
+      setResult({
+        status: 'success',
+        checkpointSignature: checkpointResult.signature,
+      });
+    } catch (err: any) {
+      console.error('Checkpoint failed:', err);
+      setResult({ status: 'error', error: err?.message || String(err) });
+    } finally {
+      setIsProcessing(false);
+      setProcessingStep(null);
+    }
+  };
 
   const handleDeploy = async () => {
     if (!wallet.connected || !wallet.publicKey) {
@@ -64,44 +127,13 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
 
     try {
       const amountLamports = BigInt(Math.floor(parseFloat(amount) * 1e9));
-      
-      // TO DO: check
-      const walletAdapter = {
-        publicKey: wallet.publicKey!.toBase58(),
-        signAndSend: async (transaction: any) => {
-          const tx = new Transaction();
-          for (const ix of transaction.instructions) {
-            tx.add({
-              programId: new PublicKey(ix.programId),
-              keys: ix.keys.map((key: any) => ({
-                pubkey: new PublicKey(key.pubkey),
-                isSigner: key.isSigner,
-                isWritable: key.isWritable,
-              })),
-              data: Buffer.from(ix.data),
-            });
-          }
-          return await wallet.sendTransaction!(tx, connection);
-        }
-      };
+      const walletAdapter = buildWalletAdapter();
 
       let checkpointSig: string | undefined;
 
       // Call checkpoint first only when the miner round is already completed
       if (canCheckpointNow) {
-        const oldRound = recentRounds?.find(r => r.id?.round_id === minerRoundId);
-        
-        if (!oldRound?.id?.round_address) {
-          throw new Error(`Round ${minerRoundId} not available. Cannot checkpoint.`);
-        }
-
-        const checkpointResult = await checkpoint.submit(
-          {},
-          {
-            wallet: walletAdapter,
-            accounts: { round: oldRound.id.round_address },
-          }
-        );
+        const checkpointResult = await runCheckpoint(walletAdapter);
         checkpointSig = checkpointResult.signature;
         setProcessingStep('deploy');
       }
@@ -143,6 +175,13 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
       {canCheckpointNow && (
         <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-300">
           ℹ️ Round {minerRoundId} is completed and uncheckpointed. It will be checkpointed before deploy.
+          <button
+            onClick={handleCheckpointNow}
+            disabled={!wallet.connected || isProcessing || !checkpoint}
+            className="mt-2 w-full px-3 py-2 bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700 rounded-md text-amber-800 dark:text-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Checkpoint Round {minerRoundId} now
+          </button>
         </div>
       )}
 
@@ -202,10 +241,14 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
           </div>
         )}
 
-        {result?.status === 'success' && result.deploySignature && (
+        {result?.status === 'success' && (result.deploySignature || result.checkpointSignature) && (
           <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-green-700 dark:text-green-400 text-sm">
             <div className="font-semibold mb-2">
-              ✅ {result.checkpointSignature ? 'Checkpoint + Deploy' : 'Deploy'} successful!
+              ✅ {result.checkpointSignature && result.deploySignature
+                ? 'Checkpoint + Deploy'
+                : result.checkpointSignature
+                  ? 'Checkpoint'
+                  : 'Deploy'} successful!
             </div>
             {result.checkpointSignature && (
               <div className="mb-2">
@@ -220,17 +263,19 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
                 </a>
               </div>
             )}
-            <div className={result.checkpointSignature ? 'mt-2' : ''}>
-              <div className="text-xs font-medium mb-1">Deploy:</div>
-              <a 
-                href={`https://solscan.io/tx/${result.deploySignature}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs underline hover:no-underline break-all"
-              >
-                {result.deploySignature.slice(0, 8)}...{result.deploySignature.slice(-8)} →
-              </a>
-            </div>
+            {result.deploySignature && (
+              <div className={result.checkpointSignature ? 'mt-2' : ''}>
+                <div className="text-xs font-medium mb-1">Deploy:</div>
+                <a 
+                  href={`https://solscan.io/tx/${result.deploySignature}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs underline hover:no-underline break-all"
+                >
+                  {result.deploySignature.slice(0, 8)}...{result.deploySignature.slice(-8)} →
+                </a>
+              </div>
+            )}
             <button
               onClick={() => setResult(null)}
               className="mt-3 w-full text-xs text-green-700 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 underline"
