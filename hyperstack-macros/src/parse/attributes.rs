@@ -1069,7 +1069,14 @@ impl Parse for ResolveAttributeArgs {
 
                 url = Some(parts.join("."));
             } else if ident_str == "method" {
-                method = Some(input.parse()?);
+                let method_ident: syn::Ident = input.parse()?;
+                match method_ident.to_string().to_lowercase().as_str() {
+                    "get" | "post" => method = Some(method_ident),
+                    _ => return Err(syn::Error::new(
+                        method_ident.span(),
+                        "Invalid HTTP method. Only 'GET' or 'POST' are supported.",
+                    )),
+                }
             } else if ident_str == "extract" {
                 let lit: syn::LitStr = input.parse()?;
                 extract = Some(lit.value());
