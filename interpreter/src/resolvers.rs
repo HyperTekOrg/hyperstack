@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
+use futures::future::join_all;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -596,32 +598,32 @@ impl UrlResolverClient {
         Ok(current.clone())
     }
 
-    /// Batch resolve multiple URLs (each URL resolved independently)
+    /// Batch resolve multiple URLs in parallel
     pub async fn resolve_batch(
         &self,
         urls: &[(String, crate::ast::HttpMethod, Option<String>)],
     ) -> HashMap<String, Value> {
-        let mut results = HashMap::new();
+        let futures = urls
+            .iter()
+            .filter(|(url, _, _)| !url.is_empty())
+            .map(|(url, method, extract_path)| async move {
+                let result = self
+                    .resolve_with_extract(url, method, extract_path.as_deref())
+                    .await;
+                (url.clone(), result)
+            });
 
-        for (url, method, extract_path) in urls {
-            if url.is_empty() {
-                continue;
-            }
-
-            match self
-                .resolve_with_extract(url, method, extract_path.as_deref())
-                .await
-            {
-                Ok(value) => {
-                    results.insert(url.clone(), value);
-                }
+        join_all(futures)
+            .await
+            .into_iter()
+            .filter_map(|(url, result)| match result {
+                Ok(value) => Some((url, value)),
                 Err(e) => {
                     tracing::warn!(url = %url, error = %e, "Failed to resolve URL");
+                    None
                 }
-            }
-        }
-
-        results
+            })
+            .collect()
     }
 }
 

@@ -1294,6 +1294,7 @@ version = "0.5.3"
 dependencies = [
  "bs58",
  "dashmap",
+ "futures",
  "hex",
  "hyperstack-macros",
  "lru",
