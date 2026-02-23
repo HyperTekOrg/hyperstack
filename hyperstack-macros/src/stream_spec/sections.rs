@@ -634,14 +634,15 @@ pub fn process_nested_struct(
                     parse::parse_resolve_attribute(attr, &field_name.to_string())
                 {
                     // Determine resolver type: URL resolver if url is present, otherwise Token resolver
-                    let resolver = if let Some(url_path_raw) = resolve_attr.url.clone() {
-                        // Qualify the url_path with section name if needed
-                        let url_path = if url_path_raw.contains('.') {
-                            url_path_raw
+                    let qualified_url = resolve_attr.url.as_deref().map(|url_path_raw| {
+                        if url_path_raw.contains('.') {
+                            url_path_raw.to_string()
                         } else {
                             format!("{}.{}", section_name, url_path_raw)
-                        };
+                        }
+                    });
 
+                    let resolver = if let Some(ref url_path) = qualified_url {
                         let method = resolve_attr.method.as_deref().map(|m| {
                             match m.to_lowercase().as_str() {
                                 "post" => crate::ast::HttpMethod::Post,
@@ -650,7 +651,7 @@ pub fn process_nested_struct(
                         }).unwrap_or(crate::ast::HttpMethod::Get);
 
                         crate::ast::ResolverType::Url(crate::ast::UrlResolverConfig {
-                            url_path,
+                            url_path: url_path.clone(),
                             method,
                             extract_path: resolve_attr.extract.clone(),
                         })
@@ -667,17 +668,7 @@ pub fn process_nested_struct(
                         target_field_name = format!("{}.{}", section_name, target_field_name);
                     }
 
-                    // For URL resolvers, qualify the url with section name if needed
-                    let from = if let Some(url) = resolve_attr.url.clone() {
-                        let url_path = if url.contains('.') {
-                            url
-                        } else {
-                            format!("{}.{}", section_name, url)
-                        };
-                        Some(url_path)
-                    } else {
-                        resolve_attr.from
-                    };
+                    let from = qualified_url.or(resolve_attr.from);
 
                     resolve_specs.push(parse::ResolveSpec {
                         resolver,
