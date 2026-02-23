@@ -463,7 +463,7 @@ pub fn generate_vm_handler(
                                 continue;
                             }
 
-                            match url_client.resolve_with_extract(&url, &config.method, config.extract_path.as_deref()).await {
+                            match url_client.resolve(&url, &config.method).await {
                                 Ok(resolved_value) => {
                                     let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
                                     match vm.apply_resolver_result(
@@ -1442,7 +1442,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                                 continue;
                             }
 
-                            match url_client.resolve_with_extract(&url, &config.method, config.extract_path.as_deref()).await {
+                            match url_client.resolve(&url, &config.method).await {
                                 Ok(resolved_value) => {
                                     let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
                                     match vm.apply_resolver_result(
