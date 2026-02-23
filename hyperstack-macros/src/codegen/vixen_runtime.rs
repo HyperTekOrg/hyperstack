@@ -455,6 +455,8 @@ pub fn generate_vm_handler(
                             };
 
                             if url.is_empty() {
+                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                                vm.restore_resolver_requests(vec![request]);
                                 continue;
                             }
 
@@ -481,9 +483,11 @@ pub fn generate_vm_handler(
                                 Err(err) => {
                                     hyperstack::runtime::tracing::warn!(
                                         url = %url,
-                                        "URL resolver request failed: {}",
+                                        "URL resolver request failed, re-queuing: {}",
                                         err
                                     );
+                                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                                    vm.restore_resolver_requests(vec![request]);
                                 }
                             }
                         }
@@ -1424,6 +1428,8 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                             };
 
                             if url.is_empty() {
+                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                                vm.restore_resolver_requests(vec![request]);
                                 continue;
                             }
 
@@ -1450,9 +1456,11 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                                 Err(err) => {
                                     hyperstack::runtime::tracing::warn!(
                                         url = %url,
-                                        "URL resolver request failed: {}",
+                                        "URL resolver request failed, re-queuing: {}",
                                         err
                                     );
+                                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                                    vm.restore_resolver_requests(vec![request]);
                                 }
                             }
                         }
