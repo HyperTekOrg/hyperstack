@@ -586,10 +586,10 @@ impl UrlResolverClient {
                 if let Some(next) = current.get(index) {
                     current = next;
                 } else {
-                    return Ok(Value::Null);
+                    return Err(format!("Index '{}' out of bounds in path '{}'", index, path).into());
                 }
             } else {
-                return Ok(Value::Null);
+                return Err(format!("Key '{}' not found in path '{}'", segment, path).into());
             }
         }
 
