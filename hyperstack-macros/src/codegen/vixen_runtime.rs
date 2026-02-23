@@ -259,6 +259,7 @@ pub fn generate_vm_handler(
             health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
             slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
             resolver_client: Option<std::sync::Arc<ResolverClient>>,
+            url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
         }
 
         impl std::fmt::Debug for VmHandler {
@@ -278,6 +279,7 @@ pub fn generate_vm_handler(
                 health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
                 slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
                 resolver_client: Option<std::sync::Arc<ResolverClient>>,
+                url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
             ) -> Self {
                 Self {
                     vm,
@@ -286,6 +288,7 @@ pub fn generate_vm_handler(
                     health_monitor,
                     slot_tracker,
                     resolver_client,
+                    url_resolver_client,
                 }
             }
 
@@ -436,7 +439,7 @@ pub fn generate_vm_handler(
 
                 // Process URL resolver requests
                 if !url_requests.is_empty() {
-                    let url_client = hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient::new();
+                    let url_client = self.url_resolver_client.clone();
 
                     for request in url_requests {
                         if let hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(config) = &request.resolver {
@@ -923,6 +926,8 @@ pub fn generate_spec_function(
                 }
             };
 
+            let url_resolver_client = Arc::new(hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient::new());
+
             let slot_tracker = hyperstack::runtime::hyperstack_server::SlotTracker::new();
             let mut attempt = 0u32;
             let mut backoff = reconnection_config.initial_delay;
@@ -964,6 +969,7 @@ pub fn generate_spec_function(
                     health_monitor.clone(),
                     slot_tracker.clone(),
                     resolver_client.clone(),
+                    url_resolver_client.clone(),
                 );
 
                 let account_parser = parsers::AccountParser;
@@ -1232,6 +1238,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
             health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
             slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
             resolver_client: Option<std::sync::Arc<ResolverClient>>,
+            url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
         }
 
         impl std::fmt::Debug for VmHandler {
@@ -1251,6 +1258,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                 health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
                 slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
                 resolver_client: Option<std::sync::Arc<ResolverClient>>,
+                url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
             ) -> Self {
                 Self {
                     vm,
@@ -1259,6 +1267,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                     health_monitor,
                     slot_tracker,
                     resolver_client,
+                    url_resolver_client,
                 }
             }
 
@@ -1409,7 +1418,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
 
                 // Process URL resolver requests
                 if !url_requests.is_empty() {
-                    let url_client = hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient::new();
+                    let url_client = self.url_resolver_client.clone();
 
                     for request in url_requests {
                         if let hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(config) = &request.resolver {
@@ -1964,6 +1973,8 @@ pub fn generate_multi_pipeline_spec_function(
                 }
             };
 
+            let url_resolver_client = Arc::new(hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient::new());
+
             let slot_tracker = hyperstack::runtime::hyperstack_server::SlotTracker::new();
             let mut attempt = 0u32;
             let mut backoff = reconnection_config.initial_delay;
@@ -2005,6 +2016,7 @@ pub fn generate_multi_pipeline_spec_function(
                     health_monitor.clone(),
                     slot_tracker.clone(),
                     resolver_client.clone(),
+                    url_resolver_client.clone(),
                 );
 
                 if attempt == 0 {
