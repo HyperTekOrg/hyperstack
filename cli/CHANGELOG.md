@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.5.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.5.2...hyperstack-cli-v0.5.3) (2026-02-20)
+
+
+### Features
+
+* **cli:** add explore command for stack and schema discovery ([17c3022](https://github.com/HyperTekOrg/hyperstack/commit/17c302249c0393200fc53a1eca79bd2cabc53ce2))
+
+
+### Bug Fixes
+
+* use next_back() instead of last() on DoubleEndedIterator ([a4aa568](https://github.com/HyperTekOrg/hyperstack/commit/a4aa5688959fb1eea5800b3764c0c9696a45e17e))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.5.2 to 0.5.3
+
 ## [0.5.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-cli-v0.5.1...hyperstack-cli-v0.5.2) (2026-02-07)
 
 

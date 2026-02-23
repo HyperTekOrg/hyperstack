@@ -1,0 +1,111 @@
+---
+title: "Tutorial: ORE Dashboard"
+sidebar:
+  order: 6
+  badge: New
+description: Build a live ORE mining dashboard by prompting your AI agent step by step.
+---
+
+import CopyPrompt from "../../../components/CopyPrompt.astro";
+
+This tutorial shows you how to build a real-time ORE mining dashboard without writing any code. You will use your AI agent to discover the data, set up the project, and implement the UI.
+
+---
+
+## Prerequisites
+
+- Install agent skills: `npx skills add usehyperstack/skills`
+- Install Hyperstack CLI: `npm i -g hyperstack-cli`
+- A code editor with an AI agent (Cursor, VS Code with Copilot, etc.)
+
+---
+
+## Step 1: Scaffold the Project
+
+Start by creating the basic project structure and installing dependencies.
+
+**Prompt:**
+
+<CopyPrompt>
+Create a new React + Vite + TypeScript project. Install these dependencies: hyperstack-react, hyperstack-stacks, tailwindcss. Set up Tailwind with the Vite plugin.
+</CopyPrompt>
+
+---
+
+## Step 2: Discover the ORE Schema
+
+Ask your agent to look at the available ORE data to understand what you can build.
+
+**Prompt:**
+
+<CopyPrompt>
+Run `hs explore ore --json` and `hs explore ore OreRound --json` to understand the ORE stack schema. Summarize the available entities, views, and fields.
+</CopyPrompt>
+
+---
+
+## Step 3: Build the Main Layout
+
+Set up the application shell with a connection status indicator.
+
+**Prompt:**
+
+<CopyPrompt>
+Create the main `App.tsx` with a `HyperstackProvider` (autoConnect={true}). Create an `OreDashboard` component that will hold our mining data display. Use a dark theme with tailwind (bg-gray-900, text-white). Add a header that says "ORE Mining Dashboard" with a connection status indicator.
+</CopyPrompt>
+
+---
+
+## Step 4: Add Live Round Data
+
+Connect to the live round view to show the current mining status.
+
+**Prompt:**
+
+<CopyPrompt>
+In the `OreDashboard` component, use the `useHyperstack` hook with `ORE_STREAM_STACK` from `hyperstack-stacks/ore`. Subscribe to the `OreRound.latest` view using `useOne()` to get the current round. Display: Round number (`id.round_id`), Motherlode amount (`state.motherlode`), Total miners (`state.total_miners`), Total deployed (`state.total_deployed`), and Deploy count (`metrics.deploy_count`). Format large numbers with commas.
+</CopyPrompt>
+
+---
+
+## Step 5: Add Treasury Data
+
+Include high-level stats about the ORE treasury.
+
+**Prompt:**
+
+<CopyPrompt>
+Add a section that shows the ORE treasury state. Use `OreTreasury.list` view with `useOne()`. Display: Total staked, Total refined, Total unclaimed, and Treasury balance. Put these in a grid of stat cards.
+</CopyPrompt>
+
+---
+
+## Step 6: Add Round History
+
+List previous rounds to show historical mining activity.
+
+**Prompt:**
+
+<CopyPrompt>
+Add a section below the stats that shows recent rounds in a table. Use `OreRound.list` view with `use()`. Show the last 10 rounds with columns: Round #, Motherlode, Miners, Deployed, Motherlode Hit (boolean as a checkmark or X). Sort by `round_id` descending in the component.
+</CopyPrompt>
+
+---
+
+## Step 7: Polish the UI
+
+Make the dashboard look professional and responsive.
+
+**Prompt:**
+
+<CopyPrompt>
+Clean up the layout. Add subtle animations for when data updates like a brief highlight or pulse effect. Make the stat cards have a slightly lighter background (`bg-gray-800`). Add a footer that says "Powered by Hyperstack" with a link to `docs.usehyperstack.com`. Ensure the app is responsive on mobile devices.
+</CopyPrompt>
+
+---
+
+## The Result
+
+Once your agent finishes the final step, you will have a fully functional, real-time dashboard. The app connects to the Hyperstack ORE stream and updates automatically as new data hits the Solana blockchain.
+
+You built a complex, data-heavy application in minutes without writing a single line of manual code.

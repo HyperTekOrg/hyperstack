@@ -1,0 +1,103 @@
+---
+title: Prompt Cookbook
+sidebar:
+  order: 4
+description: Copy-paste prompts for building with Hyperstack using AI coding agents.
+---
+
+import CopyPrompt from "../../../components/CopyPrompt.astro";
+
+Curated prompts to help your AI agent build with Hyperstack. These are designed to be copied directly into your agent chat (Cursor, Claude Code, etc.) to automate discovery and implementation.
+
+:::note[Skills required]
+These prompts assume the Hyperstack agent skills are installed. The skills teach your agent the SDK patterns, CLI commands, and when to run `hs explore` — so you don't have to spell it out in every prompt.
+
+Not installed yet? See [Editor Setup](/agent-skills/setup/) to get started.
+:::
+
+---
+
+## Consuming ORE (React)
+
+### Live ORE Mining Dashboard
+
+<CopyPrompt>
+Build a React + Vite app that shows live ORE mining data. Display:
+- Current round number and motherlode amount
+- Total miners and total SOL deployed
+- Countdown to round expiration
+- Connection status indicator
+
+Use Tailwind for styling.
+
+</CopyPrompt>
+
+**What you should get:** A React app with `HyperstackProvider`, `useHyperstack` hook, live-updating round stats, and a connection badge.
+
+### ORE Round History Table
+
+<CopyPrompt>
+Build a React component that shows a table of historical ORE mining rounds. Columns: Round #, Motherlode, Total Miners, Deploy Count, Top Miner (truncated address), and whether the motherlode was hit. Sort by round descending. Add a filter for minimum motherlode amount.
+</CopyPrompt>
+
+**What you should get:** A paginated or scrollable table showing historical ORE rounds with real-time updates as new rounds complete.
+
+### Live ORE Grid Heatmap
+
+<CopyPrompt>
+Build a React component that visualizes the current ORE mining round as an interactive 5x5 grid heatmap. Use `OreRound.latest` to get the live round data. For each square, show the deployed SOL amount (`state.deployed_per_square_ui`) with color intensity based on the amount. Show miner counts per square (`state.count_per_square`) on hover. Include a countdown to round expiration using `state.estimated_expires_at_unix`. Highlight the winning square (`results.winning_square`) when the round completes.
+</CopyPrompt>
+
+**What you should get:** A live-updating visual grid showing where miners are deploying SOL in the current round, with real-time countdown and win detection.
+
+---
+
+## Consuming ORE (TypeScript CLI)
+
+### ORE Round Monitor CLI
+
+<CopyPrompt>
+Build a TypeScript CLI tool that monitors ORE mining rounds in real-time. On each update, print: Round number, motherlode amount, total miners, total deployed, deploy count, and time until expiration. Exit cleanly on Ctrl+C.
+</CopyPrompt>
+
+**What you should get:** A terminal utility that prints a clean, live-updating summary of every ORE round.
+
+### ORE Treasury Tracker
+
+<CopyPrompt>
+Build a TypeScript script that tracks the ORE treasury state in real-time. Log: treasury balance, motherlode, total staked, total refined, and total unclaimed. Calculate and display the percentage of ORE that is staked vs unclaimed.
+</CopyPrompt>
+
+**What you should get:** A script for monitoring treasury health and distribution metrics.
+
+---
+
+## Building Custom Stacks
+
+### Build a custom stack for [Protocol X]
+
+<CopyPrompt>
+I want to build a Hyperstack stack that tracks [describe the protocol and what data you want]. The program ID is [PROGRAM_ID]. Find the IDL and build a stack that defines entities for the account types I want to track.
+</CopyPrompt>
+
+**What you should get:** The agent finds or guides you to the IDL, then scaffolds a new Hyperstack project with entities, field mappings, and views.
+
+### Add a new entity to my stack
+
+<CopyPrompt>
+I have an existing Hyperstack stack and I want to add a new entity that tracks [describe account type]. The IDL is already at `idl/[program].json`. Add an entity for the [AccountName] account with appropriate sections and field mappings, following the same patterns as the existing entities.
+</CopyPrompt>
+
+**What you should get:** A new entity definition added to your `stack.rs` with correct type mappings from the IDL.
+
+---
+
+## Exploring and Discovery
+
+### What data is available?
+
+<CopyPrompt>
+Run `hs explore --json` and tell me what Hyperstack stacks are available. For each stack, run `hs explore [stack-name] --json` to list the entities. Then for the most interesting entities, run `hs explore [stack-name] [Entity] --json` to show me the fields and types. Summarize what data I can stream from each stack.
+</CopyPrompt>
+
+**What you should get:** A comprehensive overview of all data you can currently access through your Hyperstack installation.

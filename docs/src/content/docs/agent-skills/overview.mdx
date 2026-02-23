@@ -1,0 +1,114 @@
+---
+title: Build with AI
+sidebar:
+  order: 1
+description: Let your AI agent set up and build with Hyperstack. One prompt, fully automated.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+import CopyPrompt from "../../../components/CopyPrompt.astro";
+
+The fastest way to start with Hyperstack is to let your AI agent handle everything. Paste one prompt and your agent installs the CLI, sets up skills, discovers available data, and starts building.
+
+---
+
+## Let Your Agent Do It
+
+Paste this into your AI coding agent (Cursor, Claude Code, OpenCode, Windsurf, or any agent that can read URLs):
+
+<CopyPrompt>
+Read https://docs.usehyperstack.com/agent.md and follow the instructions to set up Hyperstack in this project
+</CopyPrompt>
+
+That's it. Your agent will:
+
+1. Install the Hyperstack CLI (prefers Cargo, falls back to npm)
+2. Install agent skills so it knows the SDK patterns
+3. Run `hs explore --json` to discover available data streams
+4. Be ready to build
+
+Once setup is complete, try asking:
+
+- "Build a React dashboard that displays live ORE mining rounds"
+- "Show me the current ORE motherlode and total miners in real-time"
+- "Create a custom stack from this IDL that tracks token balances"
+- "What entities does the ore stack have? Show me all fields."
+
+---
+
+## How It Works
+
+The setup prompt points your agent to a plain text instruction file. The agent reads it, executes the setup commands, and learns how to use Hyperstack through the installed skills.
+
+Agent skills are markdown files that teach your agent the SDK syntax, CLI commands, and patterns. The skills also instruct the agent to use the `hs` CLI for live data, so type information is always accurate.
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Agent Skills   │ ──▶ │   AI Agent      │ ──▶ │   Your Code     │
+│  (SDK patterns  │     │   (Cursor,      │     │   (correct      │
+│   + CLI usage)  │     │    Claude, etc.) │     │    from start)  │
+└─────────────────┘     └─────────┬───────┘     └─────────────────┘
+                                  │
+                         hs explore --json
+                                  │
+                        ┌─────────▼───────┐
+                        │  Hyperstack API  │
+                        │  (live schemas)  │
+                        └─────────────────┘
+```
+
+Three skills are installed:
+
+| Skill                | What It Teaches                                                                   |
+| -------------------- | --------------------------------------------------------------------------------- |
+| `hyperstack`         | Router skill that detects your intent and points the agent to the right sub-skill |
+| `hyperstack-consume` | SDK patterns for connecting to streams and building UIs (TypeScript, React, Rust) |
+| `hyperstack-build`   | Rust DSL syntax for building custom stacks from Solana program IDLs               |
+
+---
+
+## Prefer to Set Up Manually?
+
+If you'd rather run the commands yourself instead of letting the agent handle it:
+
+<Tabs>
+<TabItem label="New Project">
+
+```bash
+# Install the CLI
+cargo install hyperstack-cli
+# Or: npm install -g hyperstack-cli
+
+# Scaffold an app
+npx hyperstack-cli create my-app
+cd my-app
+
+# Install agent skills
+npx skills add usehyperstack/skills
+```
+
+</TabItem>
+<TabItem label="Existing Project">
+
+```bash
+# Install the CLI
+cargo install hyperstack-cli
+# Or: npm install -g hyperstack-cli
+
+# Install agent skills in your project
+npx skills add usehyperstack/skills
+```
+
+</TabItem>
+</Tabs>
+
+For editor-specific file locations and manual configuration, see [Editor Setup](/agent-skills/setup/).
+
+---
+
+## Next Steps
+
+- [Prompt Cookbook](/agent-skills/prompts/) - Copy-paste prompts for common tasks
+- [Tutorial: ORE Dashboard](/agent-skills/tutorial-ore-dashboard/) - Build a complete app with step-by-step prompts
+- [Schema Discovery](/agent-skills/explore/) - How `hs explore` provides live type information
+- [Editor Setup](/agent-skills/setup/) - Manual setup for specific editors

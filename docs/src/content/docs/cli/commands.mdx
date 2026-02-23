@@ -33,6 +33,7 @@ Complete reference for the Hyperstack CLI (`hs`).
 | `hs stack list`                | List all stacks                      |
 | `hs stack show`                | Show stack details                   |
 | `hs telemetry status`          | Show telemetry status                |
+| `hs explore`                   | Discover stacks and schemas          |
 
 :::note[npm vs Cargo]
 When installed via npm (`npm install -g hyperstack-cli`), the command is `hyperstack-cli`. When installed via Cargo (`cargo install hyperstack-cli`), the command is `hs`. Both are the same CLI.
@@ -147,6 +148,47 @@ hs auth whoami
 ```
 
 **Credentials location:** `~/.hyperstack/credentials.toml`
+
+---
+
+## Schema Discovery
+
+### hs explore
+
+Discover available stacks and explore their schemas. Works without authentication for public stacks.
+
+```bash
+# List all available stacks
+hs explore
+
+# Show entities and views for a stack
+hs explore ore
+
+# Show fields and types for a specific entity
+hs explore ore OreRound
+
+# JSON output (for agents and scripts)
+hs explore --json
+hs explore ore --json
+hs explore ore OreRound --json
+```
+
+**Arguments:**
+
+| Argument   | Description                       |
+| ---------- | --------------------------------- |
+| `[name]`   | Stack name to explore             |
+| `[entity]` | Entity name to show field details |
+
+**Output varies by specificity:**
+
+| Command                       | Shows                                         |
+| ----------------------------- | --------------------------------------------- |
+| `hs explore`                  | All available stacks with entity names        |
+| `hs explore <stack>`          | Stack entities, views, and field counts       |
+| `hs explore <stack> <entity>` | Entity fields with types, sections, and views |
+
+Public stacks are visible without authentication. Log in with `hs auth login` to also see global stacks and your own deployed stacks.
 
 ---
 
