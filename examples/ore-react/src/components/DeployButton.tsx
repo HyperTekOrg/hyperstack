@@ -1,11 +1,7 @@
-/**
- * Deploy Button with Automatic Checkpoint
- */
-
 import { useState } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { useHyperstack } from 'hyperstack-react';
-import { ORE_STREAM_STACK, type OreMiner, type OreRound } from 'hyperstack-stacks/ore';
+import type { UseMutationResult } from 'hyperstack-react';
+import { type OreMiner, type OreRound } from 'hyperstack-stacks/ore';
 import { Transaction, PublicKey } from '@solana/web3.js';
 
 const LAMPORTS_PER_SOL = 1_000_000_000n;
@@ -29,12 +25,15 @@ type DeployButtonProps = {
   minerData?: OreMiner;
   recentRounds?: OreRound[];
   selectedSquares: number[];
+  onClearSquares: () => void;
+  checkpoint?: UseMutationResult;
+  deploy?: UseMutationResult;
 };
 
-export function DeployButton({ currentRound, minerData, recentRounds, selectedSquares }: DeployButtonProps) {
+export function DeployButton({ currentRound, minerData, recentRounds, selectedSquares, onClearSquares, checkpoint, deploy }: DeployButtonProps) {
   const wallet = useWallet();
   const { connection } = useConnection();
-  const [amount, setAmount] = useState('0.001');
+  const [amount, setAmount] = useState('0.000001');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState<'checkpoint' | 'deploy' | null>(null);
   const [result, setResult] = useState<{ 
@@ -43,10 +42,6 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
     deploySignature?: string; 
     error?: string;
   } | null>(null);
-  
-  const stack = useHyperstack(ORE_STREAM_STACK);
-  const checkpoint = stack.instructions?.checkpoint?.useMutation();
-  const deploy = stack.instructions?.deploy?.useMutation();
   
   const minerRoundId = minerData?.state?.round_id;
   const checkpointId = minerData?.state?.checkpoint_id;
@@ -134,8 +129,12 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
   };
 
   const handleDeploy = async () => {
-    if (!wallet.connected || !wallet.publicKey) {
+    if (!wallet.connected || !wallet.publicKey || !wallet.sendTransaction) {
       return;
+    }
+
+    if (!deploy) {
+      throw new Error('Deploy instruction is not ready yet.');
     }
 
     if (!currentRound?.id?.round_address || !currentRound?.entropy?.entropy_var_address || selectedSquares.length === 0) {
@@ -164,10 +163,13 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
       }
 
       // Then deploy
+      // Build a bitmask: each selectedSquare is 1-indexed, so square N → bit (N-1).
+      // The on-chain program treats `squares` as a u32 bitmask where bit i = square i+1.
+      const squareMask = selectedSquares.reduce((mask, squareId) => mask | (1 << (squareId - 1)), 0);
       const deployResult = await deploy.submit(
         {
           amount: parsedAmountLamports,
-          squares: selectedSquares.length,
+          squares: squareMask,
         },
         {
           wallet: walletAdapter,
@@ -183,6 +185,7 @@ export function DeployButton({ currentRound, minerData, recentRounds, selectedSq
         checkpointSignature: checkpointSig,
         deploySignature: deployResult.signature 
       });
+      onClearSquares();
       
     } catch (err: any) {
       console.error('Deploy failed:', err);
