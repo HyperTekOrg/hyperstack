@@ -437,64 +437,15 @@ pub fn generate_vm_handler(
                     }
                 }
 
-                // Process URL resolver requests
+                // Process URL resolver requests in parallel with deduplication
                 if !url_requests.is_empty() {
-                    let url_client = self.url_resolver_client.clone();
-
-                    for request in url_requests {
-                        if let hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(config) = &request.resolver {
-                            // Get the URL from the input value
-                            let url = match &request.input {
-                                hyperstack::runtime::serde_json::Value::String(s) => s.clone(),
-                                _ => {
-                                    hyperstack::runtime::tracing::warn!(
-                                        "URL resolver input is not a string: {:?}",
-                                        request.input
-                                    );
-                                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                                    vm.restore_resolver_requests(vec![request]);
-                                    continue;
-                                }
-                            };
-
-                            if url.is_empty() {
-                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                                vm.restore_resolver_requests(vec![request]);
-                                continue;
-                            }
-
-                            match url_client.resolve(&url, &config.method).await {
-                                Ok(resolved_value) => {
-                                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                                    match vm.apply_resolver_result(
-                                        self.bytecode.as_ref(),
-                                        &request.cache_key,
-                                        resolved_value,
-                                    ) {
-                                        Ok(mut new_mutations) => {
-                                            mutations.append(&mut new_mutations);
-                                        }
-                                        Err(err) => {
-                                            hyperstack::runtime::tracing::warn!(
-                                                url = %url,
-                                                "Failed to apply URL resolver result: {}",
-                                                err
-                                            );
-                                        }
-                                    }
-                                }
-                                Err(err) => {
-                                    hyperstack::runtime::tracing::warn!(
-                                        url = %url,
-                                        "URL resolver request failed, re-queuing: {}",
-                                        err
-                                    );
-                                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                                    vm.restore_resolver_requests(vec![request]);
-                                }
-                            }
-                        }
-                    }
+                    let mut url_mutations = hyperstack::runtime::hyperstack_interpreter::resolvers::resolve_url_batch(
+                        &self.vm,
+                        self.bytecode.as_ref(),
+                        &self.url_resolver_client,
+                        url_requests,
+                    ).await;
+                    mutations.append(&mut url_mutations);
                 }
 
                 if !other_requests.is_empty() {
@@ -1416,64 +1367,15 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                     }
                 }
 
-                // Process URL resolver requests
+                // Process URL resolver requests in parallel with deduplication
                 if !url_requests.is_empty() {
-                    let url_client = self.url_resolver_client.clone();
-
-                    for request in url_requests {
-                        if let hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(config) = &request.resolver {
-                            // Get the URL from the input value
-                            let url = match &request.input {
-                                hyperstack::runtime::serde_json::Value::String(s) => s.clone(),
-                                _ => {
-                                    hyperstack::runtime::tracing::warn!(
-                                        "URL resolver input is not a string: {:?}",
-                                        request.input
-                                    );
-                                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                                    vm.restore_resolver_requests(vec![request]);
-                                    continue;
-                                }
-                            };
-
-                            if url.is_empty() {
-                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                                vm.restore_resolver_requests(vec![request]);
-                                continue;
-                            }
-
-                            match url_client.resolve(&url, &config.method).await {
-                                Ok(resolved_value) => {
-                                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                                    match vm.apply_resolver_result(
-                                        self.bytecode.as_ref(),
-                                        &request.cache_key,
-                                        resolved_value,
-                                    ) {
-                                        Ok(mut new_mutations) => {
-                                            mutations.append(&mut new_mutations);
-                                        }
-                                        Err(err) => {
-                                            hyperstack::runtime::tracing::warn!(
-                                                url = %url,
-                                                "Failed to apply URL resolver result: {}",
-                                                err
-                                            );
-                                        }
-                                    }
-                                }
-                                Err(err) => {
-                                    hyperstack::runtime::tracing::warn!(
-                                        url = %url,
-                                        "URL resolver request failed, re-queuing: {}",
-                                        err
-                                    );
-                                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                                    vm.restore_resolver_requests(vec![request]);
-                                }
-                            }
-                        }
-                    }
+                    let mut url_mutations = hyperstack::runtime::hyperstack_interpreter::resolvers::resolve_url_batch(
+                        &self.vm,
+                        self.bytecode.as_ref(),
+                        &self.url_resolver_client,
+                        url_requests,
+                    ).await;
+                    mutations.append(&mut url_mutations);
                 }
 
                 if !other_requests.is_empty() {

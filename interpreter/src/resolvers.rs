@@ -598,19 +598,24 @@ impl UrlResolverClient {
         Ok(current.clone())
     }
 
-    /// Batch resolve multiple URLs in parallel
+    /// Batch resolve multiple URLs in parallel with deduplication.
+    /// Returns raw JSON keyed by URL. Identical URLs are only fetched once.
     pub async fn resolve_batch(
         &self,
-        urls: &[(String, crate::ast::HttpMethod, Option<String>)],
+        urls: &[(String, crate::ast::HttpMethod)],
     ) -> HashMap<String, Value> {
-        let futures = urls
-            .iter()
-            .filter(|(url, _, _)| !url.is_empty())
-            .map(|(url, method, extract_path)| async move {
-                let result = self
-                    .resolve_with_extract(url, method, extract_path.as_deref())
-                    .await;
-                (url.clone(), result)
+        let mut unique: HashMap<String, crate::ast::HttpMethod> = HashMap::new();
+        for (url, method) in urls {
+            if !url.is_empty() {
+                unique.entry(url.clone()).or_insert_with(|| method.clone());
+            }
+        }
+
+        let futures = unique
+            .into_iter()
+            .map(|(url, method)| async move {
+                let result = self.resolve(&url, &method).await;
+                (url, result)
             });
 
         join_all(futures)
@@ -625,6 +630,100 @@ impl UrlResolverClient {
             })
             .collect()
     }
+}
+
+/// Intermediate type for validated URL resolver requests,
+/// avoiding redundant pattern matching after partition.
+struct ValidUrlRequest {
+    url: String,
+    method: crate::ast::HttpMethod,
+    request: crate::vm::ResolverRequest,
+}
+
+/// Resolve a batch of URL resolver requests in parallel with deduplication,
+/// apply results to VM state, and requeue failures.
+///
+/// This is the single entry point for URL resolution at runtime —
+/// it owns the full lifecycle: validate, fetch, apply, requeue.
+pub async fn resolve_url_batch(
+    vm: &std::sync::Mutex<crate::vm::VmContext>,
+    bytecode: &crate::compiler::MultiEntityBytecode,
+    url_client: &UrlResolverClient,
+    requests: Vec<crate::vm::ResolverRequest>,
+) -> Vec<crate::Mutation> {
+    if requests.is_empty() {
+        return Vec::new();
+    }
+
+    // Partition into valid and invalid in a single pass
+    let mut valid = Vec::with_capacity(requests.len());
+    let mut invalid = Vec::new();
+
+    for request in requests {
+        if let crate::ast::ResolverType::Url(ref config) = request.resolver {
+            match &request.input {
+                serde_json::Value::String(s) if !s.is_empty() => {
+                    valid.push(ValidUrlRequest {
+                        url: s.clone(),
+                        method: config.method.clone(),
+                        request,
+                    });
+                }
+                _ => {
+                    tracing::warn!(
+                        "URL resolver input is not a non-empty string: {:?}",
+                        request.input
+                    );
+                    invalid.push(request);
+                }
+            }
+        }
+    }
+
+    if !invalid.is_empty() {
+        let mut vm = vm.lock().unwrap_or_else(|e| e.into_inner());
+        vm.restore_resolver_requests(invalid);
+    }
+
+    if valid.is_empty() {
+        return Vec::new();
+    }
+
+    // Build deduplicated batch input
+    let batch_input: Vec<_> = valid
+        .iter()
+        .map(|v| (v.url.clone(), v.method.clone()))
+        .collect();
+
+    let results = url_client.resolve_batch(&batch_input).await;
+
+    // Apply results to VM state, requeue anything that didn't resolve
+    let mut vm = vm.lock().unwrap_or_else(|e| e.into_inner());
+    let mut mutations = Vec::new();
+    let mut failed = Vec::new();
+
+    for entry in valid {
+        match results.get(&entry.url) {
+            Some(resolved_value) => {
+                match vm.apply_resolver_result(bytecode, &entry.request.cache_key, resolved_value.clone()) {
+                    Ok(mut new_mutations) => mutations.append(&mut new_mutations),
+                    Err(err) => {
+                        tracing::warn!(url = %entry.url, "Failed to apply URL resolver result: {}", err);
+                    }
+                }
+            }
+            None => {
+                tracing::warn!(url = %entry.url, "URL resolver request failed, re-queuing");
+                failed.push(entry.request);
+            }
+        }
+    }
+
+    if !failed.is_empty() {
+        vm.restore_resolver_requests(failed);
+    }
+
+    mutations
 }
 
 struct TokenMetadataResolver;
