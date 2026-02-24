@@ -259,6 +259,7 @@ pub fn generate_vm_handler(
             health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
             slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
             resolver_client: Option<std::sync::Arc<ResolverClient>>,
+            url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
         }
 
         impl std::fmt::Debug for VmHandler {
@@ -278,6 +279,7 @@ pub fn generate_vm_handler(
                 health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
                 slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
                 resolver_client: Option<std::sync::Arc<ResolverClient>>,
+                url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
             ) -> Self {
                 Self {
                     vm,
@@ -286,6 +288,7 @@ pub fn generate_vm_handler(
                     health_monitor,
                     slot_tracker,
                     resolver_client,
+                    url_resolver_client,
                 }
             }
 
@@ -347,13 +350,18 @@ pub fn generate_vm_handler(
                 };
 
                 let mut token_requests = Vec::new();
+                let mut url_requests = Vec::new();
                 let mut other_requests = Vec::new();
 
                 for request in requests {
-                    match request.resolver {
+                    match &request.resolver {
                         hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Token => {
                             token_requests.push(request)
                         }
+                        hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(_) => {
+                            url_requests.push(request)
+                        }
+                        #[allow(unreachable_patterns)]
                         _ => other_requests.push(request),
                     }
                 }
@@ -427,6 +435,17 @@ pub fn generate_vm_handler(
                             }
                         }
                     }
+                }
+
+                // Process URL resolver requests in parallel with deduplication
+                if !url_requests.is_empty() {
+                    let mut url_mutations = hyperstack::runtime::hyperstack_interpreter::resolvers::resolve_url_batch(
+                        &self.vm,
+                        self.bytecode.as_ref(),
+                        &self.url_resolver_client,
+                        url_requests,
+                    ).await;
+                    mutations.append(&mut url_mutations);
                 }
 
                 if !other_requests.is_empty() {
@@ -858,6 +877,8 @@ pub fn generate_spec_function(
                 }
             };
 
+            let url_resolver_client = Arc::new(hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient::new());
+
             let slot_tracker = hyperstack::runtime::hyperstack_server::SlotTracker::new();
             let mut attempt = 0u32;
             let mut backoff = reconnection_config.initial_delay;
@@ -899,6 +920,7 @@ pub fn generate_spec_function(
                     health_monitor.clone(),
                     slot_tracker.clone(),
                     resolver_client.clone(),
+                    url_resolver_client.clone(),
                 );
 
                 let account_parser = parsers::AccountParser;
@@ -1167,6 +1189,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
             health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
             slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
             resolver_client: Option<std::sync::Arc<ResolverClient>>,
+            url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
         }
 
         impl std::fmt::Debug for VmHandler {
@@ -1186,6 +1209,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                 health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
                 slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
                 resolver_client: Option<std::sync::Arc<ResolverClient>>,
+                url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
             ) -> Self {
                 Self {
                     vm,
@@ -1194,6 +1218,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                     health_monitor,
                     slot_tracker,
                     resolver_client,
+                    url_resolver_client,
                 }
             }
 
@@ -1255,13 +1280,18 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                 };
 
                 let mut token_requests = Vec::new();
+                let mut url_requests = Vec::new();
                 let mut other_requests = Vec::new();
 
                 for request in requests {
-                    match request.resolver {
+                    match &request.resolver {
                         hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Token => {
                             token_requests.push(request)
                         }
+                        hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(_) => {
+                            url_requests.push(request)
+                        }
+                        #[allow(unreachable_patterns)]
                         _ => other_requests.push(request),
                     }
                 }
@@ -1335,6 +1365,17 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                             }
                         }
                     }
+                }
+
+                // Process URL resolver requests in parallel with deduplication
+                if !url_requests.is_empty() {
+                    let mut url_mutations = hyperstack::runtime::hyperstack_interpreter::resolvers::resolve_url_batch(
+                        &self.vm,
+                        self.bytecode.as_ref(),
+                        &self.url_resolver_client,
+                        url_requests,
+                    ).await;
+                    mutations.append(&mut url_mutations);
                 }
 
                 if !other_requests.is_empty() {
@@ -1834,6 +1875,8 @@ pub fn generate_multi_pipeline_spec_function(
                 }
             };
 
+            let url_resolver_client = Arc::new(hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient::new());
+
             let slot_tracker = hyperstack::runtime::hyperstack_server::SlotTracker::new();
             let mut attempt = 0u32;
             let mut backoff = reconnection_config.initial_delay;
@@ -1875,6 +1918,7 @@ pub fn generate_multi_pipeline_spec_function(
                     health_monitor.clone(),
                     slot_tracker.clone(),
                     resolver_client.clone(),
+                    url_resolver_client.clone(),
                 );
 
                 if attempt == 0 {

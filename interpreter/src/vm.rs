@@ -376,9 +376,10 @@ fn value_to_cache_key(value: &Value) -> String {
     }
 }
 
-fn resolver_type_key(resolver: &ResolverType) -> &'static str {
+fn resolver_type_key(resolver: &ResolverType) -> String {
     match resolver {
-        ResolverType::Token => "token",
+        ResolverType::Token => "token".to_string(),
+        ResolverType::Url(config) => format!("url:{}", config.url_path),
     }
 }
 

@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
+use futures::future::join_all;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -492,6 +494,236 @@ impl TokenMetadataResolverClient {
 
         Some((mint, Value::Object(obj)))
     }
+}
+
+// ============================================================================
+// URL Resolver Client - Fetch and parse data from external URLs
+// ============================================================================
+
+const DEFAULT_URL_TIMEOUT_SECS: u64 = 30;
+
+pub struct UrlResolverClient {
+    client: reqwest::Client,
+}
+
+impl Default for UrlResolverClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl UrlResolverClient {
+    pub fn new() -> Self {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(DEFAULT_URL_TIMEOUT_SECS))
+            .build()
+            .expect("Failed to create HTTP client for URL resolver");
+
+        Self { client }
+    }
+
+    pub fn with_timeout(timeout_secs: u64) -> Self {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(timeout_secs))
+            .build()
+            .expect("Failed to create HTTP client for URL resolver");
+
+        Self { client }
+    }
+
+    /// Resolve a URL and return the parsed JSON response
+    pub async fn resolve(
+        &self,
+        url: &str,
+        method: &crate::ast::HttpMethod,
+    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+        if url.is_empty() {
+            return Err("URL is empty".into());
+        }
+
+        let response = match method {
+            crate::ast::HttpMethod::Get => self.client.get(url).send().await?,
+            crate::ast::HttpMethod::Post => self.client.post(url).send().await?,
+        };
+
+        let response = response.error_for_status()?;
+        let value = response.json::<Value>().await?;
+
+        Ok(value)
+    }
+
+    /// Resolve a URL and extract a specific JSON path from the response
+    pub async fn resolve_with_extract(
+        &self,
+        url: &str,
+        method: &crate::ast::HttpMethod,
+        extract_path: Option<&str>,
+    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+        let response = self.resolve(url, method).await?;
+
+        if let Some(path) = extract_path {
+            Self::extract_json_path(&response, path)
+        } else {
+            Ok(response)
+        }
+    }
+
+    /// Extract a value from a JSON object using dot-notation path
+    /// e.g., "data.image" extracts response["data"]["image"]
+    pub fn extract_json_path(
+        value: &Value,
+        path: &str,
+    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+        if path.is_empty() {
+            return Ok(value.clone());
+        }
+
+        let mut current = value;
+        for segment in path.split('.') {
+            // Try as object key first
+            if let Some(next) = current.get(segment) {
+                current = next;
+            } else if let Ok(index) = segment.parse::<usize>() {
+                // Try as array index
+                if let Some(next) = current.get(index) {
+                    current = next;
+                } else {
+                    return Err(format!("Index '{}' out of bounds in path '{}'", index, path).into());
+                }
+            } else {
+                return Err(format!("Key '{}' not found in path '{}'", segment, path).into());
+            }
+        }
+
+        Ok(current.clone())
+    }
+
+    /// Batch resolve multiple URLs in parallel with deduplication.
+    /// Returns raw JSON keyed by URL. Identical URLs are only fetched once.
+    pub async fn resolve_batch(
+        &self,
+        urls: &[(String, crate::ast::HttpMethod)],
+    ) -> HashMap<String, Value> {
+        let mut unique: HashMap<String, crate::ast::HttpMethod> = HashMap::new();
+        for (url, method) in urls {
+            if !url.is_empty() {
+                unique.entry(url.clone()).or_insert_with(|| method.clone());
+            }
+        }
+
+        let futures = unique
+            .into_iter()
+            .map(|(url, method)| async move {
+                let result = self.resolve(&url, &method).await;
+                (url, result)
+            });
+
+        join_all(futures)
+            .await
+            .into_iter()
+            .filter_map(|(url, result)| match result {
+                Ok(value) => Some((url, value)),
+                Err(e) => {
+                    tracing::warn!(url = %url, error = %e, "Failed to resolve URL");
+                    None
+                }
+            })
+            .collect()
+    }
+}
+
+/// Intermediate type for validated URL resolver requests,
+/// avoiding redundant pattern matching after partition.
+struct ValidUrlRequest {
+    url: String,
+    method: crate::ast::HttpMethod,
+    request: crate::vm::ResolverRequest,
+}
+
+/// Resolve a batch of URL resolver requests in parallel with deduplication,
+/// apply results to VM state, and requeue failures.
+///
+/// This is the single entry point for URL resolution at runtime —
+/// it owns the full lifecycle: validate, fetch, apply, requeue.
+pub async fn resolve_url_batch(
+    vm: &std::sync::Mutex<crate::vm::VmContext>,
+    bytecode: &crate::compiler::MultiEntityBytecode,
+    url_client: &UrlResolverClient,
+    requests: Vec<crate::vm::ResolverRequest>,
+) -> Vec<crate::Mutation> {
+    if requests.is_empty() {
+        return Vec::new();
+    }
+
+    // Partition into valid and invalid in a single pass
+    let mut valid = Vec::with_capacity(requests.len());
+    let mut invalid = Vec::new();
+
+    for request in requests {
+        if let crate::ast::ResolverType::Url(ref config) = request.resolver {
+            match &request.input {
+                serde_json::Value::String(s) if !s.is_empty() => {
+                    valid.push(ValidUrlRequest {
+                        url: s.clone(),
+                        method: config.method.clone(),
+                        request,
+                    });
+                }
+                _ => {
+                    tracing::warn!(
+                        "URL resolver input is not a non-empty string: {:?}",
+                        request.input
+                    );
+                    invalid.push(request);
+                }
+            }
+        }
+    }
+
+    if !invalid.is_empty() {
+        let mut vm = vm.lock().unwrap_or_else(|e| e.into_inner());
+        vm.restore_resolver_requests(invalid);
+    }
+
+    if valid.is_empty() {
+        return Vec::new();
+    }
+
+    // Build deduplicated batch input
+    let batch_input: Vec<_> = valid
+        .iter()
+        .map(|v| (v.url.clone(), v.method.clone()))
+        .collect();
+
+    let results = url_client.resolve_batch(&batch_input).await;
+
+    // Apply results to VM state, requeue anything that didn't resolve
+    let mut vm = vm.lock().unwrap_or_else(|e| e.into_inner());
+    let mut mutations = Vec::new();
+    let mut failed = Vec::new();
+
+    for entry in valid {
+        match results.get(&entry.url) {
+            Some(resolved_value) => {
+                match vm.apply_resolver_result(bytecode, &entry.request.cache_key, resolved_value.clone()) {
+                    Ok(mut new_mutations) => mutations.append(&mut new_mutations),
+                    Err(err) => {
+                        tracing::warn!(url = %entry.url, "Failed to apply URL resolver result: {}", err);
+                    }
+                }
+            }
+            None => {
+                tracing::warn!(url = %entry.url, "URL resolver request failed, re-queuing");
+                failed.push(entry.request);
+            }
+        }
+    }
+
+    if !failed.is_empty() {
+        vm.restore_resolver_requests(failed);
+    }
+
+    mutations
 }
 
 struct TokenMetadataResolver;

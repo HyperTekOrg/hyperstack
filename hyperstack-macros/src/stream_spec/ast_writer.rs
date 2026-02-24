@@ -208,9 +208,11 @@ fn build_resolver_specs(resolve_specs: &[parse::ResolveSpec]) -> Vec<ResolverSpe
             extracts: Vec::new(),
         });
 
+        let source_path = spec.extract.clone();
+
         let extract = ResolverExtractSpec {
             target_path: spec.target_field_name.clone(),
-            source_path: spec.extract.clone(),
+            source_path,
             transform: None,
         };
 
@@ -232,9 +234,10 @@ fn parse_resolve_strategy(strategy: &str) -> ResolveStrategy {
     }
 }
 
-fn resolver_type_key(resolver: &ResolverType) -> &'static str {
+fn resolver_type_key(resolver: &ResolverType) -> String {
     match resolver {
-        ResolverType::Token => "token",
+        ResolverType::Token => "token".to_string(),
+        ResolverType::Url(config) => format!("url:{}", config.url_path),
     }
 }
 

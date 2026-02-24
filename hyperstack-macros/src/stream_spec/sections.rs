@@ -633,21 +633,46 @@ pub fn process_nested_struct(
                 } else if let Ok(Some(resolve_attr)) =
                     parse::parse_resolve_attribute(attr, &field_name.to_string())
                 {
-                    let resolver = if let Some(name) = resolve_attr.resolver.as_deref() {
+                    // Determine resolver type: URL resolver if url is present, otherwise Token resolver
+                    let qualified_url = resolve_attr.url.as_deref().map(|url_path_raw| {
+                        if url_path_raw.contains('.') {
+                            url_path_raw.to_string()
+                        } else {
+                            format!("{}.{}", section_name, url_path_raw)
+                        }
+                    });
+
+                    let resolver = if let Some(ref url_path) = qualified_url {
+                        let method = resolve_attr.method.as_deref().map(|m| {
+                            match m.to_lowercase().as_str() {
+                                "post" => crate::ast::HttpMethod::Post,
+                                _ => crate::ast::HttpMethod::Get,
+                            }
+                        }).unwrap_or(crate::ast::HttpMethod::Get);
+
+                        crate::ast::ResolverType::Url(crate::ast::UrlResolverConfig {
+                            url_path: url_path.clone(),
+                            method,
+                            extract_path: resolve_attr.extract.clone(),
+                        })
+                    } else if let Some(name) = resolve_attr.resolver.as_deref() {
                         super::entity::parse_resolver_type_name(name, field_type)
+                            .unwrap_or_else(|err| panic!("{}", err))
                     } else {
                         super::entity::infer_resolver_type(field_type)
-                    }
-                    .unwrap_or_else(|err| panic!("{}", err));
+                            .unwrap_or_else(|err| panic!("{}", err))
+                    };
 
                     let mut target_field_name = resolve_attr.target_field_name;
                     if !target_field_name.contains('.') {
                         target_field_name = format!("{}.{}", section_name, target_field_name);
                     }
 
+                    let from = qualified_url.or(resolve_attr.from);
+
                     resolve_specs.push(parse::ResolveSpec {
                         resolver,
-                        from: resolve_attr.from,
+                        from,
                         address: resolve_attr.address,
                         extract: resolve_attr.extract,
                         target_field_name,

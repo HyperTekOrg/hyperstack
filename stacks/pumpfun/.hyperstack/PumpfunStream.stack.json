@@ -5348,6 +5348,16 @@
               "inner_type": "bool",
               "source_path": null,
               "resolved_type": null
+            },
+            {
+              "field_name": "resolved_image",
+              "rust_type_name": "Option < String >",
+              "base_type": "String",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "String",
+              "source_path": null,
+              "resolved_type": null
             }
           ],
           "is_nested_struct": false,
@@ -6689,6 +6699,16 @@
           "source_path": null,
           "resolved_type": null
         },
+        "info.resolved_image": {
+          "field_name": "resolved_image",
+          "rust_type_name": "Option < String >",
+          "base_type": "String",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "String",
+          "source_path": null,
+          "resolved_type": null
+        },
         "info.symbol": {
           "field_name": "symbol",
           "rust_type_name": "Option < String >",
@@ -7262,7 +7282,24 @@
           }
         }
       ],
-      "resolver_specs": [],
+      "resolver_specs": [
+        {
+          "resolver": {
+            "url": {
+              "url_path": "info.uri",
+              "method": "get",
+              "extract_path": "image"
+            }
+          },
+          "input_path": "info.uri",
+          "strategy": "SetOnce",
+          "extracts": [
+            {
+              "target_path": "info.resolved_image"
+            }
+          ]
+        }
+      ],
       "computed_fields": [
         "trading.last_trade_price",
         "trading.total_volume",
@@ -7409,7 +7446,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "bb7da3279a1983c38e3e2d84c91babe722c3e4d9e32963b5d26cba8be745e7bd",
+      "content_hash": "1bc6f8116859f576b2730b2de2bf9fab4090643faa9bf7bf814d31642ff7fc38",
       "views": []
     }
   ],
@@ -17939,5 +17976,5 @@
       "program_id": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"
     }
   ],
-  "content_hash": "9edc87a2beb6a7fc98dc3a46d6fe0cbd9acd61f71acaf36818669bcd7bd7a8a1"
+  "content_hash": "f7a952f5de70efe998814a8d532f022a21724f1ca47d5dcc1d72ffdcc99a6578"
 }
