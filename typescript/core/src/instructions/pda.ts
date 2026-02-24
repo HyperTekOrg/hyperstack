@@ -4,6 +4,9 @@
  * Implements Solana's PDA derivation algorithm without depending on @solana/web3.js.
  */
 
+import { sha256 } from '@noble/hashes/sha2.js';
+import { ed25519 } from '@noble/curves/ed25519.js';
+
 // Base58 alphabet (Bitcoin/Solana style)
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
@@ -77,12 +80,10 @@ export function encodeBase58(bytes: Uint8Array): string {
 }
 
 /**
- * SHA-256 hash function (synchronous, Node.js).
+ * SHA-256 hash function (synchronous).
  */
 function sha256Sync(data: Uint8Array): Uint8Array {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { createHash } = require('crypto');
-  return new Uint8Array(createHash('sha256').update(Buffer.from(data)).digest());
+  return sha256(data);
 }
 
 /**
@@ -100,18 +101,17 @@ async function sha256Async(data: Uint8Array): Promise<Uint8Array> {
 
 /**
  * Check if a point is on the ed25519 curve.
- * A valid PDA must be OFF the curve.
- * 
- * This is a simplified implementation.
- * In practice, most PDAs are valid on first try with bump=255.
+ * A valid PDA must be OFF the curve to ensure it has no corresponding private key.
+ * Uses @noble/curves for browser-compatible ed25519 validation.
  */
-function isOnCurve(_publicKey: Uint8Array): boolean {
-  // Simplified heuristic: actual curve check requires ed25519 math
-  // For Solana PDAs, we try bumps from 255 down
-  // The first bump (255) almost always produces a valid off-curve point
-  // We return false here to accept the first result
-  // In production with @solana/web3.js, use PublicKey.isOnCurve()
-  return false;
+function isOnCurve(publicKey: Uint8Array): boolean {
+  try {
+    // Try to decode as an ed25519 point - if successful, it's on the curve
+    ed25519.Point.fromBytes(publicKey);
+    return true; // Point is on curve - invalid for PDA
+  } catch {
+    return false; // Point is off curve - valid for PDA
+  }
 }
 
 /**
@@ -200,7 +200,8 @@ export async function findProgramAddress(
     const hash = await sha256Async(buffer);
     
     if (!isOnCurve(hash)) {
-      return [encodeBase58(hash), bump];
+      const result = encodeBase58(hash);
+      return [result, bump];
     }
   }
 
@@ -228,7 +229,8 @@ export function findProgramAddressSync(
     const hash = sha256Sync(buffer);
     
     if (!isOnCurve(hash)) {
-      return [encodeBase58(hash), bump];
+      const result = encodeBase58(hash);
+      return [result, bump];
     }
   }
 

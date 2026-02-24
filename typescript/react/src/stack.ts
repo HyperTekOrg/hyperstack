@@ -159,10 +159,20 @@ export function useHyperstack<TStack extends StackDefinition>(
           useMutation: () => useInstructionMutation(executeFn as InstructionExecutor)
         };
       }
+    } else if (stack.instructions) {
+      for (const instructionName of Object.keys(stack.instructions)) {
+        const placeholderExecutor = () => {
+          throw new Error(`Cannot execute ${instructionName}: client not connected`);
+        };
+        result[instructionName] = {
+          execute: placeholderExecutor,
+          useMutation: () => useInstructionMutation(placeholderExecutor)
+        };
+      }
     }
 
     return result;
-  }, [client]);
+  }, [client, stack.instructions]);
 
   return {
     views: views as BuildViewInterface<TStack['views']>,
