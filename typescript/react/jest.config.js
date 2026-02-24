@@ -12,6 +12,16 @@ export default {
         useESM: true,
       },
     ],
+    '^.+\\.js$': [
+      'ts-jest',
+      {
+        useESM: true,
+      },
+    ],
   },
+  // Allow Jest to transform ESM-only packages that can't run in CommonJS
+  transformIgnorePatterns: [
+    '/node_modules/(?!(@noble/hashes|@noble/curves)/)',
+  ],
   testMatch: ['**/*.test.ts'],
 };
