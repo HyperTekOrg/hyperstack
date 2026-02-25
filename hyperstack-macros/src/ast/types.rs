@@ -270,13 +270,22 @@ pub enum HttpMethod {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum UrlTemplatePart {
+    Literal(String),
+    FieldRef(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum UrlSource {
+    FieldPath(String),
+    Template(Vec<UrlTemplatePart>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct UrlResolverConfig {
-    /// Field path to get the URL from (e.g., "info.uri")
-    pub url_path: String,
-    /// HTTP method to use (default: GET)
+    pub url_source: UrlSource,
     #[serde(default)]
     pub method: HttpMethod,
-    /// JSON path to extract from response (None = full payload)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extract_path: Option<String>,
 }
@@ -298,6 +307,13 @@ pub enum ResolveStrategy {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolverCondition {
+    pub field_path: String,
+    pub op: ComparisonOp,
+    pub value: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResolverSpec {
     pub resolver: ResolverType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -307,6 +323,10 @@ pub struct ResolverSpec {
     #[serde(default)]
     pub strategy: ResolveStrategy,
     pub extracts: Vec<ResolverExtractSpec>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<ResolverCondition>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schedule_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

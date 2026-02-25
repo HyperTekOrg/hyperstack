@@ -148,6 +148,8 @@ pub fn process_struct_with_context(
                         extract: resolve_attr.extract,
                         target_field_name: resolve_attr.target_field_name,
                         strategy: resolve_attr.strategy,
+                        condition: resolve_attr.condition,
+                        schedule_at: resolve_attr.schedule_at,
                     });
                 }
             }
@@ -449,7 +451,26 @@ pub fn process_struct_with_context(
                     hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Token
                 },
                 crate::ast::ResolverType::Url(config) => {
-                    let url_path = &config.url_path;
+                    let url_source_code = match &config.url_source {
+                        crate::ast::UrlSource::FieldPath(path) => {
+                            quote! {
+                                hyperstack::runtime::hyperstack_interpreter::ast::UrlSource::FieldPath(#path.to_string())
+                            }
+                        }
+                        crate::ast::UrlSource::Template(parts) => {
+                            let parts_code: Vec<_> = parts.iter().map(|part| match part {
+                                crate::ast::UrlTemplatePart::Literal(s) => quote! {
+                                    hyperstack::runtime::hyperstack_interpreter::ast::UrlTemplatePart::Literal(#s.to_string())
+                                },
+                                crate::ast::UrlTemplatePart::FieldRef(f) => quote! {
+                                    hyperstack::runtime::hyperstack_interpreter::ast::UrlTemplatePart::FieldRef(#f.to_string())
+                                },
+                            }).collect();
+                            quote! {
+                                hyperstack::runtime::hyperstack_interpreter::ast::UrlSource::Template(vec![#(#parts_code),*])
+                            }
+                        }
+                    };
                     let method_code = match config.method {
                         crate::ast::HttpMethod::Get => quote! {
                             hyperstack::runtime::hyperstack_interpreter::ast::HttpMethod::Get
@@ -465,7 +486,7 @@ pub fn process_struct_with_context(
                     quote! {
                         hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(
                             hyperstack::runtime::hyperstack_interpreter::ast::UrlResolverConfig {
-                                url_path: #url_path.to_string(),
+                                url_source: #url_source_code,
                                 method: #method_code,
                                 extract_path: #extract_path_code,
                             }
@@ -525,6 +546,8 @@ pub fn process_struct_with_context(
                     extracts: vec![
                         #(#extracts_code),*
                     ],
+                    condition: None,
+                    schedule_at: None,
                 }
             }
         })
