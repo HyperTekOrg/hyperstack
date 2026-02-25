@@ -3,11 +3,14 @@
 //! This crate provides types and utilities for parsing and working with
 //! HyperStack IDL (Interface Definition Language) specifications.
 
-pub mod parse;
-pub mod types;
-pub mod snapshot;
-pub mod discriminator;
 pub mod analysis;
-pub mod search;
+pub mod discriminator;
 pub mod error;
+pub mod parse;
+pub mod search;
+pub mod snapshot;
+pub mod types;
 pub mod utils;
+
+pub use parse::*;
+pub use types::*;
