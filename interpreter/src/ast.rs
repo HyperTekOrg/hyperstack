@@ -3,323 +3,64 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 
-// ============================================================================
-// IDL Snapshot Types - Embedded IDL for AST-only compilation
-// ============================================================================
+pub use hyperstack_idl::snapshot::*;
 
-/// Snapshot of an Anchor IDL for embedding in the AST
-/// Contains all information needed to generate parsers and SDK types
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlSnapshot {
-    /// Program name (e.g., "pump")
-    pub name: String,
-    /// Program ID this IDL belongs to
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub program_id: Option<String>,
-    /// Program version
-    pub version: String,
-    /// Account type definitions
-    pub accounts: Vec<IdlAccountSnapshot>,
-    /// Instruction definitions
-    pub instructions: Vec<IdlInstructionSnapshot>,
-    /// Type definitions (structs, enums)
-    #[serde(default)]
-    pub types: Vec<IdlTypeDefSnapshot>,
-    /// Event definitions
-    #[serde(default)]
-    pub events: Vec<IdlEventSnapshot>,
-    /// Error definitions
-    #[serde(default)]
-    pub errors: Vec<IdlErrorSnapshot>,
-    /// Discriminant size in bytes (1 for Steel, 8 for Anchor)
-    /// Defaults to 8 (Anchor) for backwards compatibility
-    #[serde(default = "default_discriminant_size")]
-    pub discriminant_size: usize,
-}
-
-fn default_discriminant_size() -> usize {
-    8
-}
-
-/// Account definition from IDL
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlAccountSnapshot {
-    /// Account name (e.g., "BondingCurve")
-    pub name: String,
-    /// 8-byte discriminator
-    pub discriminator: Vec<u8>,
-    /// Documentation
-    #[serde(default)]
-    pub docs: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub serialization: Option<IdlSerializationSnapshot>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum IdlSerializationSnapshot {
-    Borsh,
-    Bytemuck,
-    #[serde(alias = "bytemuckunsafe")]
-    BytemuckUnsafe,
-}
-
-/// Instruction definition from IDL
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlInstructionSnapshot {
-    /// Instruction name (e.g., "buy", "sell", "create")
-    pub name: String,
-    /// 8-byte discriminator
-    pub discriminator: Vec<u8>,
-    /// Documentation
-    #[serde(default)]
-    pub docs: Vec<String>,
-    /// Account arguments
-    pub accounts: Vec<IdlInstructionAccountSnapshot>,
-    /// Data arguments
-    pub args: Vec<IdlFieldSnapshot>,
-}
-
-/// Account argument in an instruction
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlInstructionAccountSnapshot {
-    /// Account name (e.g., "mint", "user")
-    pub name: String,
-    /// Whether this account is writable
-    #[serde(default)]
-    pub writable: bool,
-    /// Whether this account is a signer
-    #[serde(default)]
-    pub signer: bool,
-    /// Optional - if the account is optional
-    #[serde(default)]
-    pub optional: bool,
-    /// Fixed address constraint (if any)
-    #[serde(default)]
-    pub address: Option<String>,
-    /// Documentation
-    #[serde(default)]
-    pub docs: Vec<String>,
-}
-
-/// Field definition (used in instructions, accounts, types)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlFieldSnapshot {
-    /// Field name
-    pub name: String,
-    /// Field type
-    #[serde(rename = "type")]
-    pub type_: IdlTypeSnapshot,
-}
-
-/// Type representation from IDL
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdlTypeSnapshot {
-    /// Simple types: "u64", "bool", "string", "pubkey", etc.
-    Simple(String),
-    /// Array type: { "array": ["u8", 32] }
-    Array(IdlArrayTypeSnapshot),
-    /// Option type: { "option": "u64" }
-    Option(IdlOptionTypeSnapshot),
-    /// Vec type: { "vec": "u8" }
-    Vec(IdlVecTypeSnapshot),
-    /// HashMap type: { "hashMap": ["string", "u64"] }
-    HashMap(IdlHashMapTypeSnapshot),
-    /// Defined/custom type: { "defined": { "name": "MyStruct" } }
-    Defined(IdlDefinedTypeSnapshot),
-}
-
-/// Array type representation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlArrayTypeSnapshot {
-    /// [element_type, size]
-    pub array: Vec<IdlArrayElementSnapshot>,
-}
-
-/// Array element (can be type or size)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdlArrayElementSnapshot {
-    /// Nested type
-    Type(IdlTypeSnapshot),
-    /// Type name as string
-    TypeName(String),
-    /// Array size
-    Size(u32),
-}
-
-/// Option type representation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlOptionTypeSnapshot {
-    pub option: Box<IdlTypeSnapshot>,
-}
-
-/// Vec type representation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlVecTypeSnapshot {
-    pub vec: Box<IdlTypeSnapshot>,
-}
-
-/// HashMap type representation: { "hashMap": [key_type, value_type] }
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlHashMapTypeSnapshot {
-    #[serde(rename = "hashMap")]
-    pub hash_map: Vec<IdlTypeSnapshot>,
-}
-
-/// Defined/custom type reference
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlDefinedTypeSnapshot {
-    pub defined: IdlDefinedInnerSnapshot,
-}
-
-/// Inner defined type (can be named or simple string)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdlDefinedInnerSnapshot {
-    /// Named: { "name": "MyStruct" }
-    Named { name: String },
-    /// Simple string reference
-    Simple(String),
-}
-
-/// Type definition (struct or enum)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlTypeDefSnapshot {
-    /// Type name
-    pub name: String,
-    /// Documentation
-    #[serde(default)]
-    pub docs: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub serialization: Option<IdlSerializationSnapshot>,
-    /// Type definition (struct or enum)
-    #[serde(rename = "type")]
-    pub type_def: IdlTypeDefKindSnapshot,
-}
-
-/// Type definition kind (struct or enum)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdlTypeDefKindSnapshot {
-    /// Struct: { "kind": "struct", "fields": [...] }
-    Struct {
-        kind: String,
-        fields: Vec<IdlFieldSnapshot>,
-    },
-    /// Tuple struct: { "kind": "struct", "fields": ["type1", "type2"] }
-    TupleStruct {
-        kind: String,
-        fields: Vec<IdlTypeSnapshot>,
-    },
-    /// Enum: { "kind": "enum", "variants": [...] }
-    Enum {
-        kind: String,
-        variants: Vec<IdlEnumVariantSnapshot>,
-    },
-}
-
-/// Enum variant
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlEnumVariantSnapshot {
-    pub name: String,
-}
-
-/// Event definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlEventSnapshot {
-    /// Event name
-    pub name: String,
-    /// 8-byte discriminator
-    pub discriminator: Vec<u8>,
-    /// Documentation
-    #[serde(default)]
-    pub docs: Vec<String>,
-}
-
-/// Error definition
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct IdlErrorSnapshot {
-    /// Error code
-    pub code: u32,
-    /// Error name
-    pub name: String,
-    /// Error message (optional - some IDLs omit this)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub msg: Option<String>,
-}
-
-impl IdlTypeSnapshot {
-    /// Convert IDL type to Rust type string
-    pub fn to_rust_type_string(&self) -> String {
-        match self {
-            IdlTypeSnapshot::Simple(s) => Self::map_simple_type(s),
-            IdlTypeSnapshot::Array(arr) => {
-                if arr.array.len() == 2 {
-                    match (&arr.array[0], &arr.array[1]) {
-                        (
-                            IdlArrayElementSnapshot::TypeName(t),
-                            IdlArrayElementSnapshot::Size(size),
-                        ) => {
-                            format!("[{}; {}]", Self::map_simple_type(t), size)
-                        }
-                        (
-                            IdlArrayElementSnapshot::Type(nested),
-                            IdlArrayElementSnapshot::Size(size),
-                        ) => {
-                            format!("[{}; {}]", nested.to_rust_type_string(), size)
-                        }
-                        _ => "Vec<u8>".to_string(),
+pub fn idl_type_snapshot_to_rust_string(ty: &IdlTypeSnapshot) -> String {
+    match ty {
+        IdlTypeSnapshot::Simple(s) => map_simple_idl_type(s),
+        IdlTypeSnapshot::Array(arr) => {
+            if arr.array.len() == 2 {
+                match (&arr.array[0], &arr.array[1]) {
+                    (IdlArrayElementSnapshot::TypeName(t), IdlArrayElementSnapshot::Size(size)) => {
+                        format!("[{}; {}]", map_simple_idl_type(t), size)
                     }
-                } else {
-                    "Vec<u8>".to_string()
+                    (
+                        IdlArrayElementSnapshot::Type(nested),
+                        IdlArrayElementSnapshot::Size(size),
+                    ) => {
+                        format!("[{}; {}]", idl_type_snapshot_to_rust_string(nested), size)
+                    }
+                    _ => "Vec<u8>".to_string(),
                 }
+            } else {
+                "Vec<u8>".to_string()
             }
-            IdlTypeSnapshot::Option(opt) => {
-                format!("Option<{}>", opt.option.to_rust_type_string())
-            }
-            IdlTypeSnapshot::Vec(vec) => {
-                format!("Vec<{}>", vec.vec.to_rust_type_string())
-            }
-            IdlTypeSnapshot::HashMap(map) => {
-                let key_type = map
-                    .hash_map
-                    .first()
-                    .map(|t| t.to_rust_type_string())
-                    .unwrap_or_else(|| "String".to_string());
-                let val_type = map
-                    .hash_map
-                    .get(1)
-                    .map(|t| t.to_rust_type_string())
-                    .unwrap_or_else(|| "serde_json::Value".to_string());
-                format!("std::collections::HashMap<{}, {}>", key_type, val_type)
-            }
-            IdlTypeSnapshot::Defined(def) => match &def.defined {
-                IdlDefinedInnerSnapshot::Named { name } => name.clone(),
-                IdlDefinedInnerSnapshot::Simple(s) => s.clone(),
-            },
         }
+        IdlTypeSnapshot::Option(opt) => {
+            format!("Option<{}>", idl_type_snapshot_to_rust_string(&opt.option))
+        }
+        IdlTypeSnapshot::Vec(vec) => {
+            format!("Vec<{}>", idl_type_snapshot_to_rust_string(&vec.vec))
+        }
+        IdlTypeSnapshot::HashMap(map) => {
+            let key_type = idl_type_snapshot_to_rust_string(&map.hash_map.0);
+            let val_type = idl_type_snapshot_to_rust_string(&map.hash_map.1);
+            format!("std::collections::HashMap<{}, {}>", key_type, val_type)
+        }
+        IdlTypeSnapshot::Defined(def) => match &def.defined {
+            IdlDefinedInnerSnapshot::Named { name } => name.clone(),
+            IdlDefinedInnerSnapshot::Simple(s) => s.clone(),
+        },
     }
+}
 
-    fn map_simple_type(idl_type: &str) -> String {
-        match idl_type {
-            "u8" => "u8".to_string(),
-            "u16" => "u16".to_string(),
-            "u32" => "u32".to_string(),
-            "u64" => "u64".to_string(),
-            "u128" => "u128".to_string(),
-            "i8" => "i8".to_string(),
-            "i16" => "i16".to_string(),
-            "i32" => "i32".to_string(),
-            "i64" => "i64".to_string(),
-            "i128" => "i128".to_string(),
-            "bool" => "bool".to_string(),
-            "string" => "String".to_string(),
-            "publicKey" | "pubkey" => "solana_pubkey::Pubkey".to_string(),
-            "bytes" => "Vec<u8>".to_string(),
-            _ => idl_type.to_string(),
-        }
+fn map_simple_idl_type(idl_type: &str) -> String {
+    match idl_type {
+        "u8" => "u8".to_string(),
+        "u16" => "u16".to_string(),
+        "u32" => "u32".to_string(),
+        "u64" => "u64".to_string(),
+        "u128" => "u128".to_string(),
+        "i8" => "i8".to_string(),
+        "i16" => "i16".to_string(),
+        "i32" => "i32".to_string(),
+        "i64" => "i64".to_string(),
+        "i128" => "i128".to_string(),
+        "bool" => "bool".to_string(),
+        "string" => "String".to_string(),
+        "publicKey" | "pubkey" => "solana_pubkey::Pubkey".to_string(),
+        "bytes" => "Vec<u8>".to_string(),
+        _ => idl_type.to_string(),
     }
 }
 
@@ -996,6 +737,10 @@ fn default_emit() -> bool {
     true
 }
 
+fn default_instruction_discriminant_size() -> usize {
+    8
+}
+
 fn is_true(value: &bool) -> bool {
     *value
 }
@@ -1507,7 +1252,7 @@ pub struct InstructionDef {
     pub discriminator: Vec<u8>,
 
     /// Size of discriminator in bytes (for buffer allocation)
-    #[serde(default = "default_discriminant_size")]
+    #[serde(default = "default_instruction_discriminant_size")]
     pub discriminator_size: usize,
 
     /// Accounts required by this instruction, in order
