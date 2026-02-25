@@ -349,12 +349,16 @@ impl IdlSpec {
         instruction_name: &str,
         field_name: &str,
     ) -> Option<&'static str> {
-        // Normalize instruction name to snake_case for comparison
-        // IDL uses snake_case (e.g., "create_v2") but code uses PascalCase (e.g., "CreateV2")
+        // Normalize instruction name for comparison.
+        // IDL may use camelCase (e.g., "swapBaseIn") or snake_case (e.g., "create_v2")
+        // while code uses PascalCase (e.g., "SwapBaseIn", "CreateV2").
+        // Try both case-insensitive match and snake_case conversion.
         let normalized_name = to_snake_case(instruction_name);
 
         for instruction in &self.instructions {
-            if instruction.name == normalized_name {
+            if instruction.name == normalized_name
+                || instruction.name.eq_ignore_ascii_case(instruction_name)
+            {
                 // Check if it's an account
                 for account in &instruction.accounts {
                     if account.name == field_name {
