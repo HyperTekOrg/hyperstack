@@ -43,7 +43,7 @@ pub fn extract_pda_graph(idl: &IdlSpec) -> Vec<PdaNode> {
                 let seeds = pda
                     .seeds
                     .iter()
-                    .map(|seed| extract_seed_info(seed))
+                    .map(extract_seed_info)
                     .collect();
 
                 nodes.push(PdaNode {
