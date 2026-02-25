@@ -238,6 +238,10 @@ fn parse_resolve_strategy(strategy: &str) -> ResolveStrategy {
     }
 }
 
+pub fn parse_resolver_condition_from_str(s: &str) -> ResolverCondition {
+    parse_resolver_condition(s)
+}
+
 fn parse_resolver_condition(s: &str) -> ResolverCondition {
     let operators = ["==", "!=", ">=", "<=", ">", "<"];
     for op_str in &operators {

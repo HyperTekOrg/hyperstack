@@ -537,6 +537,44 @@ pub fn process_struct_with_context(
                 })
                 .collect();
 
+            let condition_code = match specs.first().and_then(|s| s.condition.as_deref()) {
+                Some(cond_str) => {
+                    let parsed = super::ast_writer::parse_resolver_condition_from_str(cond_str);
+                    let field_path = &parsed.field_path;
+                    let op_code = match parsed.op {
+                        crate::ast::ComparisonOp::Equal => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::Equal },
+                        crate::ast::ComparisonOp::NotEqual => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::NotEqual },
+                        crate::ast::ComparisonOp::GreaterThan => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::GreaterThan },
+                        crate::ast::ComparisonOp::LessThan => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::LessThan },
+                        crate::ast::ComparisonOp::GreaterThanOrEqual => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::GreaterThanOrEqual },
+                        crate::ast::ComparisonOp::LessThanOrEqual => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::LessThanOrEqual },
+                    };
+                    let val_code = match &parsed.value {
+                        serde_json::Value::Null => quote! { hyperstack::runtime::serde_json::Value::Null },
+                        serde_json::Value::Bool(b) => quote! { hyperstack::runtime::serde_json::Value::Bool(#b) },
+                        serde_json::Value::Number(n) => {
+                            let n_str = n.to_string();
+                            quote! { hyperstack::runtime::serde_json::json!(#n_str.parse::<f64>().unwrap()) }
+                        }
+                        serde_json::Value::String(s) => quote! { hyperstack::runtime::serde_json::Value::String(#s.to_string()) },
+                        _ => quote! { hyperstack::runtime::serde_json::Value::Null },
+                    };
+                    quote! {
+                        Some(hyperstack::runtime::hyperstack_interpreter::ast::ResolverCondition {
+                            field_path: #field_path.to_string(),
+                            op: #op_code,
+                            value: #val_code,
+                        })
+                    }
+                }
+                None => quote! { None },
+            };
+
+            let schedule_at_code = match specs.first().and_then(|s| s.schedule_at.as_ref()) {
+                Some(path) => quote! { Some(#path.to_string()) },
+                None => quote! { None },
+            };
+
             quote! {
                 hyperstack::runtime::hyperstack_interpreter::ast::ResolverSpec {
                     resolver: #resolver_code,
@@ -546,8 +584,8 @@ pub fn process_struct_with_context(
                     extracts: vec![
                         #(#extracts_code),*
                     ],
-                    condition: None,
-                    schedule_at: None,
+                    condition: #condition_code,
+                    schedule_at: #schedule_at_code,
                 }
             }
         })
