@@ -4,6 +4,7 @@ members = [
     "hyperstack",
     "interpreter",
     "hyperstack-macros",
+    "hyperstack-idl",
     "cli",
     "rust/hyperstack-server",
     "rust/hyperstack-sdk",

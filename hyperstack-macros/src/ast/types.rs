@@ -11,6 +11,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+pub use hyperstack_idl::snapshot::*;
+
 // ============================================================================
 // Core AST Types
 // ============================================================================
@@ -58,187 +60,12 @@ pub enum PopulationStrategy {
     UniqueCount,
 }
 
-// ============================================================================
-// IDL Snapshot Types - Embedded IDL for AST-only compilation
-// ============================================================================
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlSnapshot {
-    pub name: String,
-    /// Program ID this IDL belongs to
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub program_id: Option<String>,
-    pub version: String,
-    pub accounts: Vec<IdlAccountSnapshot>,
-    pub instructions: Vec<IdlInstructionSnapshot>,
-    #[serde(default)]
-    pub types: Vec<IdlTypeDefSnapshot>,
-    #[serde(default)]
-    pub events: Vec<IdlEventSnapshot>,
-    #[serde(default)]
-    pub errors: Vec<IdlErrorSnapshot>,
-    /// Discriminant size in bytes (1 for Steel, 8 for Anchor)
-    /// Defaults to 8 (Anchor) for backwards compatibility
-    #[serde(default = "default_discriminant_size")]
-    pub discriminant_size: usize,
-}
-
+/// Default discriminant size (8 bytes for Anchor).
+/// Used by InstructionDef serde default.
 fn default_discriminant_size() -> usize {
     8
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlAccountSnapshot {
-    pub name: String,
-    pub discriminator: Vec<u8>,
-    #[serde(default)]
-    pub docs: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub serialization: Option<IdlSerializationSnapshot>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlInstructionSnapshot {
-    pub name: String,
-    pub discriminator: Vec<u8>,
-    #[serde(default)]
-    pub docs: Vec<String>,
-    pub accounts: Vec<IdlInstructionAccountSnapshot>,
-    pub args: Vec<IdlFieldSnapshot>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlInstructionAccountSnapshot {
-    pub name: String,
-    #[serde(default)]
-    pub writable: bool,
-    #[serde(default)]
-    pub signer: bool,
-    #[serde(default)]
-    pub optional: bool,
-    #[serde(default)]
-    pub address: Option<String>,
-    #[serde(default)]
-    pub docs: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlFieldSnapshot {
-    pub name: String,
-    #[serde(rename = "type")]
-    pub type_: IdlTypeSnapshot,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdlTypeSnapshot {
-    Simple(String),
-    Array(IdlArrayTypeSnapshot),
-    Option(IdlOptionTypeSnapshot),
-    Vec(IdlVecTypeSnapshot),
-    HashMap(IdlHashMapTypeSnapshot),
-    Defined(IdlDefinedTypeSnapshot),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlHashMapTypeSnapshot {
-    #[serde(rename = "hashMap")]
-    pub hash_map: (Box<IdlTypeSnapshot>, Box<IdlTypeSnapshot>),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlArrayTypeSnapshot {
-    pub array: Vec<IdlArrayElementSnapshot>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdlArrayElementSnapshot {
-    Type(IdlTypeSnapshot),
-    TypeName(String),
-    Size(u32),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlOptionTypeSnapshot {
-    pub option: Box<IdlTypeSnapshot>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlVecTypeSnapshot {
-    pub vec: Box<IdlTypeSnapshot>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlDefinedTypeSnapshot {
-    pub defined: IdlDefinedInnerSnapshot,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdlDefinedInnerSnapshot {
-    Named { name: String },
-    Simple(String),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum IdlSerializationSnapshot {
-    Borsh,
-    Bytemuck,
-    #[serde(alias = "bytemuckunsafe")]
-    BytemuckUnsafe,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlTypeDefSnapshot {
-    pub name: String,
-    #[serde(default)]
-    pub docs: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub serialization: Option<IdlSerializationSnapshot>,
-    #[serde(rename = "type")]
-    pub type_def: IdlTypeDefKindSnapshot,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdlTypeDefKindSnapshot {
-    Struct {
-        kind: String,
-        fields: Vec<IdlFieldSnapshot>,
-    },
-    TupleStruct {
-        kind: String,
-        fields: Vec<IdlTypeSnapshot>,
-    },
-    Enum {
-        kind: String,
-        variants: Vec<IdlEnumVariantSnapshot>,
-    },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlEnumVariantSnapshot {
-    pub name: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlEventSnapshot {
-    pub name: String,
-    pub discriminator: Vec<u8>,
-    #[serde(default)]
-    pub docs: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct IdlErrorSnapshot {
-    pub code: u32,
-    pub name: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub msg: Option<String>,
-}
-
 // ============================================================================
 // Computed Field Expression AST
 // ============================================================================

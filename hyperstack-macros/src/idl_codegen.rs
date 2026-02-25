@@ -48,9 +48,9 @@ fn resolve_type_string(
     in_accounts_module: bool,
 ) -> String {
     let base = if bytemuck {
-        idl_type.to_rust_type_string_bytemuck()
+        crate::parse::idl::to_rust_type_string_bytemuck(idl_type)
     } else {
-        idl_type.to_rust_type_string()
+        crate::parse::idl::to_rust_type_string(idl_type)
     };
     match idl_type {
         IdlType::Defined(def) => {

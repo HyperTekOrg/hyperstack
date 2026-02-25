@@ -78,8 +78,16 @@
     "packages/hyperstack": {
       "release-type": "node",
       "component": "hyperstack-npm"
+    },
+    "hyperstack-idl": {
+      "release-type": "rust",
+      "component": "hyperstack-idl"
     }
   },
+
+
+
+
   "plugins": [
     {
       "type": "cargo-workspace",

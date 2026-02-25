@@ -143,6 +143,9 @@ enum Commands {
     /// Manage anonymous usage telemetry
     #[command(subcommand)]
     Telemetry(TelemetryCommands),
+
+    /// Inspect and analyze Anchor/Shank IDL files
+    Idl(commands::idl::IdlArgs),
 }
 
 #[derive(Subcommand)]
@@ -414,6 +417,7 @@ fn command_name(cmd: &Commands) -> &'static str {
         Commands::Stack(_) => "stack",
         Commands::Build(_) => "build",
         Commands::Telemetry(_) => "telemetry",
+        Commands::Idl(_) => "idl",
     }
 }
 
@@ -535,6 +539,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
                 json,
             } => commands::build::status(build_id, watch, json || cli.json),
         },
+        Commands::Idl(args) => commands::idl::run(args),
         Commands::Telemetry(telemetry_cmd) => match telemetry_cmd {
             TelemetryCommands::Status => commands::telemetry::status(),
             TelemetryCommands::Enable => commands::telemetry::enable(),

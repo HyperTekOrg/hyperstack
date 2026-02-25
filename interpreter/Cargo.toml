@@ -28,6 +28,7 @@ tracing = "0.1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 futures = "0.3"
 hyperstack-macros = { version = "0.5.3", path = "../hyperstack-macros" }
+hyperstack-idl = { path = "../hyperstack-idl" }
 
 # OpenTelemetry for distributed tracing and metrics (optional, behind 'otel' feature)
 opentelemetry = { version = "0.22", features = ["otel_unstable"], optional = true }
