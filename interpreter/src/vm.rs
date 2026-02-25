@@ -1019,6 +1019,10 @@ impl VmContext {
         std::mem::take(&mut self.scheduled_callbacks)
     }
 
+    pub fn get_entity_state(&self, state_id: u32, key: &Value) -> Option<Value> {
+        self.states.get(&state_id)?.get_and_touch(key)
+    }
+
     pub fn restore_resolver_requests(&mut self, requests: Vec<ResolverRequest>) {
         if requests.is_empty() {
             return;
