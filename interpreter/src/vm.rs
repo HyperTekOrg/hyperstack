@@ -1127,7 +1127,7 @@ impl VmContext {
         Ok(mutations)
     }
 
-    fn enqueue_resolver_request(
+    pub fn enqueue_resolver_request(
         &mut self,
         cache_key: String,
         resolver: ResolverType,

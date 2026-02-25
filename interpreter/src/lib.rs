@@ -46,8 +46,8 @@ pub use resolvers::{
 pub use typescript::{write_typescript_to_file, TypeScriptCompiler, TypeScriptConfig};
 pub use vm::{
     CapacityWarning, CleanupResult, DirtyTracker, FieldChange, PendingAccountUpdate,
-    PendingQueueStats, QueuedAccountUpdate, ResolverRequest, ScheduledCallback, StateTableConfig,
-    UpdateContext, VmMemoryStats,
+    PendingQueueStats, QueuedAccountUpdate, ResolverRequest, ResolverTarget, ScheduledCallback,
+    StateTableConfig, UpdateContext, VmMemoryStats,
 };
 
 // Re-export macros for convenient use
