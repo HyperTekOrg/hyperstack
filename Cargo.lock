@@ -1276,6 +1276,7 @@ dependencies = [
  "dialoguer",
  "dirs",
  "flate2",
+ "hyperstack-idl",
  "hyperstack-interpreter",
  "indicatif",
  "regex",
