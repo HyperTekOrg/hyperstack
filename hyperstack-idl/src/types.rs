@@ -18,7 +18,17 @@ pub struct IdlSpec {
     pub events: Vec<IdlEvent>,
     #[serde(default)]
     pub errors: Vec<IdlError>,
+    #[serde(default)]
+    pub constants: Vec<IdlConstant>,
     pub metadata: Option<IdlMetadata>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct IdlConstant {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub type_: IdlType,
+    pub value: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

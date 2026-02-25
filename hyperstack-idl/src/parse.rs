@@ -233,4 +233,41 @@ mod tests {
         assert!(accounts[1].is_mut);
         assert!(!accounts[1].is_signer);
     }
+
+    #[test]
+    fn test_constants() {
+        let json = r#"{
+            "address": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+            "metadata": {
+                "name": "lb_clmm",
+                "version": "0.11.0",
+                "spec": "0.1.0",
+                "description": "Created with Anchor"
+            },
+            "instructions": [],
+            "accounts": [],
+            "types": [],
+            "events": [],
+            "errors": [],
+            "constants": [
+                {
+                    "name": "BASIS_POINT_MAX",
+                    "type": "i32",
+                    "value": "10000"
+                },
+                {
+                    "name": "MAX_BIN_PER_ARRAY",
+                    "type": "u64",
+                    "value": "70"
+                }
+            ]
+        }"#;
+        let idl = parse_idl_content(json).expect("IDL with constants should parse");
+        
+        assert_eq!(idl.constants.len(), 2);
+        assert_eq!(idl.constants[0].name, "BASIS_POINT_MAX");
+        assert_eq!(idl.constants[0].value, "10000");
+        assert_eq!(idl.constants[1].name, "MAX_BIN_PER_ARRAY");
+        assert_eq!(idl.constants[1].value, "70");
+    }
 }
