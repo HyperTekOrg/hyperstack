@@ -13,5 +13,7 @@ pub mod types;
 pub mod utils;
 
 pub use discriminator::*;
+pub use error::*;
+pub use search::*;
 pub use snapshot::*;
 pub use types::*;
