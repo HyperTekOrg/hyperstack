@@ -263,7 +263,7 @@ mod tests {
             ]
         }"#;
         let idl = parse_idl_content(json).expect("IDL with constants should parse");
-        
+
         assert_eq!(idl.constants.len(), 2);
         assert_eq!(idl.constants[0].name, "BASIS_POINT_MAX");
         assert_eq!(idl.constants[0].value, "10000");

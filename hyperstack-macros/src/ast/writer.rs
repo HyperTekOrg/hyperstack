@@ -905,7 +905,7 @@ pub fn extract_instructions_from_idl(
                 .iter()
                 .map(|arg| InstructionArgDef {
                     name: arg.name.clone(),
-                    arg_type: arg.type_.to_rust_type_string(),
+                    arg_type: crate::parse::idl::to_rust_type_string(&arg.type_),
                     docs: vec![],
                 })
                 .collect();
