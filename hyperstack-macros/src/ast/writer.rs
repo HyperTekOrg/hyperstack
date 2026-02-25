@@ -227,7 +227,7 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
                     });
                 IdlAccountSnapshot {
                     name: acc.name.clone(),
-                    discriminator: acc.discriminator.clone(),
+                    discriminator: acc.get_discriminator(),
                     docs: acc.docs.clone(),
                     serialization,
                 }
@@ -268,7 +268,7 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
             .iter()
             .map(|event| IdlEventSnapshot {
                 name: event.name.clone(),
-                discriminator: event.discriminator.clone(),
+                discriminator: event.get_discriminator(),
                 docs: event.docs.clone(),
             })
             .collect(),
@@ -319,6 +319,12 @@ pub fn convert_idl_type(idl_type: &idl_parser::IdlType) -> IdlTypeSnapshot {
                     IdlDefinedInnerSnapshot::Simple(s.clone())
                 }
             },
+        }),
+        idl_parser::IdlType::HashMap(hm) => IdlTypeSnapshot::HashMap(IdlHashMapTypeSnapshot {
+            hash_map: (
+                Box::new(convert_idl_type(&hm.hash_map.0)),
+                Box::new(convert_idl_type(&hm.hash_map.1)),
+            ),
         }),
     }
 }

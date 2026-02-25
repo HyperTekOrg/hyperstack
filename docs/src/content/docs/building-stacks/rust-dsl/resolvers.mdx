@@ -10,7 +10,7 @@ Resolvers enrich your entities with data that doesn't live on-chain. When you de
 
 ## Token Metadata
 
-The built-in `TokenMetadata` resolver fetches SPL token metadata (name, symbol, decimals, logo) for any mint address. Hyperstack resolves this automatically when your entity includes a field typed as `TokenMetadata`:
+The built-in `TokenMetadata` resolver enriches your entity with SPL token metadata (name, symbol, decimals, logo) for any mint address. Hyperstack resolves this automatically server-side when your entity includes a field typed as `TokenMetadata`:
 
 ```rust
 #[hyperstack(idl = "idl/ore.json")]
@@ -26,7 +26,7 @@ pub mod ore_stream {
 }
 ```
 
-When a new `OreRound` entity is created, Hyperstack sees the `TokenMetadata` field, looks up the mint address via a Digital Asset Standard (DAS) API, and populates the metadata. By the time data reaches your TypeScript client, the field is already filled in:
+When a new `OreRound` entity is created, Hyperstack sees the `TokenMetadata` field, resolves the metadata server-side, and delivers it as part of the entity. By the time data reaches your TypeScript client, the field is already filled in:
 
 ```typescript
 for await (const round of hs.views.OreRound.latest.use()) {
@@ -112,7 +112,7 @@ for await (const round of hs.views.OreRound.latest.use()) {
 ## How It Works
 
 1. **You define** a `TokenMetadata` field on your entity in Rust
-2. **Hyperstack resolves** the metadata server-side using the DAS API when the entity is first created
+2. **Hyperstack resolves** the metadata server-side when the entity is first created
 3. **Computed fields** referencing the resolver are evaluated server-side on every update
 4. **Your client receives** the fully enriched entity — metadata and computed values included
 

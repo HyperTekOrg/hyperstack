@@ -5,8 +5,14 @@
 #![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::Path;
+
+fn anchor_discriminator(preimage: &str) -> Vec<u8> {
+    let hash = Sha256::digest(preimage.as_bytes());
+    hash[..8].to_vec()
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IdlSpec {
@@ -67,21 +73,19 @@ pub struct IdlInstruction {
 }
 
 impl IdlInstruction {
-    /// Get the discriminator bytes, converting from Steel format if needed.
-    /// Steel uses a single u8 value, which we expand to [value, 0, 0, 0, 0, 0, 0, 0]
     pub fn get_discriminator(&self) -> Vec<u8> {
         if !self.discriminator.is_empty() {
             return self.discriminator.clone();
         }
 
-        // Convert Steel discriminant to 8-byte discriminator
         if let Some(disc) = &self.discriminant {
             let value = disc.value as u8;
             return vec![value, 0, 0, 0, 0, 0, 0, 0];
         }
 
-        // Default empty
-        Vec::new()
+        // Legacy IDLs omit discriminators — derive from Anchor convention:
+        // sha256("global:<instruction_name>")[0..8]
+        anchor_discriminator(&format!("global:{}", self.name))
     }
 }
 
@@ -145,12 +149,25 @@ pub struct IdlAccountArg {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IdlAccount {
     pub name: String,
+    #[serde(default)]
     pub discriminator: Vec<u8>,
     #[serde(default)]
     pub docs: Vec<String>,
     /// Steel format embedded type definition
     #[serde(rename = "type", default)]
     pub type_def: Option<IdlTypeDefKind>,
+}
+
+impl IdlAccount {
+    pub fn get_discriminator(&self) -> Vec<u8> {
+        if !self.discriminator.is_empty() {
+            return self.discriminator.clone();
+        }
+
+        // Legacy IDLs omit discriminators — derive from Anchor convention:
+        // sha256("account:<AccountName>")[0..8]
+        anchor_discriminator(&format!("account:{}", self.name))
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -173,6 +190,7 @@ pub enum IdlType {
     Array(IdlTypeArray),
     Option(IdlTypeOption),
     Vec(IdlTypeVec),
+    HashMap(IdlTypeHashMap),
     Defined(IdlTypeDefined),
 }
 
@@ -184,6 +202,13 @@ pub struct IdlTypeOption {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IdlTypeVec {
     pub vec: Box<IdlType>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct IdlTypeHashMap {
+    #[serde(alias = "bTreeMap")]
+    #[serde(rename = "hashMap")]
+    pub hash_map: (Box<IdlType>, Box<IdlType>),
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -268,9 +293,19 @@ pub struct IdlEnumVariant {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IdlEvent {
     pub name: String,
+    #[serde(default)]
     pub discriminator: Vec<u8>,
     #[serde(default)]
     pub docs: Vec<String>,
+}
+
+impl IdlEvent {
+    pub fn get_discriminator(&self) -> Vec<u8> {
+        if !self.discriminator.is_empty() {
+            return self.discriminator.clone();
+        }
+        anchor_discriminator(&format!("event:{}", self.name))
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -314,12 +349,16 @@ impl IdlSpec {
         instruction_name: &str,
         field_name: &str,
     ) -> Option<&'static str> {
-        // Normalize instruction name to snake_case for comparison
-        // IDL uses snake_case (e.g., "create_v2") but code uses PascalCase (e.g., "CreateV2")
+        // Normalize instruction name for comparison.
+        // IDL may use camelCase (e.g., "swapBaseIn") or snake_case (e.g., "create_v2")
+        // while code uses PascalCase (e.g., "SwapBaseIn", "CreateV2").
+        // Try both case-insensitive match and snake_case conversion.
         let normalized_name = to_snake_case(instruction_name);
 
         for instruction in &self.instructions {
-            if instruction.name == normalized_name {
+            if instruction.name == normalized_name
+                || instruction.name.eq_ignore_ascii_case(instruction_name)
+            {
                 // Check if it's an account
                 for account in &instruction.accounts {
                     if account.name == field_name {
@@ -387,6 +426,11 @@ impl IdlType {
                 let inner_type = vec.vec.to_rust_type_string();
                 format!("Vec<{}>", inner_type)
             }
+            IdlType::HashMap(hm) => {
+                let key_type = hm.hash_map.0.to_rust_type_string();
+                let val_type = hm.hash_map.1.to_rust_type_string();
+                format!("std::collections::HashMap<{}, {}>", key_type, val_type)
+            }
         }
     }
 
@@ -420,6 +464,11 @@ impl IdlType {
             IdlType::Vec(vec) => {
                 let inner_type = vec.vec.to_rust_type_string_bytemuck();
                 format!("Vec<{}>", inner_type)
+            }
+            IdlType::HashMap(hm) => {
+                let key_type = hm.hash_map.0.to_rust_type_string_bytemuck();
+                let val_type = hm.hash_map.1.to_rust_type_string_bytemuck();
+                format!("std::collections::HashMap<{}, {}>", key_type, val_type)
             }
         }
     }
@@ -494,4 +543,222 @@ pub fn to_pascal_case(s: &str) -> String {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_anchor_discriminator_known_values() {
+        let disc = anchor_discriminator("global:initialize");
+        assert_eq!(disc.len(), 8);
+        assert_eq!(disc, &Sha256::digest(b"global:initialize")[..8]);
+    }
+
+    #[test]
+    fn test_anchor_account_discriminator() {
+        let disc = anchor_discriminator("account:LendingMarket");
+        assert_eq!(disc.len(), 8);
+        assert_eq!(disc, &Sha256::digest(b"account:LendingMarket")[..8]);
+    }
+
+    #[test]
+    fn test_legacy_idl_parses_without_discriminator() {
+        let json = r#"{
+            "address": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+            "version": "0.3.0",
+            "name": "raydium_amm",
+            "instructions": [
+                {
+                    "name": "initialize",
+                    "accounts": [
+                        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+                    ],
+                    "args": [
+                        { "name": "nonce", "type": "u8" }
+                    ]
+                }
+            ],
+            "accounts": [
+                {
+                    "name": "TargetOrders",
+                    "type": {
+                        "kind": "struct",
+                        "fields": [
+                            { "name": "owner", "type": { "array": ["u64", 4] } }
+                        ]
+                    }
+                }
+            ],
+            "types": [],
+            "errors": []
+        }"#;
+        let idl = parse_idl_content(json).expect("legacy IDL should parse");
+
+        assert_eq!(idl.instructions.len(), 1);
+        assert_eq!(idl.accounts.len(), 1);
+        assert!(idl.accounts[0].discriminator.is_empty());
+        assert!(idl.instructions[0].discriminator.is_empty());
+        assert!(idl.instructions[0].discriminant.is_none());
+    }
+
+    #[test]
+    fn test_legacy_instruction_computes_discriminator() {
+        let json = r#"{
+            "name": "raydium_amm",
+            "instructions": [
+                {
+                    "name": "initialize",
+                    "accounts": [],
+                    "args": []
+                }
+            ],
+            "accounts": [],
+            "types": [],
+            "errors": []
+        }"#;
+        let idl = parse_idl_content(json).unwrap();
+        let disc = idl.instructions[0].get_discriminator();
+
+        assert_eq!(disc.len(), 8);
+        let expected = anchor_discriminator("global:initialize");
+        assert_eq!(disc, expected);
+    }
+
+    #[test]
+    fn test_legacy_account_computes_discriminator() {
+        let json = r#"{
+            "name": "test",
+            "instructions": [],
+            "accounts": [
+                {
+                    "name": "LendingMarket",
+                    "type": { "kind": "struct", "fields": [] }
+                }
+            ],
+            "types": [],
+            "errors": []
+        }"#;
+        let idl = parse_idl_content(json).unwrap();
+        let disc = idl.accounts[0].get_discriminator();
+
+        assert_eq!(disc.len(), 8);
+        let expected = anchor_discriminator("account:LendingMarket");
+        assert_eq!(disc, expected);
+    }
+
+    #[test]
+    fn test_explicit_discriminator_not_overridden() {
+        let json = r#"{
+            "name": "test",
+            "instructions": [
+                {
+                    "name": "transfer",
+                    "discriminator": [1, 2, 3, 4, 5, 6, 7, 8],
+                    "accounts": [],
+                    "args": []
+                }
+            ],
+            "accounts": [
+                {
+                    "name": "TokenAccount",
+                    "discriminator": [10, 20, 30, 40, 50, 60, 70, 80]
+                }
+            ],
+            "types": [],
+            "errors": []
+        }"#;
+        let idl = parse_idl_content(json).unwrap();
+
+        assert_eq!(
+            idl.instructions[0].get_discriminator(),
+            vec![1, 2, 3, 4, 5, 6, 7, 8]
+        );
+        assert_eq!(
+            idl.accounts[0].get_discriminator(),
+            vec![10, 20, 30, 40, 50, 60, 70, 80]
+        );
+    }
+
+    #[test]
+    fn test_steel_discriminant_still_works() {
+        let json = r#"{
+            "name": "test",
+            "instructions": [
+                {
+                    "name": "CreateMetadataAccount",
+                    "accounts": [],
+                    "args": [],
+                    "discriminant": { "type": "u8", "value": 0 }
+                },
+                {
+                    "name": "UpdateMetadataAccount",
+                    "accounts": [],
+                    "args": [],
+                    "discriminant": { "type": "u8", "value": 1 }
+                }
+            ],
+            "accounts": [],
+            "types": [],
+            "errors": []
+        }"#;
+        let idl = parse_idl_content(json).unwrap();
+
+        assert_eq!(
+            idl.instructions[0].get_discriminator(),
+            vec![0, 0, 0, 0, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            idl.instructions[1].get_discriminator(),
+            vec![1, 0, 0, 0, 0, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn test_legacy_event_computes_discriminator() {
+        let json = r#"{
+            "name": "test",
+            "instructions": [],
+            "accounts": [],
+            "types": [],
+            "events": [
+                { "name": "TransferEvent" }
+            ],
+            "errors": []
+        }"#;
+        let idl = parse_idl_content(json).unwrap();
+        let disc = idl.events[0].get_discriminator();
+
+        assert_eq!(disc.len(), 8);
+        let expected = anchor_discriminator("event:TransferEvent");
+        assert_eq!(disc, expected);
+    }
+
+    #[test]
+    fn test_is_mut_is_signer_aliases() {
+        let json = r#"{
+            "name": "test",
+            "instructions": [
+                {
+                    "name": "do_thing",
+                    "accounts": [
+                        { "name": "payer", "isMut": true, "isSigner": true },
+                        { "name": "dest", "writable": true, "signer": false }
+                    ],
+                    "args": []
+                }
+            ],
+            "accounts": [],
+            "types": [],
+            "errors": []
+        }"#;
+        let idl = parse_idl_content(json).unwrap();
+        let accounts = &idl.instructions[0].accounts;
+
+        assert!(accounts[0].is_mut);
+        assert!(accounts[0].is_signer);
+        assert!(accounts[1].is_mut);
+        assert!(!accounts[1].is_signer);
+    }
 }

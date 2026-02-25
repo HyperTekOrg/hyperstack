@@ -136,7 +136,14 @@ pub enum IdlTypeSnapshot {
     Array(IdlArrayTypeSnapshot),
     Option(IdlOptionTypeSnapshot),
     Vec(IdlVecTypeSnapshot),
+    HashMap(IdlHashMapTypeSnapshot),
     Defined(IdlDefinedTypeSnapshot),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IdlHashMapTypeSnapshot {
+    #[serde(rename = "hashMap")]
+    pub hash_map: (Box<IdlTypeSnapshot>, Box<IdlTypeSnapshot>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

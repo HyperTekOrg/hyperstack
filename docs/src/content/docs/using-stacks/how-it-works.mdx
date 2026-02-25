@@ -7,6 +7,10 @@ description: Architecture, core concepts, and data flow in Hyperstack.
 
 Hyperstack is a declarative data layer for Solana. You define the data shape you need, and Hyperstack handles all the infrastructure to stream it to your app.
 
+:::tip[Prefer AI-assisted development?]
+You don't need to understand all of this to build with Hyperstack. Check out the [Build with AI](/agent-skills/overview/) path to get started with prompts instead of code.
+:::
+
 ---
 
 ## The Problem
@@ -90,12 +94,15 @@ Hyperstack then:
 
 A **Stack** is a deployed data pipeline that:
 
-1. **Subscribes** to specific Solana program events
-2. **Transforms** raw transaction data into structured entities
-3. **Aggregates** values over time (sums, counts, etc.)
-4. **Streams** updates to connected clients as they happen
+1. **Declares** one or more Solana programs it cares about — each with its own IDL
+2. **Subscribes** to on-chain events across all of those programs
+3. **Transforms** raw transaction data into structured entities
+4. **Aggregates** values over time (sums, counts, etc.)
+5. **Streams** updates to connected clients as they happen
 
-Think of it as a "live query" against Solana — you define what data you want, and Hyperstack keeps it updated.
+A stack isn't limited to a single program. You can pull data from multiple programs into a single unified set of entities — as long as you provide an IDL for each. For example, a DeFi stack might combine instructions from a DEX program, a token program, and a rewards program into one coherent stream.
+
+Think of it as a "live query" across Solana — you declare the programs and data shape you need, and Hyperstack keeps it updated.
 
 ### Entities
 

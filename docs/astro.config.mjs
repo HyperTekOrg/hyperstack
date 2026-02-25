@@ -20,10 +20,13 @@ export default defineConfig({
           description:
             "Hyperstack is a system for programmable real-time data feeds on Solana. Stream any on-chain data to your app via WebSocket. Define data shapes in a Rust DSL, deploy, and consume with typed TypeScript, React, or Rust SDKs.",
           promote: [
+            "getting-started/what-is-hyperstack",
+            "agent-skills/setup-tools",
             "using-stacks/quickstart",
             "using-stacks/connect",
             "agent-skills/overview",
             "agent-skills/prompts",
+            "agent-skills/tutorial-ore-dashboard",
             "sdks/typescript",
             "sdks/react",
           ],
@@ -50,7 +53,11 @@ export default defineConfig({
       // Contributors only need to add frontmatter to control ordering
       sidebar: [
         {
-          label: "Get Started",
+          label: "Getting Started",
+          items: [{ slug: "getting-started/what-is-hyperstack" }],
+        },
+        {
+          label: "For Developers",
           autogenerate: { directory: "using-stacks" },
         },
         {

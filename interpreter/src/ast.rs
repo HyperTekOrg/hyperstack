@@ -124,6 +124,8 @@ pub enum IdlTypeSnapshot {
     Option(IdlOptionTypeSnapshot),
     /// Vec type: { "vec": "u8" }
     Vec(IdlVecTypeSnapshot),
+    /// HashMap type: { "hashMap": ["string", "u64"] }
+    HashMap(IdlHashMapTypeSnapshot),
     /// Defined/custom type: { "defined": { "name": "MyStruct" } }
     Defined(IdlDefinedTypeSnapshot),
 }
@@ -157,6 +159,13 @@ pub struct IdlOptionTypeSnapshot {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IdlVecTypeSnapshot {
     pub vec: Box<IdlTypeSnapshot>,
+}
+
+/// HashMap type representation: { "hashMap": [key_type, value_type] }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IdlHashMapTypeSnapshot {
+    #[serde(rename = "hashMap")]
+    pub hash_map: Vec<IdlTypeSnapshot>,
 }
 
 /// Defined/custom type reference
@@ -272,6 +281,19 @@ impl IdlTypeSnapshot {
             }
             IdlTypeSnapshot::Vec(vec) => {
                 format!("Vec<{}>", vec.vec.to_rust_type_string())
+            }
+            IdlTypeSnapshot::HashMap(map) => {
+                let key_type = map
+                    .hash_map
+                    .first()
+                    .map(|t| t.to_rust_type_string())
+                    .unwrap_or_else(|| "String".to_string());
+                let val_type = map
+                    .hash_map
+                    .get(1)
+                    .map(|t| t.to_rust_type_string())
+                    .unwrap_or_else(|| "serde_json::Value".to_string());
+                format!("std::collections::HashMap<{}, {}>", key_type, val_type)
             }
             IdlTypeSnapshot::Defined(def) => match &def.defined {
                 IdlDefinedInnerSnapshot::Named { name } => name.clone(),

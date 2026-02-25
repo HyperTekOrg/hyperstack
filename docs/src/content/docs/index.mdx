@@ -1,26 +1,81 @@
 ---
 title: Hyperstack
-description: Programmable data feeds for Solana
+description: Build Solana apps with live blockchain data
 ---
 
 import { Card, CardGrid, Tabs, TabItem } from "@astrojs/starlight/components";
+import CopyPrompt from "../../components/CopyPrompt.astro";
 import Workflow from "../../components/Workflow.astro";
 
-**Hyperstack is a system for programmable data feeds on Solana.**
+**Programmable data streams for Solana.** No indexers. No polling. No infrastructure to manage.
 
-Stream any on-chain data to your app as it happens. No custom indexers. No RPC polling. No infrastructure to manage.
+Hyperstack streams real-time blockchain data directly to your app. Define what data you need and Hyperstack transforms on-chain events into typed, live feeds — consumed via React hooks, TypeScript streams, or Rust clients.
+
+---
+
+## Choose Your Path
+
+<CardGrid>
+  <Card title="I'm New to Coding" icon="rocket">
+    **Start here if you've never built an app.** We'll walk you through setting up AI tools that write code for you.
+
+    No programming experience required.
+
+    [Get started →](/agent-skills/setup-tools/)
+
+  </Card>
+  <Card title="I Use AI Coding Tools" icon="star">
+    **Already have Cursor, Claude Code, or similar?** Paste one prompt and your AI handles the rest.
+
+    Works with 30+ AI coding assistants.
+
+    [Build with AI →](/agent-skills/overview/)
+
+  </Card>
+  <Card title="I'm a Developer" icon="laptop">
+    **Know React, TypeScript, or Rust?** Jump straight to the SDK and start streaming data in minutes.
+
+    Full API reference available.
+
+    [Quickstart →](/using-stacks/quickstart/)
+
+  </Card>
+</CardGrid>
+
+---
+
+## What is Hyperstack?
+
+Hyperstack connects your app to live Solana blockchain data. Instead of polling RPCs or building custom indexers, you define what data you want and Hyperstack streams it to you as it happens on-chain.
+
+<Workflow steps={[
+  {
+    title: "Solana",
+    description: "On-chain data"
+  },
+  {
+    title: "Hyperstack",
+    description: "Transforms + streams"
+  },
+  {
+    title: "Your App",
+    description: "Live feed"
+  }
+]} />
+
+**Think of it like a live database query against the blockchain** — you subscribe once and get updates pushed to you automatically.
 
 ---
 
 ## See It In Action
 
-Connect to the public ORE mining rounds stack — anyone can use it, no account required.
+Connect to the public ORE mining stack — a live feed of blockchain mining activity. No account required.
 
 <Tabs>
 <TabItem label="React">
 ```tsx
 import { HyperstackProvider, useHyperstack } from 'hyperstack-react';
-import { ORE_STREAM_STACK, type OreRound } from 'hyperstack-stacks/ore';
+import { ORE_STREAM_STACK } from 'hyperstack-stacks/ore';
 
 function App() {
   return (
@@ -54,7 +109,7 @@ function LatestRounds() {
 <TabItem label="TypeScript">
 ```typescript
 import { HyperStack } from 'hyperstack-typescript';
-import { ORE_STREAM_STACK, type OreRound } from 'hyperstack-stacks/ore';
+import { ORE_STREAM_STACK } from 'hyperstack-stacks/ore';
 
 // Connect using the stack (URL is embedded in the stack definition)
 const hs = await HyperStack.connect(ORE_STREAM_STACK);
@@ -89,12 +144,8 @@ async fn main() -> anyhow::Result<()> {
 </TabItem>
 </Tabs>
 
-:::note[Stack SDKs]
-The `hyperstack-stacks` package provides ready-to-use SDKs for popular Solana protocols. You can also [generate your own SDK](/building-stacks/workflow) from any stack you build. Install it alongside your SDK:
-```bash
-npm install hyperstack-stacks hyperstack-react
-```
-
+:::tip[Don't want to write code?]
+Paste the prompt below into your AI coding assistant — it handles everything.
 :::
 
 ---
@@ -138,13 +189,13 @@ Hyperstack handles the full pipeline from chain to client:
 
 ---
 
-## I Want to Read Data
+## For Developers
 
-Connect to existing stacks and stream live Solana data into your app.
+Already comfortable with code? Here are the fastest paths:
 
 <CardGrid>
   <Card title="Quickstart" icon="rocket">
-    **Create a new app** — The CLI scaffolds a complete working project in under 2 minutes.
+    **Scaffold a new app** — The CLI creates a complete working project in under 2 minutes.
 
     Choose React, TypeScript, or Rust templates.
 
@@ -163,34 +214,36 @@ Connect to existing stacks and stream live Solana data into your app.
 
 ---
 
-## I'm Using an AI Coding Agent
+## Build with AI
 
-Let your AI write the code. Agent skills teach Cursor, Claude Code, Windsurf, and other AI tools how to use Hyperstack.
+Paste this into any AI coding assistant (Cursor, Claude Code, Windsurf, or any agent that can read URLs) and it will set up Hyperstack and build an ORE mining dashboard for you:
+
+<CopyPrompt>
+Read https://docs.usehyperstack.com/agent.md and follow the instructions to set up Hyperstack in this project. Then build a React dashboard that shows live ORE mining round data with Tailwind CSS dark theme.
+</CopyPrompt>
+
+Your AI will install the CLI, learn the SDK patterns, connect to live Solana data, and build the app — all from that one prompt.
 
 <CardGrid>
-  <Card title="Agent Skills" icon="star">
-    **One command setup** — Install skills and your agent knows all the SDK patterns and CLI commands.
+  <Card title="New to Coding?" icon="rocket">
+    **Never used AI coding tools?** We'll walk you through installing Cursor or similar from scratch.
 
-    Works with Cursor, Claude Code, Windsurf, VS Code Copilot, and 30+ other agents.
-
-    [Install skills →](/agent-skills/overview/)
+    [Set up your tools →](/agent-skills/setup-tools/)
 
   </Card>
-  <Card title="Schema Discovery" icon="magnifier">
-    **Live type info** — Agents use `hs explore` to get exact entity names, field paths, and types from deployed stacks.
+  <Card title="Prompt Cookbook" icon="document">
+    **Browse ready-made prompts** for dashboards, analytics, and custom data feeds.
 
-    Always accurate, always up to date.
-
-    [Learn more →](/agent-skills/explore/)
+    [View prompts →](/agent-skills/prompts/)
 
   </Card>
 </CardGrid>
 
 ---
 
-## I Want to Build Stacks
+## Build Custom Streams
 
-Create custom data pipelines that transform on-chain events into structured, streaming feeds.
+Want to create your own data feeds? Build stacks that transform on-chain events into structured, streaming data.
 
 <CardGrid>
   <Card title="Your First Stack" icon="seti:rust">
