@@ -12,10 +12,9 @@ keywords = ["hyperstack", "solana", "blockchain", "streaming"]
 categories = ["api-bindings", "web-programming"]
 
 [features]
-default = ["pumpfun"]
-pumpfun = []
+default = ["ore"]
 ore = []
-full = ["pumpfun", "ore"]
+full = ["ore"]
 
 [dependencies]
 hyperstack-sdk = { version = "0.5.3", path = "../../../rust/hyperstack-sdk" }

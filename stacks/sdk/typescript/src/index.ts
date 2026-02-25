@@ -1,25 +1,5 @@
 // Re-export stack definitions and entity types (excluding internal ViewDef helpers)
 export {
-  PUMPFUN_STREAM_STACK,
-  type PumpfunStreamStack,
-  type PumpfunStreamEntity,
-  type PumpfunToken,
-  type PumpfunTokenEvents,
-  type PumpfunTokenId,
-  type PumpfunTokenInfo,
-  type PumpfunTokenReserves,
-  type PumpfunTokenTrading,
-  type BondingCurve,
-  type Buy,
-  type Sell,
-  type Create,
-  type BuysEvent,
-  type CreateEvent,
-  type SellsEvent,
-  type EventWrapper,
-} from './pumpfun';
-
-export {
   ORE_STREAM_STACK,
   type OreStreamStack,
   type OreStreamEntity,

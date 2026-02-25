@@ -12,11 +12,6 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
-    "./pumpfun": {
-      "types": "./dist/pumpfun/index.d.ts",
-      "import": "./dist/pumpfun/index.js",
-      "require": "./dist/pumpfun/index.cjs"
-    },
     "./ore": {
       "types": "./dist/ore/index.d.ts",
       "import": "./dist/ore/index.js",
@@ -57,7 +52,6 @@
     "solana",
     "blockchain",
     "streaming",
-    "pumpfun"
   ],
   "author": "HyperTek",
   "license": "MIT",
