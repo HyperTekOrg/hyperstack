@@ -184,15 +184,15 @@ pub ore_metadata: Option<TokenMetadata>,
 
 **Arguments:**
 
-| Argument  | Type     | Required | Description                                                                                              |
-| --------- | -------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| Argument  | Type     | Required | Description                                                                         |
+| --------- | -------- | -------- | ----------------------------------------------------------------------------------- |
 | `address` | `string` | Yes      | The fixed address to resolve against. For `TokenMetadata` this is the mint address. |
 
 **Available resolvers:**
 
-| Resolver        | Type field                | What it fetches                                                                 |
-| --------------- | ------------------------- | ------------------------------------------------------------------------------- |
-| `TokenMetadata` | `Option<TokenMetadata>`   | SPL token metadata (name, symbol, decimals, logo) via the DAS API               |
+| Resolver        | Type field              | What it fetches                                                   |
+| --------------- | ----------------------- | ----------------------------------------------------------------- |
+| `TokenMetadata` | `Option<TokenMetadata>` | SPL token metadata (name, symbol, decimals, logo) via the DAS API |
 
 Once resolved, the data is available to other fields in the same entity. Use `#[computed]` to derive values from it, or reference the resolver fields directly in `#[map]` transforms:
 

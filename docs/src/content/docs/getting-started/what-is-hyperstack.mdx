@@ -91,27 +91,27 @@ The data is fully typed regardless of how you consume it. It updates the moment 
 
 Hyperstack is built around a simple contract: **you declare what you want, we deliver the stream.**
 
-**Stacks** are your declaration. A Stack is a named collection of semantically related data — the accounts, fields, and programs needed for a specific feature or app. That data might come from one program or many. When you connect to a Stack, you're saying *"give me everything I need for this."* Existing stacks (like ORE) are ready to use. You can also build your own.
+**Stacks** are your declaration. A Stack is a named collection of semantically related data — the accounts, fields, and programs needed for a specific feature or app. That data might come from one program or many. When you connect to a Stack, you're saying _"give me everything I need for this."_ Existing stacks (like ORE) are ready to use. You can also build your own.
 
 **Entities** are the individual pieces of data a stack defines. Each entity represents a distinct concept in your app — a round, a miner, a treasury. You write them as Rust structs that declare exactly which on-chain fields you care about, across as many accounts and programs as needed. The ORE stack defines three:
 
-| Entity | What it represents |
-| --- | --- |
-| `OreRound` | A single mining round — state, results, grid data, entropy |
-| `OreTreasury` | The protocol-wide treasury account |
-| `OreMiner` | A miner's rewards, state, and automation config |
+| Entity        | What it represents                                         |
+| ------------- | ---------------------------------------------------------- |
+| `OreRound`    | A single mining round — state, results, grid data, entropy |
+| `OreTreasury` | The protocol-wide treasury account                         |
+| `OreMiner`    | A miner's rewards, state, and automation config            |
 
 **Views** are projections over an entity's data — they define what slice of the stream your app subscribes to. Every entity gets `list` (all items) and `state` (one item by key) by default. Custom views add sorted or filtered variants on top. The ORE stack exposes:
 
-| View | Entity | What it returns |
-| --- | --- | --- |
-| `OreRound/state` | OreRound | A single round by key |
-| `OreRound/list` | OreRound | All rounds |
-| `OreRound/latest` | OreRound | Rounds sorted by round\_id descending |
-| `OreTreasury/state` | OreTreasury | The treasury account |
-| `OreTreasury/list` | OreTreasury | All treasury records |
-| `OreMiner/state` | OreMiner | A single miner by wallet address |
-| `OreMiner/list` | OreMiner | All miners |
+| View                | Entity      | What it returns                      |
+| ------------------- | ----------- | ------------------------------------ |
+| `OreRound/state`    | OreRound    | A single round by key                |
+| `OreRound/list`     | OreRound    | All rounds                           |
+| `OreRound/latest`   | OreRound    | Rounds sorted by round_id descending |
+| `OreTreasury/state` | OreTreasury | The treasury account                 |
+| `OreTreasury/list`  | OreTreasury | All treasury records                 |
+| `OreMiner/state`    | OreMiner    | A single miner by wallet address     |
+| `OreMiner/list`     | OreMiner    | All miners                           |
 
 Note that views maintain a rolling cache — they're optimised for live data, not full historical queries. Full historical access is on the roadmap.
 

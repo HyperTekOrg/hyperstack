@@ -274,12 +274,12 @@ Each `OreRound` update has this structure:
 }
 ```
 
-| Section   | Description                                                        |
-| --------- | ------------------------------------------------------------------ |
-| `id`      | Primary key (`round_id`) and lookup index (`round_address`)        |
-| `state`   | Current round state from on-chain account                          |
-| `results` | Round outcome including computed fields                            |
-| `metrics` | Aggregated counts and sums from instructions                       |
+| Section   | Description                                                 |
+| --------- | ----------------------------------------------------------- |
+| `id`      | Primary key (`round_id`) and lookup index (`round_address`) |
+| `state`   | Current round state from on-chain account                   |
+| `results` | Round outcome including computed fields                     |
+| `metrics` | Aggregated counts and sums from instructions                |
 
 :::tip[View the source]
 The full ORE stack definition is on GitHub: [stacks/ore/src/stack.rs](https://github.com/HyperTekOrg/hyperstack/blob/main/stacks/ore/src/stack.rs)

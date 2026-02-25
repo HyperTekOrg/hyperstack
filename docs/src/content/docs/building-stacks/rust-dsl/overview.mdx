@@ -71,23 +71,23 @@ Field paths use the `{name}_sdk::accounts::` and `{name}_sdk::instructions::` pr
 
 ### Field-Level
 
-| Macro                 | Purpose                                      |
-| --------------------- | -------------------------------------------- |
-| `#[map]`              | Maps fields from Solana account state        |
-| `#[from_instruction]` | Extracts data from instruction arguments     |
-| `#[aggregate]`        | Computes running values (Sum, Count, etc.)   |
-| `#[event]`            | Captures instructions as structured events   |
-| `#[snapshot]`         | Captures complete account state              |
-| `#[computed]`         | Derives values from other entity fields      |
-| `#[derive_from]`      | Populates from instruction metadata          |
-| `#[resolve]`          | Fetches off-chain data via a named resolver  |
+| Macro                 | Purpose                                     |
+| --------------------- | ------------------------------------------- |
+| `#[map]`              | Maps fields from Solana account state       |
+| `#[from_instruction]` | Extracts data from instruction arguments    |
+| `#[aggregate]`        | Computes running values (Sum, Count, etc.)  |
+| `#[event]`            | Captures instructions as structured events  |
+| `#[snapshot]`         | Captures complete account state             |
+| `#[computed]`         | Derives values from other entity fields     |
+| `#[derive_from]`      | Populates from instruction metadata         |
+| `#[resolve]`          | Fetches off-chain data via a named resolver |
 
 ### Resolvers
 
 Resolvers are types that fetch external data server-side and deliver it as part of your entity. You attach them to fields using `#[resolve]`.
 
-| Resolver        | Purpose                                                                                              |
-| --------------- | ---------------------------------------------------------------------------------------------------- |
+| Resolver        | Purpose                                                                                                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TokenMetadata` | Fetches SPL token metadata (name, symbol, decimals, logo) for a mint address via the DAS API. Also exposes `ui_amount` and `raw_amount` helper methods for use in `#[computed]` transforms. |
 
 For example, the ORE stack resolves token metadata for the ORE mint at a known address:
