@@ -391,7 +391,7 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
 
             fn prefilter(&self) -> hyperstack::runtime::yellowstone_vixen_core::Prefilter {
                 hyperstack::runtime::yellowstone_vixen_core::Prefilter::builder()
-                    .transaction_accounts([program_id()])
+                    .transaction_accounts_include([program_id()])
                     .build()
                     .unwrap()
             }
