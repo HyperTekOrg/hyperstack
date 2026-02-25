@@ -5,6 +5,10 @@ use clap::{Parser, Subcommand};
 use colored::Colorize;
 use serde::Serialize;
 
+use hyperstack_idl::analysis::{
+    build_account_index, classify_accounts, extract_pda_graph, extract_type_graph,
+    find_account_usage, find_links, AccountCategory, SeedKind,
+};
 use hyperstack_idl::discriminator::compute_discriminator;
 use hyperstack_idl::parse::parse_idl_file;
 use hyperstack_idl::search::{search_idl, suggest_similar, IdlSection, MatchType, SearchResult};
@@ -178,6 +182,55 @@ struct SearchResultJson {
     match_type: String,
 }
 
+#[derive(Serialize)]
+struct AccountRelationJson {
+    account_name: String,
+    matched_type: Option<String>,
+    instruction_count: usize,
+    category: String,
+}
+
+#[derive(Serialize)]
+struct InstructionUsageJson {
+    instruction_name: String,
+    writable: bool,
+    signer: bool,
+    readonly: bool,
+    pda: bool,
+}
+
+#[derive(Serialize)]
+struct InstructionLinkJson {
+    instruction_name: String,
+    account_a_writable: bool,
+    account_b_writable: bool,
+}
+
+#[derive(Serialize)]
+struct PdaSeedInfoJson {
+    kind: String,
+    value: String,
+}
+
+#[derive(Serialize)]
+struct PdaNodeJson {
+    account_name: String,
+    instruction_name: String,
+    seeds: Vec<PdaSeedInfoJson>,
+}
+
+#[derive(Serialize)]
+struct PubkeyFieldRefJson {
+    field_name: String,
+    likely_target: Option<String>,
+}
+
+#[derive(Serialize)]
+struct TypeNodeJson {
+    type_name: String,
+    pubkey_fields: Vec<PubkeyFieldRefJson>,
+}
+
 fn format_section(section: &IdlSection) -> String {
     match section {
         IdlSection::Instruction => "instruction".to_string(),
@@ -196,6 +249,57 @@ fn format_match_type(mt: &MatchType) -> String {
         MatchType::Contains => "contains".to_string(),
         MatchType::Fuzzy(d) => format!("fuzzy({})", d),
     }
+}
+
+fn format_account_category(category: &AccountCategory) -> &'static str {
+    match category {
+        AccountCategory::Entity => "Entity",
+        AccountCategory::Infrastructure => "Infrastructure",
+        AccountCategory::Role => "Role",
+        AccountCategory::Other => "Other",
+    }
+}
+
+fn format_seed_kind(kind: &SeedKind) -> &'static str {
+    match kind {
+        SeedKind::Const => "Const",
+        SeedKind::Account => "Account",
+        SeedKind::Arg => "Arg",
+    }
+}
+
+fn collect_account_names(idl: &IdlSpec) -> Vec<String> {
+    let mut names = build_account_index(idl).into_keys().collect::<Vec<_>>();
+    names.sort();
+    names
+}
+
+fn resolve_account_name<'a>(name: &str, candidates: &'a [String]) -> Result<&'a str> {
+    candidates
+        .iter()
+        .find(|candidate| candidate.eq_ignore_ascii_case(name))
+        .map(String::as_str)
+        .ok_or_else(|| not_found_error("account", name, candidates))
+}
+
+fn collect_instruction_usage(idl: &IdlSpec, account_name: &str) -> Vec<InstructionUsageJson> {
+    let mut usage = Vec::new();
+    for ix in &idl.instructions {
+        if let Some(account) = ix
+            .accounts
+            .iter()
+            .find(|account| account.name == account_name)
+        {
+            usage.push(InstructionUsageJson {
+                instruction_name: ix.name.clone(),
+                writable: account.is_mut,
+                signer: account.is_signer,
+                readonly: !account.is_mut && !account.is_signer,
+                pda: account.pda.is_some(),
+            });
+        }
+    }
+    usage
 }
 
 #[derive(Parser)]
@@ -721,19 +825,11 @@ pub fn run(args: IdlArgs) -> Result<()> {
             if idl.events.is_empty() {
                 println!("  {}", "(none)".dimmed());
             } else {
-                println!(
-                    "  {:<32} {}",
-                    "Name".bold(),
-                    "Discriminator".bold()
-                );
+                println!("  {:<32} {}", "Name".bold(), "Discriminator".bold());
                 println!("  {}", "-".repeat(60).dimmed());
                 for event in &idl.events {
                     let disc = format_discriminator(&event.get_discriminator());
-                    println!(
-                        "  {:<32} {}",
-                        event.name.green(),
-                        disc.yellow()
-                    );
+                    println!("  {:<32} {}", event.name.green(), disc.yellow());
                 }
             }
         }
@@ -799,7 +895,9 @@ pub fn run(args: IdlArgs) -> Result<()> {
                 for (label, section) in &sections {
                     let section_results: Vec<&SearchResult> = results
                         .iter()
-                        .filter(|r| std::mem::discriminant(&r.section) == std::mem::discriminant(section))
+                        .filter(|r| {
+                            std::mem::discriminant(&r.section) == std::mem::discriminant(section)
+                        })
                         .collect();
                     if !section_results.is_empty() {
                         println!("{}", label.bold());
@@ -855,11 +953,8 @@ pub fn run(args: IdlArgs) -> Result<()> {
             }
 
             if results.is_empty() {
-                let mut candidates: Vec<String> = idl
-                    .instructions
-                    .iter()
-                    .map(|ix| ix.name.clone())
-                    .collect();
+                let mut candidates: Vec<String> =
+                    idl.instructions.iter().map(|ix| ix.name.clone()).collect();
                 candidates.extend(idl.accounts.iter().map(|a| a.name.clone()));
                 return Err(not_found_error("instruction or account", name, &candidates));
             }
@@ -872,33 +967,268 @@ pub fn run(args: IdlArgs) -> Result<()> {
                 println!("{} {}", "Name:".bold(), r.name.green());
                 println!("{} {}", "Namespace:".bold(), r.namespace.cyan());
                 println!("{} {}", "Discriminator:".bold(), r.hex.yellow());
-                println!(
-                    "{} {:?}",
-                    "Bytes:".bold(),
-                    r.bytes
-                );
+                println!("{} {:?}", "Bytes:".bold(), r.bytes);
                 println!();
             }
         }
-        IdlCommands::Relations { ref path, .. } => {
-            let _idl = load_idl(path)?;
-            println!("TODO: implement relations");
+        IdlCommands::Relations { ref path, json } => {
+            let idl = load_idl(path)?;
+            let mut relations = classify_accounts(&idl);
+            relations.sort_by(|a, b| a.account_name.cmp(&b.account_name));
+
+            if json {
+                let out = relations
+                    .iter()
+                    .map(|relation| AccountRelationJson {
+                        account_name: relation.account_name.clone(),
+                        matched_type: relation.matched_type.clone(),
+                        instruction_count: relation.instruction_count,
+                        category: format_account_category(&relation.category).to_string(),
+                    })
+                    .collect::<Vec<_>>();
+                return print_json(&out);
+            }
+
+            println!("{}", "Account Relations".bold());
+            println!(
+                "  {:<32} {:<16} {}",
+                "Account".bold(),
+                "Category".bold(),
+                "Instruction Count".bold()
+            );
+            println!("  {}", "-".repeat(72).dimmed());
+            for relation in &relations {
+                println!(
+                    "  {:<32} {:<16} {}",
+                    relation.account_name.green(),
+                    format_account_category(&relation.category).cyan(),
+                    relation.instruction_count.to_string().yellow()
+                );
+            }
         }
-        IdlCommands::AccountUsage { ref path, .. } => {
-            let _idl = load_idl(path)?;
-            println!("TODO: implement account-usage");
+        IdlCommands::AccountUsage {
+            ref path,
+            ref name,
+            json,
+        } => {
+            let idl = load_idl(path)?;
+            let candidates = collect_account_names(&idl);
+            let account_name = resolve_account_name(name, &candidates)?;
+            let _usage_summary = find_account_usage(&idl, account_name).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Account '{}' exists in index but no usage was found",
+                    account_name
+                )
+            })?;
+            let usage = collect_instruction_usage(&idl, account_name);
+
+            if json {
+                return print_json(&usage);
+            }
+
+            println!(
+                "{} {}",
+                "Account Usage:".bold(),
+                account_name.green().bold()
+            );
+            println!(
+                "  {} {}",
+                "Total Instructions:".bold(),
+                usage.len().to_string().cyan()
+            );
+
+            let writable = usage
+                .iter()
+                .filter(|entry| entry.writable)
+                .map(|entry| entry.instruction_name.as_str())
+                .collect::<Vec<_>>();
+            let signer = usage
+                .iter()
+                .filter(|entry| entry.signer)
+                .map(|entry| entry.instruction_name.as_str())
+                .collect::<Vec<_>>();
+            let readonly = usage
+                .iter()
+                .filter(|entry| entry.readonly)
+                .map(|entry| entry.instruction_name.as_str())
+                .collect::<Vec<_>>();
+
+            println!();
+            println!(
+                "{} ({})",
+                "Writable".bold(),
+                writable.len().to_string().cyan()
+            );
+            if writable.is_empty() {
+                println!("  {}", "(none)".dimmed());
+            } else {
+                for instruction_name in &writable {
+                    println!("  {}", instruction_name.green());
+                }
+            }
+
+            println!();
+            println!("{} ({})", "Signer".bold(), signer.len().to_string().cyan());
+            if signer.is_empty() {
+                println!("  {}", "(none)".dimmed());
+            } else {
+                for instruction_name in &signer {
+                    println!("  {}", instruction_name.green());
+                }
+            }
+
+            println!();
+            println!(
+                "{} ({})",
+                "Readonly".bold(),
+                readonly.len().to_string().cyan()
+            );
+            if readonly.is_empty() {
+                println!("  {}", "(none)".dimmed());
+            } else {
+                for instruction_name in &readonly {
+                    println!("  {}", instruction_name.green());
+                }
+            }
         }
-        IdlCommands::Links { ref path, .. } => {
-            let _idl = load_idl(path)?;
-            println!("TODO: implement links");
+        IdlCommands::Links {
+            ref path,
+            ref a,
+            ref b,
+            json,
+        } => {
+            let idl = load_idl(path)?;
+            let candidates = collect_account_names(&idl);
+            let account_a = resolve_account_name(a, &candidates)?;
+            let account_b = resolve_account_name(b, &candidates)?;
+            let links = find_links(&idl, account_a, account_b);
+
+            if json {
+                let out = links
+                    .iter()
+                    .map(|link| InstructionLinkJson {
+                        instruction_name: link.instruction_name.clone(),
+                        account_a_writable: link.account_a_writable,
+                        account_b_writable: link.account_b_writable,
+                    })
+                    .collect::<Vec<_>>();
+                return print_json(&out);
+            }
+
+            println!(
+                "{} {} {} {}",
+                "Links between".bold(),
+                account_a.green().bold(),
+                "and".bold(),
+                account_b.green().bold()
+            );
+            if links.is_empty() {
+                println!("  {}", "(none)".dimmed());
+            } else {
+                println!(
+                    "  {:<32} {:<14} {}",
+                    "Instruction".bold(),
+                    format!("{} Writable", account_a).bold(),
+                    format!("{} Writable", account_b).bold()
+                );
+                println!("  {}", "-".repeat(72).dimmed());
+                for link in &links {
+                    println!(
+                        "  {:<32} {:<14} {}",
+                        link.instruction_name.green(),
+                        link.account_a_writable.to_string().cyan(),
+                        link.account_b_writable.to_string().cyan()
+                    );
+                }
+            }
         }
-        IdlCommands::PdaGraph { ref path, .. } => {
-            let _idl = load_idl(path)?;
-            println!("TODO: implement pda-graph");
+        IdlCommands::PdaGraph { ref path, json } => {
+            let idl = load_idl(path)?;
+            let graph = extract_pda_graph(&idl);
+
+            if json {
+                let out = graph
+                    .iter()
+                    .map(|node| PdaNodeJson {
+                        account_name: node.account_name.clone(),
+                        instruction_name: node.instruction_name.clone(),
+                        seeds: node
+                            .seeds
+                            .iter()
+                            .map(|seed| PdaSeedInfoJson {
+                                kind: format_seed_kind(&seed.kind).to_string(),
+                                value: seed.value.clone(),
+                            })
+                            .collect(),
+                    })
+                    .collect::<Vec<_>>();
+                return print_json(&out);
+            }
+
+            println!("{}", "PDA Graph".bold());
+            if graph.is_empty() {
+                println!("  {}", "(none)".dimmed());
+            } else {
+                for node in &graph {
+                    println!(
+                        "  {} {} {}",
+                        node.account_name.green().bold(),
+                        "in".dimmed(),
+                        node.instruction_name.cyan()
+                    );
+                    if node.seeds.is_empty() {
+                        println!("    {}", "(no seeds)".dimmed());
+                    } else {
+                        for seed in &node.seeds {
+                            println!(
+                                "    - {:<8} {}",
+                                format_seed_kind(&seed.kind).yellow(),
+                                seed.value
+                            );
+                        }
+                    }
+                }
+            }
         }
-        IdlCommands::TypeGraph { ref path, .. } => {
-            let _idl = load_idl(path)?;
-            println!("TODO: implement type-graph");
+        IdlCommands::TypeGraph { ref path, json } => {
+            let idl = load_idl(path)?;
+            let graph = extract_type_graph(&idl);
+
+            if json {
+                let out = graph
+                    .iter()
+                    .map(|node| TypeNodeJson {
+                        type_name: node.type_name.clone(),
+                        pubkey_fields: node
+                            .pubkey_fields
+                            .iter()
+                            .map(|field| PubkeyFieldRefJson {
+                                field_name: field.field_name.clone(),
+                                likely_target: field.likely_target.clone(),
+                            })
+                            .collect(),
+                    })
+                    .collect::<Vec<_>>();
+                return print_json(&out);
+            }
+
+            println!("{}", "Type Graph".bold());
+            if graph.is_empty() {
+                println!("  {}", "(none)".dimmed());
+            } else {
+                for node in &graph {
+                    println!("  {}", node.type_name.green().bold());
+                    for field in &node.pubkey_fields {
+                        let target = field.likely_target.as_deref().unwrap_or("?");
+                        println!(
+                            "    - {:<24} {} {}",
+                            field.field_name.cyan(),
+                            "->".dimmed(),
+                            target.yellow()
+                        );
+                    }
+                }
+            }
         }
         IdlCommands::Connect { ref path, .. } => {
             let _idl = load_idl(path)?;
