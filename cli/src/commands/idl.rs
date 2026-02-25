@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use hyperstack_idl::analysis::{
     build_account_index, classify_accounts, extract_pda_graph, extract_type_graph,
-    find_account_usage, find_links, AccountCategory, SeedKind,
+    find_account_usage, find_connections, find_links, AccountCategory, SeedKind,
 };
 use hyperstack_idl::discriminator::compute_discriminator;
 use hyperstack_idl::parse::parse_idl_file;
@@ -231,6 +231,51 @@ struct TypeNodeJson {
     pubkey_fields: Vec<PubkeyFieldRefJson>,
 }
 
+#[derive(Serialize)]
+struct AccountRoleJson {
+    writable: bool,
+    signer: bool,
+    pda: bool,
+}
+
+#[derive(Serialize)]
+struct InstructionContextJson {
+    instruction_name: String,
+    from_role: AccountRoleJson,
+    to_role: AccountRoleJson,
+    all_accounts: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct DirectConnectionJson {
+    from: String,
+    to: String,
+    instructions: Vec<InstructionContextJson>,
+}
+
+#[derive(Serialize)]
+struct TransitiveConnectionJson {
+    from: String,
+    intermediary: String,
+    to: String,
+    hop1_instruction: String,
+    hop2_instruction: String,
+}
+
+#[derive(Serialize)]
+struct InvalidExistingJson {
+    account: String,
+    suggestions: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct ConnectionReportJson {
+    new_account: String,
+    direct: Vec<DirectConnectionJson>,
+    transitive: Vec<TransitiveConnectionJson>,
+    invalid_existing: Vec<InvalidExistingJson>,
+}
+
 fn format_section(section: &IdlSection) -> String {
     match section {
         IdlSection::Instruction => "instruction".to_string(),
@@ -300,6 +345,15 @@ fn collect_instruction_usage(idl: &IdlSpec, account_name: &str) -> Vec<Instructi
         }
     }
     usage
+}
+
+fn format_account_role_flags(writable: bool, signer: bool, pda: bool) -> String {
+    format!(
+        "writable={}, signer={}, pda={}",
+        writable.to_string().cyan(),
+        signer.to_string().cyan(),
+        pda.to_string().cyan()
+    )
 }
 
 #[derive(Parser)]
@@ -1230,9 +1284,225 @@ pub fn run(args: IdlArgs) -> Result<()> {
                 }
             }
         }
-        IdlCommands::Connect { ref path, .. } => {
-            let _idl = load_idl(path)?;
-            println!("TODO: implement connect");
+        IdlCommands::Connect {
+            ref path,
+            ref new_account,
+            ref existing,
+            json,
+            suggest_hs,
+        } => {
+            let idl = load_idl(path)?;
+            let candidates = collect_account_names(&idl);
+            let resolved_new = resolve_account_name(new_account, &candidates)?;
+
+            let mut valid_existing = Vec::new();
+            let mut invalid_existing: Vec<(String, Vec<String>)> = Vec::new();
+            for name in existing {
+                if let Some(canonical) = candidates
+                    .iter()
+                    .find(|candidate| candidate.eq_ignore_ascii_case(name))
+                {
+                    if !valid_existing.iter().any(|entry| entry == canonical) {
+                        valid_existing.push(canonical.clone());
+                    }
+                } else {
+                    eprintln!("Warning: account '{}' not found in IDL, skipping", name);
+                    let candidate_refs = candidates.iter().map(String::as_str).collect::<Vec<_>>();
+                    let suggestions = suggest_similar(name, &candidate_refs, 3)
+                        .iter()
+                        .map(|s| s.candidate.clone())
+                        .collect::<Vec<_>>();
+                    invalid_existing.push((name.clone(), suggestions));
+                }
+            }
+
+            let existing_refs = valid_existing
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+            let report = find_connections(&idl, resolved_new, &existing_refs);
+
+            let mut invalid_all = invalid_existing;
+            for (name, suggestions) in &report.invalid_existing {
+                if !invalid_all
+                    .iter()
+                    .any(|(existing_name, _)| existing_name == name)
+                {
+                    invalid_all.push((name.clone(), suggestions.clone()));
+                }
+            }
+
+            if json {
+                let out = ConnectionReportJson {
+                    new_account: report.new_account.clone(),
+                    direct: report
+                        .direct
+                        .iter()
+                        .map(|connection| DirectConnectionJson {
+                            from: connection.from.clone(),
+                            to: connection.to.clone(),
+                            instructions: connection
+                                .instructions
+                                .iter()
+                                .map(|instruction| InstructionContextJson {
+                                    instruction_name: instruction.instruction_name.clone(),
+                                    from_role: AccountRoleJson {
+                                        writable: instruction.from_role.writable,
+                                        signer: instruction.from_role.signer,
+                                        pda: instruction.from_role.pda,
+                                    },
+                                    to_role: AccountRoleJson {
+                                        writable: instruction.to_role.writable,
+                                        signer: instruction.to_role.signer,
+                                        pda: instruction.to_role.pda,
+                                    },
+                                    all_accounts: instruction.all_accounts.clone(),
+                                })
+                                .collect(),
+                        })
+                        .collect(),
+                    transitive: report
+                        .transitive
+                        .iter()
+                        .map(|connection| TransitiveConnectionJson {
+                            from: connection.from.clone(),
+                            intermediary: connection.intermediary.clone(),
+                            to: connection.to.clone(),
+                            hop1_instruction: connection.hop1_instruction.clone(),
+                            hop2_instruction: connection.hop2_instruction.clone(),
+                        })
+                        .collect(),
+                    invalid_existing: invalid_all
+                        .iter()
+                        .map(|(account, suggestions)| InvalidExistingJson {
+                            account: account.clone(),
+                            suggestions: suggestions.clone(),
+                        })
+                        .collect(),
+                };
+                return print_json(&out);
+            }
+
+            println!(
+                "{} {}",
+                "Connect: new account".bold(),
+                report.new_account.green().bold()
+            );
+            println!(
+                "  {} {}",
+                "Valid existing inputs:".bold(),
+                valid_existing.len().to_string().cyan()
+            );
+            if !valid_existing.is_empty() {
+                println!("  {}", valid_existing.join(", ").green());
+            }
+
+            println!();
+            println!("{}", "Direct Connections".bold());
+            if report.direct.is_empty() {
+                println!("  {}", "(none)".dimmed());
+            } else {
+                for connection in &report.direct {
+                    println!("  {} {}", "Existing: ".bold(), connection.to.green().bold());
+                    for instruction in &connection.instructions {
+                        println!(
+                            "    - {} {}",
+                            instruction.instruction_name.cyan(),
+                            format_account_role_flags(
+                                instruction.from_role.writable,
+                                instruction.from_role.signer,
+                                instruction.from_role.pda
+                            )
+                        );
+                    }
+                }
+            }
+
+            println!();
+            println!("{}", "Transitive Connections".bold());
+            if report.transitive.is_empty() {
+                println!("  {}", "(none)".dimmed());
+            } else {
+                for connection in &report.transitive {
+                    println!(
+                        "  {} {} {} {} {}",
+                        connection.from.green(),
+                        format!("--({})-->", connection.hop1_instruction).dimmed(),
+                        connection.intermediary.yellow(),
+                        format!("--({})-->", connection.hop2_instruction).dimmed(),
+                        connection.to.green()
+                    );
+                }
+            }
+
+            if !invalid_all.is_empty() {
+                println!();
+                println!("{}", "Invalid Existing Accounts".bold());
+                for (name, suggestions) in &invalid_all {
+                    if suggestions.is_empty() {
+                        println!("  - {} {}", name.red(), "(no suggestions)".dimmed());
+                    } else {
+                        println!(
+                            "  - {} {} {}",
+                            name.red(),
+                            "->".dimmed(),
+                            suggestions.join(", ").yellow()
+                        );
+                    }
+                }
+            }
+
+            if suggest_hs {
+                let mut register_from = Vec::new();
+                let mut aggregate = Vec::new();
+
+                for connection in &report.direct {
+                    for instruction in &connection.instructions {
+                        if instruction.from_role.writable
+                            && !register_from
+                                .iter()
+                                .any(|name: &String| name == &instruction.instruction_name)
+                        {
+                            register_from.push(instruction.instruction_name.clone());
+                        }
+                        if instruction.from_role.signer
+                            && !aggregate
+                                .iter()
+                                .any(|name: &String| name == &instruction.instruction_name)
+                        {
+                            aggregate.push(instruction.instruction_name.clone());
+                        }
+                    }
+                }
+
+                register_from.sort();
+                aggregate.sort();
+
+                println!();
+                println!("{}", "HyperStack Suggestions".bold());
+                if register_from.is_empty() && aggregate.is_empty() {
+                    println!("  {}", "(none)".dimmed());
+                } else {
+                    for instruction_name in &register_from {
+                        println!(
+                            "  {} {}",
+                            "register_from:".green().bold(),
+                            instruction_name.cyan()
+                        );
+                    }
+                    for instruction_name in &aggregate {
+                        println!(
+                            "  {} {}",
+                            "aggregate:".green().bold(),
+                            instruction_name.cyan()
+                        );
+                    }
+                }
+                println!(
+                    "  {}",
+                    "These are HyperStack-specific integration suggestions. Use `--suggest-hs` to see them.".dimmed()
+                );
+            }
         }
     }
 
