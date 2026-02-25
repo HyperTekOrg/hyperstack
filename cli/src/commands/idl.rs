@@ -3,12 +3,11 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-#[allow(dead_code)]
 use serde::Serialize;
 
 use hyperstack_idl::discriminator::compute_discriminator;
 use hyperstack_idl::parse::parse_idl_file;
-use hyperstack_idl::search::suggest_similar;
+use hyperstack_idl::search::{search_idl, suggest_similar, IdlSection, MatchType, SearchResult};
 use hyperstack_idl::types::{
     IdlAccount, IdlField, IdlInstruction, IdlSpec, IdlType, IdlTypeArrayElement, IdlTypeDef,
     IdlTypeDefKind, IdlTypeDefinedInner,
@@ -169,6 +168,33 @@ fn print_fields(fields: &[IdlField]) {
             field.name.green(),
             format_idl_type(&field.type_).cyan()
         );
+    }
+}
+
+#[derive(Serialize)]
+struct SearchResultJson {
+    name: String,
+    section: String,
+    match_type: String,
+}
+
+fn format_section(section: &IdlSection) -> String {
+    match section {
+        IdlSection::Instruction => "instruction".to_string(),
+        IdlSection::Account => "account".to_string(),
+        IdlSection::Type => "type".to_string(),
+        IdlSection::Error => "error".to_string(),
+        IdlSection::Event => "event".to_string(),
+        IdlSection::Constant => "constant".to_string(),
+    }
+}
+
+fn format_match_type(mt: &MatchType) -> String {
+    match mt {
+        MatchType::Exact => "exact".to_string(),
+        MatchType::CaseInsensitive => "case-insensitive".to_string(),
+        MatchType::Contains => "contains".to_string(),
+        MatchType::Fuzzy(d) => format!("fuzzy({})", d),
     }
 }
 
@@ -657,25 +683,202 @@ pub fn run(args: IdlArgs) -> Result<()> {
                 }
             }
         }
-        IdlCommands::Errors { ref path, .. } => {
-            let _idl = load_idl(path)?;
-            println!("TODO: implement errors");
+        IdlCommands::Errors { ref path, json } => {
+            let idl = load_idl(path)?;
+            if json {
+                return print_json(&idl.errors);
+            }
+
+            println!("{}", "Errors".bold());
+            if idl.errors.is_empty() {
+                println!("  {}", "(none)".dimmed());
+            } else {
+                println!(
+                    "  {:<8} {:<32} {}",
+                    "Code".bold(),
+                    "Name".bold(),
+                    "Message".bold()
+                );
+                println!("  {}", "-".repeat(70).dimmed());
+                for error in &idl.errors {
+                    let msg = error.msg.as_deref().unwrap_or("-");
+                    println!(
+                        "  {:<8} {:<32} {}",
+                        error.code.to_string().cyan(),
+                        error.name.green(),
+                        msg.yellow()
+                    );
+                }
+            }
         }
-        IdlCommands::Events { ref path, .. } => {
-            let _idl = load_idl(path)?;
-            println!("TODO: implement events");
+        IdlCommands::Events { ref path, json } => {
+            let idl = load_idl(path)?;
+            if json {
+                return print_json(&idl.events);
+            }
+
+            println!("{}", "Events".bold());
+            if idl.events.is_empty() {
+                println!("  {}", "(none)".dimmed());
+            } else {
+                println!(
+                    "  {:<32} {}",
+                    "Name".bold(),
+                    "Discriminator".bold()
+                );
+                println!("  {}", "-".repeat(60).dimmed());
+                for event in &idl.events {
+                    let disc = format_discriminator(&event.get_discriminator());
+                    println!(
+                        "  {:<32} {}",
+                        event.name.green(),
+                        disc.yellow()
+                    );
+                }
+            }
         }
-        IdlCommands::Constants { ref path, .. } => {
-            let _idl = load_idl(path)?;
-            println!("TODO: implement constants");
+        IdlCommands::Constants { ref path, json } => {
+            let idl = load_idl(path)?;
+            if json {
+                return print_json(&idl.constants);
+            }
+
+            println!("{}", "Constants".bold());
+            if idl.constants.is_empty() {
+                println!("  {}", "(none)".dimmed());
+            } else {
+                println!(
+                    "  {:<32} {:<16} {}",
+                    "Name".bold(),
+                    "Type".bold(),
+                    "Value".bold()
+                );
+                println!("  {}", "-".repeat(70).dimmed());
+                for constant in &idl.constants {
+                    println!(
+                        "  {:<32} {:<16} {}",
+                        constant.name.green(),
+                        format_idl_type(&constant.type_).cyan(),
+                        constant.value.yellow()
+                    );
+                }
+            }
         }
-        IdlCommands::Search { ref path, .. } => {
-            let _idl = load_idl(path)?;
-            println!("TODO: implement search");
+        IdlCommands::Search {
+            ref path,
+            ref query,
+            json,
+        } => {
+            let idl = load_idl(path)?;
+            let results = search_idl(&idl, query);
+
+            if json {
+                let json_results: Vec<SearchResultJson> = results
+                    .iter()
+                    .map(|r| SearchResultJson {
+                        name: r.name.clone(),
+                        section: format_section(&r.section),
+                        match_type: format_match_type(&r.match_type),
+                    })
+                    .collect();
+                return print_json(&json_results);
+            }
+
+            if results.is_empty() {
+                println!("  {} '{}'", "No results found for".dimmed(), query);
+            } else {
+                // Group by section
+                let sections = [
+                    ("Instructions", IdlSection::Instruction),
+                    ("Accounts", IdlSection::Account),
+                    ("Types", IdlSection::Type),
+                    ("Errors", IdlSection::Error),
+                    ("Events", IdlSection::Event),
+                    ("Constants", IdlSection::Constant),
+                ];
+                for (label, section) in &sections {
+                    let section_results: Vec<&SearchResult> = results
+                        .iter()
+                        .filter(|r| std::mem::discriminant(&r.section) == std::mem::discriminant(section))
+                        .collect();
+                    if !section_results.is_empty() {
+                        println!("{}", label.bold());
+                        for r in &section_results {
+                            println!(
+                                "  {} {}",
+                                r.name.green(),
+                                format!("({})", format_match_type(&r.match_type)).dimmed()
+                            );
+                        }
+                        println!();
+                    }
+                }
+            }
         }
-        IdlCommands::Discriminator { ref path, .. } => {
-            let _idl = load_idl(path)?;
-            println!("TODO: implement discriminator");
+        IdlCommands::Discriminator {
+            ref path,
+            ref name,
+            json,
+        } => {
+            let idl = load_idl(path)?;
+
+            #[derive(Serialize)]
+            struct DiscriminatorResult {
+                name: String,
+                namespace: String,
+                hex: String,
+                bytes: Vec<u8>,
+            }
+
+            let mut results: Vec<DiscriminatorResult> = Vec::new();
+
+            // Check instructions
+            if let Some(ix) = find_instruction(&idl, name) {
+                let disc = instruction_discriminator(ix);
+                results.push(DiscriminatorResult {
+                    name: ix.name.clone(),
+                    namespace: "global".to_string(),
+                    hex: format_discriminator(&disc),
+                    bytes: disc,
+                });
+            }
+
+            // Check accounts
+            if let Some(acc) = find_account(&idl, name) {
+                let disc = account_discriminator(acc);
+                results.push(DiscriminatorResult {
+                    name: acc.name.clone(),
+                    namespace: "account".to_string(),
+                    hex: format_discriminator(&disc),
+                    bytes: disc,
+                });
+            }
+
+            if results.is_empty() {
+                let mut candidates: Vec<String> = idl
+                    .instructions
+                    .iter()
+                    .map(|ix| ix.name.clone())
+                    .collect();
+                candidates.extend(idl.accounts.iter().map(|a| a.name.clone()));
+                return Err(not_found_error("instruction or account", name, &candidates));
+            }
+
+            if json {
+                return print_json(&results);
+            }
+
+            for r in &results {
+                println!("{} {}", "Name:".bold(), r.name.green());
+                println!("{} {}", "Namespace:".bold(), r.namespace.cyan());
+                println!("{} {}", "Discriminator:".bold(), r.hex.yellow());
+                println!(
+                    "{} {:?}",
+                    "Bytes:".bold(),
+                    r.bytes
+                );
+                println!();
+            }
         }
         IdlCommands::Relations { ref path, .. } => {
             let _idl = load_idl(path)?;
