@@ -13,4 +13,5 @@ pub mod types;
 pub mod utils;
 
 pub use parse::*;
+pub use snapshot::*;
 pub use types::*;
