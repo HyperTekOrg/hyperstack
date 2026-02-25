@@ -42,6 +42,12 @@ jobs:
         run: cargo login ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       # Publish in dependency order with waits for crates.io index propagation
+      - name: Publish hyperstack-idl
+        run: |
+          cd hyperstack-idl
+          cargo publish --allow-dirty || echo "Package may already be published"
+          sleep 30
+
       - name: Publish hyperstack-macros
         run: |
           cd hyperstack-macros

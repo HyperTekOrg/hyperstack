@@ -9,5 +9,6 @@
   "typescript/core": "0.5.3",
   "stacks/sdk/typescript": "0.5.3",
   "stacks/sdk/rust": "0.5.3",
-  "packages/hyperstack": "0.5.3"
+  "packages/hyperstack": "0.5.3",
+  "hyperstack-idl": "0.1.0"
 }

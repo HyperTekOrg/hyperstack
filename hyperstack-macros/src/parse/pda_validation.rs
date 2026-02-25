@@ -100,7 +100,7 @@ impl<'a> PdaValidationContext<'a> {
                         ))
                     }
                     Some(idl_arg) => {
-                        let actual_type = idl_arg.type_.to_rust_type_string();
+                        let actual_type = crate::parse::idl::to_rust_type_string(&idl_arg.type_);
                         if arg_type != &actual_type {
                             Err(Error::new(
                                 seed.span,
@@ -156,6 +156,7 @@ mod tests {
             version: Some("0.1.0".to_string()),
             metadata: None,
             accounts: vec![],
+            constants: vec![],
             instructions: vec![IdlInstruction {
                 name: "create".to_string(),
                 discriminator: vec![0; 8],
