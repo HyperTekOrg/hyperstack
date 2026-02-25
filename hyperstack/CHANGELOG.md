@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.5.3...hyperstack-v0.5.4) (2026-02-25)
+
+
+### Features
+
+* add HashMap type support, auto-derive discriminators, and to_json_value codegen ([7e81e3d](https://github.com/HyperTekOrg/hyperstack/commit/7e81e3d9802ad25987439841b7e4dd0f45232386))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.5.3 to 0.5.4
+    * hyperstack-macros bumped from 0.5.3 to 0.5.4
+    * hyperstack-server bumped from 0.5.3 to 0.5.4
+    * hyperstack-sdk bumped from 0.5.3 to 0.5.4
+
 ## [0.5.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.5.2...hyperstack-v0.5.3) (2026-02-20)
 
 

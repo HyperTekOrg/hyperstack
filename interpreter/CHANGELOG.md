@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.5.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.5.3...hyperstack-interpreter-v0.5.4) (2026-02-25)
+
+
+### Bug Fixes
+
+* add hashMap IDL type variant to support Metaplex token metadata SDK generation ([21a81ad](https://github.com/HyperTekOrg/hyperstack/commit/21a81ada3b8325295428de6c0cb5eaaedcc4f215))
+* improve error handling in UrlResolverClient for out-of-bounds access ([540aeef](https://github.com/HyperTekOrg/hyperstack/commit/540aeefed35be873067f41fc14daa205c4e959d9))
+
+
+### Performance Improvements
+
+* parallelize URL batch resolution using join_all ([e252a8e](https://github.com/HyperTekOrg/hyperstack/commit/e252a8ea2f91b7b7e0dc266586d670e98bae0cfb))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-macros bumped from 0.5.3 to 0.5.4
+
 ## [0.5.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-interpreter-v0.5.2...hyperstack-interpreter-v0.5.3) (2026-02-20)
 
 

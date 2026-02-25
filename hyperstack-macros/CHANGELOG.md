@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.5.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.5.3...hyperstack-macros-v0.5.4) (2026-02-25)
+
+
+### Features
+
+* add HashMap type support, auto-derive discriminators, and to_json_value codegen ([7e81e3d](https://github.com/HyperTekOrg/hyperstack/commit/7e81e3d9802ad25987439841b7e4dd0f45232386))
+
+
+### Bug Fixes
+
+* - Instantiate UrlResolverClient once at startup on VmHandler instead of per-request ([f346bfa](https://github.com/HyperTekOrg/hyperstack/commit/f346bfa2131d2cb1ae3ea98e03b25e9351f25eca))
+* add serde derives to IDL-generated account and custom types ([cada9f5](https://github.com/HyperTekOrg/hyperstack/commit/cada9f53f00112b7048f62743dd9aea0ffb07baa))
+* eliminate duplicate url_path qualification logic in sections.rs ([6ed8e94](https://github.com/HyperTekOrg/hyperstack/commit/6ed8e948f4490e2aa659c7c25812fdcc968ac64e))
+* re-queue URL resolver requests on empty URL or failure ([dc204a2](https://github.com/HyperTekOrg/hyperstack/commit/dc204a2cfae505b7cf603b4eb56b39e0d8277f97))
+* resolve instruction field prefix for camelCase IDL instruction names ([df75acf](https://github.com/HyperTekOrg/hyperstack/commit/df75acfca07371ffbda8f410bcc777a42f62627a))
+* use transaction_accounts_include in prefilter builder ([2df88f8](https://github.com/HyperTekOrg/hyperstack/commit/2df88f890e7549a2d5dadee9703e2cb31cd866ef))
+* validate HTTP method input in ResolveAttributeArgs parser to support only 'GET' and 'POST' ([fb80a48](https://github.com/HyperTekOrg/hyperstack/commit/fb80a48ebf603a13d72d67cd6aedb602d5818cc3))
+
 ## [0.5.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.5.2...hyperstack-macros-v0.5.3) (2026-02-20)
 
 
