@@ -1012,13 +1012,22 @@ fn analyze_idl_type_with_resolution(
                 crate::parse::idl::IdlTypeDefinedInner::Simple(s) => s.clone(),
             };
 
-            // Try to resolve this defined type from IDL (including enums)
-            // Convert Option<&IdlSpec> into a temporary IdlLookup slice for resolve_complex_type
             let temp_idl_lookup: Vec<(String, &IdlSpec)> =
                 idl.into_iter().map(|i| (String::new(), i)).collect();
             let resolved_type = resolve_complex_type(&type_name, &temp_idl_lookup);
 
             (type_name, BaseType::Object, false, false, resolved_type)
+        }
+        IdlType::HashMap(hm) => {
+            let (val_type, base_type, _, _, resolved_type) =
+                analyze_idl_type_with_resolution(&hm.hash_map.1, idl);
+            (
+                format!("HashMap<{}>", val_type),
+                base_type,
+                false,
+                false,
+                resolved_type,
+            )
         }
     }
 }

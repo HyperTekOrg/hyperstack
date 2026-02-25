@@ -1,12 +1,33 @@
 use crate::parse::idl::*;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
+use std::collections::HashSet;
+
+fn collect_account_names(accounts: &[IdlAccount]) -> HashSet<String> {
+    accounts.iter().map(|a| a.name.clone()).collect()
+}
+
+fn qualify_defined_name(
+    name: &str,
+    account_names: &HashSet<String>,
+    in_accounts_module: bool,
+) -> String {
+    if account_names.contains(name) && !in_accounts_module {
+        format!("accounts::{}", name)
+    } else {
+        name.to_string()
+    }
+}
 
 fn is_bytemuck_serialization(serialization: &Option<IdlSerialization>) -> bool {
     matches!(
         serialization,
         Some(IdlSerialization::Bytemuck) | Some(IdlSerialization::BytemuckUnsafe)
     )
+}
+
+fn is_bytemuck_unsafe(serialization: &Option<IdlSerialization>) -> bool {
+    matches!(serialization, Some(IdlSerialization::BytemuckUnsafe))
 }
 
 fn lookup_account_serialization<'a>(
@@ -20,40 +41,77 @@ fn lookup_account_serialization<'a>(
         .unwrap_or(&None)
 }
 
-fn type_to_token_stream_bytemuck(idl_type: &IdlType) -> TokenStream {
-    let type_str = idl_type.to_rust_type_string_bytemuck();
-    let tokens: TokenStream = type_str.parse().unwrap_or_else(|_| {
-        quote! { serde_json::Value }
-    });
-    tokens
+fn resolve_type_string(
+    idl_type: &IdlType,
+    bytemuck: bool,
+    account_names: &HashSet<String>,
+    in_accounts_module: bool,
+) -> String {
+    let base = if bytemuck {
+        idl_type.to_rust_type_string_bytemuck()
+    } else {
+        idl_type.to_rust_type_string()
+    };
+    match idl_type {
+        IdlType::Defined(def) => {
+            let name = match &def.defined {
+                IdlTypeDefinedInner::Named { name } => name.as_str(),
+                IdlTypeDefinedInner::Simple(s) => s.as_str(),
+            };
+            qualify_defined_name(name, account_names, in_accounts_module)
+        }
+        IdlType::Option(opt) => {
+            let inner =
+                resolve_type_string(&opt.option, bytemuck, account_names, in_accounts_module);
+            format!("Option<{}>", inner)
+        }
+        IdlType::Vec(vec) => {
+            let inner = resolve_type_string(&vec.vec, bytemuck, account_names, in_accounts_module);
+            format!("Vec<{}>", inner)
+        }
+        IdlType::HashMap(hm) => {
+            let key =
+                resolve_type_string(&hm.hash_map.0, bytemuck, account_names, in_accounts_module);
+            let val =
+                resolve_type_string(&hm.hash_map.1, bytemuck, account_names, in_accounts_module);
+            format!("std::collections::HashMap<{}, {}>", key, val)
+        }
+        _ => base,
+    }
 }
 
-fn is_pubkey_type(idl_type: &IdlType) -> bool {
-    matches!(idl_type, IdlType::Simple(s) if s == "pubkey" || s == "publicKey")
+fn type_to_token_stream_bytemuck(idl_type: &IdlType) -> TokenStream {
+    type_to_token_stream_resolved(idl_type, true, &HashSet::new(), true)
+}
+
+fn type_to_token_stream_resolved(
+    idl_type: &IdlType,
+    bytemuck: bool,
+    account_names: &HashSet<String>,
+    in_accounts_module: bool,
+) -> TokenStream {
+    let type_str = resolve_type_string(idl_type, bytemuck, account_names, in_accounts_module);
+    type_str.parse().unwrap_or_else(|_| {
+        quote! { hyperstack::runtime::serde_json::Value }
+    })
 }
 
 fn generate_bytemuck_field(field: &IdlField) -> TokenStream {
     let field_name = format_ident!("{}", to_snake_case(&field.name));
     let field_type = type_to_token_stream_bytemuck(&field.type_);
-    if is_pubkey_type(&field.type_) {
-        quote! {
-            #[serde(with = "hyperstack::runtime::serde_helpers::pubkey_base58")]
-            pub #field_name: #field_type
-        }
-    } else {
-        quote! { pub #field_name: #field_type }
-    }
+    quote! { pub #field_name: #field_type }
 }
 
 pub fn generate_sdk_types(idl: &IdlSpec, module_name: &str) -> TokenStream {
-    let account_types = generate_account_types(&idl.accounts, &idl.types);
-    let instruction_types = generate_instruction_types(&idl.instructions, &idl.types);
-    let custom_types = generate_custom_types(&idl.types);
+    let account_names = collect_account_names(&idl.accounts);
+    let account_types = generate_account_types(&idl.accounts, &idl.types, &account_names);
+    let instruction_types =
+        generate_instruction_types(&idl.instructions, &idl.types, &account_names);
+    let custom_types = generate_custom_types(&idl.types, &account_names);
     let module_ident = format_ident!("{}", module_name);
 
     quote! {
         pub mod #module_ident {
-            use serde::{Deserialize, Serialize};
             use borsh::{BorshDeserialize, BorshSerialize};
 
             pub mod types {
@@ -76,7 +134,12 @@ pub fn generate_sdk_types(idl: &IdlSpec, module_name: &str) -> TokenStream {
     }
 }
 
-fn generate_struct_fields(fields: &[IdlField], use_bytemuck: bool) -> Vec<TokenStream> {
+fn generate_struct_fields(
+    fields: &[IdlField],
+    use_bytemuck: bool,
+    account_names: &HashSet<String>,
+    in_accounts_module: bool,
+) -> Vec<TokenStream> {
     fields
         .iter()
         .map(|field| {
@@ -84,54 +147,189 @@ fn generate_struct_fields(fields: &[IdlField], use_bytemuck: bool) -> Vec<TokenS
                 generate_bytemuck_field(field)
             } else {
                 let field_name = format_ident!("{}", to_snake_case(&field.name));
-                let field_type = type_to_token_stream(&field.type_);
+                let field_type =
+                    type_to_token_stream_in_module(&field.type_, account_names, in_accounts_module);
                 quote! { pub #field_name: #field_type }
             }
         })
         .collect()
 }
 
-fn generate_account_types(accounts: &[IdlAccount], types: &[IdlTypeDef]) -> TokenStream {
+fn array_inner_type(idl_type: &IdlTypeArray) -> Option<IdlType> {
+    if idl_type.array.len() != 2 {
+        return None;
+    }
+
+    match &idl_type.array[0] {
+        IdlTypeArrayElement::Type(type_name) => Some(IdlType::Simple(type_name.clone())),
+        IdlTypeArrayElement::Nested(nested) => Some(nested.clone()),
+        IdlTypeArrayElement::Size(_) => None,
+    }
+}
+
+fn generate_json_value_for_type(
+    idl_type: &IdlType,
+    value_expr: TokenStream,
+    use_bytemuck: bool,
+) -> TokenStream {
+    match idl_type {
+        IdlType::Simple(type_name) => match type_name.as_str() {
+            "u128" | "i128" => {
+                quote! { hyperstack::runtime::serde_json::Value::String((#value_expr).to_string()) }
+            }
+            "pubkey" | "publicKey" => {
+                if use_bytemuck {
+                    quote! {
+                        hyperstack::runtime::serde_json::Value::String(
+                            hyperstack::runtime::bs58::encode(#value_expr).into_string()
+                        )
+                    }
+                } else {
+                    quote! { hyperstack::runtime::serde_json::Value::String((#value_expr).to_string()) }
+                }
+            }
+            "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64" | "f32" | "f64"
+            | "bool" | "string" | "bytes" => {
+                quote! { hyperstack::runtime::serde_json::json!(#value_expr) }
+            }
+            _ => quote! { (#value_expr).to_json_value() },
+        },
+        IdlType::Defined(_) => quote! { (#value_expr).to_json_value() },
+        IdlType::Option(option_type) => {
+            let inner_value =
+                generate_json_value_for_type(&option_type.option, quote! { value }, use_bytemuck);
+            quote! {
+                match (#value_expr).as_ref() {
+                    Some(value) => #inner_value,
+                    None => hyperstack::runtime::serde_json::Value::Null,
+                }
+            }
+        }
+        IdlType::Vec(vec_type) => {
+            let inner_value =
+                generate_json_value_for_type(&vec_type.vec, quote! { item }, use_bytemuck);
+            quote! {
+                hyperstack::runtime::serde_json::Value::Array(
+                    (#value_expr)
+                        .iter()
+                        .map(|item| #inner_value)
+                        .collect::<Vec<_>>()
+                )
+            }
+        }
+        IdlType::Array(array_type) => {
+            if let Some(inner_type) = array_inner_type(array_type) {
+                let inner_value =
+                    generate_json_value_for_type(&inner_type, quote! { item }, use_bytemuck);
+                quote! {
+                    hyperstack::runtime::serde_json::Value::Array(
+                        (#value_expr)
+                            .iter()
+                            .map(|item| #inner_value)
+                            .collect::<Vec<_>>()
+                    )
+                }
+            } else {
+                quote! { hyperstack::runtime::serde_json::json!(#value_expr) }
+            }
+        }
+        IdlType::HashMap(hm) => {
+            let val_value =
+                generate_json_value_for_type(&hm.hash_map.1, quote! { v }, use_bytemuck);
+            quote! {
+                hyperstack::runtime::serde_json::Value::Object(
+                    (#value_expr)
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), #val_value))
+                        .collect::<hyperstack::runtime::serde_json::Map<String, hyperstack::runtime::serde_json::Value>>()
+                )
+            }
+        }
+    }
+}
+
+fn generate_struct_to_json_method(fields: &[IdlField], use_bytemuck: bool) -> TokenStream {
+    let field_inserts = fields.iter().map(|field| {
+        let field_ident = format_ident!("{}", to_snake_case(&field.name));
+        let field_name = field_ident.to_string();
+        let field_value =
+            generate_json_value_for_type(&field.type_, quote! { self.#field_ident }, use_bytemuck);
+
+        quote! {
+            object.insert(#field_name.to_string(), #field_value);
+        }
+    });
+
+    quote! {
+        pub fn to_json_value(&self) -> hyperstack::runtime::serde_json::Value {
+            let mut object = hyperstack::runtime::serde_json::Map::new();
+            #(#field_inserts)*
+            hyperstack::runtime::serde_json::Value::Object(object)
+        }
+    }
+}
+
+fn generate_tuple_struct_to_json_method(fields: &[IdlType], use_bytemuck: bool) -> TokenStream {
+    let field_values = fields.iter().enumerate().map(|(index, field_type)| {
+        let field_access: TokenStream = format!("self.{}", index)
+            .parse()
+            .expect("tuple field access must be valid");
+        generate_json_value_for_type(field_type, field_access, use_bytemuck)
+    });
+
+    quote! {
+        pub fn to_json_value(&self) -> hyperstack::runtime::serde_json::Value {
+            hyperstack::runtime::serde_json::Value::Array(vec![#(#field_values),*])
+        }
+    }
+}
+
+fn generate_account_types(
+    accounts: &[IdlAccount],
+    types: &[IdlTypeDef],
+    account_names: &HashSet<String>,
+) -> TokenStream {
     let account_structs = accounts
         .iter()
-        .map(|account| generate_account_type(account, types));
+        .map(|account| generate_account_type(account, types, account_names));
 
     quote! {
         #(#account_structs)*
     }
 }
 
-fn generate_account_type(account: &IdlAccount, types: &[IdlTypeDef]) -> TokenStream {
+fn generate_account_type(
+    account: &IdlAccount,
+    types: &[IdlTypeDef],
+    account_names: &HashSet<String>,
+) -> TokenStream {
     let name = format_ident!("{}", account.name);
     let serialization = lookup_account_serialization(&account.name, types);
     let use_bytemuck = is_bytemuck_serialization(serialization);
+    let use_unsafe = is_bytemuck_unsafe(serialization);
 
-    let fields = if let Some(type_def) = &account.type_def {
+    let idl_fields = if let Some(type_def) = &account.type_def {
         match type_def {
-            IdlTypeDefKind::Struct { fields, .. } => generate_struct_fields(fields, use_bytemuck),
+            IdlTypeDefKind::Struct { fields, .. } => fields.clone(),
             IdlTypeDefKind::TupleStruct { .. } | IdlTypeDefKind::Enum { .. } => vec![],
         }
     } else if let Some(type_def) = types.iter().find(|t| t.name == account.name) {
         match &type_def.type_def {
-            IdlTypeDefKind::Struct { fields, .. } => generate_struct_fields(fields, use_bytemuck),
+            IdlTypeDefKind::Struct { fields, .. } => fields.clone(),
             IdlTypeDefKind::TupleStruct { .. } | IdlTypeDefKind::Enum { .. } => vec![],
         }
     } else {
         vec![]
     };
 
-    let discriminator = &account.discriminator;
+    let fields = generate_struct_fields(&idl_fields, use_bytemuck, account_names, true);
+    let to_json_method = generate_struct_to_json_method(&idl_fields, use_bytemuck);
+
+    let discriminator = account.get_discriminator();
     let disc_array = quote! { [#(#discriminator),*] };
 
     if use_bytemuck {
-        quote! {
-            #[derive(Debug, Copy, Clone, Serialize, Deserialize, hyperstack::runtime::bytemuck::Pod, hyperstack::runtime::bytemuck::Zeroable)]
-            #[bytemuck(crate = "hyperstack::runtime::bytemuck")]
-            #[repr(C)]
-            pub struct #name {
-                #(#fields),*
-            }
-
+        let bytemuck_try_from = quote! {
             impl #name {
                 pub const DISCRIMINATOR: [u8; 8] = #disc_array;
 
@@ -149,11 +347,42 @@ fn generate_account_type(account: &IdlAccount, types: &[IdlTypeDef]) -> TokenStr
                     }
                     Ok(hyperstack::runtime::bytemuck::pod_read_unaligned::<Self>(&body[..struct_size]))
                 }
+
+                #to_json_method
+            }
+        };
+
+        if use_unsafe {
+            // BytemuckUnsafe: use unsafe impl to bypass padding checks,
+            // matching how the on-chain program was compiled.
+            quote! {
+                #[derive(Debug, Copy, Clone)]
+                #[repr(C)]
+                pub struct #name {
+                    #(#fields),*
+                }
+
+                unsafe impl hyperstack::runtime::bytemuck::Zeroable for #name {}
+                unsafe impl hyperstack::runtime::bytemuck::Pod for #name {}
+
+                #bytemuck_try_from
+            }
+        } else {
+            // Bytemuck (safe): use derive macros which validate no padding at compile time.
+            quote! {
+                #[derive(Debug, Copy, Clone, hyperstack::runtime::bytemuck::Pod, hyperstack::runtime::bytemuck::Zeroable)]
+                #[bytemuck(crate = "hyperstack::runtime::bytemuck")]
+                #[repr(C)]
+                pub struct #name {
+                    #(#fields),*
+                }
+
+                #bytemuck_try_from
             }
         }
     } else {
         quote! {
-            #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+            #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
             pub struct #name {
                 #(#fields),*
             }
@@ -169,6 +398,8 @@ fn generate_account_type(account: &IdlAccount, types: &[IdlTypeDef]) -> TokenStr
                     borsh::BorshDeserialize::deserialize_reader(&mut reader)
                         .map_err(|e| e.into())
                 }
+
+                #to_json_method
             }
         }
     }
@@ -177,28 +408,34 @@ fn generate_account_type(account: &IdlAccount, types: &[IdlTypeDef]) -> TokenStr
 fn generate_instruction_types(
     instructions: &[IdlInstruction],
     _types: &[IdlTypeDef],
+    account_names: &HashSet<String>,
 ) -> TokenStream {
-    let instruction_structs = instructions.iter().map(generate_instruction_type);
+    let instruction_structs = instructions
+        .iter()
+        .map(|ix| generate_instruction_type(ix, account_names));
 
     quote! {
         #(#instruction_structs)*
     }
 }
 
-fn generate_instruction_type(instruction: &IdlInstruction) -> TokenStream {
+fn generate_instruction_type(
+    instruction: &IdlInstruction,
+    account_names: &HashSet<String>,
+) -> TokenStream {
     let name = format_ident!("{}", to_pascal_case(&instruction.name));
 
-    // Use get_discriminator() to handle both Anchor and Steel formats
     let discriminator = instruction.get_discriminator();
     let disc_array = quote! { [#(#discriminator),*] };
 
     let args_fields = instruction.args.iter().map(|arg| {
         let arg_name = format_ident!("{}", to_snake_case(&arg.name));
-        let arg_type = type_to_token_stream(&arg.type_);
+        let arg_type = type_to_token_stream_in_module(&arg.type_, account_names, false);
         quote! { pub #arg_name: #arg_type }
     });
 
-    let derives = quote! { #[derive(Debug, Clone, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)] };
+    let to_json_method = generate_struct_to_json_method(&instruction.args, false);
+    let derives = quote! { #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)] };
 
     quote! {
         #derives
@@ -223,50 +460,86 @@ fn generate_instruction_type(instruction: &IdlInstruction) -> TokenStream {
                     Err(e) => Err(e.into()),
                 }
             }
+
+            #to_json_method
         }
     }
 }
 
-fn generate_custom_types(types: &[IdlTypeDef]) -> TokenStream {
-    let type_defs = types.iter().map(generate_custom_type);
+fn generate_custom_types(types: &[IdlTypeDef], account_names: &HashSet<String>) -> TokenStream {
+    let type_defs = types.iter().map(|t| generate_custom_type(t, account_names));
 
     quote! {
         #(#type_defs)*
     }
 }
 
-fn generate_custom_type(type_def: &IdlTypeDef) -> TokenStream {
+fn generate_custom_type(type_def: &IdlTypeDef, account_names: &HashSet<String>) -> TokenStream {
     let name = format_ident!("{}", type_def.name);
     let use_bytemuck = is_bytemuck_serialization(&type_def.serialization);
+    let use_unsafe = is_bytemuck_unsafe(&type_def.serialization);
 
     match &type_def.type_def {
         IdlTypeDefKind::Struct { kind: _, fields } => {
-            let struct_fields = generate_struct_fields(fields, use_bytemuck);
+            let struct_fields = generate_struct_fields(fields, use_bytemuck, account_names, false);
+            let to_json_method = generate_struct_to_json_method(fields, use_bytemuck);
 
             if use_bytemuck {
-                quote! {
-                    #[derive(Debug, Copy, Clone, Serialize, Deserialize, hyperstack::runtime::bytemuck::Pod, hyperstack::runtime::bytemuck::Zeroable)]
-                    #[bytemuck(crate = "hyperstack::runtime::bytemuck")]
-                    #[repr(C)]
-                    pub struct #name {
-                        #(#struct_fields),*
+                if use_unsafe {
+                    quote! {
+                        #[derive(Debug, Copy, Clone)]
+                        #[repr(C)]
+                        pub struct #name {
+                            #(#struct_fields),*
+                        }
+
+                        unsafe impl hyperstack::runtime::bytemuck::Zeroable for #name {}
+                        unsafe impl hyperstack::runtime::bytemuck::Pod for #name {}
+
+                        impl #name {
+                            #to_json_method
+                        }
+                    }
+                } else {
+                    quote! {
+                        #[derive(Debug, Copy, Clone, hyperstack::runtime::bytemuck::Pod, hyperstack::runtime::bytemuck::Zeroable)]
+                        #[bytemuck(crate = "hyperstack::runtime::bytemuck")]
+                        #[repr(C)]
+                        pub struct #name {
+                            #(#struct_fields),*
+                        }
+
+                        impl #name {
+                            #to_json_method
+                        }
                     }
                 }
             } else {
                 quote! {
-                    #[derive(Debug, Clone, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+                    #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
                     pub struct #name {
                         #(#struct_fields),*
+                    }
+
+                    impl #name {
+                        #to_json_method
                     }
                 }
             }
         }
         IdlTypeDefKind::TupleStruct { kind: _, fields } => {
-            let tuple_fields = fields.iter().map(type_to_token_stream);
+            let tuple_fields = fields
+                .iter()
+                .map(|f| type_to_token_stream_in_module(f, account_names, false));
+            let to_json_method = generate_tuple_struct_to_json_method(fields, use_bytemuck);
 
             quote! {
-                #[derive(Debug, Clone, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+                #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
                 pub struct #name(#(pub #tuple_fields),*);
+
+                impl #name {
+                    #to_json_method
+                }
             }
         }
         IdlTypeDefKind::Enum { kind: _, variants } => {
@@ -279,10 +552,27 @@ fn generate_custom_type(type_def: &IdlTypeDef) -> TokenStream {
                 }
             });
 
+            let enum_to_json_arms = variants.iter().map(|variant| {
+                let variant_name = format_ident!("{}", variant.name);
+                let variant_value = variant.name.clone();
+
+                quote! {
+                    Self::#variant_name => hyperstack::runtime::serde_json::Value::String(#variant_value.to_string())
+                }
+            });
+
             quote! {
-                #[derive(Debug, Clone, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+                #[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
                 pub enum #name {
                     #(#enum_variants),*
+                }
+
+                impl #name {
+                    pub fn to_json_value(&self) -> hyperstack::runtime::serde_json::Value {
+                        match self {
+                            #(#enum_to_json_arms),*
+                        }
+                    }
                 }
             }
         }
@@ -290,12 +580,15 @@ fn generate_custom_type(type_def: &IdlTypeDef) -> TokenStream {
 }
 
 fn type_to_token_stream(idl_type: &IdlType) -> TokenStream {
-    let type_str = idl_type.to_rust_type_string();
-    let tokens: TokenStream = type_str.parse().unwrap_or_else(|_| {
-        // Fallback for complex types
-        quote! { serde_json::Value }
-    });
-    tokens
+    type_to_token_stream_resolved(idl_type, false, &HashSet::new(), true)
+}
+
+fn type_to_token_stream_in_module(
+    idl_type: &IdlType,
+    account_names: &HashSet<String>,
+    in_accounts_module: bool,
+) -> TokenStream {
+    type_to_token_stream_resolved(idl_type, false, account_names, in_accounts_module)
 }
 
 #[cfg(test)]
@@ -419,14 +712,14 @@ mod tests {
     }
 
     #[test]
-    fn test_bytemuck_pubkey_gets_serde_base58() {
+    fn test_bytemuck_pubkey_to_json_uses_bs58() {
         let idl = minimal_bytemuck_idl();
         let output = generate_sdk_types(&idl, "generated_sdk");
         let code = output.to_string();
 
         assert!(
-            code.contains("pubkey_base58"),
-            "bytemuck pubkey fields should have serde(with = pubkey_base58) attribute, got: {}",
+            code.contains("bs58 :: encode"),
+            "bytemuck pubkey to_json_value should encode with bs58, got: {}",
             code
         );
     }
@@ -505,5 +798,122 @@ mod tests {
         let idl = parse_idl_content(json).expect("bytemuckunsafe should parse");
         let t = &idl.types[0];
         assert_eq!(t.serialization, Some(IdlSerialization::BytemuckUnsafe));
+    }
+
+    fn bytemuck_unsafe_idl() -> IdlSpec {
+        let json = r#"{
+            "address": "TestUnsafeProgram111111111111111111111111",
+            "metadata": {
+                "name": "test_unsafe",
+                "version": "0.1.0",
+                "spec": "0.1.0"
+            },
+            "instructions": [],
+            "accounts": [
+                {
+                    "name": "PaddedAccount",
+                    "discriminator": [1, 2, 3, 4, 5, 6, 7, 8]
+                }
+            ],
+            "types": [
+                {
+                    "name": "PaddedAccount",
+                    "serialization": "bytemuckunsafe",
+                    "repr": { "kind": "c" },
+                    "type": {
+                        "kind": "struct",
+                        "fields": [
+                            { "name": "authority", "type": "pubkey" },
+                            { "name": "value", "type": "u64" },
+                            { "name": "flag", "type": "u8" }
+                        ]
+                    }
+                },
+                {
+                    "name": "SafeType",
+                    "serialization": "bytemuck",
+                    "repr": { "kind": "c" },
+                    "type": {
+                        "kind": "struct",
+                        "fields": [
+                            { "name": "data", "type": "u64" },
+                            { "name": "padding", "type": { "array": ["u8", 8] } }
+                        ]
+                    }
+                }
+            ],
+            "events": [],
+            "errors": []
+        }"#;
+        parse_idl_content(json).expect("test IDL should parse")
+    }
+
+    #[test]
+    fn test_bytemuck_unsafe_uses_unsafe_impl_not_derive() {
+        let idl = bytemuck_unsafe_idl();
+        let output = generate_sdk_types(&idl, "generated_sdk");
+        let code = output.to_string();
+
+        assert!(
+            code.contains("unsafe impl hyperstack :: runtime :: bytemuck :: Pod for PaddedAccount"),
+            "bytemuckunsafe should emit unsafe impl Pod, got: {}",
+            code
+        );
+        assert!(
+            code.contains(
+                "unsafe impl hyperstack :: runtime :: bytemuck :: Zeroable for PaddedAccount"
+            ),
+            "bytemuckunsafe should emit unsafe impl Zeroable, got: {}",
+            code
+        );
+    }
+
+    #[test]
+    fn test_bytemuck_unsafe_does_not_derive_pod() {
+        let idl = bytemuck_unsafe_idl();
+        let output = generate_sdk_types(&idl, "generated_sdk");
+        let code = output.to_string();
+
+        let parts: Vec<&str> = code.split("pub struct PaddedAccount").collect();
+        assert!(parts.len() > 1, "PaddedAccount should exist in output");
+        let before = parts[0];
+        if let Some(pos) = before.rfind("derive") {
+            let end = (pos + 200).min(before.len());
+            let derive_block = &before[pos..end];
+            assert!(
+                !derive_block.contains("Pod"),
+                "bytemuckunsafe should NOT derive Pod on the struct, got: {}",
+                derive_block
+            );
+        }
+    }
+
+    #[test]
+    fn test_bytemuck_safe_still_uses_derive() {
+        let idl = bytemuck_unsafe_idl();
+        let output = generate_sdk_types(&idl, "generated_sdk");
+        let code = output.to_string();
+
+        let safe_section = code.split("pub struct SafeType").collect::<Vec<_>>();
+        assert!(safe_section.len() > 1, "SafeType should exist in output");
+        let before_safe = safe_section[0];
+        let last_chunk = &before_safe[before_safe.len().saturating_sub(300)..];
+        assert!(
+            last_chunk.contains("Pod"),
+            "bytemuck (safe) should still derive Pod, got: {}",
+            last_chunk
+        );
+    }
+
+    #[test]
+    fn test_bytemuck_unsafe_still_has_try_from_bytes() {
+        let idl = bytemuck_unsafe_idl();
+        let output = generate_sdk_types(&idl, "generated_sdk");
+        let code = output.to_string();
+
+        assert!(
+            code.contains("pod_read_unaligned"),
+            "bytemuckunsafe should still use pod_read_unaligned for deserialization"
+        );
     }
 }

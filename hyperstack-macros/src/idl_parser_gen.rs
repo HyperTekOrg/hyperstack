@@ -24,7 +24,6 @@ pub fn generate_named_parsers(
     quote! {
         pub mod #parser_module_ident {
             use super::#sdk_module_ident::*;
-            use hyperstack::runtime::serde::{Deserialize, Serialize};
 
             #account_parser
             #instruction_parser
@@ -43,7 +42,6 @@ fn generate_account_parser(idl: &IdlSpec, program_id: &str) -> TokenStream {
 
     let unpack_arms = idl.accounts.iter().map(|acc| {
         let variant_name = format_ident!("{}", acc.name);
-        let _discriminator = &acc.discriminator;
 
         quote! {
             d if d == accounts::#variant_name::DISCRIMINATOR => {
@@ -62,7 +60,7 @@ fn generate_account_parser(idl: &IdlSpec, program_id: &str) -> TokenStream {
             #state_enum_name::#variant_name(data) => {
                 hyperstack::runtime::serde_json::json!({
                     "type": #type_name,
-                    "data": hyperstack::runtime::serde_json::to_value(data).unwrap_or_default()
+                    "data": data.to_json_value()
                 })
             }
         }
@@ -82,7 +80,7 @@ fn generate_account_parser(idl: &IdlSpec, program_id: &str) -> TokenStream {
 
         quote! {
             #state_enum_name::#variant_name(data) => {
-                hyperstack::runtime::serde_json::to_value(data).unwrap_or_default()
+                data.to_json_value()
             }
         }
     });
@@ -223,7 +221,7 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
             } else {
                 quote! {
                     [#discriminant_value, ..] => {
-                        Ok(#ix_enum_name::#variant_name(instructions::#variant_name::default()))
+                        Ok(#ix_enum_name::#variant_name(instructions::#variant_name {}))
                     }
                 }
             }
@@ -248,7 +246,7 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
             } else {
                 quote! {
                     [#d0, #d1, #d2, #d3, #d4, #d5, #d6, #d7, ..] => {
-                        Ok(#ix_enum_name::#variant_name(instructions::#variant_name::default()))
+                        Ok(#ix_enum_name::#variant_name(instructions::#variant_name {}))
                     }
                 }
             }
@@ -263,7 +261,7 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
             #ix_enum_name::#variant_name(data) => {
                 hyperstack::runtime::serde_json::json!({
                     "type": #type_name,
-                    "data": hyperstack::runtime::serde_json::to_value(data).unwrap_or_default()
+                    "data": data.to_json_value()
                 })
             }
         }
@@ -284,7 +282,7 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
         quote! {
             #ix_enum_name::#variant_name(data) => {
                 hyperstack::runtime::serde_json::json!({
-                    "data": hyperstack::runtime::serde_json::to_value(data).unwrap_or_default()
+                    "data": data.to_json_value()
                 })
             }
         }
@@ -299,7 +297,7 @@ fn generate_instruction_parser(idl: &IdlSpec, _program_id: &str) -> TokenStream 
         quote! {
             #ix_enum_name::#variant_name(data) => {
                 let mut value = hyperstack::runtime::serde_json::json!({
-                    "data": hyperstack::runtime::serde_json::to_value(data).unwrap_or_default()
+                    "data": data.to_json_value()
                 });
 
                 if let Some(obj) = value.as_object_mut() {
