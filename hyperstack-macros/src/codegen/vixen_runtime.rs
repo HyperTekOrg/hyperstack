@@ -943,7 +943,9 @@ pub fn generate_spec_function(
                         };
 
 
-                        for callback in due {
+                        const MAX_RETRIES: u32 = 100;
+
+                        for mut callback in due {
                             let state = {
                                 let vm = vm.lock().unwrap_or_else(|e| e.into_inner());
                                 vm.get_entity_state(callback.state_id, &callback.primary_key)
@@ -952,11 +954,17 @@ pub fn generate_spec_function(
                             let state = match state {
                                 Some(s) => s,
                                 None => {
-                                    hyperstack::runtime::tracing::warn!(
-                                        entity = %callback.entity_name,
-                                        key = ?callback.primary_key,
-                                        "SlotScheduler: entity state not found, skipping"
-                                    );
+                                    if callback.retry_count < MAX_RETRIES {
+                                        callback.retry_count += 1;
+                                        let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                        sched.re_register(callback, current_slot + 1);
+                                    } else {
+                                        hyperstack::runtime::tracing::warn!(
+                                            entity = %callback.entity_name,
+                                            key = ?callback.primary_key,
+                                            "SlotScheduler: entity state not found, discarding after max retries"
+                                        );
+                                    }
                                     continue;
                                 }
                             };
@@ -965,11 +973,17 @@ pub fn generate_spec_function(
                                 match hyperstack::runtime::hyperstack_interpreter::scheduler::build_url_from_template(template, &state) {
                                     Some(u) => u,
                                     None => {
-                                        hyperstack::runtime::tracing::warn!(
-                                            entity = %callback.entity_name,
-                                            key = ?callback.primary_key,
-                                            "SlotScheduler: URL template could not be resolved"
-                                        );
+                                        if callback.retry_count < MAX_RETRIES {
+                                            callback.retry_count += 1;
+                                            let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                            sched.re_register(callback, current_slot + 1);
+                                        } else {
+                                            hyperstack::runtime::tracing::warn!(
+                                                entity = %callback.entity_name,
+                                                key = ?callback.primary_key,
+                                                "SlotScheduler: URL template unresolvable, discarding after max retries"
+                                            );
+                                        }
                                         continue;
                                     }
                                 }
@@ -1003,7 +1017,19 @@ pub fn generate_spec_function(
                                 requests,
                             ).await;
 
-                            if !url_mutations.is_empty() {
+                            if url_mutations.is_empty() {
+                                if callback.retry_count < MAX_RETRIES {
+                                    callback.retry_count += 1;
+                                    let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                    sched.re_register(callback, current_slot + 1);
+                                } else {
+                                    hyperstack::runtime::tracing::warn!(
+                                        entity = %callback.entity_name,
+                                        key = ?callback.primary_key,
+                                        "SlotScheduler: resolver returned no data, discarding after max retries"
+                                    );
+                                }
+                            } else {
                                 let slot_context = hyperstack::runtime::hyperstack_server::SlotContext::new(current_slot, 0);
                                 let batch = hyperstack::runtime::hyperstack_server::MutationBatch::with_slot_context(
                                     hyperstack::runtime::smallvec::SmallVec::from_vec(url_mutations),
@@ -2070,7 +2096,9 @@ pub fn generate_multi_pipeline_spec_function(
                         };
 
 
-                        for callback in due {
+                        const MAX_RETRIES: u32 = 100;
+
+                        for mut callback in due {
                             let state = {
                                 let vm = vm.lock().unwrap_or_else(|e| e.into_inner());
                                 vm.get_entity_state(callback.state_id, &callback.primary_key)
@@ -2079,11 +2107,17 @@ pub fn generate_multi_pipeline_spec_function(
                             let state = match state {
                                 Some(s) => s,
                                 None => {
-                                    hyperstack::runtime::tracing::warn!(
-                                        entity = %callback.entity_name,
-                                        key = ?callback.primary_key,
-                                        "SlotScheduler: entity state not found, skipping"
-                                    );
+                                    if callback.retry_count < MAX_RETRIES {
+                                        callback.retry_count += 1;
+                                        let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                        sched.re_register(callback, current_slot + 1);
+                                    } else {
+                                        hyperstack::runtime::tracing::warn!(
+                                            entity = %callback.entity_name,
+                                            key = ?callback.primary_key,
+                                            "SlotScheduler: entity state not found, discarding after max retries"
+                                        );
+                                    }
                                     continue;
                                 }
                             };
@@ -2092,11 +2126,17 @@ pub fn generate_multi_pipeline_spec_function(
                                 match hyperstack::runtime::hyperstack_interpreter::scheduler::build_url_from_template(template, &state) {
                                     Some(u) => u,
                                     None => {
-                                        hyperstack::runtime::tracing::warn!(
-                                            entity = %callback.entity_name,
-                                            key = ?callback.primary_key,
-                                            "SlotScheduler: URL template could not be resolved"
-                                        );
+                                        if callback.retry_count < MAX_RETRIES {
+                                            callback.retry_count += 1;
+                                            let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                            sched.re_register(callback, current_slot + 1);
+                                        } else {
+                                            hyperstack::runtime::tracing::warn!(
+                                                entity = %callback.entity_name,
+                                                key = ?callback.primary_key,
+                                                "SlotScheduler: URL template unresolvable, discarding after max retries"
+                                            );
+                                        }
                                         continue;
                                     }
                                 }
@@ -2130,7 +2170,19 @@ pub fn generate_multi_pipeline_spec_function(
                                 requests,
                             ).await;
 
-                            if !url_mutations.is_empty() {
+                            if url_mutations.is_empty() {
+                                if callback.retry_count < MAX_RETRIES {
+                                    callback.retry_count += 1;
+                                    let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                    sched.re_register(callback, current_slot + 1);
+                                } else {
+                                    hyperstack::runtime::tracing::warn!(
+                                        entity = %callback.entity_name,
+                                        key = ?callback.primary_key,
+                                        "SlotScheduler: resolver returned no data, discarding after max retries"
+                                    );
+                                }
+                            } else {
                                 let slot_context = hyperstack::runtime::hyperstack_server::SlotContext::new(current_slot, 0);
                                 let batch = hyperstack::runtime::hyperstack_server::MutationBatch::with_slot_context(
                                     hyperstack::runtime::smallvec::SmallVec::from_vec(url_mutations),
