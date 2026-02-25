@@ -24,62 +24,74 @@ Building data pipelines for Solana typically involves manual account parsing, co
 
 ## Anatomy of a Stack Definition
 
-A Hyperstack definition is a Rust module annotated with `#[hyperstack]`. Inside this module, you define **Entities**—the structured data objects your application will consume. A single module can contain multiple `#[entity]` structs, all packaged into one stack.
+A Hyperstack definition is a Rust module annotated with `#[hyperstack]`. Inside this module, you define **Entities** — the structured data objects your application will consume. A single module can contain multiple `#[entity]` structs, all packaged into one stack.
+
+The ORE stack is a real example. Here's a simplified version showing the core concepts with a single IDL:
 
 ```rust
 use hyperstack::prelude::*;
 
-#[hyperstack(idl = "path/to/idl.json")]
-pub mod my_stream {
+#[hyperstack(idl = "idl/ore.json")]
+pub mod ore_stream {
     use hyperstack::macros::Stream;
     use serde::{Deserialize, Serialize};
 
-    #[entity(name = "Token")]
-    pub struct Token {
-        pub id: TokenId,
-        pub state: TokenState,
-        pub metrics: TokenMetrics,
+    // OreRound is the main entity -- one instance per mining round.
+    // The `latest` view sorts rounds descending by round_id.
+    #[entity(name = "OreRound")]
+    #[view(name = "latest", sort_by = "id.round_id", order = "desc")]
+    pub struct OreRound {
+        pub id: RoundId,
+        pub state: RoundState,
+        pub metrics: RoundMetrics,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
-    pub struct TokenId {
-        /// The primary key (mint address)
-        #[map(pump_sdk::accounts::BondingCurve::mint, primary_key, strategy = SetOnce)]
-        pub mint: String,
+    pub struct RoundId {
+        // Primary key -- set once, never overwritten
+        #[map(ore_sdk::accounts::Round::id, primary_key, strategy = SetOnce)]
+        pub round_id: u64,
+
+        #[map(ore_sdk::accounts::Round::__account_address, lookup_index, strategy = SetOnce)]
+        pub round_address: String,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
-    pub struct TokenState {
-        /// Live reserves mapped from account state
-        #[map(pump_sdk::accounts::BondingCurve::reserves, strategy = LastWrite)]
-        pub reserves: Option<u64>,
+    pub struct RoundState {
+        // LastWrite: overwritten each time the account updates
+        #[map(ore_sdk::accounts::Round::motherlode, strategy = LastWrite)]
+        pub motherlode: Option<u64>,
 
-        /// Computed field derived from existing fields
-        #[computed(state.reserves.map(|r| r * 100))]
-        pub tvl: Option<u64>,
+        #[map(ore_sdk::accounts::Round::total_deployed, strategy = LastWrite)]
+        pub total_deployed: Option<u64>,
+
+        // Computed field: derived from other fields in this entity
+        #[computed(state.total_deployed.map(|d| d / 1_000_000_000))]
+        pub total_deployed_sol: Option<u64>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
-    pub struct TokenMetrics {
-        /// Total volume aggregated from individual trade events
-        #[aggregate(from = pump_sdk::instructions::Trade, field = amount, strategy = Sum, lookup_by = accounts::mint)]
-        pub total_volume: Option<u64>,
+    pub struct RoundMetrics {
+        // Aggregate: counts Deploy instructions referencing this round
+        #[aggregate(from = ore_sdk::instructions::Deploy, strategy = Count, lookup_by = accounts::round)]
+        pub deploy_count: Option<u64>,
     }
 }
 ```
 
 :::note[SDK Module Naming]
-Hyperstack derives the program name from the IDL metadata and generates a typed SDK module named `{name}_sdk`. For example, an IDL for the "pump" program produces `pump_sdk::accounts::*` and `pump_sdk::instructions::*`. All `#[map]` and `#[aggregate]` paths use this prefix.
+Hyperstack derives the program name from the IDL metadata and generates a typed SDK module named `{name}_sdk`. The ORE IDL produces `ore_sdk::accounts::*` and `ore_sdk::instructions::*`. The Entropy IDL produces `entropy_sdk::*`. All `#[map]` and `#[aggregate]` paths use these prefixes.
 :::
 
 ### Key Components
 
-1.  **`#[hyperstack]` Module**: The container for your definition. It links to your data sources (IDL or Protobuf files). The `idl` argument also accepts an array for multi-program stacks: `idl = ["pump.json", "raydium.json"]`.
-2.  **`#[entity]` Struct**: Defines a projection of on-chain data. Each entity represents a collection of related data that will be streamed as a single unit. Entities compose nested structs—they do NOT use `#[derive(Stream)]`.
-3.  **`#[derive(Stream)]` Structs**: Nested structs that contain the actual field mappings. These derive `Stream` along with `Debug`, `Clone`, `Serialize`, and `Deserialize`.
-4.  **Primary Key**: Every entity must have a primary key (usually a `Pubkey` or `String`). This is how Hyperstack tracks individual instances of an entity.
-5.  **Field Mappings**: Attributes on struct fields that define where the data comes from and how it's processed.
-
+1. **`#[hyperstack]` Module** — The container for your definition. The `idl` argument accepts a single path or an array for multi-program stacks.
+2. **`#[entity]` Struct** — An entity is an individual definition of some part of your app's data. Each entity represents a distinct concept — a round, a miner, a treasury — and declares exactly which on-chain fields belong to it, across as many accounts or programs as needed. A stack can have many entities.
+3. **`#[view]`** — A view is a projection over an entity's data. It defines what slice of the stream a client subscribes to. Every entity gets `state` (one item by key) and `list` (all items) by default. `#[view]` adds custom sorted or filtered projections on top — like `OreRound/latest` which streams rounds sorted by `round_id` descending.
+4. **`#[derive(Stream)]` Structs** — Nested structs containing the actual field mappings. Must derive `Stream`, `Debug`, `Clone`, `Serialize`, and `Deserialize`.
+5. **Primary Key** — Every entity needs one (annotated `primary_key`). This is how Hyperstack tracks individual entity instances.
+6. **Field Mappings** — Attributes on struct fields defining where data comes from and how it's processed.
+7. **Resolvers** — Fetch off-chain data (e.g. token metadata) and make it available to transforms.
 ---
 
 ## Mapping Types

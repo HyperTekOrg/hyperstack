@@ -173,24 +173,44 @@ pub total_volume: u64,
 **Arguments:**
 Takes a single Rust expression. Can reference other fields in the entity.
 
-### `TokenMetadata` (Resolver)
+### `#[resolve]`
 
-Add a field typed as `TokenMetadata` to automatically enrich your entity with off-chain token metadata. Hyperstack resolves this server-side from the entity's mint address — no configuration needed beyond adding the field.
+Attaches a resolver to a field. Hyperstack fetches the external data server-side and delivers it as part of the entity — no extra API calls needed from the client.
 
 ```rust
-#[entity]
-pub struct Token {
-    #[map(pump_sdk::accounts::BondingCurve::__account_address, primary_key)]
-    pub mint: String,
-
-    // Resolved automatically from the mint
-    pub token_metadata: Option<TokenMetadata>,
-
-    // Use resolver computed methods in #[computed] expressions
-    #[computed(TokenMetadata::ui_amount(raw_balance, token_metadata.decimals))]
-    pub balance_ui: Option<f64>,
-}
+#[resolve(address = "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp")]
+pub ore_metadata: Option<TokenMetadata>,
 ```
+
+**Arguments:**
+
+| Argument  | Type     | Required | Description                                                                                              |
+| --------- | -------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| `address` | `string` | Yes      | The fixed address to resolve against. For `TokenMetadata` this is the mint address. |
+
+**Available resolvers:**
+
+| Resolver        | Type field                | What it fetches                                                                 |
+| --------------- | ------------------------- | ------------------------------------------------------------------------------- |
+| `TokenMetadata` | `Option<TokenMetadata>`   | SPL token metadata (name, symbol, decimals, logo) via the DAS API               |
+
+Once resolved, the data is available to other fields in the same entity. Use `#[computed]` to derive values from it, or reference the resolver fields directly in `#[map]` transforms:
+
+```rust
+// Option A: use resolver decimals in a transform on #[map]
+#[map(ore_sdk::accounts::Round::motherlode, strategy = LastWrite,
+      transform = ui_amount(ore_metadata.decimals))]
+pub motherlode: Option<f64>,
+
+// Option B: use resolver computed methods in #[computed]
+#[map(ore_sdk::accounts::Round::motherlode, strategy = LastWrite)]
+pub motherlode_raw: Option<u64>,
+
+#[computed(state.motherlode_raw.and_then(|v| ore_metadata.ui_amount(v)))]
+pub motherlode_ui: Option<f64>,
+```
+
+Resolver data is cached server-side — metadata is fetched once per address and reused across all entities that reference it.
 
 See [Resolvers](./resolvers) for the full reference on `TokenMetadata` fields and computed methods.
 

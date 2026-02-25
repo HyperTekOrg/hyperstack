@@ -2,21 +2,20 @@
 title: Quickstart
 sidebar:
   order: 1
-  badge: Start Here
-description: Scaffold a new Hyperstack app in under 2 minutes.
+description: Run the ORE demo and see live Solana data streaming in minutes.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 import Workflow from "../../../components/Workflow.astro";
 
-Create a new app that streams live Solana data in under 2 minutes. The CLI scaffolds everything you need — no configuration required.
+This quickstart gets you streaming live Solana data in a few minutes using the ORE demo — a real, deployed Hyperstack stack for the ORE mining program. It's the fastest way to see Hyperstack in action.
+
+:::note[What this covers]
+This guide walks through the ORE demo only. It's a good starting point to understand how Hyperstack feels, but it doesn't cover building your own stacks or integrating with your own on-chain programs. For those paths, see the [Next Steps](#next-steps) section below.
+:::
 
 :::tip[Prefer AI-assisted development?]
 If you're using Cursor, Claude Code, or another AI coding tool, check out [Build with AI](/agent-skills/overview/) — paste one prompt and your AI sets everything up.
-:::
-
-:::note[Adding to an existing project?]
-If you already have a project and want to add Hyperstack, see [Connect to a Stack](/using-stacks/connect/) instead.
 :::
 
 ---
@@ -26,6 +25,23 @@ If you already have a project and want to add Hyperstack, see [Connect to a Stac
 Choose how you want to run the CLI:
 
 <Tabs>
+<TabItem label="Cargo (Rust)">
+
+Install the native binary via Cargo:
+
+```bash
+cargo install hyperstack-cli
+```
+
+Then use the `hs` command:
+
+```bash
+hs create my-app
+```
+
+This is the same CLI — Cargo installs it as `hs` while npm uses `hyperstack-cli`.
+
+</TabItem>
 <TabItem label="npx (no install)">
 
 No installation needed — just run:
@@ -52,32 +68,35 @@ hyperstack-cli create my-app
 ```
 
 </TabItem>
-<TabItem label="Cargo (Rust)">
-
-Install the native binary via Cargo:
-
-```bash
-cargo install hyperstack-cli
-```
-
-Then use the `hs` command:
-
-```bash
-hs create my-app
-```
-
-This is the same CLI — Cargo installs it as `hs` while npm uses `hyperstack-cli`.
-
-</TabItem>
 </Tabs>
 
 ---
 
 ## Create Your App
 
+<Tabs>
+<TabItem label="Cargo (Rust)">
+
+```bash
+hs create my-app
+```
+
+</TabItem>
+<TabItem label="npx (no install)">
+
 ```bash
 npx hyperstack-cli create my-app
 ```
+
+</TabItem>
+<TabItem label="npm (global)">
+
+```bash
+hyperstack-cli create my-app
+```
+
+</TabItem>
+</Tabs>
 
 You'll be prompted to select a template:
 
@@ -88,26 +107,34 @@ You'll be prompted to select a template:
 | `rust-ore`       | Rust + Tokio client    | `cargo run`                                                  |
 
 :::note[About the ORE demo]
-All CLI templates use the same underlying example: **ORE mining rounds**. This demonstrates Hyperstack with a real, live Solana program. The templates differ only in language/framework — React for a web dashboard, TypeScript for a CLI tool, or Rust for a native binary. Each connects to the same public ORE stack and streams identical data.
+All templates use the same example: **ORE mining rounds** — a real, live Solana program. The templates differ only in language/framework. Each connects to the same public ORE stack and streams identical data.
 :::
 
-Or specify directly:
+Or specify the template directly:
+
+<Tabs>
+<TabItem label="Cargo (Rust)">
 
 ```bash
-npx hyperstack-cli create my-app --template react-ore    # or typescript-ore, rust-ore
+hs create my-app --template rust-ore  # or react-ore, typescript-ore
 ```
 
-:::tip[Pure Rust workflow]
-If you prefer to avoid Node.js entirely:
+</TabItem>
+<TabItem label="npx (no install)">
 
 ```bash
-cargo install hyperstack-cli
-hs create my-app --template rust-ore
-cd my-app
-cargo run
+npx hyperstack-cli create my-app --template react-ore  # or typescript-ore, rust-ore
 ```
 
-:::
+</TabItem>
+<TabItem label="npm (global)">
+
+```bash
+hyperstack-cli create my-app --template react-ore  # or typescript-ore, rust-ore
+```
+
+</TabItem>
+</Tabs>
 
 That's it. You're streaming live Solana data.
 
@@ -271,11 +298,19 @@ See [Build with AI](/agent-skills/overview/) for the full guide and prompt cookb
 
 ## Next Steps
 
-Now that you have a working app:
+Now that you've seen Hyperstack in action, where you go next depends on what you're building:
 
-- [Build with AI](/agent-skills/overview/) — Let your AI agent write Hyperstack code with agent skills
-- [How It Works](/using-stacks/how-it-works/) — Understand Stacks, Views, and live data streaming
-- [React SDK](/sdks/react/) — Build a complete React app with custom stack definitions
-- [TypeScript SDK](/sdks/typescript/) — Use Hyperstack with Node.js, Vue, Svelte, or vanilla JS
+**Using an existing on-chain program that has a Hyperstack stack?**
+- [Connect to a Stack](/using-stacks/connect/) — Add Hyperstack to an existing project
+- [React SDK](/sdks/react/) — Build a full React app against a deployed stack
+- [TypeScript SDK](/sdks/typescript/) — Use Hyperstack in Node.js, Vue, Svelte, or vanilla JS
 - [Rust SDK](/sdks/rust/) — Native Rust client
-- [Build Your Own Stack](/building-stacks/workflow) — Create custom data streams for any Solana program
+
+**Have your own on-chain program and want to stream its data?**
+- [Build Your Own Stack](/building-stacks/workflow/) — Create a custom data stream for any Solana program
+
+**Want to understand what's happening under the hood?**
+- [How It Works](/using-stacks/how-it-works/) — Stacks, Views, and how live data flows
+
+**Using an AI coding tool?**
+- [Build with AI](/agent-skills/overview/) — Let your agent write Hyperstack code with the right context

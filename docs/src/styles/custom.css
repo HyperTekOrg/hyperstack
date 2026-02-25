@@ -297,6 +297,11 @@ main h3 {
   margin-bottom: 0.5rem;
 }
 
+/* Anchor link icon on headings - add spacing */
+main .sl-anchor-link {
+  margin-left: 0.35em;
+}
+
 /* Paragraphs */
 main p {
   font-size: var(--sl-text-base);

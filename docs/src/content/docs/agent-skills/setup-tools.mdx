@@ -1,0 +1,137 @@
+---
+title: AI Tooling Setup
+sidebar:
+  order: 0
+description: Get started with Hyperstack by setting up an AI coding assistant that writes code for you.
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+import CopyPrompt from "../../../components/CopyPrompt.astro";
+
+You don't need to know how to code to build with Hyperstack. AI coding tools can write all the code for you — you just tell them what you want in plain English.
+
+Hyperstack works with any AI coding agent. This guide uses **Cursor** as the example, but the same steps apply to Claude Code, Windsurf, OpenCode, or any other agent you prefer.
+
+---
+
+## What You'll Need
+
+- A computer (Mac, Windows, or Linux)
+- An internet connection
+- About 10 minutes
+
+That's it. No programming experience required.
+
+---
+
+## Step 1: Install Cursor
+
+[Cursor](https://cursor.sh) is an AI-powered code editor — a good starting point if you don't already have a tool you prefer.
+
+1. Go to [cursor.sh](https://cursor.sh) and download the version for your OS
+2. Open the downloaded file and follow the installation prompts
+3. Launch Cursor and create a free account
+
+:::tip[Already have an AI coding tool?]
+If you're already using Claude Code, Windsurf, OpenCode, or another agent, skip to [Step 2](#step-2-create-a-project-folder). Hyperstack works with all of them.
+:::
+
+:::tip[Cursor is free to start]
+Cursor offers a free tier with limited AI queries per month — plenty for getting started.
+:::
+
+---
+
+## Step 2: Create a Project Folder
+
+Create a folder for your project and open it in your AI tool.
+
+**On Mac:** Open Finder, navigate to Documents (or wherever you keep projects), right-click → **New Folder**, name it `my-hyperstack-app`, then open it in Cursor via **File → Open Folder**.
+
+**On Windows:** Open File Explorer, navigate to Documents, right-click → **New → Folder**, name it `my-hyperstack-app`, then open it in Cursor via **File → Open Folder**.
+
+**On Linux / terminal-based tools:**
+```bash
+mkdir ~/my-hyperstack-app
+cd ~/my-hyperstack-app
+```
+Then open the folder in your editor, or start your agent in that directory.
+
+---
+
+## Step 3: Let Your AI Set Up Hyperstack
+
+Paste this prompt into your AI assistant's chat:
+
+<CopyPrompt>
+Read https://docs.usehyperstack.com/agent.md and follow the instructions to set up Hyperstack in this project
+</CopyPrompt>
+
+In Cursor, press `Cmd+L` (Mac) or `Ctrl+L` (Windows) to open the AI chat sidebar, paste the prompt, and press Enter. Approve any commands it asks to run.
+
+For terminal-based agents (Claude Code, OpenCode, etc.), just paste it directly and press Enter.
+
+### What happens next
+
+Your AI will:
+
+1. **Install the Hyperstack CLI** — the command-line tool for Hyperstack
+2. **Install agent skills** — teaching itself how to use Hyperstack correctly
+3. **Discover available data** — finding out what blockchain data you can access
+4. **Be ready to build** — waiting for your next instruction
+
+This takes about 1–2 minutes.
+
+---
+
+## Step 4: Scaffold the ORE Template
+
+Run this in your terminal to create a working ORE dashboard:
+
+```bash
+npx hyperstack-cli create my-ore-app --template react-ore
+cd my-ore-app
+npm install
+npm run dev
+```
+
+Open [localhost:5173](http://localhost:5173) and you'll see live ORE mining data streaming from Solana.
+
+---
+
+## Step 5: Customise It With Your AI
+
+Now open the project in Cursor and try this prompt:
+
+<CopyPrompt>
+I have a Hyperstack ORE dashboard running using the react-ore template. Update the mining grid so each square is coloured as a heatmap based on the amount of SOL deployed to that square — more SOL should glow brighter. Keep the existing dark theme.
+</CopyPrompt>
+
+Your AI already knows how to use Hyperstack from Step 3 — it will find the right views and update the component for you.
+
+---
+
+## Troubleshooting
+
+**"Command not found" errors** — You may need to install Node.js first. Download the LTS version from [nodejs.org](https://nodejs.org), install it, then restart your AI tool and try again.
+
+**The AI seems confused** — Make sure it completed Step 3. You can re-paste the setup prompt to re-run it.
+
+---
+
+## Next Steps
+
+<CardGrid>
+  <Card title="Build a Dashboard" icon="rocket">
+    Follow our step-by-step tutorial to build a complete ORE mining dashboard.
+
+    [Start tutorial →](/agent-skills/tutorial-ore-dashboard/)
+
+  </Card>
+  <Card title="Copy-Paste Prompts" icon="document">
+    Browse our cookbook of ready-to-use prompts for common tasks.
+
+    [View prompts →](/agent-skills/prompts/)
+
+  </Card>
+</CardGrid>

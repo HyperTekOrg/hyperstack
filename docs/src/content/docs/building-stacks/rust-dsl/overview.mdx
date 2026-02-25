@@ -42,6 +42,7 @@ pub mod my_stream {
         pub tvl: u64,
 
         // Enrich with off-chain token metadata (name, symbol, decimals, logo)
+        #[resolve(address = "So11111111111111111111111111111111111111112")]
         pub token_metadata: Option<TokenMetadata>,
     }
 }
@@ -79,7 +80,29 @@ Field paths use the `{name}_sdk::accounts::` and `{name}_sdk::instructions::` pr
 | `#[snapshot]`         | Captures complete account state              |
 | `#[computed]`         | Derives values from other entity fields      |
 | `#[derive_from]`      | Populates from instruction metadata          |
-| `TokenMetadata`       | Resolves off-chain token metadata for a mint |
+| `#[resolve]`          | Fetches off-chain data via a named resolver  |
+
+### Resolvers
+
+Resolvers are types that fetch external data server-side and deliver it as part of your entity. You attach them to fields using `#[resolve]`.
+
+| Resolver        | Purpose                                                                                              |
+| --------------- | ---------------------------------------------------------------------------------------------------- |
+| `TokenMetadata` | Fetches SPL token metadata (name, symbol, decimals, logo) for a mint address via the DAS API. Also exposes `ui_amount` and `raw_amount` helper methods for use in `#[computed]` transforms. |
+
+For example, the ORE stack resolves token metadata for the ORE mint at a known address:
+
+```rust
+#[resolve(address = "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp")]
+pub ore_metadata: Option<TokenMetadata>,
+
+// The resolved decimals can then be used in transforms:
+#[map(ore_sdk::accounts::Round::motherlode, strategy = LastWrite,
+      transform = ui_amount(ore_metadata.decimals))]
+pub motherlode: Option<f64>,
+```
+
+See [Resolvers](./resolvers) for the full reference.
 
 ### Cross-Account Resolution
 

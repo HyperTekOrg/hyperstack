@@ -1,0 +1,137 @@
+---
+title: What is Hyperstack?
+sidebar:
+  order: 0
+description: A plain-English introduction to Hyperstack and what you can build with it.
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+import Workflow from "../../../components/Workflow.astro";
+
+**Programmable data streams for Solana.** You declare what you want — which programs, which accounts, which fields — and Hyperstack delivers a typed, live stream straight to your app. No polling, no backend plumbing, no data wrangling.
+
+---
+
+## The Simple Version
+
+Here's the flow:
+
+<Workflow steps={[
+  {
+    title: "Solana Blockchain",
+    description: "Someone trades a token, mines ORE, or stakes"
+  },
+  {
+    title: "Hyperstack",
+    description: "Transforms the raw data into what you need"
+  },
+  {
+    title: "Your App",
+    description: "Your dashboard updates in real-time"
+  }
+]} />
+
+1. **Something happens on Solana** — a trade, a transfer, a vote, anything
+2. **Hyperstack processes it** — turns raw blockchain data into clean, structured information
+3. **Your app gets it instantly** — no delay, no polling, no manual refreshing
+
+---
+
+## What Can You Build?
+
+Hyperstack is especially good for apps that need **live data**:
+
+- **Dashboards** — Show mining stats, token prices, or DeFi positions updating in real-time
+- **Real-time UIs** — Build interfaces that react instantly to on-chain state changes without a single refresh
+- **Trading tools** — Display live order flow, liquidity changes, or market metrics
+- **Portfolio trackers** — Track wallet balances and activity as they happen
+- **Analytics** — Aggregate on-chain events (totals, counts, trends) without building your own backend
+- **Monitoring** — Watch specific programs or accounts for activity
+
+---
+
+## How People Build With It
+
+Without Hyperstack, getting live on-chain data means writing polling loops, handling RPC rate limits, and parsing raw account bytes. It's a lot of plumbing before you write a single line of actual product.
+
+With Hyperstack, you declare the stream — Hyperstack handles the rest. The typed data flows to wherever you consume it:
+
+```tsx
+// React UI — component re-renders live as chain state changes
+const { data: round } = views.OreRound.latest.use();
+```
+
+```ts
+// TypeScript backend — process events as they arrive
+const stream = await stack.views.OreRound.latest.subscribe();
+for await (const round of stream) {
+  await db.upsert(round);
+}
+```
+
+```rust
+// Rust service — zero-copy typed events at the edge
+let mut stream = stack.views().ore_round().latest().subscribe().await?;
+while let Some(round) = stream.next().await {
+    process(round?);
+}
+```
+
+The data is fully typed regardless of how you consume it. It updates the moment the chain does.
+
+### Two ways to get there
+
+**AI-assisted** — Describe what you want in plain English. Your AI coding tool (Cursor, Claude Code, etc.) writes all the Hyperstack code for you. Most people have something running in under 30 minutes — no prior coding experience needed.
+
+**Direct SDK** — Use the React, TypeScript, or Rust SDKs yourself. Full type safety, React hooks, streaming iterators for backends, and native Rust for high-performance services.
+
+---
+
+## Key Ideas
+
+Hyperstack is built around a simple contract: **you declare what you want, we deliver the stream.**
+
+**Stacks** are your declaration. A Stack is a named collection of semantically related data — the accounts, fields, and programs needed for a specific feature or app. That data might come from one program or many. When you connect to a Stack, you're saying *"give me everything I need for this."* Existing stacks (like ORE) are ready to use. You can also build your own.
+
+**Entities** are the individual pieces of data a stack defines. Each entity represents a distinct concept in your app — a round, a miner, a treasury. You write them as Rust structs that declare exactly which on-chain fields you care about, across as many accounts and programs as needed. The ORE stack defines three:
+
+| Entity | What it represents |
+| --- | --- |
+| `OreRound` | A single mining round — state, results, grid data, entropy |
+| `OreTreasury` | The protocol-wide treasury account |
+| `OreMiner` | A miner's rewards, state, and automation config |
+
+**Views** are projections over an entity's data — they define what slice of the stream your app subscribes to. Every entity gets `list` (all items) and `state` (one item by key) by default. Custom views add sorted or filtered variants on top. The ORE stack exposes:
+
+| View | Entity | What it returns |
+| --- | --- | --- |
+| `OreRound/state` | OreRound | A single round by key |
+| `OreRound/list` | OreRound | All rounds |
+| `OreRound/latest` | OreRound | Rounds sorted by round\_id descending |
+| `OreTreasury/state` | OreTreasury | The treasury account |
+| `OreTreasury/list` | OreTreasury | All treasury records |
+| `OreMiner/state` | OreMiner | A single miner by wallet address |
+| `OreMiner/list` | OreMiner | All miners |
+
+Note that views maintain a rolling cache — they're optimised for live data, not full historical queries. Full historical access is on the roadmap.
+
+**SDKs** are the wire. React hooks, a TypeScript client, and a Rust client all connect to the same streams. Use whichever fits your stack — or mix them across services in the same project.
+
+---
+
+## Next Steps
+
+<CardGrid>
+  <Card title="New to Coding?" icon="rocket">
+    Set up AI coding tools and build your first Hyperstack app with zero programming experience.
+
+    [Set up your tools →](/agent-skills/setup-tools/)
+
+  </Card>
+  <Card title="Already a Developer?" icon="laptop">
+    Jump straight to the SDK and start streaming live Solana data in minutes.
+
+    [Quickstart →](/using-stacks/quickstart/)
+
+  </Card>
+</CardGrid>

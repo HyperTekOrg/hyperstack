@@ -4,11 +4,12 @@ description: Build Solana apps with live blockchain data
 ---
 
 import { Card, CardGrid, Tabs, TabItem } from "@astrojs/starlight/components";
+import CopyPrompt from "../../components/CopyPrompt.astro";
 import Workflow from "../../components/Workflow.astro";
 
-**Build Solana apps with live blockchain data.** No indexers. No polling. No infrastructure to manage.
+**Programmable data streams for Solana.** No indexers. No polling. No infrastructure to manage.
 
-Hyperstack streams real-time data from the Solana blockchain directly to your app. Whether you're new to coding or a seasoned developer, there's a path for you.
+Hyperstack streams real-time blockchain data directly to your app. Define what data you need and Hyperstack transforms on-chain events into typed, live feeds — consumed via React hooks, TypeScript streams, or Rust clients.
 
 ---
 
@@ -20,7 +21,7 @@ Hyperstack streams real-time data from the Solana blockchain directly to your ap
 
     No programming experience required.
 
-    [Get started →](/getting-started/setup-tools/)
+    [Get started →](/agent-skills/setup-tools/)
 
   </Card>
   <Card title="I Use AI Coding Tools" icon="star">
@@ -47,19 +48,22 @@ Hyperstack streams real-time data from the Solana blockchain directly to your ap
 
 Hyperstack connects your app to live Solana blockchain data. Instead of polling RPCs or building custom indexers, you define what data you want and Hyperstack streams it to you as it happens on-chain.
 
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│     Solana      │ ──▶ │   Hyperstack    │ ──▶ │    Your App     │
-│   (on-chain)    │     │  (transforms +  │     │   (live feed)   │
-│                 │     │    streams)     │     │                 │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-```
+<Workflow steps={[
+  {
+    title: "Solana",
+    description: "On-chain data"
+  },
+  {
+    title: "Hyperstack",
+    description: "Transforms + streams"
+  },
+  {
+    title: "Your App",
+    description: "Live feed"
+  }
+]} />
 
 **Think of it like a live database query against the blockchain** — you subscribe once and get updates pushed to you automatically.
-
-:::note[What is Solana?]
-Solana is a fast blockchain (like Ethereum, but quicker). Apps built on Solana include trading platforms, games, and financial tools. Hyperstack lets you build apps that display and react to what's happening on Solana in real-time.
-:::
 
 ---
 
@@ -141,11 +145,7 @@ async fn main() -> anyhow::Result<()> {
 </Tabs>
 
 :::tip[Don't want to write code?]
-If you're using an AI coding assistant, just paste this prompt:
-
-*"Connect to the Hyperstack ORE stack and show me live mining round data in a React dashboard"*
-
-Your AI will write everything for you. See [Build with AI](/agent-skills/overview/) to get started.
+Paste the prompt below into your AI coding assistant — it handles everything.
 :::
 
 ---
@@ -214,7 +214,34 @@ Already comfortable with code? Here are the fastest paths:
 
 ---
 
-## Build Custom Data Pipelines
+## Build with AI
+
+Paste this into any AI coding assistant (Cursor, Claude Code, Windsurf, or any agent that can read URLs) and it will set up Hyperstack and build an ORE mining dashboard for you:
+
+<CopyPrompt>
+Read https://docs.usehyperstack.com/agent.md and follow the instructions to set up Hyperstack in this project. Then build a React dashboard that shows live ORE mining round data with Tailwind CSS dark theme.
+</CopyPrompt>
+
+Your AI will install the CLI, learn the SDK patterns, connect to live Solana data, and build the app — all from that one prompt.
+
+<CardGrid>
+  <Card title="New to Coding?" icon="rocket">
+    **Never used AI coding tools?** We'll walk you through installing Cursor or similar from scratch.
+
+    [Set up your tools →](/agent-skills/setup-tools/)
+
+  </Card>
+  <Card title="Prompt Cookbook" icon="document">
+    **Browse ready-made prompts** for dashboards, analytics, and custom data feeds.
+
+    [View prompts →](/agent-skills/prompts/)
+
+  </Card>
+</CardGrid>
+
+---
+
+## Build Custom Streams
 
 Want to create your own data feeds? Build stacks that transform on-chain events into structured, streaming data.
 
