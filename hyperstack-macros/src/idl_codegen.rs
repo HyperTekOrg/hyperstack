@@ -579,6 +579,7 @@ fn generate_custom_type(type_def: &IdlTypeDef, account_names: &HashSet<String>) 
     }
 }
 
+#[allow(dead_code)]
 fn type_to_token_stream(idl_type: &IdlType) -> TokenStream {
     type_to_token_stream_resolved(idl_type, false, &HashSet::new(), true)
 }
