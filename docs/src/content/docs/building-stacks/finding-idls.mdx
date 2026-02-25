@@ -78,3 +78,25 @@ pub struct MyStack;
 | ORE            | `oreo7nRnU86QCen6Np3iH6q8C6c6K6c6K6c6K6c6K6c` | [GitHub](https://github.com/regolith-labs/ore) |
 | System Program | `11111111111111111111111111111111`            | Built-in                                       |
 | Token Program  | `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` | Built-in                                       |
+
+---
+
+## Exploring IDLs with the CLI
+
+Once you have an IDL file, use `hs idl` to explore it before writing your stack:
+
+```bash
+# Get a quick overview
+hs idl summary idl/program.json
+
+# Browse all instructions
+hs idl instructions idl/program.json
+
+# Find how accounts relate to each other
+hs idl relations idl/program.json
+
+# Search for anything
+hs idl search idl/program.json <query>
+```
+
+See the [hs idl reference](/cli/idl/) for the full command list.
