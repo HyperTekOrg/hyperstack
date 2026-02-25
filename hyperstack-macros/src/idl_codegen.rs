@@ -382,7 +382,8 @@ fn generate_account_type(
         }
     } else {
         quote! {
-            #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+            #[derive(Debug, Clone, BorshSerialize, BorshDeserialize, hyperstack::runtime::serde::Serialize, hyperstack::runtime::serde::Deserialize)]
+            #[serde(crate = "hyperstack::runtime::serde")]
             pub struct #name {
                 #(#fields),*
             }
@@ -516,7 +517,8 @@ fn generate_custom_type(type_def: &IdlTypeDef, account_names: &HashSet<String>) 
                 }
             } else {
                 quote! {
-                    #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+                    #[derive(Debug, Clone, BorshSerialize, BorshDeserialize, hyperstack::runtime::serde::Serialize, hyperstack::runtime::serde::Deserialize)]
+                    #[serde(crate = "hyperstack::runtime::serde")]
                     pub struct #name {
                         #(#struct_fields),*
                     }
@@ -534,7 +536,8 @@ fn generate_custom_type(type_def: &IdlTypeDef, account_names: &HashSet<String>) 
             let to_json_method = generate_tuple_struct_to_json_method(fields, use_bytemuck);
 
             quote! {
-                #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+                #[derive(Debug, Clone, BorshSerialize, BorshDeserialize, hyperstack::runtime::serde::Serialize, hyperstack::runtime::serde::Deserialize)]
+                #[serde(crate = "hyperstack::runtime::serde")]
                 pub struct #name(#(pub #tuple_fields),*);
 
                 impl #name {
@@ -562,7 +565,8 @@ fn generate_custom_type(type_def: &IdlTypeDef, account_names: &HashSet<String>) 
             });
 
             quote! {
-                #[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
+                #[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize, hyperstack::runtime::serde::Serialize, hyperstack::runtime::serde::Deserialize)]
+                #[serde(crate = "hyperstack::runtime::serde")]
                 pub enum #name {
                     #(#enum_variants),*
                 }
