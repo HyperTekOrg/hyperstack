@@ -10,6 +10,12 @@ pub struct SlotScheduler {
     registered: HashSet<(String, String, String)>,
 }
 
+impl Default for SlotScheduler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SlotScheduler {
     pub fn new() -> Self {
         Self {
@@ -84,7 +90,7 @@ pub fn build_url_from_template(template: &[UrlTemplatePart], state: &Value) -> O
                 }
                 match val.as_str() {
                     Some(s) => url.push_str(s),
-                    None => url.push_str(&val.to_string().trim_matches('"').to_string()),
+                    None => url.push_str(val.to_string().trim_matches('"')),
                 }
             }
         }

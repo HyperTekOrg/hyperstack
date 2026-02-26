@@ -2657,7 +2657,7 @@ impl VmContext {
                                             match val.as_str() {
                                                 Some(s) => url.push_str(s),
                                                 None => url.push_str(
-                                                    &val.to_string().trim_matches('"').to_string(),
+                                                    val.to_string().trim_matches('"'),
                                                 ),
                                             }
                                         }
