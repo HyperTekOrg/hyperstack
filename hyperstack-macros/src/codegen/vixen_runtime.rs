@@ -1004,6 +1004,26 @@ pub fn generate_spec_function(
                                         continue;
                                     }
                                 }
+                            } else if let Some(ref val) = callback.input_value {
+                                match val.as_str() {
+                                    Some(s) => s.to_string(),
+                                    None => val.to_string().trim_matches('"').to_string(),
+                                }
+                            } else if let Some(ref path) = callback.input_path {
+                                match hyperstack::runtime::hyperstack_interpreter::scheduler::get_value_at_path(&state, path) {
+                                    Some(v) if !v.is_null() => match v.as_str() {
+                                        Some(s) => s.to_string(),
+                                        None => v.to_string().trim_matches('"').to_string(),
+                                    },
+                                    _ => {
+                                        if callback.retry_count < MAX_RETRIES {
+                                            callback.retry_count += 1;
+                                            let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                            sched.re_register(callback, current_slot + 1);
+                                        }
+                                        continue;
+                                    }
+                                }
                             } else {
                                 continue;
                             };
@@ -2170,6 +2190,26 @@ pub fn generate_multi_pipeline_spec_function(
                                                 key = ?callback.primary_key,
                                                 "SlotScheduler: URL template unresolvable, discarding after max retries"
                                             );
+                                        }
+                                        continue;
+                                    }
+                                }
+                            } else if let Some(ref val) = callback.input_value {
+                                match val.as_str() {
+                                    Some(s) => s.to_string(),
+                                    None => val.to_string().trim_matches('"').to_string(),
+                                }
+                            } else if let Some(ref path) = callback.input_path {
+                                match hyperstack::runtime::hyperstack_interpreter::scheduler::get_value_at_path(&state, path) {
+                                    Some(v) if !v.is_null() => match v.as_str() {
+                                        Some(s) => s.to_string(),
+                                        None => v.to_string().trim_matches('"').to_string(),
+                                    },
+                                    _ => {
+                                        if callback.retry_count < MAX_RETRIES {
+                                            callback.retry_count += 1;
+                                            let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                            sched.re_register(callback, current_slot + 1);
                                         }
                                         continue;
                                     }
