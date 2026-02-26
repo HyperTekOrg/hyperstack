@@ -162,7 +162,7 @@ pub struct UrlResolverConfig {
     pub extract_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResolverExtractSpec {
     pub target_path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -178,7 +178,7 @@ pub enum ResolveStrategy {
     LastWrite,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResolverCondition {
     pub field_path: String,
     pub op: ComparisonOp,
@@ -625,7 +625,7 @@ pub enum ParsedCondition {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ComparisonOp {
     Equal,
     NotEqual,

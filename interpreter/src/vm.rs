@@ -621,7 +621,7 @@ pub struct PendingResolverEntry {
     pub queued_at: i64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ScheduledCallback {
     pub state_id: u32,
     pub entity_name: String,
