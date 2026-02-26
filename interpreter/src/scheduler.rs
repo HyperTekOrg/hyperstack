@@ -21,7 +21,9 @@ impl SlotScheduler {
     pub fn register(&mut self, target_slot: u64, callback: ScheduledCallback) {
         let dedup_key = Self::dedup_key(&callback);
         if self.registered.contains(&dedup_key) {
-            return;
+            for cbs in self.callbacks.values_mut() {
+                cbs.retain(|cb| Self::dedup_key(cb) != dedup_key);
+            }
         }
         self.registered.insert(dedup_key);
         self.callbacks
