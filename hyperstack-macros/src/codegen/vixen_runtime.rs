@@ -969,6 +969,23 @@ pub fn generate_spec_function(
                                 }
                             };
 
+                            if let Some(ref condition) = callback.condition {
+                                if !hyperstack::runtime::hyperstack_interpreter::scheduler::evaluate_condition(condition, &state) {
+                                    continue;
+                                }
+                            }
+
+                            if callback.strategy == hyperstack::runtime::hyperstack_interpreter::ast::ResolveStrategy::SetOnce {
+                                let already_resolved = callback.extracts.iter().all(|ext| {
+                                    hyperstack::runtime::hyperstack_interpreter::scheduler::get_value_at_path(&state, &ext.target_path)
+                                        .map(|v| !v.is_null())
+                                        .unwrap_or(false)
+                                });
+                                if already_resolved {
+                                    continue;
+                                }
+                            }
+
                             let url = if let Some(ref template) = callback.url_template {
                                 match hyperstack::runtime::hyperstack_interpreter::scheduler::build_url_from_template(template, &state) {
                                     Some(u) => u,
@@ -2121,6 +2138,23 @@ pub fn generate_multi_pipeline_spec_function(
                                     continue;
                                 }
                             };
+
+                            if let Some(ref condition) = callback.condition {
+                                if !hyperstack::runtime::hyperstack_interpreter::scheduler::evaluate_condition(condition, &state) {
+                                    continue;
+                                }
+                            }
+
+                            if callback.strategy == hyperstack::runtime::hyperstack_interpreter::ast::ResolveStrategy::SetOnce {
+                                let already_resolved = callback.extracts.iter().all(|ext| {
+                                    hyperstack::runtime::hyperstack_interpreter::scheduler::get_value_at_path(&state, &ext.target_path)
+                                        .map(|v| !v.is_null())
+                                        .unwrap_or(false)
+                                });
+                                if already_resolved {
+                                    continue;
+                                }
+                            }
 
                             let url = if let Some(ref template) = callback.url_template {
                                 match hyperstack::runtime::hyperstack_interpreter::scheduler::build_url_from_template(template, &state) {
