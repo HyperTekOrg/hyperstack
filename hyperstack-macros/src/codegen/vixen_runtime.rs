@@ -943,7 +943,7 @@ pub fn generate_spec_function(
                         };
 
 
-                        const MAX_RETRIES: u32 = 100;
+                        const MAX_RETRIES: u32 = hyperstack::runtime::hyperstack_interpreter::scheduler::MAX_RETRIES;
 
                         for mut callback in due {
                             let state = {
@@ -2096,7 +2096,7 @@ pub fn generate_multi_pipeline_spec_function(
                         };
 
 
-                        const MAX_RETRIES: u32 = 100;
+                        const MAX_RETRIES: u32 = hyperstack::runtime::hyperstack_interpreter::scheduler::MAX_RETRIES;
 
                         for mut callback in due {
                             let state = {

@@ -3,7 +3,7 @@ use crate::vm::ScheduledCallback;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
 
-const MAX_RETRIES: u32 = 100;
+pub const MAX_RETRIES: u32 = 100;
 
 pub struct SlotScheduler {
     callbacks: BTreeMap<u64, Vec<ScheduledCallback>>,
@@ -121,5 +121,3 @@ fn compare_numeric(a: &Value, b: &Value, cmp: fn(f64, f64) -> bool) -> bool {
         _ => false,
     }
 }
-
-pub const MAX_SCHEDULER_RETRIES: u32 = MAX_RETRIES;
