@@ -3350,6 +3350,16 @@
               "inner_type": "String",
               "source_path": null,
               "resolved_type": null
+            },
+            {
+              "field_name": "resolved_seed",
+              "rust_type_name": "Option < Vec < u8 > >",
+              "base_type": "Array",
+              "is_optional": true,
+              "is_array": true,
+              "inner_type": "Vec < u8 >",
+              "source_path": null,
+              "resolved_type": null
             }
           ],
           "is_nested_struct": false,
@@ -3452,6 +3462,16 @@
           "is_optional": true,
           "is_array": false,
           "inner_type": "String",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "entropy.resolved_seed": {
+          "field_name": "resolved_seed",
+          "rust_type_name": "Option < Vec < u8 > >",
+          "base_type": "Array",
+          "is_optional": true,
+          "is_array": true,
+          "inner_type": "Vec < u8 >",
           "source_path": null,
           "resolved_type": null
         },
@@ -3688,15 +3708,6 @@
       },
       "resolver_hooks": [
         {
-          "account_type": "entropy::VarState",
-          "strategy": {
-            "PdaReverseLookup": {
-              "lookup_name": "default_pda_lookup",
-              "queue_discriminators": []
-            }
-          }
-        },
-        {
           "account_type": "ore::TreasuryState",
           "strategy": {
             "PdaReverseLookup": {
@@ -3713,6 +3724,15 @@
                   0
                 ]
               ]
+            }
+          }
+        },
+        {
+          "account_type": "entropy::VarState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": []
             }
           }
         }
@@ -3770,14 +3790,14 @@
                 "pda_field": {
                   "segments": [
                     "accounts",
-                    "entropyVar"
+                    "treasury"
                   ],
                   "offsets": null
                 },
                 "seed_field": {
                   "segments": [
                     "accounts",
-                    "round"
+                    "roundNext"
                   ],
                   "offsets": null
                 },
@@ -3851,6 +3871,43 @@
               "target_path": "ore_metadata"
             }
           ]
+        },
+        {
+          "resolver": {
+            "url": {
+              "url_source": {
+                "Template": [
+                  {
+                    "Literal": "https://entropy-api.onrender.com/var/"
+                  },
+                  {
+                    "FieldRef": "entropy.entropy_var_address"
+                  },
+                  {
+                    "Literal": "/seed?samples="
+                  },
+                  {
+                    "FieldRef": "entropy.entropy_samples"
+                  }
+                ]
+              },
+              "method": "get",
+              "extract_path": "seed"
+            }
+          },
+          "strategy": "SetOnce",
+          "extracts": [
+            {
+              "target_path": "entropy.resolved_seed",
+              "source_path": "seed"
+            }
+          ],
+          "condition": {
+            "field_path": "entropy.entropy_value",
+            "op": "Equal",
+            "value": null
+          },
+          "schedule_at": "state.expires_at"
         }
       ],
       "computed_fields": [
@@ -4556,7 +4613,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "bb98d040a8cb94fca1a7641d664ed8245ec8c7cf266ace6c894cbfbf97dc0dea",
+      "content_hash": "6656d3208291c8ac7d8fc757727ffd176be3a42fc66624e002623cc0ca840a16",
       "views": [
         {
           "id": "OreRound/latest",
@@ -5045,15 +5102,6 @@
       },
       "resolver_hooks": [
         {
-          "account_type": "entropy::VarState",
-          "strategy": {
-            "PdaReverseLookup": {
-              "lookup_name": "default_pda_lookup",
-              "queue_discriminators": []
-            }
-          }
-        },
-        {
           "account_type": "ore::TreasuryState",
           "strategy": {
             "PdaReverseLookup": {
@@ -5070,6 +5118,15 @@
                   0
                 ]
               ]
+            }
+          }
+        },
+        {
+          "account_type": "entropy::VarState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": []
             }
           }
         }
@@ -5127,14 +5184,14 @@
                 "pda_field": {
                   "segments": [
                     "accounts",
-                    "entropyVar"
+                    "treasury"
                   ],
                   "offsets": null
                 },
                 "seed_field": {
                   "segments": [
                     "accounts",
-                    "round"
+                    "roundNext"
                   ],
                   "offsets": null
                 },
@@ -5280,7 +5337,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "66301f1e812d89849a1f719de939d80b2973335b736c6c08c1d5b7773fa023ef",
+      "content_hash": "6940e0c98d4f1b4ecc6592fb4b2fe825950f1205860b47de7723e81e7c921204",
       "views": []
     },
     {
@@ -6605,15 +6662,6 @@
       },
       "resolver_hooks": [
         {
-          "account_type": "entropy::VarState",
-          "strategy": {
-            "PdaReverseLookup": {
-              "lookup_name": "default_pda_lookup",
-              "queue_discriminators": []
-            }
-          }
-        },
-        {
           "account_type": "ore::TreasuryState",
           "strategy": {
             "PdaReverseLookup": {
@@ -6630,6 +6678,15 @@
                   0
                 ]
               ]
+            }
+          }
+        },
+        {
+          "account_type": "entropy::VarState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": []
             }
           }
         }
@@ -6687,14 +6744,14 @@
                 "pda_field": {
                   "segments": [
                     "accounts",
-                    "entropyVar"
+                    "treasury"
                   ],
                   "offsets": null
                 },
                 "seed_field": {
                   "segments": [
                     "accounts",
-                    "round"
+                    "roundNext"
                   ],
                   "offsets": null
                 },
@@ -6746,7 +6803,7 @@
       "resolver_specs": [],
       "computed_fields": [],
       "computed_field_specs": [],
-      "content_hash": "236fccaddbe4354f0fd201accb7bc597b90894a1b517d987980178b7be75a6be",
+      "content_hash": "cc153e8334a5d6bff0710db82de32f84037aaee14db0eeb7f443209e23f02e71",
       "views": []
     }
   ],
@@ -8854,5 +8911,5 @@
       ]
     }
   ],
-  "content_hash": "d54be9ac027a6a9581305854d45da529430879dd2e0dec2786f6da636a4cadda"
+  "content_hash": "e3f5ab05df7fb576313c02f6f942748f9ef597a1df30de66fa7a24a6cfe39f25"
 }

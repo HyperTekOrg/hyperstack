@@ -8,6 +8,7 @@ export interface OreRoundEntropy {
   entropy_start_at?: number | null;
   entropy_value?: string | null;
   entropy_var_address?: string | null;
+  resolved_seed?: any[] | null;
 }
 
 export interface OreRoundId {
@@ -81,6 +82,7 @@ export const OreRoundEntropySchema = z.object({
   entropy_start_at: z.number().nullable().optional(),
   entropy_value: z.string().nullable().optional(),
   entropy_var_address: z.string().nullable().optional(),
+  resolved_seed: z.array(z.any()).nullable().optional(),
 });
 
 export const OreRoundIdSchema = z.object({

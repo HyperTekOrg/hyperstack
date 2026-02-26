@@ -1,5 +1,5 @@
 use crate::ast::{
-    BinaryOp, ComparisonOp, ComputedExpr, ComputedFieldSpec, FieldPath, ResolveStrategy,
+    self, BinaryOp, ComparisonOp, ComputedExpr, ComputedFieldSpec, FieldPath, ResolveStrategy,
     ResolverExtractSpec, ResolverType, Transformation,
 };
 use crate::compiler::{MultiEntityBytecode, OpCode};
@@ -321,6 +321,7 @@ pub struct VmContext {
     last_lookup_index_miss: Option<String>,
     last_pda_registered: Option<String>,
     last_lookup_index_keys: Vec<String>,
+    scheduled_callbacks: Vec<(u64, ScheduledCallback)>,
 }
 
 #[derive(Debug)]
@@ -379,7 +380,19 @@ fn value_to_cache_key(value: &Value) -> String {
 fn resolver_type_key(resolver: &ResolverType) -> String {
     match resolver {
         ResolverType::Token => "token".to_string(),
-        ResolverType::Url(config) => format!("url:{}", config.url_path),
+        ResolverType::Url(config) => match &config.url_source {
+            ast::UrlSource::FieldPath(path) => format!("url:{}", path),
+            ast::UrlSource::Template(parts) => {
+                let key: String = parts
+                    .iter()
+                    .map(|p| match p {
+                        ast::UrlTemplatePart::Literal(s) => s.clone(),
+                        ast::UrlTemplatePart::FieldRef(f) => format!("{{{}}}", f),
+                    })
+                    .collect();
+                format!("url:{}", key)
+            }
+        },
     }
 }
 
@@ -606,6 +619,22 @@ pub struct PendingResolverEntry {
     pub input: Value,
     pub targets: Vec<ResolverTarget>,
     pub queued_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScheduledCallback {
+    pub state_id: u32,
+    pub entity_name: String,
+    pub primary_key: Value,
+    pub resolver: ResolverType,
+    pub url_template: Option<Vec<ast::UrlTemplatePart>>,
+    pub input_value: Option<Value>,
+    pub input_path: Option<String>,
+    pub condition: Option<ast::ResolverCondition>,
+    pub strategy: ResolveStrategy,
+    pub extracts: Vec<ResolverExtractSpec>,
+    pub registered_at_slot: u64,
+    pub retry_count: u32,
 }
 
 impl PendingResolverEntry {
@@ -906,6 +935,7 @@ impl VmContext {
             last_lookup_index_miss: None,
             last_pda_registered: None,
             last_lookup_index_keys: Vec::new(),
+            scheduled_callbacks: Vec::new(),
         };
         vm.states.insert(
             0,
@@ -956,6 +986,7 @@ impl VmContext {
             last_lookup_index_miss: None,
             last_pda_registered: None,
             last_lookup_index_keys: Vec::new(),
+            scheduled_callbacks: Vec::new(),
         };
         vm.states.insert(
             0,
@@ -984,6 +1015,14 @@ impl VmContext {
 
     pub fn take_resolver_requests(&mut self) -> Vec<ResolverRequest> {
         self.resolver_requests.drain(..).collect()
+    }
+
+    pub fn take_scheduled_callbacks(&mut self) -> Vec<(u64, ScheduledCallback)> {
+        std::mem::take(&mut self.scheduled_callbacks)
+    }
+
+    pub fn get_entity_state(&self, state_id: u32, key: &Value) -> Option<Value> {
+        self.states.get(&state_id)?.get_and_touch(key)
     }
 
     pub fn restore_resolver_requests(&mut self, requests: Vec<ResolverRequest>) {
@@ -1090,7 +1129,7 @@ impl VmContext {
         Ok(mutations)
     }
 
-    fn enqueue_resolver_request(
+    pub fn enqueue_resolver_request(
         &mut self,
         cache_key: String,
         resolver: ResolverType,
@@ -2539,13 +2578,103 @@ impl VmContext {
                     resolver,
                     input_path,
                     input_value,
+                    url_template,
                     strategy,
                     extracts,
+                    condition,
+                    schedule_at,
                     state,
                     key,
                 } => {
                     let actual_state_id = override_state_id;
-                    let resolved_input = if let Some(value) = input_value {
+
+                    // Evaluate condition if present
+                    if let Some(cond) = condition {
+                        let field_val = Self::get_value_at_path(
+                            &self.registers[*state],
+                            &cond.field_path,
+                        )
+                        .unwrap_or(Value::Null);
+                        if !self.evaluate_comparison(&field_val, &cond.op, &cond.value)? {
+                            pc += 1;
+                            continue;
+                        }
+                    }
+
+                    // Check schedule_at: defer if target slot is in the future
+                    if let Some(schedule_path) = schedule_at {
+                        if let Some(target_val) = Self::get_value_at_path(
+                            &self.registers[*state],
+                            schedule_path,
+                        ) {
+                            if let Some(target_slot) = target_val.as_u64() {
+                                let current_slot = self
+                                    .current_context
+                                    .as_ref()
+                                    .and_then(|ctx| ctx.slot)
+                                    .unwrap_or(0);
+                                if current_slot < target_slot {
+                                    let key_value = &self.registers[*key];
+                                    if !key_value.is_null() {
+                                        self.scheduled_callbacks.push((
+                                            target_slot,
+                                            ScheduledCallback {
+                                                state_id: actual_state_id,
+                                                entity_name: entity_name.clone(),
+                                                primary_key: key_value.clone(),
+                                                resolver: resolver.clone(),
+                                                url_template: url_template.clone(),
+                                                input_value: input_value.clone(),
+                                                input_path: input_path.clone(),
+                                                condition: condition.clone(),
+                                                strategy: strategy.clone(),
+                                                extracts: extracts.clone(),
+                                                registered_at_slot: current_slot,
+                                                retry_count: 0,
+                                            },
+                                        ));
+                                    }
+                                    pc += 1;
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+
+                    // Build resolver input from template, literal value, or field path
+                    let resolved_input = if let Some(template) = url_template {
+                        let mut url = String::new();
+                        let mut all_resolved = true;
+                        for part in template {
+                            match part {
+                                ast::UrlTemplatePart::Literal(s) => url.push_str(s),
+                                ast::UrlTemplatePart::FieldRef(path) => {
+                                    match Self::get_value_at_path(
+                                        &self.registers[*state],
+                                        path,
+                                    ) {
+                                        Some(val) if !val.is_null() => {
+                                            match val.as_str() {
+                                                Some(s) => url.push_str(s),
+                                                None => url.push_str(
+                                                    val.to_string().trim_matches('"'),
+                                                ),
+                                            }
+                                        }
+                                        _ => {
+                                            all_resolved = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if all_resolved {
+                            Some(Value::String(url))
+                        } else {
+                            None
+                        }
+                    } else if let Some(value) = input_value {
                         Some(value.clone())
                     } else if let Some(path) = input_path.as_ref() {
                         Self::get_value_at_path(&self.registers[*state], path)

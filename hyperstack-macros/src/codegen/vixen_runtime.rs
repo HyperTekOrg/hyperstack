@@ -260,6 +260,7 @@ pub fn generate_vm_handler(
             slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
             resolver_client: Option<std::sync::Arc<ResolverClient>>,
             url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
+            slot_scheduler: std::sync::Arc<std::sync::Mutex<hyperstack::runtime::hyperstack_interpreter::scheduler::SlotScheduler>>,
         }
 
         impl std::fmt::Debug for VmHandler {
@@ -280,6 +281,7 @@ pub fn generate_vm_handler(
                 slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
                 resolver_client: Option<std::sync::Arc<ResolverClient>>,
                 url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
+                slot_scheduler: std::sync::Arc<std::sync::Mutex<hyperstack::runtime::hyperstack_interpreter::scheduler::SlotScheduler>>,
             ) -> Self {
                 Self {
                     vm,
@@ -289,6 +291,7 @@ pub fn generate_vm_handler(
                     slot_tracker,
                     resolver_client,
                     url_resolver_client,
+                    slot_scheduler,
                 }
             }
 
@@ -543,7 +546,7 @@ pub fn generate_vm_handler(
                     }
                 }
 
-                let (mutations_result, resolver_requests) = {
+                let (mutations_result, resolver_requests, scheduled_callbacks) = {
                     let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
@@ -557,8 +560,21 @@ pub fn generate_vm_handler(
                         Vec::new()
                     };
 
-                    (result, requests)
+                    let scheduled = if result.is_ok() {
+                        vm.take_scheduled_callbacks()
+                    } else {
+                        Vec::new()
+                    };
+
+                    (result, requests, scheduled)
                 };
+
+                if !scheduled_callbacks.is_empty() {
+                    let mut scheduler = self.slot_scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                    for (target_slot, callback) in scheduled_callbacks {
+                        scheduler.register(target_slot, callback);
+                    }
+                }
 
                 let resolver_mutations = if mutations_result.is_ok() {
                     self.resolve_and_apply_resolvers(resolver_requests).await
@@ -632,7 +648,7 @@ pub fn generate_vm_handler(
                 let event_value = value.to_value_with_accounts(static_keys_vec);
 
                 let bytecode = self.bytecode.clone();
-                let (mutations_result, resolver_requests) = {
+                let (mutations_result, resolver_requests, scheduled_callbacks) = {
                     let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
@@ -729,8 +745,21 @@ pub fn generate_vm_handler(
                         Vec::new()
                     };
 
-                    (result, requests)
+                    let scheduled = if result.is_ok() {
+                        vm.take_scheduled_callbacks()
+                    } else {
+                        Vec::new()
+                    };
+
+                    (result, requests, scheduled)
                 };
+
+                if !scheduled_callbacks.is_empty() {
+                    let mut scheduler = self.slot_scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                    for (target_slot, callback) in scheduled_callbacks {
+                        scheduler.register(target_slot, callback);
+                    }
+                }
 
                 let resolver_mutations = if mutations_result.is_ok() {
                     self.resolve_and_apply_resolvers(resolver_requests).await
@@ -880,6 +909,7 @@ pub fn generate_spec_function(
             let url_resolver_client = Arc::new(hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient::new());
 
             let slot_tracker = hyperstack::runtime::hyperstack_server::SlotTracker::new();
+            let slot_scheduler = Arc::new(Mutex::new(hyperstack::runtime::hyperstack_interpreter::scheduler::SlotScheduler::new()));
             let mut attempt = 0u32;
             let mut backoff = reconnection_config.initial_delay;
 
@@ -889,6 +919,167 @@ pub fn generate_spec_function(
 
             let vm = Arc::new(Mutex::new(hyperstack::runtime::hyperstack_interpreter::vm::VmContext::new()));
             let bytecode_arc = Arc::new(bytecode);
+
+            // Spawn slot scheduler background task
+            {
+                let scheduler = slot_scheduler.clone();
+                let vm = vm.clone();
+                let bytecode = bytecode_arc.clone();
+                let url_client = url_resolver_client.clone();
+                let slot_tracker = slot_tracker.clone();
+                let mutations_tx = mutations_tx.clone();
+
+                hyperstack::runtime::tokio::spawn(async move {
+                    loop {
+                        let current_slot = slot_tracker.get();
+                        if current_slot == 0 {
+                            hyperstack::runtime::tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+                            continue;
+                        }
+
+                        let due = {
+                            let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                            sched.take_due(current_slot)
+                        };
+
+
+                        const MAX_RETRIES: u32 = hyperstack::runtime::hyperstack_interpreter::scheduler::MAX_RETRIES;
+
+                        for mut callback in due {
+                            let state = {
+                                let vm = vm.lock().unwrap_or_else(|e| e.into_inner());
+                                vm.get_entity_state(callback.state_id, &callback.primary_key)
+                            };
+
+                            let state = match state {
+                                Some(s) => s,
+                                None => {
+                                    if callback.retry_count < MAX_RETRIES {
+                                        callback.retry_count += 1;
+                                        let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                        sched.re_register(callback, current_slot + 1);
+                                    } else {
+                                        hyperstack::runtime::tracing::warn!(
+                                            entity = %callback.entity_name,
+                                            key = ?callback.primary_key,
+                                            "SlotScheduler: entity state not found, discarding after max retries"
+                                        );
+                                    }
+                                    continue;
+                                }
+                            };
+
+                            if let Some(ref condition) = callback.condition {
+                                if !hyperstack::runtime::hyperstack_interpreter::scheduler::evaluate_condition(condition, &state) {
+                                    continue;
+                                }
+                            }
+
+                            if callback.strategy == hyperstack::runtime::hyperstack_interpreter::ast::ResolveStrategy::SetOnce {
+                                let already_resolved = callback.extracts.iter().all(|ext| {
+                                    hyperstack::runtime::hyperstack_interpreter::scheduler::get_value_at_path(&state, &ext.target_path)
+                                        .map(|v| !v.is_null())
+                                        .unwrap_or(false)
+                                });
+                                if already_resolved {
+                                    continue;
+                                }
+                            }
+
+                            let url = if let Some(ref template) = callback.url_template {
+                                match hyperstack::runtime::hyperstack_interpreter::scheduler::build_url_from_template(template, &state) {
+                                    Some(u) => u,
+                                    None => {
+                                        if callback.retry_count < MAX_RETRIES {
+                                            callback.retry_count += 1;
+                                            let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                            sched.re_register(callback, current_slot + 1);
+                                        } else {
+                                            hyperstack::runtime::tracing::warn!(
+                                                entity = %callback.entity_name,
+                                                key = ?callback.primary_key,
+                                                "SlotScheduler: URL template unresolvable, discarding after max retries"
+                                            );
+                                        }
+                                        continue;
+                                    }
+                                }
+                            } else if let Some(ref val) = callback.input_value {
+                                match val.as_str() {
+                                    Some(s) => s.to_string(),
+                                    None => val.to_string().trim_matches('"').to_string(),
+                                }
+                            } else if let Some(ref path) = callback.input_path {
+                                match hyperstack::runtime::hyperstack_interpreter::scheduler::get_value_at_path(&state, path) {
+                                    Some(v) if !v.is_null() => match v.as_str() {
+                                        Some(s) => s.to_string(),
+                                        None => v.to_string().trim_matches('"').to_string(),
+                                    },
+                                    _ => {
+                                        if callback.retry_count < MAX_RETRIES {
+                                            callback.retry_count += 1;
+                                            let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                            sched.re_register(callback, current_slot + 1);
+                                        }
+                                        continue;
+                                    }
+                                }
+                            } else {
+                                continue;
+                            };
+
+                            let cache_key = format!("scheduled:{}:{}:{}", callback.entity_name, callback.primary_key, url);
+
+                            let requests = {
+                                let mut vm = vm.lock().unwrap_or_else(|e| e.into_inner());
+                                let target = hyperstack::runtime::hyperstack_interpreter::vm::ResolverTarget {
+                                    state_id: callback.state_id,
+                                    entity_name: callback.entity_name.clone(),
+                                    primary_key: callback.primary_key.clone(),
+                                    extracts: callback.extracts.clone(),
+                                };
+                                vm.enqueue_resolver_request(
+                                    cache_key.clone(),
+                                    callback.resolver.clone(),
+                                    hyperstack::runtime::serde_json::Value::String(url.clone()),
+                                    target,
+                                );
+                                vm.take_resolver_requests()
+                            };
+
+                            let url_mutations = hyperstack::runtime::hyperstack_interpreter::resolvers::resolve_url_batch(
+                                &vm,
+                                bytecode.as_ref(),
+                                &url_client,
+                                requests,
+                            ).await;
+
+                            if url_mutations.is_empty() {
+                                if callback.retry_count < MAX_RETRIES {
+                                    callback.retry_count += 1;
+                                    let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                    sched.re_register(callback, current_slot + 1);
+                                } else {
+                                    hyperstack::runtime::tracing::warn!(
+                                        entity = %callback.entity_name,
+                                        key = ?callback.primary_key,
+                                        "SlotScheduler: resolver returned no data, discarding after max retries"
+                                    );
+                                }
+                            } else {
+                                let slot_context = hyperstack::runtime::hyperstack_server::SlotContext::new(current_slot, 0);
+                                let batch = hyperstack::runtime::hyperstack_server::MutationBatch::with_slot_context(
+                                    hyperstack::runtime::smallvec::SmallVec::from_vec(url_mutations),
+                                    slot_context,
+                                );
+                                let _ = mutations_tx.send(batch).await;
+                            }
+                        }
+
+                        hyperstack::runtime::tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+                    }
+                });
+            }
 
             loop {
                 let from_slot = {
@@ -921,6 +1112,7 @@ pub fn generate_spec_function(
                     slot_tracker.clone(),
                     resolver_client.clone(),
                     url_resolver_client.clone(),
+                    slot_scheduler.clone(),
                 );
 
                 let account_parser = parsers::AccountParser;
@@ -1190,6 +1382,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
             slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
             resolver_client: Option<std::sync::Arc<ResolverClient>>,
             url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
+            slot_scheduler: std::sync::Arc<std::sync::Mutex<hyperstack::runtime::hyperstack_interpreter::scheduler::SlotScheduler>>,
         }
 
         impl std::fmt::Debug for VmHandler {
@@ -1210,6 +1403,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                 slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
                 resolver_client: Option<std::sync::Arc<ResolverClient>>,
                 url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
+                slot_scheduler: std::sync::Arc<std::sync::Mutex<hyperstack::runtime::hyperstack_interpreter::scheduler::SlotScheduler>>,
             ) -> Self {
                 Self {
                     vm,
@@ -1219,6 +1413,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                     slot_tracker,
                     resolver_client,
                     url_resolver_client,
+                    slot_scheduler,
                 }
             }
 
@@ -1484,7 +1679,7 @@ pub fn generate_account_handler_impl(
                     }
                 }
 
-                let (mutations_result, resolver_requests) = {
+                let (mutations_result, resolver_requests, scheduled_callbacks) = {
                     let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
@@ -1498,8 +1693,21 @@ pub fn generate_account_handler_impl(
                         Vec::new()
                     };
 
-                    (result, requests)
+                    let scheduled = if result.is_ok() {
+                        vm.take_scheduled_callbacks()
+                    } else {
+                        Vec::new()
+                    };
+
+                    (result, requests, scheduled)
                 };
+
+                if !scheduled_callbacks.is_empty() {
+                    let mut scheduler = self.slot_scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                    for (target_slot, callback) in scheduled_callbacks {
+                        scheduler.register(target_slot, callback);
+                    }
+                }
 
                 let resolver_mutations = if mutations_result.is_ok() {
                     self.resolve_and_apply_resolvers(resolver_requests).await
@@ -1578,7 +1786,7 @@ pub fn generate_instruction_handler_impl(
                 let event_value = value.to_value_with_accounts(static_keys_vec);
 
                 let bytecode = self.bytecode.clone();
-                let (mutations_result, resolver_requests) = {
+                let (mutations_result, resolver_requests, scheduled_callbacks) = {
                     let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_instruction(slot, signature.clone(), txn_index);
@@ -1672,8 +1880,21 @@ pub fn generate_instruction_handler_impl(
                         Vec::new()
                     };
 
-                    (result, requests)
+                    let scheduled = if result.is_ok() {
+                        vm.take_scheduled_callbacks()
+                    } else {
+                        Vec::new()
+                    };
+
+                    (result, requests, scheduled)
                 };
+
+                if !scheduled_callbacks.is_empty() {
+                    let mut scheduler = self.slot_scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                    for (target_slot, callback) in scheduled_callbacks {
+                        scheduler.register(target_slot, callback);
+                    }
+                }
 
                 let resolver_mutations = if mutations_result.is_ok() {
                     self.resolve_and_apply_resolvers(resolver_requests).await
@@ -1878,6 +2099,7 @@ pub fn generate_multi_pipeline_spec_function(
             let url_resolver_client = Arc::new(hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient::new());
 
             let slot_tracker = hyperstack::runtime::hyperstack_server::SlotTracker::new();
+            let slot_scheduler = Arc::new(Mutex::new(hyperstack::runtime::hyperstack_interpreter::scheduler::SlotScheduler::new()));
             let mut attempt = 0u32;
             let mut backoff = reconnection_config.initial_delay;
 
@@ -1887,6 +2109,167 @@ pub fn generate_multi_pipeline_spec_function(
 
             let vm = Arc::new(Mutex::new(hyperstack::runtime::hyperstack_interpreter::vm::VmContext::new()));
             let bytecode_arc = Arc::new(bytecode);
+
+            // Spawn slot scheduler background task
+            {
+                let scheduler = slot_scheduler.clone();
+                let vm = vm.clone();
+                let bytecode = bytecode_arc.clone();
+                let url_client = url_resolver_client.clone();
+                let slot_tracker = slot_tracker.clone();
+                let mutations_tx = mutations_tx.clone();
+
+                hyperstack::runtime::tokio::spawn(async move {
+                    loop {
+                        let current_slot = slot_tracker.get();
+                        if current_slot == 0 {
+                            hyperstack::runtime::tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+                            continue;
+                        }
+
+                        let due = {
+                            let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                            sched.take_due(current_slot)
+                        };
+
+
+                        const MAX_RETRIES: u32 = hyperstack::runtime::hyperstack_interpreter::scheduler::MAX_RETRIES;
+
+                        for mut callback in due {
+                            let state = {
+                                let vm = vm.lock().unwrap_or_else(|e| e.into_inner());
+                                vm.get_entity_state(callback.state_id, &callback.primary_key)
+                            };
+
+                            let state = match state {
+                                Some(s) => s,
+                                None => {
+                                    if callback.retry_count < MAX_RETRIES {
+                                        callback.retry_count += 1;
+                                        let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                        sched.re_register(callback, current_slot + 1);
+                                    } else {
+                                        hyperstack::runtime::tracing::warn!(
+                                            entity = %callback.entity_name,
+                                            key = ?callback.primary_key,
+                                            "SlotScheduler: entity state not found, discarding after max retries"
+                                        );
+                                    }
+                                    continue;
+                                }
+                            };
+
+                            if let Some(ref condition) = callback.condition {
+                                if !hyperstack::runtime::hyperstack_interpreter::scheduler::evaluate_condition(condition, &state) {
+                                    continue;
+                                }
+                            }
+
+                            if callback.strategy == hyperstack::runtime::hyperstack_interpreter::ast::ResolveStrategy::SetOnce {
+                                let already_resolved = callback.extracts.iter().all(|ext| {
+                                    hyperstack::runtime::hyperstack_interpreter::scheduler::get_value_at_path(&state, &ext.target_path)
+                                        .map(|v| !v.is_null())
+                                        .unwrap_or(false)
+                                });
+                                if already_resolved {
+                                    continue;
+                                }
+                            }
+
+                            let url = if let Some(ref template) = callback.url_template {
+                                match hyperstack::runtime::hyperstack_interpreter::scheduler::build_url_from_template(template, &state) {
+                                    Some(u) => u,
+                                    None => {
+                                        if callback.retry_count < MAX_RETRIES {
+                                            callback.retry_count += 1;
+                                            let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                            sched.re_register(callback, current_slot + 1);
+                                        } else {
+                                            hyperstack::runtime::tracing::warn!(
+                                                entity = %callback.entity_name,
+                                                key = ?callback.primary_key,
+                                                "SlotScheduler: URL template unresolvable, discarding after max retries"
+                                            );
+                                        }
+                                        continue;
+                                    }
+                                }
+                            } else if let Some(ref val) = callback.input_value {
+                                match val.as_str() {
+                                    Some(s) => s.to_string(),
+                                    None => val.to_string().trim_matches('"').to_string(),
+                                }
+                            } else if let Some(ref path) = callback.input_path {
+                                match hyperstack::runtime::hyperstack_interpreter::scheduler::get_value_at_path(&state, path) {
+                                    Some(v) if !v.is_null() => match v.as_str() {
+                                        Some(s) => s.to_string(),
+                                        None => v.to_string().trim_matches('"').to_string(),
+                                    },
+                                    _ => {
+                                        if callback.retry_count < MAX_RETRIES {
+                                            callback.retry_count += 1;
+                                            let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                            sched.re_register(callback, current_slot + 1);
+                                        }
+                                        continue;
+                                    }
+                                }
+                            } else {
+                                continue;
+                            };
+
+                            let cache_key = format!("scheduled:{}:{}:{}", callback.entity_name, callback.primary_key, url);
+
+                            let requests = {
+                                let mut vm = vm.lock().unwrap_or_else(|e| e.into_inner());
+                                let target = hyperstack::runtime::hyperstack_interpreter::vm::ResolverTarget {
+                                    state_id: callback.state_id,
+                                    entity_name: callback.entity_name.clone(),
+                                    primary_key: callback.primary_key.clone(),
+                                    extracts: callback.extracts.clone(),
+                                };
+                                vm.enqueue_resolver_request(
+                                    cache_key.clone(),
+                                    callback.resolver.clone(),
+                                    hyperstack::runtime::serde_json::Value::String(url.clone()),
+                                    target,
+                                );
+                                vm.take_resolver_requests()
+                            };
+
+                            let url_mutations = hyperstack::runtime::hyperstack_interpreter::resolvers::resolve_url_batch(
+                                &vm,
+                                bytecode.as_ref(),
+                                &url_client,
+                                requests,
+                            ).await;
+
+                            if url_mutations.is_empty() {
+                                if callback.retry_count < MAX_RETRIES {
+                                    callback.retry_count += 1;
+                                    let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
+                                    sched.re_register(callback, current_slot + 1);
+                                } else {
+                                    hyperstack::runtime::tracing::warn!(
+                                        entity = %callback.entity_name,
+                                        key = ?callback.primary_key,
+                                        "SlotScheduler: resolver returned no data, discarding after max retries"
+                                    );
+                                }
+                            } else {
+                                let slot_context = hyperstack::runtime::hyperstack_server::SlotContext::new(current_slot, 0);
+                                let batch = hyperstack::runtime::hyperstack_server::MutationBatch::with_slot_context(
+                                    hyperstack::runtime::smallvec::SmallVec::from_vec(url_mutations),
+                                    slot_context,
+                                );
+                                let _ = mutations_tx.send(batch).await;
+                            }
+                        }
+
+                        hyperstack::runtime::tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+                    }
+                });
+            }
 
             loop {
                 let from_slot = {
@@ -1919,6 +2302,7 @@ pub fn generate_multi_pipeline_spec_function(
                     slot_tracker.clone(),
                     resolver_client.clone(),
                     url_resolver_client.clone(),
+                    slot_scheduler.clone(),
                 );
 
                 if attempt == 0 {

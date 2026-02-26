@@ -18,7 +18,7 @@ use std::collections::{HashMap, HashSet};
 use quote::{format_ident, quote};
 use syn::{Fields, GenericArgument, ItemStruct, PathArguments, Type};
 
-use crate::ast::{EntitySection, FieldTypeInfo, HttpMethod, ResolverHook, ResolverType, UrlResolverConfig};
+use crate::ast::{EntitySection, FieldTypeInfo, HttpMethod, ResolverHook, ResolverType, UrlResolverConfig, UrlSource, UrlTemplatePart};
 use crate::codegen;
 use crate::event_type_helpers::IdlLookup;
 use crate::parse;
@@ -53,6 +53,27 @@ use super::sections::{
     self as sections, extract_section_from_struct_with_idl, is_primitive_or_wrapper,
     process_nested_struct,
 };
+
+pub fn parse_url_template(s: &str) -> Vec<UrlTemplatePart> {
+    let mut parts = Vec::new();
+    let mut rest = s;
+
+    while let Some(open) = rest.find('{') {
+        if open > 0 {
+            parts.push(UrlTemplatePart::Literal(rest[..open].to_string()));
+        }
+        let close = rest[open..].find('}').expect("Unclosed '{' in URL template") + open;
+        let field_ref = rest[open + 1..close].trim().to_string();
+        parts.push(UrlTemplatePart::FieldRef(field_ref));
+        rest = &rest[close + 1..];
+    }
+
+    if !rest.is_empty() {
+        parts.push(UrlTemplatePart::Literal(rest.to_string()));
+    }
+
+    parts
+}
 
 // ============================================================================
 // Entity Processing
@@ -425,8 +446,7 @@ pub fn process_entity_struct_with_idl(
                     });
 
                     // Determine resolver type: URL resolver if url is present, otherwise Token resolver
-                    let resolver = if let Some(url_path) = resolve_attr.url.clone() {
-                        // URL resolver
+                    let resolver = if let Some(url_val) = resolve_attr.url.clone() {
                         let method = resolve_attr.method.as_deref().map(|m| {
                             match m.to_lowercase().as_str() {
                                 "post" => HttpMethod::Post,
@@ -434,8 +454,14 @@ pub fn process_entity_struct_with_idl(
                             }
                         }).unwrap_or(HttpMethod::Get);
 
+                        let url_source = if resolve_attr.url_is_template {
+                            UrlSource::Template(parse_url_template(&url_val))
+                        } else {
+                            UrlSource::FieldPath(url_val)
+                        };
+
                         ResolverType::Url(UrlResolverConfig {
-                            url_path,
+                            url_source,
                             method,
                             extract_path: resolve_attr.extract.clone(),
                         })
@@ -449,13 +475,21 @@ pub fn process_entity_struct_with_idl(
                             .unwrap_or_else(|err| panic!("{}", err))
                     };
 
+                    let from = if resolve_attr.url_is_template {
+                        None
+                    } else {
+                        resolve_attr.url.clone().or(resolve_attr.from)
+                    };
+
                     resolve_specs.push(parse::ResolveSpec {
                         resolver,
-                        from: resolve_attr.url.clone().or(resolve_attr.from),
+                        from,
                         address: resolve_attr.address,
                         extract: resolve_attr.extract,
                         target_field_name: resolve_attr.target_field_name,
                         strategy: resolve_attr.strategy,
+                        condition: resolve_attr.condition,
+                        schedule_at: resolve_attr.schedule_at,
                     });
                 } else if let Ok(Some(computed_attr)) =
                     parse::parse_computed_attribute(attr, &field_name.to_string())
