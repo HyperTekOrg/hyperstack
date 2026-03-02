@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import type { 
+  InstructionHandler, 
+  AccountMeta, 
+  ArgSchema 
+} from 'hyperstack-typescript';
+import { serializeInstructionData } from 'hyperstack-typescript';
 
 export interface OreRoundEntropy {
   entropy_end_at?: number | null;
@@ -358,6 +364,170 @@ export const OreMinerCompletedSchema = z.object({
 });
 
 // ============================================================================
+// Instruction Handlers
+// ============================================================================
+
+const ORE_PROGRAM_ID = "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv";
+const ENTROPY_PROGRAM_ID = "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X";
+const SYSTEM_PROGRAM_ID = "11111111111111111111111111111111";
+const DEPLOY_DISCRIMINATOR = new Uint8Array([6]);
+const CHECKPOINT_DISCRIMINATOR = new Uint8Array([2]);
+
+/*
+* Deploy Instruction
+*/
+const deployAccounts: AccountMeta[] = [
+  { name: "signer", category: "signer", isSigner: true, isWritable: true },
+  { name: "authority", category: "signer", isSigner: false, isWritable: true },
+  {
+    name: "automation",
+    category: "pda",
+    pdaConfig: {
+      programId: ORE_PROGRAM_ID,
+      seeds: [
+        { type: "literal", value: "automation" },
+        { type: "accountRef", accountName: "authority" },
+      ],
+    },
+    isSigner: false,
+    isWritable: true,
+  },
+  {
+    name: "board",
+    category: "pda",
+    pdaConfig: {
+      programId: ORE_PROGRAM_ID,
+      seeds: [{ type: "literal", value: "board" }],
+    },
+    isSigner: false,
+    isWritable: true,
+  },
+  {
+    name: "config",
+    category: "pda",
+    pdaConfig: {
+      programId: ORE_PROGRAM_ID,
+      seeds: [{ type: "literal", value: "config" }],
+    },
+    isSigner: false,
+    isWritable: true,
+  },
+  {
+    name: "miner",
+    category: "pda",
+    pdaConfig: {
+      programId: ORE_PROGRAM_ID,
+      seeds: [
+        { type: "literal", value: "miner" },
+        { type: "accountRef", accountName: "authority" },
+      ],
+    },
+    isSigner: false,
+    isWritable: true,
+  },
+  { name: "round", category: "userProvided", isSigner: false, isWritable: true },
+  { name: "systemProgram", category: "known", knownAddress: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
+  { name: "oreProgram", category: "known", knownAddress: ORE_PROGRAM_ID, isSigner: false, isWritable: false },
+  { name: "entropyVar", category: "userProvided", isSigner: false, isWritable: true },
+  { name: "entropyProgram", category: "known", knownAddress: ENTROPY_PROGRAM_ID, isSigner: false, isWritable: false },
+];
+
+const deployArgsSchema: ArgSchema[] = [
+  { name: "amount", type: "u64" },
+  { name: "squares", type: "u32" },
+];
+
+const deployInstruction: InstructionHandler = {
+  programId: ORE_PROGRAM_ID,
+  accounts: deployAccounts,
+  errors: [
+    { code: 0, name: "AmountTooSmall", msg: "Amount too small" },
+    { code: 1, name: "NotAuthorized", msg: "Not authorized" },
+  ],
+  build: (args, resolvedAccounts) => {
+    if (typeof args.amount !== 'bigint' && typeof args.amount !== 'number') {
+      throw new Error('amount must be a number or bigint');
+    }
+    if (typeof args.squares !== 'number') {
+      throw new Error('squares must be a number');
+    }
+
+    const buffer = serializeInstructionData(DEPLOY_DISCRIMINATOR, args, deployArgsSchema);
+    const data = new Uint8Array(buffer);
+    
+    const keys = deployAccounts.map(meta => ({
+      pubkey: resolvedAccounts[meta.name]!,
+      isSigner: meta.isSigner,
+      isWritable: meta.isWritable,
+    }));
+
+    return { programId: ORE_PROGRAM_ID, keys, data };
+  },
+};
+
+/*
+* Checkpoint Instruction
+*/
+const checkpointAccounts: AccountMeta[] = [
+  { name: "signer", category: "signer", isSigner: true, isWritable: true },
+  {
+    name: "board",
+    category: "pda",
+    pdaConfig: {
+      programId: ORE_PROGRAM_ID,
+      seeds: [{ type: "literal", value: "board" }],
+    },
+    isSigner: false,
+    isWritable: false,
+  },
+  {
+    name: "miner",
+    category: "pda",
+    pdaConfig: {
+      programId: ORE_PROGRAM_ID,
+      seeds: [
+        { type: "literal", value: "miner" },
+        { type: "accountRef", accountName: "signer" },
+      ],
+    },
+    isSigner: false,
+    isWritable: true,
+  },
+  { name: "round", category: "userProvided", isSigner: false, isWritable: true },
+  {
+    name: "treasury",
+    category: "pda",
+    pdaConfig: {
+      programId: ORE_PROGRAM_ID,
+      seeds: [{ type: "literal", value: "treasury" }],
+    },
+    isSigner: false,
+    isWritable: true,
+  },
+  { name: "systemProgram", category: "known", knownAddress: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
+];
+
+const checkpointInstruction: InstructionHandler = {
+  programId: ORE_PROGRAM_ID,
+  accounts: checkpointAccounts,
+  errors: [
+    { code: 0, name: "AmountTooSmall", msg: "Amount too small" },
+    { code: 1, name: "NotAuthorized", msg: "Not authorized" },
+  ],
+  build: (args, resolvedAccounts) => {
+    const data = CHECKPOINT_DISCRIMINATOR;
+    
+    const keys = checkpointAccounts.map(meta => ({
+      pubkey: resolvedAccounts[meta.name]!,
+      isSigner: meta.isSigner,
+      isWritable: meta.isWritable,
+    }));
+
+    return { programId: ORE_PROGRAM_ID, keys, data };
+  },
+};
+
+// ============================================================================
 // View Definition Types (framework-agnostic)
 // ============================================================================
 
@@ -402,6 +572,10 @@ export const ORE_STREAM_STACK = {
       list: listView<OreMiner>('OreMiner/list'),
     },
   },
+  instructions: {
+    checkpoint: checkpointInstruction,
+    deploy: deployInstruction,
+  } as const,
   schemas: {
     Automation: AutomationSchema,
     Miner: MinerSchema,
