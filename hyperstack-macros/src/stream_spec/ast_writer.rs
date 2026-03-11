@@ -190,11 +190,15 @@ fn build_resolver_specs(resolve_specs: &[parse::ResolveSpec]) -> Vec<ResolverSpe
         } else {
             "value:".to_string()
         };
+        let condition_key = spec.condition.as_deref().unwrap_or("");
+        let schedule_key = spec.schedule_at.as_deref().unwrap_or("");
         let key = format!(
-            "{}::{}::{}",
+            "{}::{}::{}::{}::{}",
             resolver_type_key(&spec.resolver),
             input_key,
-            spec.strategy
+            spec.strategy,
+            condition_key,
+            schedule_key,
         );
 
         let condition = spec.condition.as_deref().map(parse_resolver_condition);
