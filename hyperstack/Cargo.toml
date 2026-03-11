@@ -38,6 +38,7 @@ yellowstone-vixen = { workspace = true, optional = true }
 yellowstone-vixen-core = { workspace = true, optional = true }
 yellowstone-vixen-yellowstone-grpc-source = { workspace = true, optional = true }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"], optional = true }
+futures = { version = "0.3", optional = true }
 
 [features]
 default = ["interpreter", "macros", "server"]
@@ -60,4 +61,5 @@ runtime = [
     "dep:yellowstone-vixen-core",
     "dep:yellowstone-vixen-yellowstone-grpc-source",
     "dep:reqwest",
+    "dep:futures",
 ]

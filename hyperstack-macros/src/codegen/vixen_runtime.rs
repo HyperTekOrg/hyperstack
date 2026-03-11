@@ -64,15 +64,11 @@ fn generate_slot_scheduler_task() -> TokenStream {
                         continue;
                     }
 
-                    let scheduler_tick = scheduler.clone();
-                    let vm_tick = vm.clone();
-                    let bytecode_tick = bytecode.clone();
-                    let url_client_tick = url_client.clone();
-                    let mutations_tx_tick = mutations_tx.clone();
+                    use hyperstack::runtime::futures::FutureExt;
 
-                    let tick_handle = hyperstack::runtime::tokio::spawn(async move {
+                    let tick_future = std::panic::AssertUnwindSafe(async {
                         let due = {
-                            let mut sched = scheduler_tick.lock().unwrap_or_else(|e| e.into_inner());
+                            let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
                             sched.take_due(current_slot)
                         };
 
@@ -80,8 +76,8 @@ fn generate_slot_scheduler_task() -> TokenStream {
 
                         for mut callback in due {
                             let state = {
-                                let vm = vm_tick.lock().unwrap_or_else(|e| e.into_inner());
-                                vm.get_entity_state(callback.state_id, &callback.primary_key)
+                                let vm_guard = vm.lock().unwrap_or_else(|e| e.into_inner());
+                                vm_guard.get_entity_state(callback.state_id, &callback.primary_key)
                             };
 
                             let state = match state {
@@ -89,7 +85,7 @@ fn generate_slot_scheduler_task() -> TokenStream {
                                 None => {
                                     if callback.retry_count < MAX_RETRIES {
                                         callback.retry_count += 1;
-                                        let mut sched = scheduler_tick.lock().unwrap_or_else(|e| e.into_inner());
+                                        let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
                                         sched.re_register(callback, current_slot + 1);
                                     } else {
                                         hyperstack::runtime::tracing::warn!(
@@ -133,7 +129,7 @@ fn generate_slot_scheduler_task() -> TokenStream {
                                     None => {
                                         if callback.retry_count < MAX_RETRIES {
                                             callback.retry_count += 1;
-                                            let mut sched = scheduler_tick.lock().unwrap_or_else(|e| e.into_inner());
+                                            let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
                                             sched.re_register(callback, current_slot + 1);
                                         } else {
                                             hyperstack::runtime::tracing::warn!(
@@ -159,7 +155,7 @@ fn generate_slot_scheduler_task() -> TokenStream {
                                     _ => {
                                         if callback.retry_count < MAX_RETRIES {
                                             callback.retry_count += 1;
-                                            let mut sched = scheduler_tick.lock().unwrap_or_else(|e| e.into_inner());
+                                            let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
                                             sched.re_register(callback, current_slot + 1);
                                         }
                                         continue;
@@ -172,33 +168,33 @@ fn generate_slot_scheduler_task() -> TokenStream {
                             let cache_key = format!("scheduled:{}:{}:{}", callback.entity_name, callback.primary_key, url);
 
                             let requests = {
-                                let mut vm = vm_tick.lock().unwrap_or_else(|e| e.into_inner());
+                                let mut vm_guard = vm.lock().unwrap_or_else(|e| e.into_inner());
                                 let target = hyperstack::runtime::hyperstack_interpreter::vm::ResolverTarget {
                                     state_id: callback.state_id,
                                     entity_name: callback.entity_name.clone(),
                                     primary_key: callback.primary_key.clone(),
                                     extracts: callback.extracts.clone(),
                                 };
-                                vm.enqueue_resolver_request(
+                                vm_guard.enqueue_resolver_request(
                                     cache_key.clone(),
                                     callback.resolver.clone(),
                                     hyperstack::runtime::serde_json::Value::String(url.clone()),
                                     target,
                                 );
-                                vm.take_resolver_requests()
+                                vm_guard.take_resolver_requests()
                             };
 
                             let url_mutations = hyperstack::runtime::hyperstack_interpreter::resolvers::resolve_url_batch(
-                                &vm_tick,
-                                bytecode_tick.as_ref(),
-                                &url_client_tick,
+                                &vm,
+                                bytecode.as_ref(),
+                                &url_client,
                                 requests,
                             ).await;
 
                             if url_mutations.is_empty() {
                                 if callback.retry_count < MAX_RETRIES {
                                     callback.retry_count += 1;
-                                    let mut sched = scheduler_tick.lock().unwrap_or_else(|e| e.into_inner());
+                                    let mut sched = scheduler.lock().unwrap_or_else(|e| e.into_inner());
                                     sched.re_register(callback, current_slot + 1);
                                 } else {
                                     hyperstack::runtime::tracing::warn!(
@@ -213,17 +209,20 @@ fn generate_slot_scheduler_task() -> TokenStream {
                                     hyperstack::runtime::smallvec::SmallVec::from_vec(url_mutations),
                                     slot_context,
                                 );
-                                let _ = mutations_tx_tick.send(batch).await;
+                                let _ = mutations_tx.send(batch).await;
                             }
                         }
                     });
 
-                    if let Err(e) = tick_handle.await {
-                        if e.is_panic() {
-                            hyperstack::runtime::tracing::error!(
-                                "SlotScheduler: tick task panicked, continuing: {:?}", e
-                            );
-                        }
+                    if let Err(panic_info) = tick_future.catch_unwind().await {
+                        let msg = panic_info
+                            .downcast_ref::<&str>().map(|s| s.to_string())
+                            .or_else(|| panic_info.downcast_ref::<String>().cloned())
+                            .unwrap_or_else(|| "unknown panic".to_string());
+                        hyperstack::runtime::tracing::error!(
+                            error = %msg,
+                            "SlotScheduler: tick panicked, continuing"
+                        );
                     }
 
                     hyperstack::runtime::tokio::time::sleep(std::time::Duration::from_millis(400)).await;

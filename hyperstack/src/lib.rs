@@ -70,6 +70,7 @@ pub mod runtime {
     pub use serde_json;
     pub use smallvec;
     pub use tokio;
+    pub use futures;
     pub use tracing;
     pub use yellowstone_vixen;
     pub use yellowstone_vixen_core;
