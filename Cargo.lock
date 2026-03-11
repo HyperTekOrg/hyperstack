@@ -1248,6 +1248,7 @@ dependencies = [
  "bs58",
  "bytemuck",
  "dotenvy",
+ "futures",
  "hyperstack-interpreter",
  "hyperstack-macros",
  "hyperstack-sdk",
