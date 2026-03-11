@@ -1,6 +1,6 @@
 use crate::ast::{ComparisonOp, ResolverCondition, UrlTemplatePart};
 use crate::vm::ScheduledCallback;
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
 
@@ -80,6 +80,9 @@ pub fn evaluate_condition(condition: &ResolverCondition, state: &Value) -> bool 
     evaluate_comparison(&field_val, &condition.op, &condition.value)
 }
 
+/// NON_ALPHANUMERIC minus RFC 3986 unreserved chars (`-`, `.`, `_`, `~`) that are safe in URLs.
+const URL_SEGMENT_SET: &AsciiSet = &NON_ALPHANUMERIC.remove(b'-').remove(b'.').remove(b'_').remove(b'~');
+
 pub fn build_url_from_template(template: &[UrlTemplatePart], state: &Value) -> Option<String> {
     let mut url = String::new();
     for part in template {
@@ -94,7 +97,7 @@ pub fn build_url_from_template(template: &[UrlTemplatePart], state: &Value) -> O
                     Some(s) => s.to_string(),
                     None => val.to_string().trim_matches('"').to_string(),
                 };
-                let encoded = utf8_percent_encode(&raw, NON_ALPHANUMERIC).to_string();
+                let encoded = utf8_percent_encode(&raw, URL_SEGMENT_SET).to_string();
                 url.push_str(&encoded);
             }
         }
