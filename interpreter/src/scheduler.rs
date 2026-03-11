@@ -1,5 +1,6 @@
 use crate::ast::{ComparisonOp, ResolverCondition, UrlTemplatePart};
 use crate::vm::ScheduledCallback;
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
 
@@ -88,10 +89,12 @@ pub fn build_url_from_template(template: &[UrlTemplatePart], state: &Value) -> O
                 if val.is_null() {
                     return None;
                 }
-                match val.as_str() {
-                    Some(s) => url.push_str(s),
-                    None => url.push_str(val.to_string().trim_matches('"')),
-                }
+                let raw = match val.as_str() {
+                    Some(s) => s.to_string(),
+                    None => val.to_string().trim_matches('"').to_string(),
+                };
+                let encoded = utf8_percent_encode(&raw, NON_ALPHANUMERIC).to_string();
+                url.push_str(&encoded);
             }
         }
     }

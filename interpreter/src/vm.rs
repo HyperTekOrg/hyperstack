@@ -2670,12 +2670,15 @@ impl VmContext {
                                         path,
                                     ) {
                                         Some(val) if !val.is_null() => {
-                                            match val.as_str() {
-                                                Some(s) => url.push_str(s),
-                                                None => url.push_str(
-                                                    val.to_string().trim_matches('"'),
-                                                ),
-                                            }
+                                            let raw = match val.as_str() {
+                                                Some(s) => s.to_string(),
+                                                None => val.to_string().trim_matches('"').to_string(),
+                                            };
+                                            let encoded = percent_encoding::utf8_percent_encode(
+                                                &raw,
+                                                percent_encoding::NON_ALPHANUMERIC,
+                                            );
+                                            url.push_str(&encoded.to_string());
                                         }
                                         _ => {
                                             all_resolved = false;

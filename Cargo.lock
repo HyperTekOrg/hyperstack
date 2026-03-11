@@ -1313,6 +1313,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "percent-encoding",
  "prost 0.13.5",
  "prost-reflect",
  "prost-types 0.13.5",
