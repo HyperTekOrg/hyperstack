@@ -2659,40 +2659,8 @@ impl VmContext {
 
                     // Build resolver input from template, literal value, or field path
                     let resolved_input = if let Some(template) = url_template {
-                        let mut url = String::new();
-                        let mut all_resolved = true;
-                        for part in template {
-                            match part {
-                                ast::UrlTemplatePart::Literal(s) => url.push_str(s),
-                                ast::UrlTemplatePart::FieldRef(path) => {
-                                    match Self::get_value_at_path(
-                                        &self.registers[*state],
-                                        path,
-                                    ) {
-                                        Some(val) if !val.is_null() => {
-                                            let raw = match val.as_str() {
-                                                Some(s) => s.to_string(),
-                                                None => val.to_string().trim_matches('"').to_string(),
-                                            };
-                                            let encoded = percent_encoding::utf8_percent_encode(
-                                                &raw,
-                                                percent_encoding::NON_ALPHANUMERIC,
-                                            );
-                                            url.push_str(&encoded.to_string());
-                                        }
-                                        _ => {
-                                            all_resolved = false;
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if all_resolved {
-                            Some(Value::String(url))
-                        } else {
-                            None
-                        }
+                        crate::scheduler::build_url_from_template(template, &self.registers[*state])
+                            .map(Value::String)
                     } else if let Some(value) = input_value {
                         Some(value.clone())
                     } else if let Some(path) = input_path.as_ref() {
