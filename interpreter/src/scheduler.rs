@@ -31,6 +31,7 @@ impl SlotScheduler {
             for cbs in self.callbacks.values_mut() {
                 cbs.retain(|cb| Self::dedup_key(cb) != dedup_key);
             }
+            self.callbacks.retain(|_, cbs| !cbs.is_empty());
         }
         self.registered.insert(dedup_key);
         self.callbacks
