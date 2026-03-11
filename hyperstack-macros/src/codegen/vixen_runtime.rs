@@ -98,6 +98,11 @@ fn generate_slot_scheduler_task() -> TokenStream {
 
                         if let Some(ref condition) = callback.condition {
                             if !hyperstack::runtime::hyperstack_interpreter::scheduler::evaluate_condition(condition, &state) {
+                                hyperstack::runtime::tracing::debug!(
+                                    entity = %callback.entity_name,
+                                    key = ?callback.primary_key,
+                                    "SlotScheduler: condition no longer met, skipping callback"
+                                );
                                 continue;
                             }
                         }
