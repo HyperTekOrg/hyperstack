@@ -113,24 +113,34 @@ pub fn get_value_at_path(value: &Value, path: &str) -> Option<Value> {
     Some(current.clone())
 }
 
+/// Mirrors the VM's i64 → u64 → f64 comparison cascade to avoid divergent
+/// condition evaluation between registration time and execution time.
 fn evaluate_comparison(field_value: &Value, op: &ComparisonOp, condition_value: &Value) -> bool {
     match op {
         ComparisonOp::Equal => field_value == condition_value,
         ComparisonOp::NotEqual => field_value != condition_value,
-        ComparisonOp::GreaterThan => compare_numeric(field_value, condition_value, |a, b| a > b),
-        ComparisonOp::GreaterThanOrEqual => {
-            compare_numeric(field_value, condition_value, |a, b| a >= b)
-        }
-        ComparisonOp::LessThan => compare_numeric(field_value, condition_value, |a, b| a < b),
-        ComparisonOp::LessThanOrEqual => {
-            compare_numeric(field_value, condition_value, |a, b| a <= b)
-        }
+        ComparisonOp::GreaterThan => compare_numeric(field_value, condition_value, |a, b| a > b, |a, b| a > b, |a, b| a > b),
+        ComparisonOp::GreaterThanOrEqual => compare_numeric(field_value, condition_value, |a, b| a >= b, |a, b| a >= b, |a, b| a >= b),
+        ComparisonOp::LessThan => compare_numeric(field_value, condition_value, |a, b| a < b, |a, b| a < b, |a, b| a < b),
+        ComparisonOp::LessThanOrEqual => compare_numeric(field_value, condition_value, |a, b| a <= b, |a, b| a <= b, |a, b| a <= b),
     }
 }
 
-fn compare_numeric(a: &Value, b: &Value, cmp: fn(f64, f64) -> bool) -> bool {
-    match (a.as_f64(), b.as_f64()) {
-        (Some(a), Some(b)) => cmp(a, b),
-        _ => false,
+fn compare_numeric(
+    a: &Value,
+    b: &Value,
+    cmp_i64: fn(i64, i64) -> bool,
+    cmp_u64: fn(u64, u64) -> bool,
+    cmp_f64: fn(f64, f64) -> bool,
+) -> bool {
+    match (a.as_i64(), b.as_i64()) {
+        (Some(a), Some(b)) => cmp_i64(a, b),
+        _ => match (a.as_u64(), b.as_u64()) {
+            (Some(a), Some(b)) => cmp_u64(a, b),
+            _ => match (a.as_f64(), b.as_f64()) {
+                (Some(a), Some(b)) => cmp_f64(a, b),
+                _ => false,
+            },
+        },
     }
 }
