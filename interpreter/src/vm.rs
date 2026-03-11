@@ -2688,7 +2688,10 @@ impl VmContext {
                         }
 
                         if matches!(strategy, ResolveStrategy::SetOnce)
-                            && extracts.iter().any(|extract| {
+                            // all(): fire resolver if any target is still null.
+                            // Already-set fields are protected from overwrite by
+                            // set_value_at_path's SetOnce null-source guard.
+                            && extracts.iter().all(|extract| {
                                 match Self::get_value_at_path(
                                     &self.registers[*state],
                                     &extract.target_path,

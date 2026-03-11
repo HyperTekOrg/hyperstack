@@ -108,7 +108,10 @@ fn generate_slot_scheduler_task() -> TokenStream {
                         }
 
                         if callback.strategy == hyperstack::runtime::hyperstack_interpreter::ast::ResolveStrategy::SetOnce {
-                            let already_resolved = callback.extracts.iter().any(|ext| {
+                            // Use all(): fire resolver if any target is still null.
+                            // Already-set fields are protected from overwrite by the
+                            // SetOnce guard in VmContext::set_value_at_path.
+                            let already_resolved = callback.extracts.iter().all(|ext| {
                                 hyperstack::runtime::hyperstack_interpreter::scheduler::get_value_at_path(&state, &ext.target_path)
                                     .map(|v| !v.is_null())
                                     .unwrap_or(false)
