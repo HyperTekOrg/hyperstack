@@ -2720,7 +2720,7 @@ impl VmContext {
                         }
 
                         if matches!(strategy, ResolveStrategy::SetOnce)
-                            && extracts.iter().all(|extract| {
+                            && extracts.iter().any(|extract| {
                                 match Self::get_value_at_path(
                                     &self.registers[*state],
                                     &extract.target_path,

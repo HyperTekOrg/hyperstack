@@ -103,7 +103,7 @@ fn generate_slot_scheduler_task() -> TokenStream {
                         }
 
                         if callback.strategy == hyperstack::runtime::hyperstack_interpreter::ast::ResolveStrategy::SetOnce {
-                            let already_resolved = callback.extracts.iter().all(|ext| {
+                            let already_resolved = callback.extracts.iter().any(|ext| {
                                 hyperstack::runtime::hyperstack_interpreter::scheduler::get_value_at_path(&state, &ext.target_path)
                                     .map(|v| !v.is_null())
                                     .unwrap_or(false)
