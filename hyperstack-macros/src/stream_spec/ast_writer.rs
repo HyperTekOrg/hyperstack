@@ -201,7 +201,9 @@ fn build_resolver_specs(resolve_specs: &[parse::ResolveSpec]) -> Vec<ResolverSpe
             schedule_key,
         );
 
-        let condition = spec.condition.as_deref().map(parse_resolver_condition);
+        let condition = spec.condition.as_deref().map(|s| {
+            parse_resolver_condition(s).unwrap_or_else(|e| panic!("{}", e))
+        });
 
         let entry = grouped.entry(key).or_insert_with(|| ResolverSpec {
             resolver: spec.resolver.clone(),
@@ -243,10 +245,10 @@ fn parse_resolve_strategy(strategy: &str) -> ResolveStrategy {
 }
 
 pub fn parse_resolver_condition_from_str(s: &str) -> ResolverCondition {
-    parse_resolver_condition(s)
+    parse_resolver_condition(s).unwrap_or_else(|e| panic!("{}", e))
 }
 
-fn parse_resolver_condition(s: &str) -> ResolverCondition {
+fn parse_resolver_condition(s: &str) -> Result<ResolverCondition, String> {
     // Order matters: two-char operators (>=, <=) must precede single-char (>, <)
     // to avoid partial matches.
     let operators = ["==", "!=", ">=", "<=", ">", "<"];
@@ -272,14 +274,19 @@ fn parse_resolver_condition(s: &str) -> ResolverCondition {
                 }
                 s => serde_json::Value::String(s.trim_matches('"').to_string()),
             };
-            return ResolverCondition {
+            return Ok(ResolverCondition {
                 field_path,
                 op,
                 value,
-            };
+            });
         }
     }
-    panic!("Invalid condition expression: '{}'. Expected format: 'field.path op value'", s);
+    Err(format!(
+        "Invalid condition expression: '{}'. \
+         Expected format: 'field.path <op> value' \
+         (supported operators: ==, !=, >, >=, <, <=)",
+        s
+    ))
 }
 
 fn resolver_type_key(resolver: &ResolverType) -> String {
