@@ -1005,11 +1005,14 @@ pub struct ResolveAttribute {
     pub from: Option<String>,
     pub address: Option<String>,
     pub url: Option<String>,
+    pub url_is_template: bool,
     pub method: Option<String>,
     pub extract: Option<String>,
     pub target_field_name: String,
     pub resolver: Option<String>,
     pub strategy: String,
+    pub condition: Option<String>,
+    pub schedule_at: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -1020,16 +1023,21 @@ pub struct ResolveSpec {
     pub extract: Option<String>,
     pub target_field_name: String,
     pub strategy: String,
+    pub condition: Option<String>,
+    pub schedule_at: Option<String>,
 }
 
 struct ResolveAttributeArgs {
     from: Option<String>,
     address: Option<String>,
     url: Option<String>,
+    url_is_template: bool,
     method: Option<syn::Ident>,
     extract: Option<String>,
     resolver: Option<String>,
     strategy: Option<String>,
+    condition: Option<String>,
+    schedule_at: Option<String>,
 }
 
 impl Parse for ResolveAttributeArgs {
@@ -1037,10 +1045,13 @@ impl Parse for ResolveAttributeArgs {
         let mut from = None;
         let mut address = None;
         let mut url = None;
+        let mut url_is_template = false;
         let mut method = None;
         let mut extract = None;
         let mut resolver = None;
         let mut strategy = None;
+        let mut condition = None;
+        let mut schedule_at = None;
 
         while !input.is_empty() {
             let ident: syn::Ident = input.parse()?;
@@ -1055,19 +1066,23 @@ impl Parse for ResolveAttributeArgs {
                 let lit: syn::LitStr = input.parse()?;
                 address = Some(lit.value());
             } else if ident_str == "url" {
-                // Parse as dotted path (e.g., info.uri) - handle both dot-separated and single identifiers
-                let mut parts = Vec::new();
-                let first: syn::Ident = input.parse()?;
-                parts.push(first.to_string());
+                if input.peek(syn::LitStr) {
+                    let lit: syn::LitStr = input.parse()?;
+                    url = Some(lit.value());
+                    url_is_template = true;
+                } else {
+                    let mut parts = Vec::new();
+                    let first: syn::Ident = input.parse()?;
+                    parts.push(first.to_string());
 
-                // Parse any additional .identifier segments
-                while input.peek(Token![.]) {
-                    input.parse::<Token![.]>()?;
-                    let next: syn::Ident = input.parse()?;
-                    parts.push(next.to_string());
+                    while input.peek(Token![.]) {
+                        input.parse::<Token![.]>()?;
+                        let next: syn::Ident = input.parse()?;
+                        parts.push(next.to_string());
+                    }
+
+                    url = Some(parts.join("."));
                 }
-
-                url = Some(parts.join("."));
             } else if ident_str == "method" {
                 let method_ident: syn::Ident = input.parse()?;
                 match method_ident.to_string().to_lowercase().as_str() {
@@ -1091,6 +1106,21 @@ impl Parse for ResolveAttributeArgs {
             } else if ident_str == "strategy" {
                 let ident: syn::Ident = input.parse()?;
                 strategy = Some(ident.to_string());
+            } else if ident_str == "condition" {
+                let lit: syn::LitStr = input.parse()?;
+                condition = Some(lit.value());
+            } else if ident_str == "schedule_at" {
+                let mut parts = Vec::new();
+                let first: syn::Ident = input.parse()?;
+                parts.push(first.to_string());
+
+                while input.peek(Token![.]) {
+                    input.parse::<Token![.]>()?;
+                    let next: syn::Ident = input.parse()?;
+                    parts.push(next.to_string());
+                }
+
+                schedule_at = Some(parts.join("."));
             } else {
                 return Err(syn::Error::new(
                     ident.span(),
@@ -1107,10 +1137,13 @@ impl Parse for ResolveAttributeArgs {
             from,
             address,
             url,
+            url_is_template,
             method,
             extract,
             resolver,
             strategy,
+            condition,
+            schedule_at,
         })
     }
 }
@@ -1165,11 +1198,14 @@ pub fn parse_resolve_attribute(
         from: args.from,
         address: args.address,
         url: args.url,
+        url_is_template: args.url_is_template,
         method: args.method.map(|m| m.to_string()),
         extract: args.extract,
         target_field_name: target_field_name.to_string(),
         resolver: args.resolver,
         strategy,
+        condition: args.condition,
+        schedule_at: args.schedule_at,
     }))
 }
 

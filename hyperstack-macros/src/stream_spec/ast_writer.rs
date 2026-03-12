@@ -13,11 +13,11 @@ use crate::ast::writer::{
     convert_idl_to_snapshot, parse_population_strategy, parse_transformation,
 };
 use crate::ast::{
-    ComputedFieldSpec, ConditionExpr, EntitySection, FieldPath, HookAction, IdentitySpec,
-    IdlSerializationSnapshot, InstructionHook, KeyResolutionStrategy, LookupIndexSpec,
-    MappingSource, ResolveStrategy, ResolverExtractSpec, ResolverHook, ResolverSpec,
-    ResolverStrategy, ResolverType, SerializableFieldMapping, SerializableHandlerSpec,
-    SerializableStreamSpec, SourceSpec,
+    ComparisonOp, ComputedFieldSpec, ConditionExpr, EntitySection, FieldPath, HookAction,
+    IdentitySpec, IdlSerializationSnapshot, InstructionHook, KeyResolutionStrategy,
+    LookupIndexSpec, MappingSource, ResolveStrategy, ResolverCondition, ResolverExtractSpec,
+    ResolverHook, ResolverSpec, ResolverStrategy, ResolverType, SerializableFieldMapping,
+    SerializableHandlerSpec, SerializableStreamSpec, SourceSpec,
 };
 use crate::event_type_helpers::{find_idl_for_type, program_name_for_type, IdlLookup};
 use crate::parse;
@@ -190,12 +190,20 @@ fn build_resolver_specs(resolve_specs: &[parse::ResolveSpec]) -> Vec<ResolverSpe
         } else {
             "value:".to_string()
         };
+        let condition_key = spec.condition.as_deref().unwrap_or("");
+        let schedule_key = spec.schedule_at.as_deref().unwrap_or("");
         let key = format!(
-            "{}::{}::{}",
+            "{}::{}::{}::{}::{}",
             resolver_type_key(&spec.resolver),
             input_key,
-            spec.strategy
+            spec.strategy,
+            condition_key,
+            schedule_key,
         );
+
+        let condition = spec.condition.as_deref().map(|s| {
+            parse_resolver_condition(s).unwrap_or_else(|e| panic!("{}", e))
+        });
 
         let entry = grouped.entry(key).or_insert_with(|| ResolverSpec {
             resolver: spec.resolver.clone(),
@@ -206,6 +214,8 @@ fn build_resolver_specs(resolve_specs: &[parse::ResolveSpec]) -> Vec<ResolverSpe
                 .map(|value| serde_json::Value::String(value.clone())),
             strategy: parse_resolve_strategy(&spec.strategy),
             extracts: Vec::new(),
+            condition,
+            schedule_at: spec.schedule_at.clone(),
         });
 
         let source_path = spec.extract.clone();
@@ -234,10 +244,64 @@ fn parse_resolve_strategy(strategy: &str) -> ResolveStrategy {
     }
 }
 
+pub fn parse_resolver_condition_from_str(s: &str) -> ResolverCondition {
+    parse_resolver_condition(s).unwrap_or_else(|e| panic!("{}", e))
+}
+
+fn parse_resolver_condition(s: &str) -> Result<ResolverCondition, String> {
+    // Order matters: two-char operators (>=, <=) must precede single-char (>, <)
+    // to avoid partial matches.
+    let operators = ["==", "!=", ">=", "<=", ">", "<"];
+    for op_str in &operators {
+        if let Some(pos) = s.find(op_str) {
+            let field_path = s[..pos].trim().to_string();
+            let raw_value = s[pos + op_str.len()..].trim();
+            let op = match *op_str {
+                "==" => ComparisonOp::Equal,
+                "!=" => ComparisonOp::NotEqual,
+                ">=" => ComparisonOp::GreaterThanOrEqual,
+                "<=" => ComparisonOp::LessThanOrEqual,
+                ">" => ComparisonOp::GreaterThan,
+                "<" => ComparisonOp::LessThan,
+                _ => unreachable!(),
+            };
+            let value = match raw_value {
+                "null" => serde_json::Value::Null,
+                "true" => serde_json::Value::Bool(true),
+                "false" => serde_json::Value::Bool(false),
+                s if s.parse::<f64>().is_ok() => {
+                    serde_json::json!(s.parse::<f64>().unwrap())
+                }
+                s => serde_json::Value::String(s.trim_matches('"').to_string()),
+            };
+            return Ok(ResolverCondition {
+                field_path,
+                op,
+                value,
+            });
+        }
+    }
+    Err(format!(
+        "Invalid condition expression: '{}'. \
+         Expected format: 'field.path <op> value' \
+         (supported operators: ==, !=, >, >=, <, <=)",
+        s
+    ))
+}
+
 fn resolver_type_key(resolver: &ResolverType) -> String {
     match resolver {
         ResolverType::Token => "token".to_string(),
-        ResolverType::Url(config) => format!("url:{}", config.url_path),
+        ResolverType::Url(config) => match &config.url_source {
+            crate::ast::UrlSource::FieldPath(path) => format!("url:{}", path),
+            crate::ast::UrlSource::Template(parts) => {
+                let key: String = parts.iter().map(|p| match p {
+                    crate::ast::UrlTemplatePart::Literal(s) => s.clone(),
+                    crate::ast::UrlTemplatePart::FieldRef(f) => format!("{{{}}}", f),
+                }).collect();
+                format!("url:{}", key)
+            }
+        },
     }
 }
 

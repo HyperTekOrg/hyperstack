@@ -80,6 +80,8 @@ pub struct OreRoundEntropy {
     pub entropy_samples: Option<Option<u64>>,
     #[serde(default)]
     pub entropy_var_address: Option<Option<String>>,
+    #[serde(default)]
+    pub resolved_seed: Option<Option<Vec<serde_json::Value>>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

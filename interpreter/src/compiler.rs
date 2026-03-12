@@ -202,8 +202,11 @@ pub enum OpCode {
         resolver: ResolverType,
         input_path: Option<String>,
         input_value: Option<Value>,
+        url_template: Option<Vec<UrlTemplatePart>>,
         strategy: ResolveStrategy,
         extracts: Vec<ResolverExtractSpec>,
+        condition: Option<ResolverCondition>,
+        schedule_at: Option<String>,
         state: Register,
         key: Register,
     },
@@ -713,14 +716,25 @@ impl<S> TypedCompiler<S> {
         let mut ops = Vec::new();
 
         for resolver_spec in &self.spec.resolver_specs {
+            let url_template = match &resolver_spec.resolver {
+                ResolverType::Url(config) => match &config.url_source {
+                    UrlSource::Template(parts) => Some(parts.clone()),
+                    _ => None,
+                },
+                _ => None,
+            };
+
             ops.push(OpCode::QueueResolver {
                 state_id: self.state_id,
                 entity_name: self.entity_name.clone(),
                 resolver: resolver_spec.resolver.clone(),
                 input_path: resolver_spec.input_path.clone(),
                 input_value: resolver_spec.input_value.clone(),
+                url_template,
                 strategy: resolver_spec.strategy.clone(),
                 extracts: resolver_spec.extracts.clone(),
+                condition: resolver_spec.condition.clone(),
+                schedule_at: resolver_spec.schedule_at.clone(),
                 state: state_reg,
                 key: key_reg,
             });

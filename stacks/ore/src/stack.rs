@@ -191,6 +191,15 @@ pub mod ore_stream {
 
         #[map(entropy_sdk::accounts::Var::__account_address, strategy = SetOnce)]
         pub entropy_var_address: Option<String>,
+
+        #[resolve(
+            url = "https://entropy-api.onrender.com/var/{entropy.entropy_var_address}/seed?samples={entropy.entropy_samples}",
+            extract = "seed",
+            schedule_at = state.expires_at,
+            condition = "entropy.entropy_value == null",
+            strategy = SetOnce
+        )]
+        pub resolved_seed: Option<Vec<u8>>,
     }
 
     // ========================================================================

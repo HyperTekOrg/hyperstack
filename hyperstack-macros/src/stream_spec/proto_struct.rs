@@ -148,6 +148,8 @@ pub fn process_struct_with_context(
                         extract: resolve_attr.extract,
                         target_field_name: resolve_attr.target_field_name,
                         strategy: resolve_attr.strategy,
+                        condition: resolve_attr.condition,
+                        schedule_at: resolve_attr.schedule_at,
                     });
                 }
             }
@@ -449,7 +451,26 @@ pub fn process_struct_with_context(
                     hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Token
                 },
                 crate::ast::ResolverType::Url(config) => {
-                    let url_path = &config.url_path;
+                    let url_source_code = match &config.url_source {
+                        crate::ast::UrlSource::FieldPath(path) => {
+                            quote! {
+                                hyperstack::runtime::hyperstack_interpreter::ast::UrlSource::FieldPath(#path.to_string())
+                            }
+                        }
+                        crate::ast::UrlSource::Template(parts) => {
+                            let parts_code: Vec<_> = parts.iter().map(|part| match part {
+                                crate::ast::UrlTemplatePart::Literal(s) => quote! {
+                                    hyperstack::runtime::hyperstack_interpreter::ast::UrlTemplatePart::Literal(#s.to_string())
+                                },
+                                crate::ast::UrlTemplatePart::FieldRef(f) => quote! {
+                                    hyperstack::runtime::hyperstack_interpreter::ast::UrlTemplatePart::FieldRef(#f.to_string())
+                                },
+                            }).collect();
+                            quote! {
+                                hyperstack::runtime::hyperstack_interpreter::ast::UrlSource::Template(vec![#(#parts_code),*])
+                            }
+                        }
+                    };
                     let method_code = match config.method {
                         crate::ast::HttpMethod::Get => quote! {
                             hyperstack::runtime::hyperstack_interpreter::ast::HttpMethod::Get
@@ -465,7 +486,7 @@ pub fn process_struct_with_context(
                     quote! {
                         hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(
                             hyperstack::runtime::hyperstack_interpreter::ast::UrlResolverConfig {
-                                url_path: #url_path.to_string(),
+                                url_source: #url_source_code,
                                 method: #method_code,
                                 extract_path: #extract_path_code,
                             }
@@ -516,6 +537,44 @@ pub fn process_struct_with_context(
                 })
                 .collect();
 
+            let condition_code = match specs.first().and_then(|s| s.condition.as_deref()) {
+                Some(cond_str) => {
+                    let parsed = super::ast_writer::parse_resolver_condition_from_str(cond_str);
+                    let field_path = &parsed.field_path;
+                    let op_code = match parsed.op {
+                        crate::ast::ComparisonOp::Equal => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::Equal },
+                        crate::ast::ComparisonOp::NotEqual => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::NotEqual },
+                        crate::ast::ComparisonOp::GreaterThan => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::GreaterThan },
+                        crate::ast::ComparisonOp::LessThan => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::LessThan },
+                        crate::ast::ComparisonOp::GreaterThanOrEqual => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::GreaterThanOrEqual },
+                        crate::ast::ComparisonOp::LessThanOrEqual => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::LessThanOrEqual },
+                    };
+                    let val_code = match &parsed.value {
+                        serde_json::Value::Null => quote! { hyperstack::runtime::serde_json::Value::Null },
+                        serde_json::Value::Bool(b) => quote! { hyperstack::runtime::serde_json::Value::Bool(#b) },
+                        serde_json::Value::Number(n) => {
+                            let n_str = n.to_string();
+                            quote! { hyperstack::runtime::serde_json::json!(#n_str.parse::<f64>().unwrap()) }
+                        }
+                        serde_json::Value::String(s) => quote! { hyperstack::runtime::serde_json::Value::String(#s.to_string()) },
+                        _ => quote! { hyperstack::runtime::serde_json::Value::Null },
+                    };
+                    quote! {
+                        Some(hyperstack::runtime::hyperstack_interpreter::ast::ResolverCondition {
+                            field_path: #field_path.to_string(),
+                            op: #op_code,
+                            value: #val_code,
+                        })
+                    }
+                }
+                None => quote! { None },
+            };
+
+            let schedule_at_code = match specs.first().and_then(|s| s.schedule_at.as_ref()) {
+                Some(path) => quote! { Some(#path.to_string()) },
+                None => quote! { None },
+            };
+
             quote! {
                 hyperstack::runtime::hyperstack_interpreter::ast::ResolverSpec {
                     resolver: #resolver_code,
@@ -525,6 +584,8 @@ pub fn process_struct_with_context(
                     extracts: vec![
                         #(#extracts_code),*
                     ],
+                    condition: #condition_code,
+                    schedule_at: #schedule_at_code,
                 }
             }
         })
