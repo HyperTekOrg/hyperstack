@@ -592,9 +592,12 @@ fn collect_register_from_specs(
 ///
 /// This function returns a HashMap where the key is the entity name and the value
 /// is the list of PDA registrations for that specific entity only.
+///
+/// Scans both entity struct fields and section struct fields, since `register_from`
+/// attributes are typically defined inside section structs (e.g., `PoolId`, `PositionId`).
 fn collect_pda_registrations_per_entity(
     entity_structs: &[syn::ItemStruct],
-    _section_structs: &HashMap<String, syn::ItemStruct>,
+    section_structs: &HashMap<String, syn::ItemStruct>,
 ) -> HashMap<String, Vec<parse::RegisterPdaAttribute>> {
     let mut per_entity_regs: HashMap<String, Vec<parse::RegisterPdaAttribute>> = HashMap::new();
 
@@ -603,24 +606,41 @@ fn collect_pda_registrations_per_entity(
             .unwrap_or_else(|| entity_struct.ident.to_string());
         let mut entity_regs: Vec<parse::RegisterPdaAttribute> = Vec::new();
 
+        // Collect all structs to scan: the entity struct itself plus any section structs it references
+        let mut structs_to_scan: Vec<&syn::ItemStruct> = vec![entity_struct];
         if let syn::Fields::Named(fields) = &entity_struct.fields {
             for field in &fields.named {
-                let field_name = field
-                    .ident
-                    .as_ref()
-                    .map(|i| i.to_string())
-                    .unwrap_or_default();
-                for attr in &field.attrs {
-                    if let Ok(Some(map_attrs)) = parse::parse_map_attribute(attr, &field_name) {
-                        for map_attr in &map_attrs {
-                            if !map_attr.register_from.is_empty() {
-                                for rf in &map_attr.register_from {
-                                    entity_regs.push(parse::RegisterPdaAttribute {
-                                        instruction_path: rf.instruction_path.clone(),
-                                        pda_field: rf.pda_field.clone(),
-                                        primary_key_field: rf.primary_key_field.clone(),
-                                        lookup_name: "default_pda_lookup".to_string(),
-                                    });
+                if let syn::Type::Path(type_path) = &field.ty {
+                    if let Some(type_ident) = type_path.path.segments.last() {
+                        let type_name = type_ident.ident.to_string();
+                        if let Some(section_struct) = section_structs.get(&type_name) {
+                            structs_to_scan.push(section_struct);
+                        }
+                    }
+                }
+            }
+        }
+
+        for scan_struct in &structs_to_scan {
+            if let syn::Fields::Named(fields) = &scan_struct.fields {
+                for field in &fields.named {
+                    let field_name = field
+                        .ident
+                        .as_ref()
+                        .map(|i| i.to_string())
+                        .unwrap_or_default();
+                    for attr in &field.attrs {
+                        if let Ok(Some(map_attrs)) = parse::parse_map_attribute(attr, &field_name) {
+                            for map_attr in &map_attrs {
+                                if !map_attr.register_from.is_empty() {
+                                    for rf in &map_attr.register_from {
+                                        entity_regs.push(parse::RegisterPdaAttribute {
+                                            instruction_path: rf.instruction_path.clone(),
+                                            pda_field: rf.pda_field.clone(),
+                                            primary_key_field: rf.primary_key_field.clone(),
+                                            lookup_name: "default_pda_lookup".to_string(),
+                                        });
+                                    }
                                 }
                             }
                         }

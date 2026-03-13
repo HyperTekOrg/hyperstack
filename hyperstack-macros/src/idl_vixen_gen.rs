@@ -21,19 +21,10 @@ fn path_to_event_type(path: &Path, is_instruction: bool, default_program_name: &
         .unwrap_or_default();
     let suffix = if is_instruction { "IxState" } else { "State" };
 
-    // Derive program name from path's first segment if it ends with _sdk
-    let program_name = if path.segments.len() >= 2 {
-        let first_seg = path.segments.first().unwrap().ident.to_string();
-        if let Some(stripped) = first_seg.strip_suffix("_sdk") {
-            stripped.to_string()
-        } else {
-            default_program_name.to_string()
-        }
-    } else {
-        default_program_name.to_string()
-    };
-
-    format!("{}::{}{}", program_name, type_name, suffix)
+    // Always use the program name from the IDL spec, not the generated module path.
+    // The parser's event_type() uses the IDL program name (e.g., "pump"),
+    // so hook match arms must use the same prefix to match at runtime.
+    format!("{}::{}{}", default_program_name, type_name, suffix)
 }
 
 pub fn generate_resolver_registries(

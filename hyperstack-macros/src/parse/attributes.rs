@@ -77,6 +77,9 @@ pub struct CaptureAttribute {
     pub from_account: Option<Path>, // Explicit source via `from = ...`
     pub inferred_account: Option<Path>, // Inferred from field type
 
+    // Single field extraction from account (e.g., field = token_mint_0)
+    pub field: Option<syn::Ident>,
+
     // Field transformations
     pub field_transforms: HashMap<String, syn::Ident>, // Map field name to transformation
 
@@ -674,6 +677,7 @@ pub fn parse_event_attribute(
 // Parse args for #[snapshot] attribute
 struct SnapshotAttributeArgs {
     from: Option<Path>,
+    field: Option<syn::Ident>,
     strategy: Option<syn::Ident>,
     rename: Option<String>,
     join_on: Option<FieldSpec>,
@@ -685,6 +689,7 @@ struct SnapshotAttributeArgs {
 impl Parse for SnapshotAttributeArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut from = None;
+        let mut field = None;
         let mut strategy = None;
         let mut rename = None;
         let mut join_on = None;
@@ -700,6 +705,8 @@ impl Parse for SnapshotAttributeArgs {
 
             if ident_str == "from" {
                 from = Some(input.parse()?);
+            } else if ident_str == "field" {
+                field = Some(input.parse()?);
             } else if ident_str == "strategy" {
                 strategy = Some(input.parse()?);
             } else if ident_str == "rename" {
@@ -762,6 +769,7 @@ impl Parse for SnapshotAttributeArgs {
 
         Ok(SnapshotAttributeArgs {
             from,
+            field,
             strategy,
             rename,
             join_on,
@@ -804,6 +812,7 @@ pub fn parse_snapshot_attribute(
     Ok(Some(CaptureAttribute {
         from_account: args.from,
         inferred_account: None, // Will be filled in later from field type
+        field: args.field,
         field_transforms: args.transforms.into_iter().collect(),
         strategy,
         target_field_name: target_name,
@@ -1087,10 +1096,12 @@ impl Parse for ResolveAttributeArgs {
                 let method_ident: syn::Ident = input.parse()?;
                 match method_ident.to_string().to_lowercase().as_str() {
                     "get" | "post" => method = Some(method_ident),
-                    _ => return Err(syn::Error::new(
-                        method_ident.span(),
-                        "Invalid HTTP method. Only 'GET' or 'POST' are supported.",
-                    )),
+                    _ => {
+                        return Err(syn::Error::new(
+                            method_ident.span(),
+                            "Invalid HTTP method. Only 'GET' or 'POST' are supported.",
+                        ))
+                    }
                 }
             } else if ident_str == "extract" {
                 let lit: syn::LitStr = input.parse()?;

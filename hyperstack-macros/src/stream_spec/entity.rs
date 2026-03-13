@@ -18,7 +18,9 @@ use std::collections::{HashMap, HashSet};
 use quote::{format_ident, quote};
 use syn::{Fields, GenericArgument, ItemStruct, PathArguments, Type};
 
-use crate::ast::{EntitySection, FieldTypeInfo, HttpMethod, ResolverHook, ResolverType, UrlResolverConfig, UrlSource, UrlTemplatePart};
+use crate::ast::{
+    EntitySection, FieldTypeInfo, HttpMethod, ResolverHook, ResolverType, UrlResolverConfig,
+};
 use crate::codegen;
 use crate::event_type_helpers::IdlLookup;
 use crate::parse;
@@ -62,7 +64,10 @@ pub fn parse_url_template(s: &str) -> Vec<UrlTemplatePart> {
         if open > 0 {
             parts.push(UrlTemplatePart::Literal(rest[..open].to_string()));
         }
-        let close = rest[open..].find('}').expect("Unclosed '{' in URL template") + open;
+        let close = rest[open..]
+            .find('}')
+            .expect("Unclosed '{' in URL template")
+            + open;
         let field_ref = rest[open + 1..close].trim().to_string();
         parts.push(UrlTemplatePart::FieldRef(field_ref));
         rest = &rest[close + 1..];
@@ -321,25 +326,34 @@ pub fn process_entity_struct_with_idl(
                     if let Some(acct_path) = account_path {
                         let source_type_str = path_to_string(&acct_path);
 
-                        // Check if we have field transforms - encode them in source_field_name
-                        // so we can detect and process them differently during code generation
-                        let source_field_marker = if !snapshot_attr.field_transforms.is_empty() {
-                            format!(
-                                "__snapshot_with_transforms:{}",
-                                snapshot_attr
-                                    .field_transforms
-                                    .iter()
-                                    .map(|(k, v)| format!("{}={}", k, v))
-                                    .collect::<Vec<_>>()
-                                    .join(",")
-                            )
-                        } else {
-                            String::new()
-                        };
+                        // Determine source field name and whether this is a whole-source capture
+                        // or a single-field extraction based on the `field` parameter
+                        let (source_field_name, is_whole_source) =
+                            if let Some(ref field_ident) = snapshot_attr.field {
+                                // Single field extraction: field = token_mint_0
+                                (field_ident.to_string(), false)
+                            } else if !snapshot_attr.field_transforms.is_empty() {
+                                // Whole source with transforms
+                                (
+                                    format!(
+                                        "__snapshot_with_transforms:{}",
+                                        snapshot_attr
+                                            .field_transforms
+                                            .iter()
+                                            .map(|(k, v)| format!("{}={}", k, v))
+                                            .collect::<Vec<_>>()
+                                            .join(",")
+                                    ),
+                                    true,
+                                )
+                            } else {
+                                // Whole source capture (no field, no transforms)
+                                (String::new(), true)
+                            };
 
                         let map_attr = parse::MapAttribute {
                             source_type_path: acct_path,
-                            source_field_name: source_field_marker,
+                            source_field_name,
                             target_field_name: snapshot_attr.target_field_name.clone(),
                             is_primary_key: false,
                             is_lookup_index: false,
@@ -353,7 +367,7 @@ pub fn process_entity_struct_with_idl(
                             transform: None,
                             resolver_transform: None,
                             is_instruction: false,
-                            is_whole_source: true,
+                            is_whole_source,
                             lookup_by: snapshot_attr.lookup_by.clone(),
                             condition: None,
                             when: snapshot_attr.when.clone(),
@@ -446,13 +460,16 @@ pub fn process_entity_struct_with_idl(
                     });
 
                     // Determine resolver type: URL resolver if url is present, otherwise Token resolver
-                    let resolver = if let Some(url_val) = resolve_attr.url.clone() {
-                        let method = resolve_attr.method.as_deref().map(|m| {
-                            match m.to_lowercase().as_str() {
+                    let resolver = if let Some(url_path) = resolve_attr.url.clone() {
+                        // URL resolver
+                        let method = resolve_attr
+                            .method
+                            .as_deref()
+                            .map(|m| match m.to_lowercase().as_str() {
                                 "post" => HttpMethod::Post,
                                 _ => HttpMethod::Get,
-                            }
-                        }).unwrap_or(HttpMethod::Get);
+                            })
+                            .unwrap_or(HttpMethod::Get);
 
                         let url_source = if resolve_attr.url_is_template {
                             UrlSource::Template(parse_url_template(&url_val))
@@ -471,8 +488,7 @@ pub fn process_entity_struct_with_idl(
                             .unwrap_or_else(|err| panic!("{}", err))
                     } else {
                         // Token resolver with inferred type
-                        infer_resolver_type(field_type)
-                            .unwrap_or_else(|err| panic!("{}", err))
+                        infer_resolver_type(field_type).unwrap_or_else(|err| panic!("{}", err))
                     };
 
                     let from = if resolve_attr.url_is_template {

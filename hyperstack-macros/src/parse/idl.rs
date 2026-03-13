@@ -51,8 +51,8 @@ pub fn to_rust_type_string(idl_type: &IdlType) -> String {
     }
 }
 
-    /// Convert an IDL type to a Rust type string for bytemuck (zero-copy) accounts.
-        pub fn to_rust_type_string_bytemuck(idl_type: &IdlType) -> String {
+/// Convert an IDL type to a Rust type string for bytemuck (zero-copy) accounts.
+pub fn to_rust_type_string_bytemuck(idl_type: &IdlType) -> String {
     match idl_type {
         IdlType::Simple(s) => map_simple_type_bytemuck(s),
         IdlType::Array(arr) => {

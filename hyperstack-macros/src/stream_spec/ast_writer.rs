@@ -432,6 +432,9 @@ fn build_source_handler(
     let idl = find_idl_for_type(source_type, idls);
     let program_name = program_name_for_type(source_type, idls);
     let is_instruction = mappings.iter().any(|m| m.is_instruction);
+    // CPI events are sourced from `::events::` submodule paths (e.g. generated_sdk::events::Swap).
+    // All event fields are stored under "data.*" (no "accounts.*" section).
+    let is_cpi_event = source_type.contains("::events::");
 
     // Skip event-derived mappings
     if is_instruction
@@ -478,7 +481,14 @@ fn build_source_handler(
 
             MappingSource::AsCapture { field_transforms }
         } else {
-            let field_path = if is_instruction {
+            let field_path = if is_cpi_event {
+                // CPI events: all fields (including identifiers like lb_pair, from) are under "data"
+                if mapping.source_field_name.is_empty() {
+                    FieldPath::new(&["data"])
+                } else {
+                    FieldPath::new(&["data", &mapping.source_field_name])
+                }
+            } else if is_instruction {
                 if mapping.source_field_name.is_empty() {
                     FieldPath::new(&["data"])
                 } else {
@@ -550,7 +560,10 @@ fn build_source_handler(
 
         if mapping.is_primary_key {
             has_primary_key = true;
-            if is_instruction {
+            if is_cpi_event {
+                // CPI event fields are always in "data"
+                primary_field = Some(format!("data.{}", mapping.source_field_name));
+            } else if is_instruction {
                 let prefix = idl
                     .and_then(|idl| {
                         idl.get_instruction_field_prefix(account_type, &mapping.source_field_name)
@@ -576,10 +589,17 @@ fn build_source_handler(
         .find_map(|m| m.lookup_by.as_ref())
         .map(|fs| {
             // FieldSpec has explicit_location which tells us if it's accounts:: or data::
+            // For CPI events, all fields (including identifiers) are under "data".
             let prefix = match &fs.explicit_location {
                 Some(parse::FieldLocation::Account) => "accounts",
                 Some(parse::FieldLocation::InstructionArg) => "data",
-                None => "accounts", // Default to accounts for compatibility
+                None => {
+                    if is_cpi_event {
+                        "data" // CPI event fields are always in "data"
+                    } else {
+                        "accounts" // Default to accounts for instruction compatibility
+                    }
+                }
             };
             format!("{}.{}", prefix, fs.ident)
         });
@@ -650,7 +670,18 @@ fn build_source_handler(
         }
     };
 
-    let type_suffix = if is_instruction { "IxState" } else { "State" };
+    // Determine type suffix:
+    // - CPI events (from `::events::` submodule) use "CpiEvent"
+    // - Instructions use "IxState"
+    // - Account state uses "State"
+    let is_cpi_event = source_type.contains("::events::");
+    let type_suffix = if is_cpi_event {
+        "CpiEvent"
+    } else if is_instruction {
+        "IxState"
+    } else {
+        "State"
+    };
     let serialization = if is_instruction {
         None
     } else {
@@ -941,9 +972,10 @@ fn build_resolver_hooks_ast(
                         .filter_map(|instr_path| {
                             idl.and_then(|idl| {
                                 let instr_name = instr_path.segments.last()?.ident.to_string();
+                                let instr_snake = crate::utils::to_snake_case(&instr_name);
                                 idl.instructions
                                     .iter()
-                                    .find(|instr| instr.name.eq_ignore_ascii_case(&instr_name))
+                                    .find(|instr| instr.name == instr_snake)
                                     .map(|instr| instr.get_discriminator())
                             })
                         })
@@ -1092,10 +1124,13 @@ fn build_instruction_hooks_ast(
     for (instruction_type, derive_attrs) in sorted_derive_from {
         let instr_base = instruction_type.split("::").last().unwrap();
         let program_name = program_name_for_type(instruction_type, idls);
+        // CPI events (from `::events::` submodule) use "CpiEvent" suffix; instructions use "IxState"
+        let is_cpi_event = instruction_type.contains("::events::");
+        let type_suffix = if is_cpi_event { "CpiEvent" } else { "IxState" };
         let instr_type_state = if let Some(program_name) = program_name {
-            format!("{}::{}IxState", program_name, instr_base)
+            format!("{}::{}{}", program_name, instr_base, type_suffix)
         } else {
-            format!("{}IxState", instr_base)
+            format!("{}{}", instr_base, type_suffix)
         };
 
         for derive_attr in derive_attrs {
@@ -1113,9 +1148,14 @@ fn build_instruction_hooks_ast(
                     _ => continue,
                 }
             } else {
-                let path_prefix = match &derive_attr.field.explicit_location {
-                    Some(parse::FieldLocation::Account) => "accounts",
-                    Some(parse::FieldLocation::InstructionArg) | None => "data",
+                let path_prefix = if is_cpi_event {
+                    // CPI event fields are always under "data" (no "accounts" section)
+                    "data"
+                } else {
+                    match &derive_attr.field.explicit_location {
+                        Some(parse::FieldLocation::Account) => "accounts",
+                        Some(parse::FieldLocation::InstructionArg) | None => "data",
+                    }
                 };
 
                 MappingSource::FromSource {
@@ -1139,10 +1179,11 @@ fn build_instruction_hooks_ast(
                 condition,
             };
 
-            let lookup_by = derive_attr
-                .lookup_by
-                .as_ref()
-                .map(|field_spec| FieldPath::new(&["accounts", &field_spec.ident.to_string()]));
+            // CPI events: lookup_by fields are under "data"; instructions: under "accounts"
+            let lookup_by_prefix = if is_cpi_event { "data" } else { "accounts" };
+            let lookup_by = derive_attr.lookup_by.as_ref().map(|field_spec| {
+                FieldPath::new(&[lookup_by_prefix, &field_spec.ident.to_string()])
+            });
 
             let hook = instruction_hooks_map
                 .entry(instr_type_state.clone())

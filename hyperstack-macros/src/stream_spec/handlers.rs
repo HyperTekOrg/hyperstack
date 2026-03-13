@@ -534,16 +534,20 @@ pub fn generate_pda_registration_functions(
     for (i, registration) in pda_registrations.iter().enumerate() {
         let _instruction_type = &registration.instruction_path;
         let fn_name = format_ident!("register_pda_{}", i);
-        let pda_field = registration.pda_field.ident.to_string();
-        let primary_key_field = registration.primary_key_field.ident.to_string();
+        let pda_raw = registration.pda_field.ident.to_string();
+        let pk_raw = registration.primary_key_field.ident.to_string();
+        let pda_camel = crate::event_type_helpers::snake_to_lower_camel(&pda_raw);
+        let pk_camel = crate::event_type_helpers::snake_to_lower_camel(&pk_raw);
 
-        // Note: We do NOT emit #[after_instruction] attribute here because:
-        // 1. These functions are generated during macro expansion
-        // 2. The instruction hooks need to be registered in the AST/bytecode system
-        // 3. These will be called through the bytecode VM's instruction processing
+        // IDL account names can be camelCase (e.g. Pumpfun: "bondingCurve") or
+        // snake_case (e.g. Raydium: "pool_state"). The register_from attribute
+        // uses Rust field names (always snake_case), so try both the camelCase
+        // conversion and the raw snake_case name to match the IDL.
         functions.push(quote! {
                     pub fn #fn_name(ctx: &mut hyperstack::runtime::hyperstack_interpreter::resolvers::InstructionContext) {
-                        if let (Some(primary_key), Some(pda)) = (ctx.account(#primary_key_field), ctx.account(#pda_field)) {
+                        let pk_val = ctx.account(#pk_camel).or_else(|| ctx.account(#pk_raw));
+                        let pda_val = ctx.account(#pda_camel).or_else(|| ctx.account(#pda_raw));
+                        if let (Some(primary_key), Some(pda)) = (pk_val, pda_val) {
                             ctx.register_pda_reverse_lookup(&pda, &primary_key);
                         }
                     }
