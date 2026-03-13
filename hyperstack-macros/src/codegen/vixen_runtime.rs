@@ -722,6 +722,12 @@ pub fn generate_vm_handler(
                     }
                     hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(_discriminators) => {
                         let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
+                        tracing::info!(
+                            event_type = %event_type,
+                            pda = %account_address,
+                            slot = slot,
+                            "QueueUntil: queueing account update for later flush"
+                        );
 
                         let _ = vm.queue_account_update(
                             0,
@@ -898,6 +904,11 @@ pub fn generate_vm_handler(
 
                             // Process pending account updates from instruction hooks
                             if !pending_updates.is_empty() {
+                                tracing::info!(
+                                    count = pending_updates.len(),
+                                    event_type = %event_type,
+                                    "Flushing pending account updates from instruction hooks"
+                                );
                                 for update in pending_updates {
                                     let resolved_key = vm.try_pda_reverse_lookup(0, "default_pda_lookup", &update.pda_address);
 
@@ -916,11 +927,23 @@ pub fn generate_vm_handler(
 
                                     match vm.process_event(&bytecode, account_data, &update.account_type, Some(&update_context), None) {
                                         Ok(pending_mutations) => {
+                                            tracing::info!(
+                                                account_type = %update.account_type,
+                                                pda = %update.pda_address,
+                                                mutations = pending_mutations.len(),
+                                                "Reprocessed flushed account update"
+                                            );
                                             if let Ok(ref mut mutations) = result {
                                                 mutations.extend(pending_mutations);
                                             }
                                         }
-                                        Err(_e) => {}
+                                        Err(e) => {
+                                            tracing::warn!(
+                                                account_type = %update.account_type,
+                                                error = %e,
+                                                "Failed to reprocess flushed account update"
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -1699,7 +1722,6 @@ pub fn generate_account_handler_impl(
                     }
                     hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(_discriminators) => {
                         let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-
                         let _ = vm.queue_account_update(
                             0,
                             hyperstack::runtime::hyperstack_interpreter::QueuedAccountUpdate {
@@ -1874,6 +1896,7 @@ pub fn generate_instruction_handler_impl(
                             }
 
                             let pending_updates = ctx.take_pending_updates();
+                            let hooks_count = hooks.len();
 
                             drop(ctx);
 
@@ -1900,7 +1923,13 @@ pub fn generate_instruction_handler_impl(
                                                 mutations.extend(pending_mutations);
                                             }
                                         }
-                                        Err(_e) => {}
+                                        Err(e) => {
+                                            hyperstack::runtime::tracing::warn!(
+                                                account_type = %update.account_type,
+                                                error = %e,
+                                                "Flushed account reprocessing failed"
+                                            );
+                                        }
                                     }
                                 }
                             }
