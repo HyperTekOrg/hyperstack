@@ -65,6 +65,7 @@ pub struct TypeScriptCompiler<S> {
     idl: Option<serde_json::Value>, // IDL for enum type generation
     handlers_json: Option<serde_json::Value>, // Raw handlers for event interface generation
     views: Vec<ViewDef>,            // View definitions for derived views
+    already_emitted_types: HashSet<String>,
 }
 
 impl<S> TypeScriptCompiler<S> {
@@ -76,6 +77,7 @@ impl<S> TypeScriptCompiler<S> {
             idl: None,
             handlers_json: None,
             views: Vec::new(),
+            already_emitted_types: HashSet::new(),
         }
     }
 
@@ -96,6 +98,11 @@ impl<S> TypeScriptCompiler<S> {
 
     pub fn with_views(mut self, views: Vec<ViewDef>) -> Self {
         self.views = views;
+        self
+    }
+
+    pub fn with_already_emitted_types(mut self, types: HashSet<String>) -> Self {
+        self.already_emitted_types = types;
         self
     }
 
@@ -533,7 +540,9 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
         let registry = crate::resolvers::builtin_resolver_registry();
 
         for resolver in registry.definitions() {
-            if self.uses_builtin_type(resolver.output_type()) {
+            if self.uses_builtin_type(resolver.output_type())
+                && !self.already_emitted_types.contains(resolver.output_type())
+            {
                 if let Some(schema) = resolver.typescript_schema() {
                     schemas.push((schema.name.to_string(), schema.definition.to_string()));
                 }
@@ -559,7 +568,9 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
         let registry = crate::resolvers::builtin_resolver_registry();
 
         for resolver in registry.definitions() {
-            if self.uses_builtin_type(resolver.output_type()) {
+            if self.uses_builtin_type(resolver.output_type())
+                && !self.already_emitted_types.contains(resolver.output_type())
+            {
                 if let Some(interface) = resolver.typescript_interface() {
                     interfaces.push(interface.to_string());
                 }
@@ -838,7 +849,7 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
 
     fn generate_idl_enum_schemas(&self) -> Vec<(String, String)> {
         let mut schemas = Vec::new();
-        let mut generated_types = HashSet::new();
+        let mut generated_types = self.already_emitted_types.clone();
 
         let idl_value = match &self.idl {
             Some(idl) => idl,
@@ -1162,7 +1173,7 @@ export default {};"#,
     /// Generate nested interfaces for all resolved types in the AST
     fn generate_nested_interfaces(&self) -> Vec<String> {
         let mut interfaces = Vec::new();
-        let mut generated_types = HashSet::new();
+        let mut generated_types = self.already_emitted_types.clone();
 
         // Collect all resolved types from all sections
         for section in &self.spec.sections {
@@ -1644,6 +1655,39 @@ fn value_to_typescript_type(value: &serde_json::Value) -> String {
     }
 }
 
+fn extract_builtin_resolver_type_names(spec: &SerializableStreamSpec) -> HashSet<String> {
+    let mut names = HashSet::new();
+    let registry = crate::resolvers::builtin_resolver_registry();
+    for resolver in registry.definitions() {
+        let output_type = resolver.output_type();
+        for section in &spec.sections {
+            for field in &section.fields {
+                if field.inner_type.as_deref() == Some(output_type) {
+                    names.insert(output_type.to_string());
+                }
+            }
+        }
+    }
+    names
+}
+
+fn extract_idl_enum_type_names(idl: &serde_json::Value) -> HashSet<String> {
+    let mut names = HashSet::new();
+    if let Some(types_array) = idl.get("types").and_then(|v| v.as_array()) {
+        for type_def in types_array {
+            if let (Some(type_name), Some(type_obj)) = (
+                type_def.get("name").and_then(|v| v.as_str()),
+                type_def.get("type").and_then(|v| v.as_object()),
+            ) {
+                if type_obj.get("kind").and_then(|v| v.as_str()) == Some("enum") {
+                    names.insert(type_name.to_string());
+                }
+            }
+        }
+    }
+    names
+}
+
 /// Convert snake_case to PascalCase
 fn to_pascal_case(s: &str) -> String {
     s.split(['_', '-', '.'])
@@ -1720,6 +1764,15 @@ pub fn compile_serializable_spec(
     entity_name: String,
     config: Option<TypeScriptConfig>,
 ) -> Result<TypeScriptOutput, String> {
+    compile_serializable_spec_with_emitted(spec, entity_name, config, HashSet::new())
+}
+
+fn compile_serializable_spec_with_emitted(
+    spec: SerializableStreamSpec,
+    entity_name: String,
+    config: Option<TypeScriptConfig>,
+    already_emitted_types: HashSet<String>,
+) -> Result<TypeScriptOutput, String> {
     let idl = spec
         .idl
         .as_ref()
@@ -1734,7 +1787,8 @@ pub fn compile_serializable_spec(
         .with_idl(idl)
         .with_handlers_json(handlers)
         .with_views(views)
-        .with_config(config.unwrap_or_default());
+        .with_config(config.unwrap_or_default())
+        .with_already_emitted_types(already_emitted_types);
 
     Ok(compiler.compile())
 }
@@ -1799,6 +1853,7 @@ pub fn compile_stack_spec(
     let mut all_interfaces = Vec::new();
     let mut entity_names = Vec::new();
     let mut schema_names: Vec<String> = Vec::new();
+    let mut emitted_types: HashSet<String> = HashSet::new();
 
     for entity_spec in &stack_spec.entities {
         let mut spec = entity_spec.clone();
@@ -1817,7 +1872,25 @@ pub fn compile_stack_spec(
             url: config.url.clone(),
         };
 
-        let output = compile_serializable_spec(spec, entity_name, Some(per_entity_config))?;
+        // Collect shared type names before spec is consumed
+        let idl_enum_names = spec
+            .idl
+            .as_ref()
+            .and_then(|idl| serde_json::to_value(idl).ok())
+            .map(|v| extract_idl_enum_type_names(&v))
+            .unwrap_or_default();
+        let builtin_type_names = extract_builtin_resolver_type_names(&spec);
+
+        let output = compile_serializable_spec_with_emitted(
+            spec,
+            entity_name,
+            Some(per_entity_config),
+            emitted_types.clone(),
+        )?;
+
+        // Track shared types for cross-entity dedup
+        emitted_types.extend(idl_enum_names);
+        emitted_types.extend(builtin_type_names);
 
         // Only take the interfaces part (not the stack_definition — we generate our own)
         if !output.interfaces.is_empty() {
