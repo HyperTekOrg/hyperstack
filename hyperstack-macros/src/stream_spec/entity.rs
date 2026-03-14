@@ -20,6 +20,7 @@ use syn::{Fields, GenericArgument, ItemStruct, PathArguments, Type};
 
 use crate::ast::{
     EntitySection, FieldTypeInfo, HttpMethod, ResolverHook, ResolverType, UrlResolverConfig,
+    UrlSource, UrlTemplatePart,
 };
 use crate::codegen;
 use crate::event_type_helpers::IdlLookup;
@@ -472,9 +473,9 @@ pub fn process_entity_struct_with_idl(
                             .unwrap_or(HttpMethod::Get);
 
                         let url_source = if resolve_attr.url_is_template {
-                            UrlSource::Template(parse_url_template(&url_val))
+                            UrlSource::Template(parse_url_template(&url_path))
                         } else {
-                            UrlSource::FieldPath(url_val)
+                            UrlSource::FieldPath(url_path)
                         };
 
                         ResolverType::Url(UrlResolverConfig {
