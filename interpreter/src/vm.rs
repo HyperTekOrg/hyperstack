@@ -1609,9 +1609,9 @@ impl VmContext {
                                             },
                                         );
                                     } else {
-                                        tracing::warn!(
+                                        tracing::trace!(
                                             event_type = %event_type,
-                                            "Dropping queued account update: write_version missing from context"
+                                            "Discarding lookup_index_miss for tx-scoped event (IxState/CpiEvent do not use lookup-index queuing)"
                                         );
                                     }
                                 }
@@ -2870,7 +2870,7 @@ impl VmContext {
             current = match current.get(segment) {
                 Some(v) => v,
                 None => {
-                    tracing::debug!(
+                    tracing::trace!(
                         "load_field: segment={:?} not found in {:?}, returning default",
                         segment,
                         current
@@ -2880,7 +2880,7 @@ impl VmContext {
             };
         }
 
-        tracing::debug!("load_field: path={:?}, result={:?}", path.segments, current);
+        tracing::trace!("load_field: path={:?}, result={:?}", path.segments, current);
         Ok(current.clone())
     }
 
@@ -3053,7 +3053,7 @@ impl VmContext {
         let new_value = &self.registers[value_reg];
 
         // Extract numeric value before borrowing object_reg mutably
-        tracing::debug!(
+        tracing::trace!(
             "set_field_sum: path={:?}, value={:?}, value_type={}",
             path,
             new_value,
