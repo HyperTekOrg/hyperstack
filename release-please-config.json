@@ -84,10 +84,6 @@
       "component": "hyperstack-idl"
     }
   },
-
-
-
-
   "plugins": [
     {
       "type": "cargo-workspace",
