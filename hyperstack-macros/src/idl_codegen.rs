@@ -145,7 +145,9 @@ pub fn generate_sdk_types(idl: &IdlSpec, module_name: &str) -> TokenStream {
 /// Arrays larger than this need a custom serde helper.
 const SERDE_MAX_ARRAY_SIZE: u32 = 32;
 
-/// Check if a type is a large array (> 32 elements) that needs special serde handling.
+/// Check if the outermost array dimension exceeds SERDE_MAX_ARRAY_SIZE.
+/// Nested arrays are not inspected; only the outer length matters for the
+/// `#[serde(with = "big_array")]` attribute.
 fn is_large_array(idl_type: &IdlType) -> bool {
     if let IdlType::Array(arr) = idl_type {
         if arr.array.len() == 2 {
