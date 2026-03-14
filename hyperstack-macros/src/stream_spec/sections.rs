@@ -17,6 +17,7 @@ use crate::parse::idl::{IdlSpec, IdlType, IdlTypeDefKind};
 use crate::utils::path_to_string;
 
 use super::handlers::{determine_event_instruction, extract_account_type_from_field};
+use super::resolve_snapshot_source;
 
 // ============================================================================
 // Section Extraction
@@ -501,24 +502,13 @@ pub fn process_nested_struct(
                     if let Some(acct_path) = account_path {
                         let source_type_str = path_to_string(&acct_path);
 
-                        // Check if we have field transforms - encode them in source_field_name
-                        let source_field_marker = if !snapshot_attr.field_transforms.is_empty() {
-                            format!(
-                                "__snapshot_with_transforms:{}",
-                                snapshot_attr
-                                    .field_transforms
-                                    .iter()
-                                    .map(|(k, v)| format!("{}={}", k, v))
-                                    .collect::<Vec<_>>()
-                                    .join(",")
-                            )
-                        } else {
-                            String::new()
-                        };
+                        // Determine source field name and whether this is a whole-source capture
+                        let (source_field_name, is_whole_source) =
+                            resolve_snapshot_source(&snapshot_attr);
 
                         let map_attr = parse::MapAttribute {
                             source_type_path: acct_path,
-                            source_field_name: source_field_marker,
+                            source_field_name,
                             target_field_name: snapshot_attr.target_field_name.clone(),
                             is_primary_key: false,
                             is_lookup_index: false,
@@ -532,7 +522,7 @@ pub fn process_nested_struct(
                             transform: None,
                             resolver_transform: None,
                             is_instruction: false,
-                            is_whole_source: true,
+                            is_whole_source,
                             lookup_by: snapshot_attr.lookup_by.clone(),
                             condition: None,
                             when: snapshot_attr.when.clone(),
@@ -633,18 +623,29 @@ pub fn process_nested_struct(
                 } else if let Ok(Some(resolve_attr)) =
                     parse::parse_resolve_attribute(attr, &field_name.to_string())
                 {
-                    let resolver = if resolve_attr.url.is_some() {
-                        let method = resolve_attr.method.as_deref().map(|m| {
-                            match m.to_lowercase().as_str() {
+                    // Determine resolver type: URL resolver if url is present, otherwise Token resolver
+                    let qualified_url = resolve_attr.url.as_deref().map(|url_path_raw| {
+                        if url_path_raw.contains('.') {
+                            url_path_raw.to_string()
+                        } else {
+                            format!("{}.{}", section_name, url_path_raw)
+                        }
+                    });
+
+                    let resolver = if let Some(ref _url_path) = qualified_url {
+                        let method = resolve_attr
+                            .method
+                            .as_deref()
+                            .map(|m| match m.to_lowercase().as_str() {
                                 "post" => crate::ast::HttpMethod::Post,
                                 _ => crate::ast::HttpMethod::Get,
-                            }
-                        }).unwrap_or(crate::ast::HttpMethod::Get);
+                            })
+                            .unwrap_or(crate::ast::HttpMethod::Get);
 
                         let url_source = if resolve_attr.url_is_template {
-                            crate::ast::UrlSource::Template(
-                                super::entity::parse_url_template(resolve_attr.url.as_deref().unwrap())
-                            )
+                            crate::ast::UrlSource::Template(super::entity::parse_url_template(
+                                resolve_attr.url.as_deref().unwrap(),
+                            ))
                         } else {
                             let url_path_raw = resolve_attr.url.as_deref().unwrap();
                             let qualified = if url_path_raw.contains('.') {

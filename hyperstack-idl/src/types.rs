@@ -233,6 +233,8 @@ pub enum IdlTypeDefinedInner {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IdlRepr {
     pub kind: String,
+    #[serde(default)]
+    pub packed: Option<bool>,
 }
 
 /// Account serialization format as specified in the IDL.

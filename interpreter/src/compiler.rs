@@ -1230,8 +1230,18 @@ impl<S> TypedCompiler<S> {
                 // which caused the PDA address to be used as the key instead of the round_id.
                 // This resulted in mutations with key = PDA address instead of key = primary_key.
 
-                // Use lookup result (may be null). Do not preserve intermediate resolver key.
+                // First, set key_reg to __resolved_primary_key (may be null).
+                // When the flush path provides a resolved key via PDA reverse lookup,
+                // this gives it priority over the LookupIndex result.
+                // This matches the pattern used by Embedded and Computed strategies.
                 ops.push(OpCode::CopyRegister {
+                    source: resolved_key_reg,
+                    dest: key_reg,
+                });
+                // If key_reg is still null (no resolved key from flush), use the LookupIndex result.
+                // This preserves the original behavior for first-arrival events where
+                // __resolved_primary_key is not yet set.
+                ops.push(OpCode::CopyRegisterIfNull {
                     source: result_reg,
                     dest: key_reg,
                 });

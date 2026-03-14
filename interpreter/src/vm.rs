@@ -1537,8 +1537,12 @@ impl VmContext {
                         }
 
                         if mutations.is_empty() {
+                            // CPI events (suffix "CpiEvent") are transaction-scoped like instructions
+                            // (suffix "IxState") and should be queued the same way when PDA lookup fails.
+                            let is_tx_event =
+                                event_type.ends_with("IxState") || event_type.ends_with("CpiEvent");
                             if let Some(missed_pda) = self.take_last_pda_lookup_miss() {
-                                if event_type.ends_with("IxState") {
+                                if is_tx_event {
                                     let slot = context.and_then(|c| c.slot).unwrap_or(0);
                                     let signature = context
                                         .and_then(|c| c.signature.clone())
@@ -1553,11 +1557,39 @@ impl VmContext {
                                             signature,
                                         },
                                     );
+                                } else {
+                                    // Queue account updates (e.g. BondingCurve) when PDA
+                                    // reverse lookup fails. These will be flushed when an
+                                    // instruction registers the PDA mapping via
+                                    // UpdateLookupIndex.
+                                    let slot = context.and_then(|c| c.slot).unwrap_or(0);
+                                    let signature = context
+                                        .and_then(|c| c.signature.clone())
+                                        .unwrap_or_default();
+                                    if let Some(write_version) =
+                                        context.and_then(|c| c.write_version)
+                                    {
+                                        let _ = self.queue_account_update(
+                                            entity_bytecode.state_id,
+                                            QueuedAccountUpdate {
+                                                pda_address: missed_pda,
+                                                account_type: event_type.to_string(),
+                                                account_data: event_value.clone(),
+                                                slot,
+                                                write_version,
+                                                signature,
+                                            },
+                                        );
+                                    } else {
+                                        tracing::warn!(
+                                            event_type = %event_type,
+                                            "Dropping queued account update: write_version missing from context"
+                                        );
+                                    }
                                 }
                             }
-
                             if let Some(missed_lookup) = self.take_last_lookup_index_miss() {
-                                if !event_type.ends_with("IxState") {
+                                if !is_tx_event {
                                     let slot = context.and_then(|c| c.slot).unwrap_or(0);
                                     let signature = context
                                         .and_then(|c| c.signature.clone())
@@ -1576,6 +1608,11 @@ impl VmContext {
                                                 signature,
                                             },
                                         );
+                                    } else {
+                                        tracing::trace!(
+                                            event_type = %event_type,
+                                            "Discarding lookup_index_miss for tx-scoped event (IxState/CpiEvent do not use lookup-index queuing)"
+                                        );
                                     }
                                 }
                             }
@@ -1583,7 +1620,7 @@ impl VmContext {
 
                         all_mutations.extend(mutations);
 
-                        if event_type.ends_with("IxState") {
+                        if event_type.ends_with("IxState") || event_type.ends_with("CpiEvent") {
                             if let Some(ctx) = context {
                                 if let Some(ref signature) = ctx.signature {
                                     if let Some(state) = self.states.get(&entity_bytecode.state_id)
@@ -1653,6 +1690,13 @@ impl VmContext {
                         }
 
                         let lookup_keys = self.take_last_lookup_index_keys();
+                        if !lookup_keys.is_empty() {
+                            tracing::info!(
+                                keys = ?lookup_keys,
+                                entity = %entity_name,
+                                "vm.process_event: flushing pending updates for lookup_keys"
+                            );
+                        }
                         for lookup_key in lookup_keys {
                             if let Ok(pending_updates) =
                                 self.flush_pending_updates(entity_bytecode.state_id, &lookup_key)
@@ -1666,7 +1710,7 @@ impl VmContext {
                                             pending.signature.clone(),
                                             pending.write_version,
                                         ));
-                                        if let Ok(reprocessed) = self.execute_handler(
+                                        match self.execute_handler(
                                             pending_handler,
                                             &pending.account_data,
                                             &pending.account_type,
@@ -1675,7 +1719,16 @@ impl VmContext {
                                             entity_bytecode.computed_fields_evaluator.as_ref(),
                                             Some(&entity_bytecode.non_emitted_fields),
                                         ) {
-                                            all_mutations.extend(reprocessed);
+                                            Ok(reprocessed) => {
+                                                all_mutations.extend(reprocessed);
+                                            }
+                                            Err(e) => {
+                                                tracing::warn!(
+                                                    error = %e,
+                                                    account_type = %pending.account_type,
+                                                    "Flushed event reprocessing failed"
+                                                );
+                                            }
                                         }
                                     }
                                 }
@@ -1866,9 +1919,11 @@ impl VmContext {
                             deferred_when_ops: DashMap::new(),
                         });
                     let key_value = self.registers[*key].clone();
+                    // Warn if key is null for account state events (not instruction events or CPI events)
                     let warn_null_key = key_value.is_null()
                         && event_type.ends_with("State")
-                        && !event_type.ends_with("IxState");
+                        && !event_type.ends_with("IxState")
+                        && !event_type.ends_with("CpiEvent");
 
                     if warn_null_key {
                         self.add_warning(format!(
@@ -2589,11 +2644,9 @@ impl VmContext {
 
                     // Evaluate condition if present
                     if let Some(cond) = condition {
-                        let field_val = Self::get_value_at_path(
-                            &self.registers[*state],
-                            &cond.field_path,
-                        )
-                        .unwrap_or(Value::Null);
+                        let field_val =
+                            Self::get_value_at_path(&self.registers[*state], &cond.field_path)
+                                .unwrap_or(Value::Null);
                         if !self.evaluate_comparison(&field_val, &cond.op, &cond.value)? {
                             pc += 1;
                             continue;
@@ -2602,10 +2655,8 @@ impl VmContext {
 
                     // Check schedule_at: defer if target slot is in the future
                     if let Some(schedule_path) = schedule_at {
-                        let target_val = Self::get_value_at_path(
-                            &self.registers[*state],
-                            schedule_path,
-                        );
+                        let target_val =
+                            Self::get_value_at_path(&self.registers[*state], schedule_path);
 
                         match target_val.and_then(|v| v.as_u64()) {
                             Some(target_slot) => {
@@ -2818,10 +2869,18 @@ impl VmContext {
         for segment in path.segments.iter() {
             current = match current.get(segment) {
                 Some(v) => v,
-                None => return Ok(default.cloned().unwrap_or(Value::Null)),
+                None => {
+                    tracing::trace!(
+                        "load_field: segment={:?} not found in {:?}, returning default",
+                        segment,
+                        current
+                    );
+                    return Ok(default.cloned().unwrap_or(Value::Null));
+                }
             };
         }
 
+        tracing::trace!("load_field: path={:?}, result={:?}", path.segments, current);
         Ok(current.clone())
     }
 
@@ -2994,6 +3053,19 @@ impl VmContext {
         let new_value = &self.registers[value_reg];
 
         // Extract numeric value before borrowing object_reg mutably
+        tracing::trace!(
+            "set_field_sum: path={:?}, value={:?}, value_type={}",
+            path,
+            new_value,
+            match new_value {
+                serde_json::Value::Null => "null",
+                serde_json::Value::Bool(_) => "bool",
+                serde_json::Value::Number(_) => "number",
+                serde_json::Value::String(_) => "string",
+                serde_json::Value::Array(_) => "array",
+                serde_json::Value::Object(_) => "object",
+            }
+        );
         let new_val_num = new_value
             .as_i64()
             .or_else(|| new_value.as_u64().map(|n| n as i64))
