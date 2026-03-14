@@ -1688,6 +1688,39 @@ fn extract_idl_enum_type_names(idl: &serde_json::Value) -> HashSet<String> {
     names
 }
 
+/// Extract enum type names that were actually emitted in the generated interfaces.
+/// Looks for patterns like `export const DirectionKindSchema = z.enum([...])`
+fn extract_emitted_enum_type_names(
+    interfaces: &str,
+    spec: &SerializableStreamSpec,
+) -> HashSet<String> {
+    let mut names = HashSet::new();
+
+    // Get all enum type names from the IDL
+    let idl_enum_names: HashSet<String> = spec
+        .idl
+        .as_ref()
+        .and_then(|idl| serde_json::to_value(idl).ok())
+        .map(|v| extract_idl_enum_type_names(&v))
+        .unwrap_or_default();
+
+    // Look for emitted enum schemas in the interfaces
+    // Pattern: export const DirectionKindSchema = z.enum([...])
+    for line in interfaces.lines() {
+        if let Some(start) = line.find("export const ") {
+            if let Some(end) = line.find("Schema = z.enum") {
+                let schema_name = line[start + 13..end].trim();
+                // Check if this schema name corresponds to an IDL enum type
+                if idl_enum_names.contains(schema_name) {
+                    names.insert(schema_name.to_string());
+                }
+            }
+        }
+    }
+
+    names
+}
+
 /// Convert snake_case to PascalCase
 fn to_pascal_case(s: &str) -> String {
     s.split(['_', '-', '.'])
@@ -1872,13 +1905,7 @@ pub fn compile_stack_spec(
             url: config.url.clone(),
         };
 
-        // Collect shared type names before spec is consumed
-        let idl_enum_names = spec
-            .idl
-            .as_ref()
-            .and_then(|idl| serde_json::to_value(idl).ok())
-            .map(|v| extract_idl_enum_type_names(&v))
-            .unwrap_or_default();
+        // Collect builtin type names before spec is consumed
         let builtin_type_names = extract_builtin_resolver_type_names(&spec);
 
         let output = compile_serializable_spec_with_emitted(
@@ -1889,7 +1916,9 @@ pub fn compile_stack_spec(
         )?;
 
         // Track shared types for cross-entity dedup
-        emitted_types.extend(idl_enum_names);
+        // Only track enum types that were actually emitted (found in output.interfaces)
+        let emitted_enum_names = extract_emitted_enum_type_names(&output.interfaces, &spec);
+        emitted_types.extend(emitted_enum_names);
         emitted_types.extend(builtin_type_names);
 
         // Only take the interfaces part (not the stack_definition — we generate our own)
