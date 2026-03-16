@@ -352,6 +352,13 @@ impl LookupIndex {
         self.index.lock().unwrap().put(key, primary_key);
     }
 
+    /// Remove an entry by lookup value.  Used when a PDA mapping changes to
+    /// clear stale entries that would otherwise shadow the updated PDA mapping.
+    pub fn remove(&self, lookup_value: &Value) {
+        let key = value_to_cache_key(lookup_value);
+        self.index.lock().unwrap().pop(&key);
+    }
+
     pub fn len(&self) -> usize {
         self.index.lock().unwrap().len()
     }
@@ -769,6 +776,10 @@ pub struct StateTable {
     pub pda_reverse_lookups: HashMap<String, PdaReverseLookup>,
     pub pending_updates: DashMap<String, Vec<PendingAccountUpdate>>,
     pub pending_instruction_events: DashMap<String, Vec<PendingInstructionEvent>>,
+    /// Cache of the most recent account data per PDA address.  When a PDA
+    /// mapping changes (same PDA, different seed) the cached data is returned
+    /// for reprocessing so cross-account Lookup handlers resolve to the new key.
+    pub last_account_data: DashMap<String, PendingAccountUpdate>,
     version_tracker: VersionTracker,
     instruction_dedup_cache: VersionTracker,
     config: StateTableConfig,
@@ -946,18 +957,51 @@ impl VmContext {
                 pda_reverse_lookups: HashMap::new(),
                 pending_updates: DashMap::new(),
                 pending_instruction_events: DashMap::new(),
+                last_account_data: DashMap::new(),
                 version_tracker: VersionTracker::new(),
                 instruction_dedup_cache: VersionTracker::with_capacity(
                     DEFAULT_MAX_INSTRUCTION_DEDUP_ENTRIES,
                 ),
                 config: StateTableConfig::default(),
-                entity_name: "default".to_string(),
+                entity_name: String::new(),
                 recent_tx_instructions: std::sync::Mutex::new(LruCache::new(
                     NonZeroUsize::new(1000).unwrap(),
                 )),
                 deferred_when_ops: DashMap::new(),
             },
         );
+
+        vm
+    }
+
+    /// Create a new VmContext specifically for multi-entity operation.
+    pub fn new_multi_entity() -> Self {
+        let vm = VmContext {
+            registers: vec![Value::Null; 32],
+            states: HashMap::new(),
+            instructions_executed: 0,
+            cache_hits: 0,
+            path_cache: HashMap::new(),
+            pda_cache_hits: 0,
+            pda_cache_misses: 0,
+            pending_queue_size: 0,
+            resolver_requests: VecDeque::new(),
+            resolver_pending: HashMap::new(),
+            resolver_cache: LruCache::new(
+                NonZeroUsize::new(DEFAULT_MAX_RESOLVER_CACHE_ENTRIES)
+                    .expect("capacity must be > 0"),
+            ),
+            resolver_cache_hits: 0,
+            resolver_cache_misses: 0,
+            current_context: None,
+            warnings: Vec::new(),
+            last_pda_lookup_miss: None,
+            last_lookup_index_miss: None,
+            last_pda_registered: None,
+            last_lookup_index_keys: Vec::new(),
+            scheduled_callbacks: Vec::new(),
+        };
+
         vm
     }
 
@@ -997,6 +1041,7 @@ impl VmContext {
                 pda_reverse_lookups: HashMap::new(),
                 pending_updates: DashMap::new(),
                 pending_instruction_events: DashMap::new(),
+                last_account_data: DashMap::new(),
                 version_tracker: VersionTracker::new(),
                 instruction_dedup_cache: VersionTracker::with_capacity(
                     DEFAULT_MAX_INSTRUCTION_DEDUP_ENTRIES,
@@ -1889,6 +1934,22 @@ impl VmContext {
                     self.registers[*dest] = value;
                     pc += 1;
                 }
+                OpCode::AbortIfNullKey { key } => {
+                    let key_value = &self.registers[*key];
+                    if key_value.is_null()
+                        && event_type.ends_with("State")
+                        && !event_type.ends_with("IxState")
+                        && !event_type.ends_with("CpiEvent")
+                    {
+                        tracing::debug!(
+                            event_type = %event_type,
+                            "AbortIfNullKey: key is null for account state event, \
+                             returning empty mutations for queueing"
+                        );
+                        return Ok(Vec::new());
+                    }
+                    pc += 1;
+                }
                 OpCode::ReadOrInitState {
                     state_id: _,
                     key,
@@ -1907,6 +1968,7 @@ impl VmContext {
                             pda_reverse_lookups: HashMap::new(),
                             pending_updates: DashMap::new(),
                             pending_instruction_events: DashMap::new(),
+                            last_account_data: DashMap::new(),
                             version_tracker: VersionTracker::new(),
                             instruction_dedup_cache: VersionTracker::with_capacity(
                                 DEFAULT_MAX_INSTRUCTION_DEDUP_ENTRIES,
@@ -3555,7 +3617,16 @@ impl VmContext {
             .entry(lookup_name.to_string())
             .or_insert_with(|| PdaReverseLookup::new(DEFAULT_MAX_PDA_REVERSE_LOOKUP_ENTRIES));
 
-        let evicted_pda = lookup.insert(pda_address.clone(), seed_value);
+        // Detect if the PDA mapping is CHANGING (same PDA, different seed).
+        // This happens at round boundaries when e.g. entropyVar is remapped
+        // from old_round to new_round by a Reset instruction.
+        let old_seed = lookup.index.peek(&pda_address).cloned();
+        let mapping_changed = old_seed
+            .as_ref()
+            .map(|old| old != &seed_value)
+            .unwrap_or(false);
+
+        let evicted_pda = lookup.insert(pda_address.clone(), seed_value.clone());
 
         if let Some(ref evicted) = evicted_pda {
             if let Some((_, evicted_updates)) = state.pending_updates.remove(evicted) {
@@ -3564,8 +3635,37 @@ impl VmContext {
             }
         }
 
-        // Flush and return pending updates for this PDA
-        self.flush_pending_updates(state_id, &pda_address)
+        // Flush pending updates from QueueUntil for this PDA
+        let mut pending = self.flush_pending_updates(state_id, &pda_address)?;
+
+        // When the mapping changed, the last account update for this PDA was
+        // processed with the OLD seed (wrong key).  We need to:
+        // 1. Remove stale lookup-index entries that map this PDA address to the
+        //    old primary key — otherwise LookupIndex resolves the stale entry
+        //    before PDA reverse lookup is even tried.
+        // 2. Pull the cached account data and return it for reprocessing with
+        //    the new mapping.
+        if mapping_changed {
+            if let Some(state) = self.states.get(&state_id) {
+                // Clear stale lookup-index entries for this PDA address
+                for index in state.lookup_indexes.values() {
+                    index.remove(&Value::String(pda_address.clone()));
+                }
+
+                if let Some((_, cached)) = state.last_account_data.remove(&pda_address) {
+                    tracing::info!(
+                        pda = %pda_address,
+                        old_seed = ?old_seed,
+                        new_seed = %seed_value,
+                        account_type = %cached.account_type,
+                        "PDA mapping changed — clearing stale indexes and reprocessing cached data"
+                    );
+                    pending.push(cached);
+                }
+            }
+        }
+
+        Ok(pending)
     }
 
     /// Clean up expired pending updates that are older than the TTL
@@ -3980,6 +4080,24 @@ impl VmContext {
         }
     }
 
+    /// Cache the most recent account data for a PDA address.
+    /// Called by the vixen runtime after a Lookup-handler account update is
+    /// successfully processed.  When a PDA mapping later changes (e.g. at a
+    /// round boundary), the cached data is returned for reprocessing with the
+    /// new mapping.
+    pub fn cache_last_account_data(
+        &mut self,
+        state_id: u32,
+        pda_address: &str,
+        update: PendingAccountUpdate,
+    ) {
+        if let Some(state) = self.states.get(&state_id) {
+            state
+                .last_account_data
+                .insert(pda_address.to_string(), update);
+        }
+    }
+
     /// Try to resolve a primary key via PDA reverse lookup
     pub fn try_pda_reverse_lookup(
         &mut self,
@@ -3998,6 +4116,44 @@ impl VmContext {
 
         self.pda_cache_misses += 1;
         None
+    }
+
+    /// Try to resolve a value through lookup indexes.
+    /// This attempts to resolve the value using any lookup index in the state.
+    pub fn try_lookup_index_resolution(&self, state_id: u32, value: &Value) -> Option<Value> {
+        let state = self.states.get(&state_id)?;
+
+        for index in state.lookup_indexes.values() {
+            if let Some(resolved) = index.lookup(value) {
+                return Some(resolved);
+            }
+        }
+
+        None
+    }
+
+    /// Try to resolve a primary key via chained PDA + lookup index resolution.
+    /// First tries PDA reverse lookup, then tries to resolve the result through lookup indexes.
+    /// This is useful when the PDA maps to an intermediate value (e.g., round address)
+    /// that needs to be resolved to the actual primary key (e.g., round_id).
+    pub fn try_chained_pda_lookup(
+        &mut self,
+        state_id: u32,
+        lookup_name: &str,
+        pda_address: &str,
+    ) -> Option<String> {
+        // First, try PDA reverse lookup
+        let pda_result = self.try_pda_reverse_lookup(state_id, lookup_name, pda_address)?;
+
+        // Try to resolve the PDA result through lookup indexes
+        // (e.g., round address -> round_id)
+        let pda_value = Value::String(pda_result.clone());
+        if let Some(resolved) = self.try_lookup_index_resolution(state_id, &pda_value) {
+            resolved.as_str().map(|s| s.to_string())
+        } else {
+            // Return the PDA result if we can't resolve further
+            pda_value.as_str().map(|s| s.to_string())
+        }
     }
 
     // ============================================================================

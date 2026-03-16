@@ -752,8 +752,34 @@ pub fn generate_vm_handler(
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
 
+                    // Clone event data before process_event so we can cache it
+                    // for reprocessing when a PDA mapping changes at round boundaries.
+                    let event_value_for_cache = event_value.clone();
+
                     let result = vm.process_event(&self.bytecode, event_value, event_type, Some(&context), Some(&mut log))
                         .map_err(|e| e.to_string());
+
+                    // Cache the last account data per PDA address.  When a PDA
+                    // mapping later changes (same PDA, different seed) the cached
+                    // data is returned for reprocessing with the corrected mapping.
+                    if result.is_ok() {
+                        vm.cache_last_account_data(
+                            0,
+                            &account_address,
+                            hyperstack::runtime::hyperstack_interpreter::PendingAccountUpdate {
+                                account_type: event_type.to_string(),
+                                pda_address: account_address.clone(),
+                                account_data: event_value_for_cache,
+                                slot,
+                                write_version,
+                                signature: signature.clone(),
+                                queued_at: std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs() as i64,
+                            },
+                        );
+                    }
 
                     let requests = if result.is_ok() {
                         vm.take_resolver_requests()
@@ -910,7 +936,12 @@ pub fn generate_vm_handler(
                                     "Flushing pending account updates from instruction hooks"
                                 );
                                 for update in pending_updates {
-                                    let resolved_key = vm.try_pda_reverse_lookup(0, "default_pda_lookup", &update.pda_address);
+                                    // Use chained PDA + lookup-index resolution so that
+                                    // __resolved_primary_key carries the actual primary key
+                                    // (e.g. round_id) instead of the intermediate PDA value
+                                    // (e.g. round_address). Falls back to raw PDA result when
+                                    // lookup index isn't populated yet.
+                                    let resolved_key = vm.try_chained_pda_lookup(0, "default_pda_lookup", &update.pda_address);
 
                                     let mut account_data = update.account_data;
                                     if let Some(key) = resolved_key {
@@ -1745,8 +1776,29 @@ pub fn generate_account_handler_impl(
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
 
+                    let event_value_for_cache = event_value.clone();
+
                     let result = vm.process_event(&self.bytecode, event_value, event_type, Some(&context), Some(&mut log))
                         .map_err(|e| e.to_string());
+
+                    if result.is_ok() {
+                        vm.cache_last_account_data(
+                            0,
+                            &account_address,
+                            hyperstack::runtime::hyperstack_interpreter::PendingAccountUpdate {
+                                account_type: event_type.to_string(),
+                                pda_address: account_address.clone(),
+                                account_data: event_value_for_cache,
+                                slot,
+                                write_version,
+                                signature: signature.clone(),
+                                queued_at: std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs() as i64,
+                            },
+                        );
+                    }
 
                     let requests = if result.is_ok() {
                         vm.take_resolver_requests()
@@ -1901,7 +1953,12 @@ pub fn generate_instruction_handler_impl(
 
                             if !pending_updates.is_empty() {
                                 for update in pending_updates {
-                                    let resolved_key = vm.try_pda_reverse_lookup(0, "default_pda_lookup", &update.pda_address);
+                                    // Use chained PDA + lookup-index resolution so that
+                                    // __resolved_primary_key carries the actual primary key
+                                    // (e.g. round_id) instead of the intermediate PDA value
+                                    // (e.g. round_address). Falls back to raw PDA result when
+                                    // lookup index isn't populated yet.
+                                    let resolved_key = vm.try_chained_pda_lookup(0, "default_pda_lookup", &update.pda_address);
 
                                     let mut account_data = update.account_data;
                                     if let Some(key) = resolved_key {
