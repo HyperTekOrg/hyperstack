@@ -29,3 +29,6 @@ yellowstone-vixen = "0.6.0-alpha.0"
 yellowstone-vixen-core = "0.6.0-alpha.0"
 yellowstone-vixen-proto = "0.6.0-alpha.0"
 yellowstone-vixen-yellowstone-grpc-source = "0.6.0-alpha.0"
+# Yellowstone gRPC client (for standalone slot subscriptions)
+yellowstone-grpc-client = "9.1.0"
+yellowstone-grpc-proto = "9.1.0"

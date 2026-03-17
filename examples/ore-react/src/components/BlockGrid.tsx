@@ -11,7 +11,7 @@ export function BlockGrid({ round }: BlockGridProps) {
       id: i + 1,
       minerCount: round.state.count_per_square[i],
       deployedUi,
-      isWinner: round.results?.winning_square === i,
+      isWinner: (round.results?.winning_square === i) || (round.results?.pre_reveal_winning_square === i),
     }))
     : Array.from({ length: 25 }, (_, i) => ({
       id: i + 1,
@@ -21,9 +21,9 @@ export function BlockGrid({ round }: BlockGridProps) {
     }));
 
   return (
-    <div 
+    <div
       className="grid grid-cols-5 gap-2"
-      style={{ 
+      style={{
         height: 'calc(100vh - 120px)',
         width: 'calc((100vh - 120px - 4 * 0.5rem) / 5 * 5 + 4 * 0.5rem)'
       }}

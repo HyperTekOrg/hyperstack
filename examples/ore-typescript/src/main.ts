@@ -2,22 +2,24 @@ import { z } from 'zod';
 import { HyperStack } from 'hyperstack-typescript';
 import {
   ORE_STREAM_STACK,
-  OreRoundSchema,
-  OreRoundIdSchema,
-  OreTreasurySchema,
-  OreTreasuryIdSchema,
+  // OreRoundSchema,
+  // OreRoundIdSchema,
+  // OreTreasurySchema,
+  // OreTreasuryIdSchema,
 } from 'hyperstack-stacks/ore';
 
-const OreRoundWithIdSchema = OreRoundSchema.extend({
-  id: OreRoundIdSchema.required(),
-});
-
-const OreTreasuryWithIdSchema = OreTreasurySchema.extend({
-  id: OreTreasuryIdSchema.required(),
-});
-
-type OreRoundWithId = z.infer<typeof OreRoundWithIdSchema>;
-type OreTreasuryWithId = z.infer<typeof OreTreasuryWithIdSchema>;
+// const OreRoundWithIdSchema = OreRoundSchema.extend({
+//   id: OreRoundIdSchema.required(),
+// });
+//
+// const OreTreasuryWithIdSchema = OreTreasurySchema.extend({
+//   id: OreTreasuryIdSchema.required(),
+// });
+//
+// type OreRoundWithId = z.infer<typeof OreRoundWithIdSchema>;
+// type OreTreasuryWithId = z.infer<typeof OreTreasuryWithIdSchema>;
+type OreRoundWithId = any;
+type OreTreasuryWithId = any;
 
 function printRound(round: OreRoundWithId) {
   console.log(`\n=== Round #${round.id.round_id ?? 'N/A'} ===`);
@@ -41,29 +43,31 @@ function printTreasury(treasury: OreTreasuryWithId) {
 }
 
 async function main() {
-  const hs = await HyperStack.connect(ORE_STREAM_STACK);
+  const hs = await HyperStack.connect(ORE_STREAM_STACK, { url: 'http://localhost:8878' });
 
   console.log('--- Streaming OreRound and OreTreasury updates ---\n');
 
   const streamRounds = async () => {
     for await (const round of hs.views.OreRound.latest.use({
       take: 1,
-      schema: OreRoundWithIdSchema,
+      // schema: OreRoundWithIdSchema,
     })) {
-      printRound(round);
+      console.log(round);
+      // printRound(round);
     }
   };
+  await streamRounds();
 
-  const streamTreasury = async () => {
-    for await (const treasury of hs.views.OreTreasury.list.use({
-      take: 1,
-      schema: OreTreasuryWithIdSchema,
-    })) {
-      printTreasury(treasury);
-    }
-  };
-
-  await Promise.all([streamRounds(), streamTreasury()]);
+  // const streamTreasury = async () => {
+  //   for await (const treasury of hs.views.OreTreasury.list.use({
+  //     take: 1,
+  //     schema: OreTreasuryWithIdSchema,
+  //   })) {
+  //     printTreasury(treasury);
+  //   }
+  // };
+  //
+  // await Promise.all([streamRounds(), streamTreasury()]);
 }
 
 main().catch((err) => {

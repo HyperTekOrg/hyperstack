@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
@@ -5,31 +6,92 @@ use tokio::sync::RwLock;
 use tokio::time::interval;
 use tracing::{error, info, warn};
 
-/// Tracks the last processed slot for stream resumption after reconnection
+/// Tracks the last processed slot for stream resumption after reconnection.
+///
+/// Includes a `Notify` that wakes waiters whenever the slot advances,
+/// allowing the scheduler to react immediately to new slots instead of polling.
+/// Also maintains a cache of slot hashes indexed by slot number.
 #[derive(Clone)]
 pub struct SlotTracker {
     last_slot: Arc<AtomicU64>,
+    notify: Arc<tokio::sync::Notify>,
+    /// Cache of slot hashes indexed by slot number
+    slot_hashes: Arc<RwLock<HashMap<u64, String>>>,
 }
 
 impl SlotTracker {
     pub fn new() -> Self {
         Self {
             last_slot: Arc::new(AtomicU64::new(0)),
+            notify: Arc::new(tokio::sync::Notify::new()),
+            slot_hashes: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
     pub fn record(&self, slot: u64) {
-        self.last_slot.fetch_max(slot, Ordering::Relaxed);
+        let old = self.last_slot.fetch_max(slot, Ordering::Relaxed);
+        if slot > old {
+            self.notify.notify_waiters();
+        }
+    }
+
+    /// Record a slot hash for a specific slot
+    pub async fn record_slot_hash(&self, slot: u64, slot_hash: String) {
+        let mut hashes = self.slot_hashes.write().await;
+        hashes.insert(slot, slot_hash);
+        
+        // Prune old entries to prevent unbounded growth (keep last 10000 slots)
+        let slots_to_remove: Vec<u64> = hashes
+            .keys()
+            .filter(|&&s| s < slot.saturating_sub(10000))
+            .copied()
+            .collect();
+        for s in slots_to_remove {
+            hashes.remove(&s);
+        }
+    }
+
+    /// Get the slot hash for a specific slot (if cached)
+    pub async fn get_slot_hash(&self, slot: u64) -> Option<String> {
+        let hashes = self.slot_hashes.read().await;
+        hashes.get(&slot).cloned()
     }
 
     pub fn get(&self) -> u64 {
         self.last_slot.load(Ordering::Relaxed)
+    }
+
+    /// Returns a future that resolves when the slot advances.
+    /// Use with `tokio::select!` and a fallback timeout.
+    pub fn notified(&self) -> impl std::future::Future<Output = ()> + '_ {
+        self.notify.notified()
     }
 }
 
 impl Default for SlotTracker {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Global slot tracker instance for accessing slot hashes from computed fields
+static GLOBAL_SLOT_TRACKER: once_cell::sync::Lazy<Arc<tokio::sync::RwLock<Option<SlotTracker>>>> =
+    once_cell::sync::Lazy::new(|| Arc::new(tokio::sync::RwLock::new(None)));
+
+/// Initialize the global slot tracker
+pub async fn init_global_slot_tracker(slot_tracker: SlotTracker) {
+    let mut global = GLOBAL_SLOT_TRACKER.write().await;
+    *global = Some(slot_tracker);
+}
+
+/// Get the slot hash for a specific slot (if available)
+/// This can be called from computed fields
+pub async fn get_slot_hash(slot: u64) -> Option<String> {
+    let global = GLOBAL_SLOT_TRACKER.read().await;
+    if let Some(ref tracker) = *global {
+        tracker.get_slot_hash(slot).await
+    } else {
+        None
     }
 }
 
