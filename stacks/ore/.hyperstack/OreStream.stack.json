@@ -24,6 +24,40 @@
           ],
           "docs": [
             "Automation parameters for automated mining deployments."
+          ],
+          "fields": [
+            {
+              "name": "amount",
+              "type": "u64"
+            },
+            {
+              "name": "authority",
+              "type": "publicKey"
+            },
+            {
+              "name": "balance",
+              "type": "u64"
+            },
+            {
+              "name": "executor",
+              "type": "publicKey"
+            },
+            {
+              "name": "fee",
+              "type": "u64"
+            },
+            {
+              "name": "strategy",
+              "type": "u64"
+            },
+            {
+              "name": "mask",
+              "type": "u64"
+            },
+            {
+              "name": "reload",
+              "type": "u64"
+            }
           ]
         },
         {
@@ -40,6 +74,24 @@
           ],
           "docs": [
             "Global round tracking for the mining game."
+          ],
+          "fields": [
+            {
+              "name": "round_id",
+              "type": "u64"
+            },
+            {
+              "name": "start_slot",
+              "type": "u64"
+            },
+            {
+              "name": "end_slot",
+              "type": "u64"
+            },
+            {
+              "name": "epoch_id",
+              "type": "u64"
+            }
           ]
         },
         {
@@ -56,6 +108,32 @@
           ],
           "docs": [
             "Program configuration state."
+          ],
+          "fields": [
+            {
+              "name": "admin",
+              "type": "publicKey"
+            },
+            {
+              "name": "buffer_a",
+              "type": "publicKey"
+            },
+            {
+              "name": "buffer_b",
+              "type": "publicKey"
+            },
+            {
+              "name": "buffer_c",
+              "type": "publicKey"
+            },
+            {
+              "name": "buffer_d",
+              "type": "publicKey"
+            },
+            {
+              "name": "buffer_e",
+              "type": "u64"
+            }
           ]
         },
         {
@@ -72,6 +150,80 @@
           ],
           "docs": [
             "Tracks a miner's deployed SOL and reward balances."
+          ],
+          "fields": [
+            {
+              "name": "authority",
+              "type": "publicKey"
+            },
+            {
+              "name": "deployed",
+              "type": {
+                "array": [
+                  "u64",
+                  25
+                ]
+              }
+            },
+            {
+              "name": "cumulative",
+              "type": {
+                "array": [
+                  "u64",
+                  25
+                ]
+              }
+            },
+            {
+              "name": "checkpoint_fee",
+              "type": "u64"
+            },
+            {
+              "name": "checkpoint_id",
+              "type": "u64"
+            },
+            {
+              "name": "last_claim_ore_at",
+              "type": "i64"
+            },
+            {
+              "name": "last_claim_sol_at",
+              "type": "i64"
+            },
+            {
+              "name": "rewards_factor",
+              "type": {
+                "defined": "Numeric"
+              }
+            },
+            {
+              "name": "rewards_sol",
+              "type": "u64"
+            },
+            {
+              "name": "rewards_ore",
+              "type": "u64"
+            },
+            {
+              "name": "refined_ore",
+              "type": "u64"
+            },
+            {
+              "name": "round_id",
+              "type": "u64"
+            },
+            {
+              "name": "lifetime_rewards_sol",
+              "type": "u64"
+            },
+            {
+              "name": "lifetime_rewards_ore",
+              "type": "u64"
+            },
+            {
+              "name": "lifetime_deployed",
+              "type": "u64"
+            }
           ]
         },
         {
@@ -88,6 +240,75 @@
           ],
           "docs": [
             "State for a single mining round."
+          ],
+          "fields": [
+            {
+              "name": "id",
+              "type": "u64"
+            },
+            {
+              "name": "deployed",
+              "type": {
+                "array": [
+                  "u64",
+                  25
+                ]
+              }
+            },
+            {
+              "name": "slot_hash",
+              "type": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            },
+            {
+              "name": "count",
+              "type": {
+                "array": [
+                  "u64",
+                  25
+                ]
+              }
+            },
+            {
+              "name": "expires_at",
+              "type": "u64"
+            },
+            {
+              "name": "motherlode",
+              "type": "u64"
+            },
+            {
+              "name": "rent_payer",
+              "type": "publicKey"
+            },
+            {
+              "name": "top_miner",
+              "type": "publicKey"
+            },
+            {
+              "name": "top_miner_reward",
+              "type": "u64"
+            },
+            {
+              "name": "total_deployed",
+              "type": "u64"
+            },
+            {
+              "name": "total_miners",
+              "type": "u64"
+            },
+            {
+              "name": "total_vaulted",
+              "type": "u64"
+            },
+            {
+              "name": "total_winnings",
+              "type": "u64"
+            }
           ]
         },
         {
@@ -104,6 +325,66 @@
           ],
           "docs": [
             "State for a staking participant."
+          ],
+          "fields": [
+            {
+              "name": "authority",
+              "type": "publicKey"
+            },
+            {
+              "name": "balance",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_a",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_b",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_c",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_d",
+              "type": "u64"
+            },
+            {
+              "name": "compound_fee_reserve",
+              "type": "u64"
+            },
+            {
+              "name": "last_claim_at",
+              "type": "i64"
+            },
+            {
+              "name": "last_deposit_at",
+              "type": "i64"
+            },
+            {
+              "name": "last_withdraw_at",
+              "type": "i64"
+            },
+            {
+              "name": "rewards_factor",
+              "type": {
+                "defined": "Numeric"
+              }
+            },
+            {
+              "name": "rewards",
+              "type": "u64"
+            },
+            {
+              "name": "lifetime_rewards",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_f",
+              "type": "u64"
+            }
           ]
         },
         {
@@ -120,6 +401,48 @@
           ],
           "docs": [
             "Singleton treasury account tracking protocol balances."
+          ],
+          "fields": [
+            {
+              "name": "balance",
+              "type": "u64"
+            },
+            {
+              "name": "buffer_a",
+              "type": "u64"
+            },
+            {
+              "name": "motherlode",
+              "type": "u64"
+            },
+            {
+              "name": "miner_rewards_factor",
+              "type": {
+                "defined": "Numeric"
+              }
+            },
+            {
+              "name": "stake_rewards_factor",
+              "type": {
+                "defined": "Numeric"
+              }
+            },
+            {
+              "name": "buffer_b",
+              "type": "u64"
+            },
+            {
+              "name": "total_refined",
+              "type": "u64"
+            },
+            {
+              "name": "total_staked",
+              "type": "u64"
+            },
+            {
+              "name": "total_unclaimed",
+              "type": "u64"
+            }
           ]
         }
       ],
@@ -136,6 +459,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Configures or closes a miner automation account.",
             "Automation PDA seeds: [\"automation\", signer].",
@@ -222,6 +546,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Settles miner rewards for a completed round.",
             "Treasury PDA seeds: [\"treasury\"]."
@@ -290,6 +615,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Claims SOL rewards from the miner account."
           ],
@@ -333,6 +659,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Claims ORE token rewards from the treasury vault."
           ],
@@ -424,6 +751,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Closes an expired round account and returns rent to the payer.",
             "Round PDA seeds: [\"round\", round_id].",
@@ -493,6 +821,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Deploys SOL to selected squares for the current round.",
             "Automation PDA seeds: [\"automation\", authority].",
@@ -613,6 +942,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Emits an arbitrary log message from the board PDA.",
             "Bytes following the discriminator are logged verbatim."
@@ -641,6 +971,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Finalizes the current round, mints rewards, and opens the next round.",
             "Board PDA seeds: [\"board\"].",
@@ -807,6 +1138,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Deposits ORE into a staking account.",
             "Stake PDA seeds: [\"stake\", signer]."
@@ -916,6 +1248,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Withdraws ORE from a staking account.",
             "Stake PDA seeds: [\"stake\", signer]."
@@ -1013,6 +1346,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Claims accrued staking rewards.",
             "Stake PDA seeds: [\"stake\", signer].",
@@ -1111,6 +1445,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Buys back ORE from the market."
           ],
@@ -1129,6 +1464,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Swaps vaulted SOL for ORE via a CPI and burns the proceeds.",
             "Treasury PDA seeds: [\"treasury\"].",
@@ -1227,6 +1563,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Wraps SOL held by the treasury into WSOL for swapping.",
             "Treasury PDA seeds: [\"treasury\"]."
@@ -1292,6 +1629,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Updates the program admin address."
           ],
@@ -1340,6 +1678,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Creates a new entropy var account through the entropy program."
           ],
@@ -1433,6 +1772,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Reloads SOL into the automation account."
           ],
@@ -1451,6 +1791,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Compounds staking yield."
           ],
@@ -1469,6 +1810,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Liquidation instruction."
           ],
@@ -2147,6 +2489,72 @@
           ],
           "docs": [
             "An entropy variable account that stores randomness generation state."
+          ],
+          "fields": [
+            {
+              "name": "authority",
+              "type": "publicKey"
+            },
+            {
+              "name": "id",
+              "type": "u64"
+            },
+            {
+              "name": "provider",
+              "type": "publicKey"
+            },
+            {
+              "name": "commit",
+              "type": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            },
+            {
+              "name": "seed",
+              "type": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            },
+            {
+              "name": "slot_hash",
+              "type": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            },
+            {
+              "name": "value",
+              "type": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            },
+            {
+              "name": "samples",
+              "type": "u64"
+            },
+            {
+              "name": "is_auto",
+              "type": "u64"
+            },
+            {
+              "name": "start_at",
+              "type": "u64"
+            },
+            {
+              "name": "end_at",
+              "type": "u64"
+            }
           ]
         }
       ],
@@ -2163,6 +2571,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Creates a new entropy var account.",
             "Var PDA seeds: [\"var\", authority, id]."
@@ -2249,6 +2658,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Closes an entropy var account and returns rent to the authority."
           ],
@@ -2292,6 +2702,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Updates the var for the next random value sample.",
             "Resets the commit to the previous seed and clears slot_hash, seed, and value."
@@ -2333,6 +2744,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Reveals the seed and finalizes the random value.",
             "The seed must hash to the commit stored in the var account."
@@ -2379,6 +2791,7 @@
             0,
             0
           ],
+          "discriminant": null,
           "docs": [
             "Samples the slot hash at the end_at slot.",
             "Must be called after the end_at slot has passed."
@@ -4968,7 +5381,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "7a868be08df6c5f84524662785b0f3c6d69c3ce57a11e1e9a92c31efdbfdd466",
+      "content_hash": "228a3402ec182567cdbfaa707138362ff7c3a5e3f5854a76cdff6d7b7c79d706",
       "views": [
         {
           "id": "OreRound/latest",
@@ -5584,7 +5997,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "6c304a5351de588793a9394e722ea4870805730d38b3a1782a970400b4fc3f36",
+      "content_hash": "807c6c941a86f6d21c0801d6c92481665cf7778931c56f4b9f716dce6413f6b3",
       "views": []
     },
     {
@@ -6942,7 +7355,7 @@
       "resolver_specs": [],
       "computed_fields": [],
       "computed_field_specs": [],
-      "content_hash": "f6a0a3a397a148fa34256295b78d8ce504484bb768958fa8593d4cd1b6a3bac7",
+      "content_hash": "65b194af422058c586a9425a4e34887d163f7adae4c6ad952968e9c10905d2d7",
       "views": []
     }
   ],
@@ -9050,5 +9463,5 @@
       ]
     }
   ],
-  "content_hash": "f55e8993b0bd69e07f04787cc9a6b513df6d784796fcdef555073fa7f58cdbb8"
+  "content_hash": "ffe594cf02bed5cffc6fe87c68b45bdea44c183c18cbefb71e5763c3e93780f1"
 }
