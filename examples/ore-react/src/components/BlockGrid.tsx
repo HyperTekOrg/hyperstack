@@ -7,7 +7,7 @@ interface BlockGridProps {
 
 export function BlockGrid({ round }: BlockGridProps) {
   const blocks = round
-    ? round.state.deployed_per_square_ui.map((deployedUi, i) => ({
+    ? (round.state?.deployed_per_square_ui || []).map((deployedUi, i) => ({
       id: i + 1,
       minerCount: round.state.count_per_square[i],
       deployedUi,
