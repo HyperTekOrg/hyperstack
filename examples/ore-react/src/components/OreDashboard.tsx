@@ -7,14 +7,9 @@ import { ConnectionBadge } from './ConnectionBadge';
 import { ThemeToggle } from './ThemeToggle';
 
 export function OreDashboard() {
-  const { views, isConnected } = useHyperstack(ORE_STREAM_STACK, { url: 'http://localhost:8878' });
+  const { views, isConnected } = useHyperstack(ORE_STREAM_STACK);
   const { data: latestRound } = views.OreRound.latest.useOne({ schema: ValidatedOreRoundSchema });
-  console.log(latestRound);
-  // const { data: latestRoundRaw } = views.OreRound.latest.use({ take: 2 });
   const { data: treasuryData } = views.OreTreasury.list.useOne();
-
-  // console.log(latestRoundRaw);
-  // return null;
 
   return (
     <div className="h-screen w-full bg-stone-100 dark:bg-stone-900 p-6 font-sans text-stone-900 dark:text-stone-100 relative transition-colors overflow-hidden flex flex-col">
