@@ -34,6 +34,7 @@ pub fn parse_computed_expression(tokens: &proc_macro2::TokenStream) -> ComputedE
 fn resolver_for_method(method: &str) -> Option<&'static str> {
     match method {
         "ui_amount" | "raw_amount" => Some("TokenMetadata"),
+        "slot_hash" | "keccak_rng" => Some("SlotHash"),
         _ => None,
     }
 }
@@ -141,6 +142,9 @@ pub fn qualify_field_refs(expr: ComputedExpr, section: &str) -> ComputedExpr {
         },
         ComputedExpr::ContextSlot => ComputedExpr::ContextSlot,
         ComputedExpr::ContextTimestamp => ComputedExpr::ContextTimestamp,
+        ComputedExpr::Keccak256 { expr } => ComputedExpr::Keccak256 {
+            expr: Box::new(qualify_field_refs(*expr, section)),
+        },
     }
 }
 
@@ -378,6 +382,9 @@ fn resolve_bindings_in_expr(expr: ComputedExpr, bindings: &HashSet<String>) -> C
             bytes: Box::new(resolve_bindings_in_expr(*bytes, bindings)),
         },
         ComputedExpr::JsonToBytes { expr } => ComputedExpr::JsonToBytes {
+            expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
+        },
+        ComputedExpr::Keccak256 { expr } => ComputedExpr::Keccak256 {
             expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
         },
         ComputedExpr::Closure { param, body } => {

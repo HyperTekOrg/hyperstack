@@ -3053,6 +3053,24 @@
               },
               "transform": null,
               "population": "LastWrite"
+            },
+            {
+              "target_path": "results.slot_hash_bytes",
+              "source": {
+                "FromSource": {
+                  "path": {
+                    "segments": [
+                      "slot_hash"
+                    ],
+                    "offsets": null
+                  },
+                  "default": null,
+                  "transform": null
+                }
+              },
+              "transform": null,
+              "population": "LastWrite",
+              "emit": false
             }
           ],
           "conditions": [],
@@ -3362,6 +3380,27 @@
               "resolved_type": null
             },
             {
+              "field_name": "slot_hash_bytes",
+              "rust_type_name": "Option < Vec < u8 > >",
+              "base_type": "Array",
+              "is_optional": true,
+              "is_array": true,
+              "inner_type": "Vec < u8 >",
+              "source_path": null,
+              "resolved_type": null,
+              "emit": false
+            },
+            {
+              "field_name": "expires_at_slot_hash",
+              "rust_type_name": "Option < Vec < u8 > >",
+              "base_type": "Array",
+              "is_optional": true,
+              "is_array": true,
+              "inner_type": "Vec < u8 >",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
               "field_name": "rng",
               "rust_type_name": "Option < u64 >",
               "base_type": "Integer",
@@ -3388,6 +3427,26 @@
               "is_optional": true,
               "is_array": false,
               "inner_type": "bool",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "pre_reveal_rng",
+              "rust_type_name": "Option < u64 >",
+              "base_type": "Integer",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "u64",
+              "source_path": null,
+              "resolved_type": null
+            },
+            {
+              "field_name": "pre_reveal_winning_square",
+              "rust_type_name": "Option < u64 >",
+              "base_type": "Integer",
+              "is_optional": true,
+              "is_array": false,
+              "inner_type": "u64",
               "source_path": null,
               "resolved_type": null
             }
@@ -3707,6 +3766,36 @@
           "source_path": null,
           "resolved_type": null
         },
+        "results.expires_at_slot_hash": {
+          "field_name": "expires_at_slot_hash",
+          "rust_type_name": "Option < Vec < u8 > >",
+          "base_type": "Array",
+          "is_optional": true,
+          "is_array": true,
+          "inner_type": "Vec < u8 >",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "results.pre_reveal_rng": {
+          "field_name": "pre_reveal_rng",
+          "rust_type_name": "Option < u64 >",
+          "base_type": "Integer",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
+        "results.pre_reveal_winning_square": {
+          "field_name": "pre_reveal_winning_square",
+          "rust_type_name": "Option < u64 >",
+          "base_type": "Integer",
+          "is_optional": true,
+          "is_array": false,
+          "inner_type": "u64",
+          "source_path": null,
+          "resolved_type": null
+        },
         "results.rent_payer": {
           "field_name": "rent_payer",
           "rust_type_name": "Option < String >",
@@ -3736,6 +3825,17 @@
           "inner_type": "String",
           "source_path": null,
           "resolved_type": null
+        },
+        "results.slot_hash_bytes": {
+          "field_name": "slot_hash_bytes",
+          "rust_type_name": "Option < Vec < u8 > >",
+          "base_type": "Array",
+          "is_optional": true,
+          "is_array": true,
+          "inner_type": "Vec < u8 >",
+          "source_path": null,
+          "resolved_type": null,
+          "emit": false
         },
         "results.top_miner": {
           "field_name": "top_miner",
@@ -4090,9 +4190,12 @@
         "state.total_winnings",
         "state.deployed_per_square_ui",
         "results.top_miner_reward",
+        "results.expires_at_slot_hash",
         "results.rng",
         "results.winning_square",
         "results.did_hit_motherlode",
+        "results.pre_reveal_rng",
+        "results.pre_reveal_winning_square",
         "treasury.motherlode"
       ],
       "computed_field_specs": [
@@ -4376,6 +4479,23 @@
             }
           },
           "result_type": "Option < f64 >"
+        },
+        {
+          "target_path": "results.expires_at_slot_hash",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "SlotHash",
+              "method": "slot_hash",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "state.expires_at"
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < Vec < u8 > >"
         },
         {
           "target_path": "results.rng",
@@ -4763,6 +4883,69 @@
           "result_type": "Option < bool >"
         },
         {
+          "target_path": "results.pre_reveal_rng",
+          "expression": {
+            "ResolverComputed": {
+              "resolver": "SlotHash",
+              "method": "keccak_rng",
+              "args": [
+                {
+                  "FieldRef": {
+                    "path": "results.expires_at_slot_hash"
+                  }
+                },
+                {
+                  "FieldRef": {
+                    "path": "entropy.resolved_seed"
+                  }
+                },
+                {
+                  "FieldRef": {
+                    "path": "entropy.entropy_samples"
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < u64 >"
+        },
+        {
+          "target_path": "results.pre_reveal_winning_square",
+          "expression": {
+            "MethodCall": {
+              "expr": {
+                "FieldRef": {
+                  "path": "results.pre_reveal_rng"
+                }
+              },
+              "method": "map",
+              "args": [
+                {
+                  "Closure": {
+                    "param": "r",
+                    "body": {
+                      "Binary": {
+                        "op": "Mod",
+                        "left": {
+                          "Var": {
+                            "name": "r"
+                          }
+                        },
+                        "right": {
+                          "Literal": {
+                            "value": 25
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "result_type": "Option < u64 >"
+        },
+        {
           "target_path": "treasury.motherlode",
           "expression": {
             "ResolverComputed": {
@@ -4785,7 +4968,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "93f4b9ed6412e15ba1d92475355f5b1d2f5b8b81358ec01e620dbf50ff0b79dd",
+      "content_hash": "7a868be08df6c5f84524662785b0f3c6d69c3ce57a11e1e9a92c31efdbfdd466",
       "views": [
         {
           "id": "OreRound/latest",
@@ -8867,5 +9050,5 @@
       ]
     }
   ],
-  "content_hash": "f6e4c04a606dddbd67be4924d7fa529569af4bef53760a7259f5da1914ea2da6"
+  "content_hash": "f55e8993b0bd69e07f04787cc9a6b513df6d784796fcdef555073fa7f58cdbb8"
 }

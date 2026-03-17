@@ -60,7 +60,6 @@ pub enum PopulationStrategy {
     UniqueCount,
 }
 
-
 /// Default discriminant size (8 bytes for Anchor).
 /// Used by InstructionDef serde default.
 fn default_discriminant_size() -> usize {
@@ -261,6 +260,12 @@ pub enum ComputedExpr {
     // Context access - slot and timestamp from the update that triggered evaluation
     ContextSlot,
     ContextTimestamp,
+
+    /// Keccak256 hash function for computing Ethereum-compatible hashes
+    /// Takes a byte array expression and returns the 32-byte hash as a Vec<u8>
+    Keccak256 {
+        expr: Box<ComputedExpr>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
