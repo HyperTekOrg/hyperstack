@@ -8,7 +8,6 @@ export interface OreRoundEntropy {
   entropy_start_at?: number | null;
   entropy_value?: string | null;
   entropy_var_address?: string | null;
-  expires_at?: number | null;
   resolved_seed?: any[] | null;
 }
 
@@ -24,6 +23,7 @@ export interface OreRoundMetrics {
 
 export interface OreRoundResults {
   did_hit_motherlode?: boolean | null;
+  expires_at_slot_hash?: any[] | null;
   pre_reveal_rng?: number | null;
   pre_reveal_winning_square?: number | null;
   rent_payer?: string | null;
@@ -85,7 +85,6 @@ export const OreRoundEntropySchema = z.object({
   entropy_start_at: z.number().nullable().optional(),
   entropy_value: z.string().nullable().optional(),
   entropy_var_address: z.string().nullable().optional(),
-  expires_at: z.number().nullable().optional(),
   resolved_seed: z.array(z.any()).nullable().optional(),
 });
 
@@ -101,6 +100,7 @@ export const OreRoundMetricsSchema = z.object({
 
 export const OreRoundResultsSchema = z.object({
   did_hit_motherlode: z.boolean().nullable().optional(),
+  expires_at_slot_hash: z.array(z.any()).nullable().optional(),
   pre_reveal_rng: z.number().nullable().optional(),
   pre_reveal_winning_square: z.number().nullable().optional(),
   rent_payer: z.string().nullable().optional(),
