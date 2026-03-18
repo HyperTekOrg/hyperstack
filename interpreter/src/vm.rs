@@ -2009,7 +2009,6 @@ impl VmContext {
                     if key_value.is_null()
                         && event_type.ends_with("State")
                         && !event_type.ends_with("IxState")
-                        && !event_type.ends_with("CpiEvent")
                     {
                         tracing::debug!(
                             event_type = %event_type,
