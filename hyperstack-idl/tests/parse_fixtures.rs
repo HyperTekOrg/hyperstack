@@ -59,13 +59,11 @@ fn test_ore_instructions_have_discriminators() {
         "automate instruction should have discriminator [0,0,0,0,0,0,0,0]"
     );
 
-    // Verify program_id is parsed from address field (using original IDL, not fixture)
-    let original_idl_json = fs::read_to_string(
-        "/Users/adrian/code/defi/hypertek/hyperstack-oss/stacks/ore/idl/ore.json",
-    )
-    .expect("should read original ore.json");
+    // Verify program_id is parsed from address field (using ore.json fixture)
+    let original_idl_json =
+        fs::read_to_string(fixture_path("ore.json")).expect("should read ore.json");
     let original_snapshot: IdlSnapshot =
-        serde_json::from_str(&original_idl_json).expect("should parse original as IdlSnapshot");
+        serde_json::from_str(&original_idl_json).expect("should parse ore.json as IdlSnapshot");
 
     assert_eq!(
         original_snapshot.program_id,
@@ -73,12 +71,9 @@ fn test_ore_instructions_have_discriminators() {
         "program_id should be parsed from address field"
     );
 
-    // Verify discriminant_size is 1 for Steel-style
-    // Note: This will fail until the fix is applied in hyperstack-debug
-    // The default is 8, but it should be detected as 1 for Steel-style
-    println!(
-        "Ore discriminant_size (before fix): {}",
-        original_snapshot.discriminant_size
+    assert_eq!(
+        original_snapshot.discriminant_size, 1,
+        "Steel-style IDL should use 1-byte discriminants"
     );
 }
 
