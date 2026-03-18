@@ -1,0 +1,142 @@
+---
+title: Skills Reference
+sidebar:
+  order: 2
+description: Per-editor file locations, agent flags, verification, and updating for Hyperstack agent skills.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+import CopyPrompt from "../../../components/CopyPrompt.astro";
+
+Reference for installing Hyperstack agent skills manually. For an overview of how skills, the CLI, and agent.md fit together, see [Agent Skills](/agent-skills/overview/).
+
+The universal install command (auto-detects your editor):
+
+```bash
+npx skills add usehyperstack/skills
+```
+
+---
+
+## Per-Editor Installation
+
+<Tabs>
+<TabItem label="Cursor">
+
+```bash
+npx skills add usehyperstack/skills --agent cursor
+```
+
+Files are created in `.agents/skills/`:
+
+```
+.agents/skills/
+├── hyperstack/SKILL.md
+├── hyperstack-consume/SKILL.md
+└── hyperstack-build/SKILL.md
+```
+
+:::tip[Allow CLI access]
+When Cursor asks to run `hs explore`, approve it.
+:::
+
+</TabItem>
+<TabItem label="Claude Code">
+
+```bash
+npx skills add usehyperstack/skills --agent claude-code
+```
+
+Files are created in `.claude/skills/`:
+
+```
+.claude/skills/
+├── hyperstack/SKILL.md
+├── hyperstack-consume/SKILL.md
+└── hyperstack-build/SKILL.md
+```
+
+You can also set project-level context in `CLAUDE.md` at the project root.
+
+</TabItem>
+<TabItem label="Windsurf">
+
+```bash
+npx skills add usehyperstack/skills --agent windsurf
+```
+
+Files are created in `.windsurf/skills/`:
+
+```
+.windsurf/skills/
+├── hyperstack/SKILL.md
+├── hyperstack-consume/SKILL.md
+└── hyperstack-build/SKILL.md
+```
+
+</TabItem>
+<TabItem label="OpenCode">
+
+```bash
+npx skills add usehyperstack/skills --agent opencode
+```
+
+Files are created in `.agents/skills/`. You can also load skills directly using the `/skill` command in OpenCode.
+
+</TabItem>
+<TabItem label="GitHub Copilot">
+
+```bash
+npx skills add usehyperstack/skills --agent github-copilot
+```
+
+Files are created in `.agents/skills/`.
+
+</TabItem>
+<TabItem label="Cline">
+
+```bash
+npx skills add usehyperstack/skills --agent cline
+```
+
+Files are created in `.cline/skills/`.
+
+</TabItem>
+<TabItem label="Other">
+
+`npx skills` supports 35+ agents:
+
+| Agent      | Flag                 |
+| ---------- | -------------------- |
+| Codex      | `--agent codex`      |
+| Gemini CLI | `--agent gemini-cli` |
+| Roo Code   | `--agent roo`        |
+| Goose      | `--agent goose`      |
+| Continue   | `--agent continue`   |
+
+If your editor isn't listed, manually copy the SKILL.md files from the [skills repository](https://github.com/usehyperstack/skills) into whatever directory your editor reads custom context from.
+
+</TabItem>
+</Tabs>
+
+---
+
+## Verifying Installation
+
+Ask your agent:
+
+<CopyPrompt>
+What stacks are available on Hyperstack? Show me the entities and fields for the ore stack.
+</CopyPrompt>
+
+The agent should run `hs explore --json`, then `hs explore ore --json`, and present the entity names, field paths, and types. If it doesn't recognise Hyperstack commands, check that the skill files are in the correct directory for your editor.
+
+---
+
+## Updating Skills
+
+```bash
+npx skills add usehyperstack/skills
+```
+
+This overwrites existing skill files with the latest versions. The static patterns (SDK syntax, DSL macros) change rarely — dynamic data (entity schemas, field types) always comes from `hs explore` at runtime, so it's always current regardless of skill version.

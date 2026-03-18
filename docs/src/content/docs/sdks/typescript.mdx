@@ -1,0 +1,608 @@
+---
+title: TypeScript SDK
+sidebar:
+  order: 2
+---
+
+The `hyperstack-typescript` SDK is a framework-agnostic client for consuming streaming data from Hyperstack. It uses `AsyncIterable`-based streaming and works in any JavaScript environment — Node.js, browsers, Deno, or Bun.
+
+:::tip[Using React?]
+If you're building a React application, use the [React SDK](/sdks/react/) instead. It provides hooks and providers built on top of this core SDK.
+:::
+
+---
+
+## Installation
+
+```bash
+npm install hyperstack-typescript
+```
+
+No peer dependencies. Works anywhere JavaScript runs.
+
+---
+
+## Quick Start
+
+```typescript
+import { HyperStack } from "hyperstack-typescript";
+import { ORE_STREAM_STACK, type OreRound } from "hyperstack-stacks/ore";
+
+// Connect using the stack (URL is embedded in the stack definition)
+const hs = await HyperStack.connect(ORE_STREAM_STACK);
+
+// Stream entities with full type safety
+for await (const round of hs.views.OreRound.latest.use()) {
+  console.log("Round:", round.id.round_id);
+}
+```
+
+---
+
+## Connection
+
+### Connect with Stack Definition
+
+Each stack definition includes its own URL, so connecting is simple:
+
+```typescript
+import { HyperStack } from "hyperstack-typescript";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
+
+// Stack includes its URL - just pass the stack
+const hs = await HyperStack.connect(ORE_STREAM_STACK);
+
+// Now you have fully typed views
+const rounds = await hs.views.OreRound.latest.get();
+```
+
+### Override Stack URL
+
+You can override the stack's default URL if needed:
+
+```typescript
+const hs = await HyperStack.connect(ORE_STREAM_STACK, {
+  url: "wss://custom.endpoint.com",
+});
+```
+
+### Connection Options
+
+```typescript
+const hs = await HyperStack.connect(ORE_STREAM_STACK, {
+  maxEntriesPerView: 5000, // Limit entries per view (default: 10000)
+});
+```
+
+| Option              | Type             | Default     | Description                                                 |
+| ------------------- | ---------------- | ----------- | ----------------------------------------------------------- |
+| `url`               | `string`         | `stack.url` | Override the stack's default URL                            |
+| `maxEntriesPerView` | `number \| null` | `10000`     | Max entries per view before LRU eviction                    |
+| `validateFrames`    | `boolean`        | `false`     | Validate incoming frames against Zod schemas before storing |
+
+### Connection State
+
+```typescript
+// Check current state
+console.log(hs.connectionState);
+// 'connected' | 'connecting' | 'disconnected' | 'reconnecting' | 'error'
+
+// Listen for changes
+const unsubscribe = hs.onConnectionStateChange((state) => {
+  console.log("Connection state:", state);
+});
+
+// Later: stop listening
+unsubscribe();
+```
+
+### Disconnect
+
+```typescript
+await hs.disconnect();
+```
+
+---
+
+## Views
+
+### View Modes
+
+Every view operates in one of two modes, which determines how you access data:
+
+| Mode      | Description                       | Key Required | Returns                     |
+| --------- | --------------------------------- | ------------ | --------------------------- |
+| **State** | Lookup individual entities by key | Yes          | Single entity (`T \| null`) |
+| **List**  | Access a collection of entities   | No           | Array of entities (`T[]`)   |
+
+### Default Views
+
+By default, each entity in a stack exposes two views:
+
+| View Name | Mode  | Description                                  |
+| --------- | ----- | -------------------------------------------- |
+| `state`   | State | Lookup any entity by its key (e.g., address) |
+| `list`    | List  | Collection of all entities                   |
+
+```typescript
+// State view — get a specific round by address
+const round = await hs.views.OreRound.state.get(roundAddress);
+
+// List view — get all rounds
+const rounds = await hs.views.OreRound.list.get();
+```
+
+### Custom Views
+
+Stacks can define additional views beyond the defaults. For example, the ORE stack includes a custom `latest` view that streams only recent rounds. Custom views are defined using the Rust DSL when building your stack — see [Stack Definitions](/building-stacks/stack-definitions/) for details.
+
+Custom views are accessed the same way as default views:
+
+```typescript
+// Custom list view defined in the ORE stack
+for await (const round of hs.views.OreRound.latest.use()) {
+  console.log("Recent round:", round.id.round_id);
+}
+```
+
+Each view type supports both **streaming** (real-time updates) and **one-shot** (point-in-time snapshot) access patterns.
+
+---
+
+## Streaming Methods
+
+Streaming methods return `AsyncIterable` and continuously emit data as entities change. The connection stays open until you break out of the loop or abort.
+
+| Method         | Emits           | Use Case                                                       |
+| -------------- | --------------- | -------------------------------------------------------------- |
+| `.use()`       | `T`             | Simplest — just the current entity state after each change     |
+| `.watch()`     | `Update<T>`     | When you need to know the operation type (upsert/patch/delete) |
+| `.watchRich()` | `RichUpdate<T>` | When you need before/after comparison                          |
+
+### `.use()` — Stream Merged Entities
+
+The simplest streaming method. Emits the full merged entity after each change:
+
+```typescript
+// List view — no key required
+for await (const round of hs.views.OreRound.latest.use()) {
+  console.log("Round:", round.id.round_id);
+  console.log("Motherlode:", round.state.motherlode);
+}
+
+// State view — key required
+const roundAddress = "So11111111111111111111111111111111111111112";
+for await (const round of hs.views.OreRound.state.use(roundAddress)) {
+  console.log("Round updated:", round.state.motherlode);
+}
+```
+
+**Signatures:**
+
+```typescript
+// State view
+use(key: string, options?: WatchOptions): AsyncIterable<T>
+
+// List view
+use(options?: WatchOptions): AsyncIterable<T>
+```
+
+### `.watch()` — Stream Raw Updates
+
+Use when you need to know what operation occurred:
+
+```typescript
+for await (const update of hs.views.OreRound.latest.watch()) {
+  switch (update.type) {
+    case "upsert":
+      console.log("Created or replaced:", update.data);
+      break;
+    case "patch":
+      console.log("Partial update:", update.data);
+      break;
+    case "delete":
+      console.log("Deleted:", update.key);
+      break;
+  }
+}
+```
+
+**Signatures:**
+
+```typescript
+// State view
+watch(key: string, options?: WatchOptions): AsyncIterable<Update<T>>
+
+// List view
+watch(options?: WatchOptions): AsyncIterable<Update<T>>
+```
+
+**Update types:**
+
+```typescript
+type Update<T> =
+  | { type: "upsert"; key: string; data: T }        // Full entity create/replace
+  | { type: "patch"; key: string; data: Partial<T> } // Partial update
+  | { type: "delete"; key: string };                 // Entity removed
+```
+
+### `.watchRich()` — Stream with Before/After Diffs
+
+Use when you need to compare the previous and new state:
+
+```typescript
+for await (const update of hs.views.OreRound.latest.watchRich()) {
+  switch (update.type) {
+    case "created":
+      console.log("New entity:", update.data);
+      break;
+    case "updated":
+      console.log(`Changed: ${update.before.state.motherlode} → ${update.after.state.motherlode}`);
+      break;
+    case "deleted":
+      console.log("Removed:", update.lastKnown);
+      break;
+  }
+}
+```
+
+**Signatures:**
+
+```typescript
+// State view
+watchRich(key: string, options?: WatchOptions): AsyncIterable<RichUpdate<T>>
+
+// List view
+watchRich(options?: WatchOptions): AsyncIterable<RichUpdate<T>>
+```
+
+**RichUpdate types:**
+
+```typescript
+type RichUpdate<T> =
+  | { type: "created"; key: string; data: T }
+  | { type: "updated"; key: string; before: T; after: T; patch?: unknown }
+  | { type: "deleted"; key: string; lastKnown?: T };
+```
+
+---
+
+## One-Shot Methods
+
+One-shot methods return a point-in-time snapshot without subscribing to updates. Use these when you need the current state but don't need real-time streaming.
+
+| Method       | Returns          | Behavior                                              |
+| ------------ | ---------------- | ----------------------------------------------------- |
+| `.get()`     | `Promise<T>`     | Async — waits for data if not yet loaded              |
+| `.getSync()` | `T \| undefined` | Sync — returns immediately, `undefined` if not loaded |
+
+### `.get()` — Async Snapshot
+
+Fetches the current state. Returns a promise that resolves when data is available:
+
+```typescript
+// List view — returns all entities
+const rounds = await hs.views.OreRound.latest.get();
+console.log(`Found ${rounds.length} rounds`);
+
+// State view — returns single entity or null
+const round = await hs.views.OreRound.state.get(roundAddress);
+if (round) {
+  console.log("Round:", round.id.round_id);
+}
+```
+
+**Signatures:**
+
+```typescript
+// State view — returns single entity or null if not found
+get(key: string): Promise<T | null>
+
+// List view — returns array of all entities
+get(): Promise<T[]>
+```
+
+### `.getSync()` — Synchronous Snapshot
+
+Returns immediately with cached data. Returns `undefined` if data hasn't been loaded yet:
+
+```typescript
+// List view
+const rounds = hs.views.OreRound.latest.getSync();
+if (rounds) {
+  console.log(`Cached: ${rounds.length} rounds`);
+} else {
+  console.log("Data not yet loaded");
+}
+
+// State view
+const round = hs.views.OreRound.state.getSync(roundAddress);
+```
+
+**Signatures:**
+
+```typescript
+// State view — returns entity, null (not found), or undefined (not loaded)
+getSync(key: string): T | null | undefined
+
+// List view — returns array or undefined (not loaded)
+getSync(): T[] | undefined
+```
+
+:::tip[When to use getSync()]
+Use `getSync()` in synchronous contexts like React render functions where you can't await. The return value distinguishes between "not found" (`null`) and "not yet loaded" (`undefined`).
+:::
+
+---
+
+## Store Size Limits
+
+Each view maintains an in-memory store of entities. By default, stores are limited to 10,000 entries to prevent memory issues on long-running clients. When the limit is reached, oldest entries are evicted (LRU).
+
+```typescript
+const hs = await HyperStack.connect(ORE_STREAM_STACK, {
+  maxEntriesPerView: 5000, // Custom limit
+});
+```
+
+To disable limiting (not recommended for production):
+
+```typescript
+const hs = await HyperStack.connect(ORE_STREAM_STACK, {
+  maxEntriesPerView: null, // Unlimited
+});
+```
+
+---
+
+## Subscription Options
+
+The streaming methods (`.use()`, `.watch()`, `.watchRich()`) accept options for pagination and validation:
+
+```typescript
+interface WatchOptions {
+  take?: number;         // Limit number of entities
+  skip?: number;         // Skip first N entities
+  schema?: Schema<T>;    // Validate and filter entities with a Zod schema
+}
+```
+
+### Limit Results
+
+```typescript
+// Only receive the first 10 entities
+for await (const round of hs.views.OreRound.latest.use({ take: 10 })) {
+  console.log("Round:", round.id.round_id);
+}
+```
+
+### Pagination
+
+```typescript
+// Skip first 20, take next 10
+for await (const round of hs.views.OreRound.latest.use({ skip: 20, take: 10 })) {
+  console.log("Round:", round.id.round_id);
+}
+```
+
+### Server-Side Filtering
+
+For server-side filtering beyond pagination, use **custom views** defined in your stack. Custom views apply filters, sorting, and limits at the server level, reducing bandwidth before data reaches the client.
+
+See [Filtering Feeds](/using-stacks/filtering-feeds/) for details on all filtering options, or [Stack Definitions](/building-stacks/stack-definitions/) for how to define custom views using the Rust DSL.
+
+---
+
+## Stream Control
+
+Use standard `AsyncIterable` patterns to control streams client-side.
+
+### Stop on Condition
+
+```typescript
+for await (const update of hs.views.OreRound.latest.watch()) {
+  if (update.type === "upsert") {
+    const round = update.data;
+    if (round.state.motherlode && round.state.motherlode > 1_000_000_000) {
+      console.log("Found high-value round:", round.id.round_id);
+      break;
+    }
+  }
+}
+```
+
+### Cancellable Streams
+
+Use an `AbortController` to cancel from outside the loop:
+
+```typescript
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 30_000); // Cancel after 30s
+
+try {
+  for await (const update of hs.views.OreRound.latest.watch()) {
+    if (controller.signal.aborted) break;
+    console.log("Update:", update.data);
+  }
+} catch (e) {
+  if (!controller.signal.aborted) throw e;
+}
+```
+
+### Client-Side Filtering
+
+```typescript
+for await (const update of hs.views.OreRound.latest.watch()) {
+  if (update.type !== "upsert") continue;
+  if ((update.data.metrics.deploy_count ?? 0) < 100) continue;
+
+  console.log("Active round:", update.data.id.round_id);
+}
+```
+
+---
+
+## Schema Validation
+
+Every stack ships with [Zod](https://zod.dev) schemas alongside its TypeScript interfaces. Use them to validate data at two levels:
+
+### Frame Validation
+
+Enable `validateFrames` on connect to automatically drop malformed data before it enters your local store:
+
+```typescript
+const hs = await HyperStack.connect(ORE_STREAM_STACK, {
+  validateFrames: true,
+});
+```
+
+### Query-Level Validation
+
+Pass a `schema` to `.use()` to filter out entities that don't match:
+
+```typescript
+import { OreRoundCompletedSchema } from "hyperstack-stacks/ore";
+
+// Only emit rounds where every field is present
+for await (const round of hs.views.OreRound.latest.use({
+  schema: OreRoundCompletedSchema,
+})) {
+  console.log(round.id.round_id, round.state.motherlode);
+}
+```
+
+See [Schema Validation](/sdks/validation/) for the full guide on generated schemas, custom schemas, and the "Completed" schema pattern.
+
+---
+
+## Resolved Data
+
+Hyperstack can automatically enrich your entities with data that doesn't live on-chain. For example, the ORE stack includes token metadata (name, symbol, decimals, logo) resolved server-side from the DAS API:
+
+```typescript
+for await (const round of hs.views.OreRound.latest.use()) {
+  // Token metadata is resolved automatically — no extra API calls
+  console.log(round.ore_metadata?.name);     // "Ore"
+  console.log(round.ore_metadata?.symbol);   // "ORE"
+  console.log(round.ore_metadata?.decimals); // 11
+}
+```
+
+Resolved data arrives as part of the entity alongside on-chain fields. Your client code reads it the same way — no distinction between on-chain and resolved data.
+
+See [Resolvers](/building-stacks/rust-dsl/resolvers/) for how to add resolved data when building your own stack.
+
+---
+
+## Error Handling
+
+```typescript
+import { HyperStack, HyperStackError } from "hyperstack-typescript";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
+
+try {
+  const hs = await HyperStack.connect(ORE_STREAM_STACK);
+} catch (error) {
+  if (error instanceof HyperStackError) {
+    console.error("Hyperstack error:", error.message);
+    console.error("Code:", error.code);
+  } else {
+    throw error;
+  }
+}
+```
+
+---
+
+## API Reference
+
+### `HyperStack.connect(stack, options?)`
+
+Establishes a WebSocket connection to a Hyperstack stack.
+
+**Parameters:**
+
+- `stack` — Stack definition (includes URL and typed views)
+- `options.url` — Override the stack's default URL (optional)
+- `options.maxEntriesPerView` — Max entries per view before LRU eviction (optional)
+- `options.validateFrames` — Validate incoming frames against Zod schemas (optional)
+
+**Returns:** `Promise<HyperStack>`
+
+### `hs.views`
+
+Typed views interface based on your stack definition. Access pattern:
+
+```typescript
+hs.views.<entity>.<viewName>.<method>()
+
+// Examples with default views:
+hs.views.OreRound.state.get(key)     // State mode — requires key
+hs.views.OreRound.list.get()         // List mode — no key
+```
+
+#### State Mode Methods
+
+For views in state mode (keyed lookup). All methods require a `key` parameter:
+
+| Method      | Signature                  | Returns                        |
+| ----------- | -------------------------- | ------------------------------ |
+| `use`       | `use(key, options?)`       | `AsyncIterable<T>`             |
+| `watch`     | `watch(key, options?)`     | `AsyncIterable<Update<T>>`     |
+| `watchRich` | `watchRich(key, options?)` | `AsyncIterable<RichUpdate<T>>` |
+| `get`       | `get(key)`                 | `Promise<T \| null>`           |
+| `getSync`   | `getSync(key)`             | `T \| null \| undefined`       |
+
+#### List Mode Methods
+
+For views in list mode (collections). No key parameter:
+
+| Method      | Signature             | Returns                        |
+| ----------- | --------------------- | ------------------------------ |
+| `use`       | `use(options?)`       | `AsyncIterable<T>`             |
+| `watch`     | `watch(options?)`     | `AsyncIterable<Update<T>>`     |
+| `watchRich` | `watchRich(options?)` | `AsyncIterable<RichUpdate<T>>` |
+| `get`       | `get()`               | `Promise<T[]>`                 |
+| `getSync`   | `getSync()`           | `T[] \| undefined`             |
+
+#### WatchOptions
+
+Options for streaming methods:
+
+```typescript
+interface WatchOptions {
+  take?: number;         // Limit number of entities
+  skip?: number;         // Skip first N entities
+  schema?: Schema<T>;    // Validate and filter entities with a Zod schema
+}
+```
+
+See [Schema Validation](/sdks/validation/) for details on using schemas to filter and validate streamed data.
+
+### `hs.connectionState`
+
+Current connection state:
+
+- `disconnected` — Not connected
+- `connecting` — Establishing connection
+- `connected` — Active connection
+- `reconnecting` — Auto-reconnecting after failure
+- `error` — Connection failed
+
+### `hs.onConnectionStateChange(callback)`
+
+Subscribe to connection state changes. Returns unsubscribe function.
+
+### `hs.disconnect()`
+
+Close the WebSocket connection gracefully.
+
+---
+
+## Next Steps
+
+- [Schema Validation](/sdks/validation/) — Zod schemas for runtime validation and filtering
+- [React SDK](/sdks/react/) — Hooks and providers for React apps
+- [Rust SDK](/sdks/rust/) — Native Rust client
+- [Resolvers](/building-stacks/rust-dsl/resolvers/) — Enrich entities with token metadata and computed fields
+- [Build Your Own Stack](/building-stacks/workflow) — Create custom data streams

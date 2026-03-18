@@ -1,111 +1,177 @@
+import { useEffect, useState, useMemo } from 'react';
+import type { ConnectionState } from 'hyperstack-typescript';
 import type { StoreApi, UseBoundStore } from 'zustand';
 import { useHyperstackContext } from './provider';
 import { createStateViewHook, createListViewHook } from './view-hooks';
-import { createTxMutationHook } from './tx-hooks';
-import {
+import { useInstructionMutation, UseMutationResult } from './hooks';
+import type {
   StackDefinition,
   ViewDef,
-  TransactionDefinition,
+  ViewMode,
   ViewHookOptions,
   ViewHookResult,
-  ListParams,
-  UseMutationReturn,
-  ViewGroup
+  ListParamsSingle,
+  ListParamsMultiple,
+  ListParamsBase,
+  ViewGroup,
+  UseHyperstackOptions
 } from './types';
-import { HyperstackRuntime } from './runtime';
-import type { HyperStackStore } from './zustand-adapter';
+import { ZustandAdapter, type HyperStackStore } from './zustand-adapter';
+import type { InstructionHandler, InstructionExecutor } from 'hyperstack-typescript';
+import type { HyperStack } from 'hyperstack-typescript';
+
+type ViewHookForDef<TDef> = TDef extends ViewDef<infer T, 'state'>
+  ? {
+      use: <TSchema = T>(
+        key?: Record<string, string>,
+        options?: ViewHookOptions<TSchema>
+      ) => ViewHookResult<TSchema>;
+    }
+  : TDef extends ViewDef<infer T, 'list'>
+  ? {
+      use: {
+        <TSchema = T>(params: ListParamsSingle<TSchema>, options?: ViewHookOptions<TSchema>): ViewHookResult<TSchema | undefined>;
+        <TSchema = T>(params?: ListParamsMultiple<TSchema>, options?: ViewHookOptions<TSchema>): ViewHookResult<TSchema[]>;
+      };
+      useOne: <TSchema = T>(
+        params?: Omit<ListParamsBase<TSchema>, 'take'>,
+        options?: ViewHookOptions<TSchema>
+      ) => ViewHookResult<TSchema | undefined>;
+    }
+  : TDef extends ViewDef<infer T, 'state' | 'list'>
+  ? {
+      use: {
+        <TSchema = T>(params: ListParamsSingle<TSchema>, options?: ViewHookOptions<TSchema>): ViewHookResult<TSchema | undefined>;
+        <TSchema = T>(params?: ListParamsMultiple<TSchema> | Record<string, string>, options?: ViewHookOptions<TSchema>): ViewHookResult<TSchema | TSchema[]>;
+      };
+      useOne: <TSchema = T>(
+        params?: Omit<ListParamsBase<TSchema>, 'take'>,
+        options?: ViewHookOptions<TSchema>
+      ) => ViewHookResult<TSchema | undefined>;
+    }
+  : never;
 
 type BuildViewInterface<TViews extends Record<string, ViewGroup>> = {
-  [K in keyof TViews]: TViews[K] extends { state: ViewDef<infer S, 'state'>; list: ViewDef<infer L, 'list'> }
-    ? {
-        state: {
-          use: (
-            key: Record<string, string>,
-            options?: ViewHookOptions
-          ) => ViewHookResult<S>;
-        };
-        list: {
-          use: (
-            params?: ListParams,
-            options?: ViewHookOptions
-          ) => ViewHookResult<L[]>;
-        };
-      }
-    : TViews[K] extends { state: ViewDef<infer S, 'state'> }
-    ? {
-        state: {
-          use: (
-            key: Record<string, string>,
-            options?: ViewHookOptions
-          ) => ViewHookResult<S>;
-        };
-      }
-    : TViews[K] extends { list: ViewDef<infer L, 'list'> }
-    ? {
-        list: {
-          use: (
-            params?: ListParams,
-            options?: ViewHookOptions
-          ) => ViewHookResult<L[]>;
-        };
-      }
-    : object;
+  [K in keyof TViews]: {
+    [SubK in keyof TViews[K] as TViews[K][SubK] extends ViewDef<unknown, ViewMode> ? SubK : never]: ViewHookForDef<TViews[K][SubK]>;
+  };
 };
+
+type InstructionHook = {
+  useMutation: () => UseMutationResult;
+  execute: InstructionExecutor;
+};
+
+type BuildInstructionInterface<TInstructions extends Record<string, InstructionHandler> | undefined> = 
+  TInstructions extends Record<string, InstructionHandler>
+    ? { [K in keyof TInstructions]: InstructionHook }
+    : {};
 
 type StackClient<TStack extends StackDefinition> = {
   views: BuildViewInterface<TStack['views']>;
-  tx: TStack['transactions'] extends Record<string, TransactionDefinition>
-    ? {
-        [K in keyof TStack['transactions']]: TStack['transactions'][K]['build'];
-      } & {
-        useMutation: () => UseMutationReturn;
-      }
-    : { useMutation: () => UseMutationReturn };
+  instructions: BuildInstructionInterface<TStack['instructions']>;
   zustandStore: UseBoundStore<StoreApi<HyperStackStore>>;
-  runtime: HyperstackRuntime;
+  client: HyperStack<TStack>;
+  connectionState: ConnectionState;
+  isConnected: boolean;
+  isLoading: boolean;
+  error: Error | null;
 };
 
 export function useHyperstack<TStack extends StackDefinition>(
-  stack: TStack
+  stack: TStack,
+  options?: UseHyperstackOptions
 ): StackClient<TStack> {
-  if (!stack) {
-    throw new Error('[Hyperstack] Stack definition is required');
-  }
+  const { getOrCreateClient, getClient } = useHyperstackContext();
+  const urlOverride = options?.url;
+  const [client, setClient] = useState<HyperStack<TStack> | null>(getClient(stack) as HyperStack<TStack> | null);
+  const [isLoading, setIsLoading] = useState(!client);
+  const [error, setError] = useState<Error | null>(null);
+  const [connectionState, setConnectionState] = useState<ConnectionState>(() => 
+    client?.connectionState ?? 'disconnected'
+  );
 
-  const { runtime } = useHyperstackContext();
+  useEffect(() => {
+    const existingClient = getClient(stack);
+    if (existingClient && !urlOverride) {
+      setClient(existingClient as HyperStack<TStack>);
+      setIsLoading(false);
+      return;
+    }
 
-  const views: Record<string, Record<string, unknown>> = {};
+    setIsLoading(true);
+    setError(null);
 
-  for (const [viewName, viewGroup] of Object.entries(stack.views)) {
-    views[viewName] = {};
+    getOrCreateClient(stack, urlOverride)
+      .then((newClient) => {
+        setClient(newClient as HyperStack<TStack>);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err : new Error(String(err)));
+        setIsLoading(false);
+      });
+  }, [stack, getOrCreateClient, getClient, urlOverride]);
 
-    if (typeof viewGroup === 'object' && viewGroup !== null) {
-      const group = viewGroup as ViewGroup;
+  useEffect(() => {
+    if (!client) {
+      setConnectionState('disconnected');
+      return;
+    }
+    
+    setConnectionState(client.connectionState);
+    const unsubscribe = client.onConnectionStateChange((state) => {
+      setConnectionState(state);
+    });
+    
+    return unsubscribe;
+  }, [client]);
 
-      if (group.state) {
-        views[viewName]!.state = createStateViewHook(group.state, runtime);
-      }
+  const views = useMemo(() => {
+    const result: Record<string, Record<string, unknown>> = {};
 
-      if (group.list) {
-        views[viewName]!.list = createListViewHook(group.list, runtime);
+    for (const [viewName, viewGroup] of Object.entries(stack.views)) {
+      result[viewName] = {};
+
+      if (typeof viewGroup === 'object' && viewGroup !== null) {
+        for (const [subViewName, viewDef] of Object.entries(viewGroup)) {
+          if (!viewDef || typeof viewDef !== 'object' || !('mode' in viewDef)) continue;
+
+          if (viewDef.mode === 'state') {
+            result[viewName]![subViewName] = createStateViewHook(viewDef as ViewDef<unknown, 'state'>, client);
+          } else if (viewDef.mode === 'list') {
+            result[viewName]![subViewName] = createListViewHook(viewDef as ViewDef<unknown, 'list'>, client);
+          }
+        }
       }
     }
-  }
 
-  const tx: Record<string, unknown> = {};
+    return result;
+  }, [stack, client]);
 
-  if (stack.transactions) {
-    for (const [txName, txDef] of Object.entries(stack.transactions)) {
-      tx[txName] = txDef.build;
+  const instructions = useMemo(() => {
+    const result: Record<string, InstructionHook> = {};
+
+    if (client?.instructions) {
+      for (const [instructionName, executeFn] of Object.entries(client.instructions)) {
+        result[instructionName] = {
+          execute: executeFn as InstructionExecutor,
+          useMutation: () => useInstructionMutation(executeFn as InstructionExecutor)
+        };
+      }
     }
-  }
 
-  tx.useMutation = createTxMutationHook(runtime, stack.transactions);
+    return result;
+  }, [client]);
 
   return {
-    views,
-    tx,
-    zustandStore: runtime.zustandStore,
-    runtime
-  } as StackClient<TStack>;
+    views: views as BuildViewInterface<TStack['views']>,
+    instructions: instructions as BuildInstructionInterface<TStack['instructions']>,
+    zustandStore: (client?.store as ZustandAdapter | undefined)?.store as UseBoundStore<StoreApi<HyperStackStore>>,
+    client: client!,
+    connectionState,
+    isConnected: connectionState === 'connected',
+    isLoading,
+    error
+  };
 }

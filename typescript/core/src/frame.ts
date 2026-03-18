@@ -1,7 +1,20 @@
 import { inflate } from 'pako';
 
 export type FrameMode = 'state' | 'append' | 'list';
-export type FrameOp = 'create' | 'upsert' | 'patch' | 'delete' | 'snapshot';
+export type FrameOp = 'create' | 'upsert' | 'patch' | 'delete' | 'snapshot' | 'subscribed';
+export type SortOrder = 'asc' | 'desc';
+
+export interface SortConfig {
+  field: string[];
+  order: SortOrder;
+}
+
+export interface SubscribedFrame {
+  op: 'subscribed';
+  view: string;
+  mode: FrameMode;
+  sort?: SortConfig;
+}
 
 export interface EntityFrame<T = unknown> {
   mode: FrameMode;
@@ -26,7 +39,7 @@ export interface SnapshotFrame<T = unknown> {
   complete?: boolean;
 }
 
-export type Frame<T = unknown> = EntityFrame<T> | SnapshotFrame<T>;
+export type Frame<T = unknown> = EntityFrame<T> | SnapshotFrame<T> | SubscribedFrame;
 
 const GZIP_MAGIC_0 = 0x1f;
 const GZIP_MAGIC_1 = 0x8b;
@@ -37,6 +50,14 @@ function isGzipData(data: Uint8Array): boolean {
 
 export function isSnapshotFrame<T>(frame: Frame<T>): frame is SnapshotFrame<T> {
   return frame.op === 'snapshot';
+}
+
+export function isSubscribedFrame(frame: Frame): frame is SubscribedFrame {
+  return frame.op === 'subscribed';
+}
+
+export function isEntityFrame<T>(frame: Frame<T>): frame is EntityFrame<T> {
+  return ['create', 'upsert', 'patch', 'delete'].includes(frame.op);
 }
 
 export function parseFrame(data: ArrayBuffer | string): Frame {

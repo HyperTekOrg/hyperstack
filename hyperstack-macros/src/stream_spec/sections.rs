@@ -11,11 +11,13 @@ use quote::quote;
 use syn::{Fields, ItemStruct, Type};
 
 use crate::ast::{BaseType, EntitySection, FieldTypeInfo, ResolvedField, ResolvedStructType};
+use crate::event_type_helpers::{find_idl_for_type, IdlLookup};
 use crate::parse;
 use crate::parse::idl::{IdlSpec, IdlType, IdlTypeDefKind};
 use crate::utils::path_to_string;
 
 use super::handlers::{determine_event_instruction, extract_account_type_from_field};
+use super::resolve_snapshot_source;
 
 // ============================================================================
 // Section Extraction
@@ -28,15 +30,14 @@ pub fn extract_section_from_struct(
     item_struct: &ItemStruct,
     parent_field: Option<String>,
 ) -> EntitySection {
-    extract_section_from_struct_with_idl(section_name, item_struct, parent_field, None)
+    extract_section_from_struct_with_idl(section_name, item_struct, parent_field, &[])
 }
 
-/// Extract section information from a struct definition with optional IDL for type resolution.
 pub fn extract_section_from_struct_with_idl(
     section_name: &str,
     item_struct: &ItemStruct,
     parent_field: Option<String>,
-    idl: Option<&IdlSpec>,
+    idls: IdlLookup,
 ) -> EntitySection {
     let mut fields = Vec::new();
 
@@ -46,8 +47,9 @@ pub fn extract_section_from_struct_with_idl(
                 let field_name = field_ident.to_string();
                 let field_ty = &field.ty;
                 let rust_type_name = quote::quote!(#field_ty).to_string();
-                let field_type_info =
-                    analyze_field_type_with_idl(&field_name, &rust_type_name, idl);
+                let mut field_type_info =
+                    analyze_field_type_with_idl(&field_name, &rust_type_name, idls);
+                field_type_info.emit = field_emit_from_attrs(field, &field_name);
                 fields.push(field_type_info);
             }
         }
@@ -61,6 +63,33 @@ pub fn extract_section_from_struct_with_idl(
     }
 }
 
+fn field_emit_from_attrs(field: &syn::Field, field_name: &str) -> bool {
+    let mut found_mapping = false;
+    let mut any_emit = false;
+
+    for attr in &field.attrs {
+        if let Ok(Some(map_attrs)) = parse::parse_map_attribute(attr, field_name) {
+            found_mapping = true;
+            if map_attrs.iter().any(|m| m.emit) {
+                any_emit = true;
+            }
+        }
+
+        if let Ok(Some(map_attrs)) = parse::parse_from_instruction_attribute(attr, field_name) {
+            found_mapping = true;
+            if map_attrs.iter().any(|m| m.emit) {
+                any_emit = true;
+            }
+        }
+    }
+
+    if found_mapping {
+        any_emit
+    } else {
+        true
+    }
+}
+
 // ============================================================================
 // Field Type Analysis
 // ============================================================================
@@ -68,22 +97,21 @@ pub fn extract_section_from_struct_with_idl(
 /// Analyze a Rust type string and extract field type information.
 #[allow(dead_code)]
 pub fn analyze_field_type(field_name: &str, rust_type: &str) -> FieldTypeInfo {
-    analyze_field_type_with_idl(field_name, rust_type, None)
+    analyze_field_type_with_idl(field_name, rust_type, &[])
 }
 
 /// Analyze a Rust type string with IDL support for resolving complex types.
 pub fn analyze_field_type_with_idl(
     field_name: &str,
     rust_type: &str,
-    idl: Option<&IdlSpec>,
+    idls: IdlLookup,
 ) -> FieldTypeInfo {
     let type_str = rust_type.trim();
 
-    // Handle Option<T>
     if let Some(inner) = extract_generic_inner_type(type_str, "Option") {
         let inner_info = analyze_inner_type(&inner);
         let resolved_type = if inner_info.0 == BaseType::Object {
-            resolve_complex_type(&inner, idl)
+            resolve_complex_type(&inner, idls)
         } else {
             None
         };
@@ -97,14 +125,14 @@ pub fn analyze_field_type_with_idl(
             inner_type: Some(inner.clone()),
             source_path: None,
             resolved_type,
+            emit: true,
         };
     }
 
-    // Handle Vec<T>
     if let Some(inner) = extract_generic_inner_type(type_str, "Vec") {
         let inner_base_type = analyze_simple_type(&inner);
         let resolved_type = if inner_base_type == BaseType::Object {
-            resolve_complex_type(&inner, idl)
+            resolve_complex_type(&inner, idls)
         } else {
             None
         };
@@ -118,13 +146,13 @@ pub fn analyze_field_type_with_idl(
             inner_type: Some(inner.clone()),
             source_path: None,
             resolved_type,
+            emit: true,
         };
     }
 
-    // Handle primitive types
     let base_type = analyze_simple_type(type_str);
     let resolved_type = if base_type == BaseType::Object {
-        resolve_complex_type(type_str, idl)
+        resolve_complex_type(type_str, idls)
     } else {
         None
     };
@@ -138,6 +166,7 @@ pub fn analyze_field_type_with_idl(
         inner_type: None,
         source_path: None,
         resolved_type,
+        emit: true,
     }
 }
 
@@ -277,8 +306,10 @@ pub fn process_nested_struct(
     events_by_instruction: &mut HashMap<String, Vec<(String, parse::EventAttribute, Type)>>,
     has_events: &mut bool,
     computed_fields: &mut Vec<(String, proc_macro2::TokenStream, Type)>,
+    resolve_specs: &mut Vec<parse::ResolveSpec>,
     derive_from_mappings: &mut HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &mut HashMap<String, String>,
+    program_name: Option<&str>,
 ) {
     let section_name = section_field_name.to_string();
 
@@ -303,18 +334,56 @@ pub fn process_nested_struct(
                                 format!("{}.{}", section_name, map_attr.target_field_name);
                         }
 
-                        super::entity::process_map_attribute(
-                            &map_attr,
-                            field_name,
-                            field_type,
-                            &mut Vec::new(),
-                            accessor_defs,
-                            accessor_names,
-                            primary_keys,
-                            lookup_indexes,
-                            sources_by_type,
-                            field_mappings,
-                        );
+                        if let Some(rt) = map_attr.resolver_transform.take() {
+                            let visible_target = map_attr.target_field_name.clone();
+                            let raw_field_name = format!("__{}_raw", field_name);
+                            let raw_target = format!("{}.{}", section_name, raw_field_name);
+
+                            map_attr.target_field_name = raw_target.clone();
+                            map_attr.emit = false;
+
+                            super::entity::process_map_attribute(
+                                &map_attr,
+                                field_name,
+                                field_type,
+                                &mut Vec::new(),
+                                accessor_defs,
+                                accessor_names,
+                                primary_keys,
+                                lookup_indexes,
+                                sources_by_type,
+                                field_mappings,
+                            );
+
+                            let raw_ref = raw_target.clone();
+                            let computed_expr: proc_macro2::TokenStream = {
+                                let raw_ident: proc_macro2::TokenStream =
+                                    raw_ref.replace('.', " . ").parse().unwrap_or_default();
+                                let method_ident: proc_macro2::TokenStream =
+                                    rt.method.parse().unwrap_or_default();
+                                let args = &rt.args;
+                                quote::quote! { #raw_ident . #method_ident ( #args ) }
+                            };
+
+                            computed_fields.push((
+                                visible_target,
+                                computed_expr,
+                                field_type.clone(),
+                            ));
+                        } else {
+                            super::entity::process_map_attribute(
+                                &map_attr,
+                                field_name,
+                                field_type,
+                                &mut Vec::new(),
+                                accessor_defs,
+                                accessor_names,
+                                primary_keys,
+                                lookup_indexes,
+                                sources_by_type,
+                                field_mappings,
+                            );
+                        }
                     }
                 } else if let Ok(Some(map_attrs)) =
                     parse::parse_from_instruction_attribute(attr, &field_name.to_string())
@@ -323,6 +392,45 @@ pub fn process_nested_struct(
                         if !map_attr.target_field_name.contains('.') {
                             map_attr.target_field_name =
                                 format!("{}.{}", section_name, map_attr.target_field_name);
+                        }
+
+                        if let Some(rt) = map_attr.resolver_transform.take() {
+                            let visible_target = map_attr.target_field_name.clone();
+                            let raw_field_name = format!("__{}_raw", field_name);
+                            let raw_target = format!("{}.{}", section_name, raw_field_name);
+
+                            map_attr.target_field_name = raw_target.clone();
+                            map_attr.emit = false;
+
+                            super::entity::process_map_attribute(
+                                &map_attr,
+                                field_name,
+                                field_type,
+                                &mut Vec::new(),
+                                accessor_defs,
+                                accessor_names,
+                                primary_keys,
+                                lookup_indexes,
+                                sources_by_type,
+                                field_mappings,
+                            );
+
+                            let raw_ref = raw_target.clone();
+                            let computed_expr: proc_macro2::TokenStream = {
+                                let raw_ident: proc_macro2::TokenStream =
+                                    raw_ref.replace('.', " . ").parse().unwrap_or_default();
+                                let method_ident: proc_macro2::TokenStream =
+                                    rt.method.parse().unwrap_or_default();
+                                let args = &rt.args;
+                                quote::quote! { #raw_ident . #method_ident ( #args ) }
+                            };
+
+                            computed_fields.push((
+                                visible_target,
+                                computed_expr,
+                                field_type.clone(),
+                            ));
+                            continue;
                         }
 
                         super::entity::process_map_attribute(
@@ -350,7 +458,7 @@ pub fn process_nested_struct(
 
                     // Determine instruction path (type-safe or legacy)
                     if let Some((_instruction_path, instruction_str)) =
-                        determine_event_instruction(&mut event_attr, field_type)
+                        determine_event_instruction(&mut event_attr, field_type, program_name)
                     {
                         events_by_instruction
                             .entry(instruction_str)
@@ -394,27 +502,17 @@ pub fn process_nested_struct(
                     if let Some(acct_path) = account_path {
                         let source_type_str = path_to_string(&acct_path);
 
-                        // Check if we have field transforms - encode them in source_field_name
-                        let source_field_marker = if !snapshot_attr.field_transforms.is_empty() {
-                            format!(
-                                "__snapshot_with_transforms:{}",
-                                snapshot_attr
-                                    .field_transforms
-                                    .iter()
-                                    .map(|(k, v)| format!("{}={}", k, v))
-                                    .collect::<Vec<_>>()
-                                    .join(",")
-                            )
-                        } else {
-                            String::new()
-                        };
+                        // Determine source field name and whether this is a whole-source capture
+                        let (source_field_name, is_whole_source) =
+                            resolve_snapshot_source(&snapshot_attr);
 
                         let map_attr = parse::MapAttribute {
                             source_type_path: acct_path,
-                            source_field_name: source_field_marker,
+                            source_field_name,
                             target_field_name: snapshot_attr.target_field_name.clone(),
                             is_primary_key: false,
                             is_lookup_index: false,
+                            register_from: Vec::new(),
                             temporal_field: None,
                             strategy: snapshot_attr.strategy.clone(),
                             join_on: snapshot_attr
@@ -422,9 +520,15 @@ pub fn process_nested_struct(
                                 .as_ref()
                                 .map(|fs| fs.ident.to_string()),
                             transform: None,
+                            resolver_transform: None,
                             is_instruction: false,
-                            is_whole_source: true, // Mark as whole source capture
+                            is_whole_source,
                             lookup_by: snapshot_attr.lookup_by.clone(),
+                            condition: None,
+                            when: snapshot_attr.when.clone(),
+                            stop: None,
+                            stop_lookup_by: None,
+                            emit: true,
                         };
 
                         sources_by_type
@@ -461,13 +565,20 @@ pub fn process_nested_struct(
                             target_field_name: aggr_attr.target_field_name.clone(),
                             is_primary_key: false,
                             is_lookup_index: false,
+                            register_from: Vec::new(),
                             temporal_field: None,
                             strategy: aggr_attr.strategy.clone(),
                             join_on: aggr_attr.join_on.as_ref().map(|fs| fs.ident.to_string()),
                             transform: aggr_attr.transform.as_ref().map(|t| t.to_string()),
+                            resolver_transform: None,
                             is_instruction: true,
                             is_whole_source: false,
                             lookup_by: aggr_attr.lookup_by.clone(),
+                            condition: None,
+                            when: None,
+                            stop: None,
+                            stop_lookup_by: None,
+                            emit: true,
                         };
 
                         // Add to sources_by_type for handler generation
@@ -509,6 +620,83 @@ pub fn process_nested_struct(
                         computed_attr.expression.clone(),
                         field_type.clone(),
                     ));
+                } else if let Ok(Some(resolve_attr)) =
+                    parse::parse_resolve_attribute(attr, &field_name.to_string())
+                {
+                    // Determine resolver type: URL resolver if url is present, otherwise Token resolver
+                    let qualified_url = resolve_attr.url.as_deref().map(|url_path_raw| {
+                        if url_path_raw.contains('.') {
+                            url_path_raw.to_string()
+                        } else {
+                            format!("{}.{}", section_name, url_path_raw)
+                        }
+                    });
+
+                    let resolver = if let Some(ref _url_path) = qualified_url {
+                        let method = resolve_attr
+                            .method
+                            .as_deref()
+                            .map(|m| match m.to_lowercase().as_str() {
+                                "post" => crate::ast::HttpMethod::Post,
+                                _ => crate::ast::HttpMethod::Get,
+                            })
+                            .unwrap_or(crate::ast::HttpMethod::Get);
+
+                        let url_source = if resolve_attr.url_is_template {
+                            crate::ast::UrlSource::Template(super::entity::parse_url_template(
+                                resolve_attr.url.as_deref().unwrap(),
+                            ))
+                        } else {
+                            let url_path_raw = resolve_attr.url.as_deref().unwrap();
+                            let qualified = if url_path_raw.contains('.') {
+                                url_path_raw.to_string()
+                            } else {
+                                format!("{}.{}", section_name, url_path_raw)
+                            };
+                            crate::ast::UrlSource::FieldPath(qualified)
+                        };
+
+                        crate::ast::ResolverType::Url(crate::ast::UrlResolverConfig {
+                            url_source,
+                            method,
+                            extract_path: resolve_attr.extract.clone(),
+                        })
+                    } else if let Some(name) = resolve_attr.resolver.as_deref() {
+                        super::entity::parse_resolver_type_name(name, field_type)
+                            .unwrap_or_else(|err| panic!("{}", err))
+                    } else {
+                        super::entity::infer_resolver_type(field_type)
+                            .unwrap_or_else(|err| panic!("{}", err))
+                    };
+
+                    let mut target_field_name = resolve_attr.target_field_name;
+                    if !target_field_name.contains('.') {
+                        target_field_name = format!("{}.{}", section_name, target_field_name);
+                    }
+
+                    let from = if resolve_attr.url_is_template {
+                        None
+                    } else {
+                        let qualified_url = resolve_attr.url.as_deref().map(|url_path_raw| {
+                            if url_path_raw.contains('.') {
+                                url_path_raw.to_string()
+                            } else {
+                                format!("{}.{}", section_name, url_path_raw)
+                            }
+                        });
+                        qualified_url.or(resolve_attr.from)
+                    };
+
+                    resolve_specs.push(parse::ResolveSpec {
+                        resolver,
+                        from,
+                        address: resolve_attr.address,
+                        extract: resolve_attr.extract,
+                        target_field_name,
+                        strategy: resolve_attr.strategy,
+                        condition: resolve_attr.condition,
+                        schedule_at: resolve_attr.schedule_at,
+                    });
                 }
             }
         }
@@ -523,37 +711,32 @@ pub fn process_nested_struct(
 // IDL Type Resolution
 // ============================================================================
 
-/// Resolve a complex type (instruction, account, or custom type) from the IDL
-fn resolve_complex_type(type_str: &str, idl: Option<&IdlSpec>) -> Option<ResolvedStructType> {
-    let idl_ref = idl?;
+fn resolve_complex_type(type_str: &str, idls: IdlLookup) -> Option<ResolvedStructType> {
+    let idl_ref = find_idl_for_type(type_str, idls)?;
 
     // Extract the simple type name from patterns like "generated_sdk :: instructions :: Buy"
     let type_name = extract_type_name(type_str);
     let type_name_lower = type_name.to_lowercase();
 
     // Check if it's an instruction (case-insensitive match)
+    let idl = Some(idl_ref);
+
     for instruction in &idl_ref.instructions {
         if instruction.name.to_lowercase() == type_name_lower {
             return Some(resolve_instruction_type(instruction, idl));
         }
     }
 
-    // Check if it's an account (case-insensitive match)
-    // First check if the account has an embedded type definition
     for account in &idl_ref.accounts {
         if account.name.to_lowercase() == type_name_lower {
             let resolved = resolve_account_type(account, idl);
-            // If the account had fields or is an enum, return it
             if !resolved.fields.is_empty() || resolved.is_enum {
                 return Some(resolved);
             }
-            // Otherwise, fall through to check types array
             break;
         }
     }
 
-    // Check if it's a custom type (case-insensitive match)
-    // This also handles accounts that don't have embedded type definitions
     for type_def in &idl_ref.types {
         if type_def.name.to_lowercase() == type_name_lower {
             return Some(resolve_custom_type(type_def, idl));
@@ -641,6 +824,22 @@ fn resolve_account_type(
                     });
                 }
             }
+            IdlTypeDefKind::TupleStruct {
+                fields: tuple_fields,
+                ..
+            } => {
+                for (i, field_type) in tuple_fields.iter().enumerate() {
+                    let (field_type_str, base_type, is_optional, is_array, _) =
+                        analyze_idl_type_with_resolution(field_type, idl);
+                    fields.push(ResolvedField {
+                        field_name: format!("_{}", i),
+                        field_type: field_type_str,
+                        base_type,
+                        is_optional,
+                        is_array,
+                    });
+                }
+            }
             IdlTypeDefKind::Enum { variants, .. } => {
                 // Enums: extract variant names
                 let variant_names: Vec<String> = variants.iter().map(|v| v.name.clone()).collect();
@@ -686,6 +885,32 @@ fn resolve_custom_type(
                 fields.push(ResolvedField {
                     field_name: field.name.clone(),
                     field_type,
+                    base_type,
+                    is_optional,
+                    is_array,
+                });
+            }
+
+            ResolvedStructType {
+                type_name: type_def.name.clone(),
+                fields,
+                is_instruction: false,
+                is_account: false,
+                is_event: false,
+                is_enum: false,
+                enum_variants: Vec::new(),
+            }
+        }
+        IdlTypeDefKind::TupleStruct {
+            fields: tuple_fields,
+            ..
+        } => {
+            for (i, field_type) in tuple_fields.iter().enumerate() {
+                let (field_type_str, base_type, is_optional, is_array, _) =
+                    analyze_idl_type_with_resolution(field_type, idl);
+                fields.push(ResolvedField {
+                    field_name: format!("_{}", i),
+                    field_type: field_type_str,
                     base_type,
                     is_optional,
                     is_array,
@@ -806,10 +1031,22 @@ fn analyze_idl_type_with_resolution(
                 crate::parse::idl::IdlTypeDefinedInner::Simple(s) => s.clone(),
             };
 
-            // Try to resolve this defined type from IDL (including enums)
-            let resolved_type = resolve_complex_type(&type_name, idl);
+            let temp_idl_lookup: Vec<(String, &IdlSpec)> =
+                idl.into_iter().map(|i| (String::new(), i)).collect();
+            let resolved_type = resolve_complex_type(&type_name, &temp_idl_lookup);
 
             (type_name, BaseType::Object, false, false, resolved_type)
+        }
+        IdlType::HashMap(hm) => {
+            let (val_type, base_type, _, _, resolved_type) =
+                analyze_idl_type_with_resolution(&hm.hash_map.1, idl);
+            (
+                format!("HashMap<{}>", val_type),
+                base_type,
+                false,
+                false,
+                resolved_type,
+            )
         }
     }
 }

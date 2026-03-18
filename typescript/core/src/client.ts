@@ -11,14 +11,45 @@ import { ConnectionManager } from './connection';
 import { FrameProcessor } from './frame-processor';
 import { MemoryAdapter } from './storage/memory-adapter';
 import type { StorageAdapter } from './storage/adapter';
+import { SortedStorageDecorator } from './storage/sorted-decorator';
 import { SubscriptionRegistry } from './subscription';
 import { createTypedViews } from './views';
 import type { Frame } from './frame';
+import type { WalletAdapter } from './wallet/types';
+import type { InstructionHandler, ExecuteOptions, ExecutionResult } from './instructions';
+import { executeInstruction } from './instructions';
 
+export interface ConnectOptions {
+  url?: string;
+  storage?: StorageAdapter;
+  maxEntriesPerView?: number | null;
+  autoReconnect?: boolean;
+  reconnectIntervals?: number[];
+  maxReconnectAttempts?: number;
+  flushIntervalMs?: number;
+  validateFrames?: boolean;
+}
+
+/** @deprecated Use ConnectOptions instead */
 export interface HyperStackOptionsWithStorage<TStack extends StackDefinition> extends HyperStackOptions<TStack> {
   storage?: StorageAdapter;
   maxEntriesPerView?: number | null;
+  flushIntervalMs?: number;
 }
+
+export interface InstructionExecutorOptions extends Omit<ExecuteOptions, 'wallet'> {
+  wallet: WalletAdapter;
+}
+
+export type InstructionExecutor = (
+  args: Record<string, unknown>,
+  options: InstructionExecutorOptions
+) => Promise<ExecutionResult>;
+
+export type InstructionsInterface<TInstructions extends Record<string, InstructionHandler> | undefined> = 
+  TInstructions extends Record<string, InstructionHandler>
+    ? { [K in keyof TInstructions]: InstructionExecutor }
+    : {};
 
 export class HyperStack<TStack extends StackDefinition> {
   private readonly connection: ConnectionManager;
@@ -27,15 +58,18 @@ export class HyperStack<TStack extends StackDefinition> {
   private readonly subscriptionRegistry: SubscriptionRegistry;
   private readonly _views: TypedViews<TStack['views']>;
   private readonly stack: TStack;
+  private readonly _instructions: InstructionsInterface<TStack['instructions']>;
 
   private constructor(
     url: string,
     options: HyperStackOptionsWithStorage<TStack>
   ) {
     this.stack = options.stack;
-    this.storage = options.storage ?? new MemoryAdapter();
+    this.storage = new SortedStorageDecorator(options.storage ?? new MemoryAdapter());
     this.processor = new FrameProcessor(this.storage, {
       maxEntriesPerView: options.maxEntriesPerView,
+      flushIntervalMs: options.flushIntervalMs,
+      schemas: options.validateFrames ? this.stack.schemas : undefined,
     });
     this.connection = new ConnectionManager({
       websocketUrl: url,
@@ -49,22 +83,47 @@ export class HyperStack<TStack extends StackDefinition> {
     });
 
     this._views = createTypedViews(this.stack, this.storage, this.subscriptionRegistry);
+    this._instructions = this.buildInstructions();
+  }
+
+  private buildInstructions(): InstructionsInterface<TStack['instructions']> {
+    const instructions = {} as Record<string, InstructionExecutor>;
+    
+    if (this.stack.instructions) {
+      for (const [name, handler] of Object.entries(this.stack.instructions)) {
+        instructions[name] = (args: Record<string, unknown>, options: InstructionExecutorOptions) => {
+          return executeInstruction(handler as InstructionHandler, args, options);
+        };
+      }
+    }
+    
+    return instructions as InstructionsInterface<TStack['instructions']>;
   }
 
   static async connect<T extends StackDefinition>(
-    url: string,
-    options: HyperStackOptionsWithStorage<T>
+    stack: T,
+    options?: ConnectOptions
   ): Promise<HyperStack<T>> {
+    const url = options?.url ?? stack.url;
+
     if (!url) {
-      throw new HyperStackError('URL is required', 'INVALID_CONFIG');
-    }
-    if (!options.stack) {
-      throw new HyperStackError('Stack definition is required', 'INVALID_CONFIG');
+      throw new HyperStackError('URL is required (provide url option or define url in stack)', 'INVALID_CONFIG');
     }
 
-    const client = new HyperStack(url, options);
+    const internalOptions: HyperStackOptionsWithStorage<T> = {
+      stack,
+      storage: options?.storage,
+      maxEntriesPerView: options?.maxEntriesPerView,
+      flushIntervalMs: options?.flushIntervalMs,
+      autoReconnect: options?.autoReconnect,
+      reconnectIntervals: options?.reconnectIntervals,
+      maxReconnectAttempts: options?.maxReconnectAttempts,
+      validateFrames: options?.validateFrames,
+    };
 
-    if (options.autoReconnect !== false) {
+    const client = new HyperStack(url, internalOptions);
+
+    if (options?.autoReconnect !== false) {
       await client.connection.connect();
     }
 
@@ -73,6 +132,10 @@ export class HyperStack<TStack extends StackDefinition> {
 
   get views(): TypedViews<TStack['views']> {
     return this._views;
+  }
+
+  get instructions(): InstructionsInterface<TStack['instructions']> {
+    return this._instructions;
   }
 
   get connectionState(): ConnectionState {

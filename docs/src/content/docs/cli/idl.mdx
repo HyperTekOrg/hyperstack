@@ -1,0 +1,380 @@
+---
+title: hs idl — IDL Explorer
+sidebar:
+  order: 2
+---
+
+Explore and analyze Solana IDL (Interface Definition Language) files directly from the command line.
+
+The `hs idl` suite helps you understand a program's structure, account layouts, and relationships before you start building your stack.
+
+---
+
+## Global Behavior
+
+These rules apply to all `hs idl` subcommands:
+
+- **Path argument**: Every subcommand takes `<path>` as its first positional argument (the path to the IDL JSON file).
+- **JSON output**: Most commands support the `--json` flag for machine-readable output.
+- **Fuzzy matching**: Lookups for instructions, accounts, and types are case-insensitive. If you make a typo, the CLI suggests the closest match.
+- **Error handling**: File-not-found or invalid names exit with code 1 and a clear message.
+
+---
+
+## Quick Reference
+
+| Command                                  | Description                              |
+| ---------------------------------------- | ---------------------------------------- |
+| [`summary`](#hs-idl-summary)             | Quick overview of the IDL structure      |
+| [`instructions`](#hs-idl-instructions)   | List all instructions                    |
+| [`instruction`](#hs-idl-instruction)     | Detail view of a specific instruction    |
+| [`accounts`](#hs-idl-accounts)           | List all account types                   |
+| [`account`](#hs-idl-account)             | Detail view of a specific account        |
+| [`types`](#hs-idl-types)                 | List all custom types                    |
+| [`type`](#hs-idl-type)                   | Detail view of a specific custom type    |
+| [`errors`](#hs-idl-errors)               | List all program errors                  |
+| [`events`](#hs-idl-events)               | List all program events                  |
+| [`constants`](#hs-idl-constants)         | List all defined constants               |
+| [`search`](#hs-idl-search)               | Fuzzy search across the entire IDL       |
+| [`discriminator`](#hs-idl-discriminator) | Compute Anchor discriminators            |
+| [`relations`](#hs-idl-relations)         | Categorize accounts by their role        |
+| [`account-usage`](#hs-idl-account-usage) | Find all instructions using an account   |
+| [`links`](#hs-idl-links)                 | Find instructions linking two accounts   |
+| [`pda-graph`](#hs-idl-pda-graph)         | Visualize PDA derivation paths           |
+| [`type-graph`](#hs-idl-type-graph)       | Visualize field-to-account relationships |
+| [`connect`](#hs-idl-connect)             | Analyze how to connect new accounts      |
+
+---
+
+## Data Commands
+
+### hs idl summary
+
+Show a high-level overview of the program.
+
+```bash
+# Get a quick summary
+hs idl summary meteora_dlmm.json
+# Output: Name: meteora_dlmm, Format: modern, Instructions: 74, Constants: 30
+```
+
+Shows program name, IDL format (modern or legacy), program address, version, and counts for all sections.
+
+### hs idl instructions
+
+List all instructions defined in the IDL.
+
+```bash
+# List all instructions
+hs idl instructions ore.json
+
+# Count instructions via JSON
+hs idl instructions ore.json --json | jq length
+# Output: 19
+```
+
+**Options:**
+
+| Flag     | Description                       |
+| -------- | --------------------------------- |
+| `--json` | Output as JSON (machine-readable) |
+
+### hs idl instruction
+
+Show detailed information about a specific instruction, including its discriminator, accounts, and arguments.
+
+```bash
+# Detail view for an instruction
+hs idl instruction ore.json deposit
+
+# Fuzzy matching on typos
+hs idl instruction ore.json depositt
+# Error: instruction 'depositt' not found, did you mean: deposit?
+```
+
+**Options:**
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+### hs idl accounts
+
+List all account structures defined in the IDL.
+
+```bash
+# List all accounts
+hs idl accounts meteora_dlmm.json
+```
+
+**Options:**
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+### hs idl account
+
+Show the detailed field layout of a specific account type.
+
+```bash
+# View account fields and types
+hs idl account meteora_dlmm.json lb_pair
+```
+
+**Options:**
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+### hs idl types
+
+List all custom types and enums.
+
+```bash
+# List all custom types
+hs idl types ore.json
+```
+
+**Options:**
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+### hs idl type
+
+Show the full definition of a custom type or enum.
+
+```bash
+# View type details
+hs idl type ore.json Config
+```
+
+**Options:**
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+### hs idl errors
+
+List all custom program errors with their codes and messages.
+
+```bash
+# List all errors
+hs idl errors meteora_dlmm.json
+```
+
+**Options:**
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+### hs idl events
+
+List all events emitted by the program.
+
+```bash
+# List all events
+hs idl events meteora_dlmm.json
+```
+
+**Options:**
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+### hs idl constants
+
+List all constants defined in the program.
+
+```bash
+# List all constants
+hs idl constants ore.json
+```
+
+**Options:**
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+### hs idl search
+
+Perform a fuzzy search across instructions, accounts, types, errors, events, and constants.
+
+```bash
+# Search for anything related to "swap"
+hs idl search meteora_dlmm.json swap
+
+# Use JSON to see where matches were found
+hs idl search meteora_dlmm.json swap --json | jq '.[].section' | sort -u
+# Output: "error", "event", "instruction", "type"
+```
+
+**Options:**
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+### hs idl discriminator
+
+Compute the Anchor discriminator for an instruction or account.
+
+```bash
+# Compute instruction discriminator (global namespace)
+hs idl discriminator pump.json buy
+# Output: Name: buy, Namespace: global, Discriminator: [66, 06, 3d, 12, 01, da, eb, ea]
+
+# Compute account discriminator (account namespace)
+hs idl discriminator pump.json LastIdlBlock
+```
+
+**Options:**
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+---
+
+## Relationship Commands
+
+### hs idl relations
+
+Analyze and categorize all accounts in the IDL.
+
+```bash
+# See how accounts are categorized
+hs idl relations meteora_dlmm.json
+
+# Find core entity accounts
+hs idl relations meteora_dlmm.json --json | jq '.[] | select(.category == "Entity") | .account_name'
+# Output includes: "lb_pair"
+```
+
+Accounts are classified into:
+
+- **Entity**: Core data accounts that appear across many instructions.
+- **Infrastructure**: System programs or token programs.
+- **Role**: Authorities, signers, or administrative accounts.
+- **Other**: Miscellaneous accounts.
+
+**Options:**
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+### hs idl account-usage
+
+Find every instruction that uses a specific account.
+
+```bash
+# See where 'lb_pair' is used
+hs idl account-usage meteora_dlmm.json lb_pair
+
+# Count usages
+hs idl account-usage meteora_dlmm.json lb_pair --json | jq length
+# Output: 59
+```
+
+Instructions are grouped by the role the account plays: Writable, Signer, or Readonly.
+
+**Options:**
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+### hs idl links
+
+Find instructions that involve a specific pair of accounts. This is useful for discovering how two entities interact.
+
+```bash
+# Find instructions linking 'round' and 'entropyVar'
+hs idl links ore.json round entropyVar
+
+# Count shared instructions
+hs idl links ore.json round entropyVar --json | jq length
+# Output: 2
+```
+
+**Options:**
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+### hs idl pda-graph
+
+Extract and visualize the PDA (Program Derived Address) derivation graph.
+
+```bash
+# Extract PDA graph
+hs idl pda-graph idl.json
+```
+
+Shows seeds (constants, accounts, or arguments) used to derive each PDA account.
+
+**Options:**
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+### hs idl type-graph
+
+Analyze field types to find implicit references to account types.
+
+```bash
+# Extract type reference graph
+hs idl type-graph idl.json
+```
+
+Useful for identifying when a field named `lb_pair` (type `Pubkey`) refers to an account of type `LbPair`.
+
+**Options:**
+
+| Flag     | Description    |
+| -------- | -------------- |
+| `--json` | Output as JSON |
+
+---
+
+## Connection Command
+
+### hs idl connect
+
+Analyze how a new account can be connected to existing accounts in the program.
+
+```bash
+# Analyze connection between reward_vault and lb_pair
+hs idl connect meteora_dlmm.json reward_vault --existing lb_pair
+
+# With HyperStack-specific suggestions
+hs idl connect meteora_dlmm.json reward_vault --existing lb_pair --suggest-hs
+# Shows: register_from suggestions
+
+# Partial success handling
+hs idl connect ore.json entropyVar --existing round,bogus_account
+# Warning: account 'bogus_account' not found in IDL, skipping
+# (then shows connections to round)
+```
+
+**Options:**
+
+| Flag                 | Description                                                            |
+| -------------------- | ---------------------------------------------------------------------- |
+| `--existing <names>` | Comma-separated list of existing account names                         |
+| `--json`             | Output as JSON                                                         |
+| `--suggest-hs`       | Show HyperStack integration suggestions (`register_from`, `aggregate`) |
+
+:::note[HyperStack Suggestions]
+The `--suggest-hs` flag is specifically for HyperStack stack builders. It suggests the most appropriate projection patterns based on the detected relationship.
+:::

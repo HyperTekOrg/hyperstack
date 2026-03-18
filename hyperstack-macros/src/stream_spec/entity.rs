@@ -11,18 +11,40 @@
 //! 1. Parse macro attributes into data structures
 //! 2. Build `SerializableStreamSpec` via `ast_writer::build_and_write_ast`
 //! 3. Generate handler code via `codegen::generate_handlers_from_specs`
-//! 4. Write AST to disk for cloud compilation via `#[ast_spec]`
+//! 4. Return AST for unified stack file writing
 
 use std::collections::{HashMap, HashSet};
 
 use quote::{format_ident, quote};
-use syn::{Fields, ItemStruct, Type};
+use syn::{Fields, GenericArgument, ItemStruct, PathArguments, Type};
 
-use crate::ast::{EntitySection, FieldTypeInfo};
+use super::resolve_snapshot_source;
+
+use crate::ast::{
+    EntitySection, FieldTypeInfo, HttpMethod, ResolverHook, ResolverType, UrlResolverConfig,
+    UrlSource, UrlTemplatePart,
+};
 use crate::codegen;
+use crate::event_type_helpers::IdlLookup;
 use crate::parse;
-use crate::parse::idl as idl_parser;
-use crate::utils::{path_to_string, to_camel_case, to_snake_case};
+use crate::utils::{path_to_string, to_pascal_case, to_snake_case};
+
+// ============================================================================
+// Process Entity Result
+// ============================================================================
+
+/// Result of processing an entity struct, containing both the generated code
+/// and any auto-generated resolver hooks that need to be threaded into the
+/// resolver registry.
+pub struct ProcessEntityResult {
+    pub token_stream: proc_macro::TokenStream,
+    /// Auto-generated resolver hooks (e.g., for lookup_index account types).
+    /// These come from the AST's `auto_generate_lookup_resolvers()` and need
+    /// to be converted to `ResolverHookSpec` entries in the IDL path.
+    pub auto_resolver_hooks: Vec<ResolverHook>,
+    /// The built AST spec for this entity (used to build the unified stack file).
+    pub ast_spec: Option<crate::ast::SerializableStreamSpec>,
+}
 
 use super::ast_writer::build_and_write_ast;
 use super::computed::{
@@ -31,32 +53,56 @@ use super::computed::{
 };
 use super::handlers::{
     convert_event_to_map_attributes, determine_event_instruction, extract_account_type_from_field,
-    generate_pda_registration_functions, generate_resolver_functions,
 };
 use super::sections::{
     self as sections, extract_section_from_struct_with_idl, is_primitive_or_wrapper,
     process_nested_struct,
 };
 
+pub fn parse_url_template(s: &str) -> Vec<UrlTemplatePart> {
+    let mut parts = Vec::new();
+    let mut rest = s;
+
+    while let Some(open) = rest.find('{') {
+        if open > 0 {
+            parts.push(UrlTemplatePart::Literal(rest[..open].to_string()));
+        }
+        let close = rest[open..]
+            .find('}')
+            .expect("Unclosed '{' in URL template")
+            + open;
+        let field_ref = rest[open + 1..close].trim().to_string();
+        parts.push(UrlTemplatePart::FieldRef(field_ref));
+        rest = &rest[close + 1..];
+    }
+
+    if !rest.is_empty() {
+        parts.push(UrlTemplatePart::Literal(rest.to_string()));
+    }
+
+    parts
+}
+
 // ============================================================================
 // Entity Processing
 // ============================================================================
 
-/// Process an entity struct without IDL context.
 pub fn process_entity_struct(
     input: ItemStruct,
     entity_name: String,
     section_structs: HashMap<String, ItemStruct>,
     skip_game_event: bool,
-) -> proc_macro::TokenStream {
+    stack_name: &str,
+) -> ProcessEntityResult {
     process_entity_struct_with_idl(
         input,
         entity_name,
         section_structs,
         skip_game_event,
-        None,
-        Vec::new(), // No resolver_hooks in proto path
-        Vec::new(), // No pda_registrations in proto path
+        stack_name,
+        &[],
+        Vec::new(),
+        Vec::new(),
     )
 }
 
@@ -67,20 +113,20 @@ pub fn process_entity_struct(
 /// 2. Generates handlers for each source type
 /// 3. Writes the AST file at compile time
 /// 4. Generates the spec function and state struct
+#[allow(clippy::too_many_arguments)]
 pub fn process_entity_struct_with_idl(
     input: ItemStruct,
     entity_name: String,
     section_structs: HashMap<String, ItemStruct>,
     skip_game_event: bool,
-    idl: Option<&idl_parser::IdlSpec>,
+    stack_name: &str,
+    idls: IdlLookup,
     resolver_hooks: Vec<parse::ResolveKeyAttribute>,
     pda_registrations: Vec<parse::RegisterPdaAttribute>,
-) -> proc_macro::TokenStream {
-    let name = syn::Ident::new(&entity_name, input.ident.span());
+) -> ProcessEntityResult {
+    let _name = syn::Ident::new(&entity_name, input.ident.span());
     let state_name = syn::Ident::new(&format!("{}State", entity_name), input.ident.span());
     let spec_fn_name = format_ident!("create_{}_spec", to_snake_case(&entity_name));
-
-    // We'll collect data for compile-time AST writing
 
     let mut field_mappings = Vec::new();
     let mut primary_keys = Vec::new();
@@ -93,8 +139,12 @@ pub fn process_entity_struct_with_idl(
         String,
         Vec<(String, parse::EventAttribute, syn::Type)>,
     > = HashMap::new();
+    // Derive primary IDL and program_name from the first entry (backward compat)
+    let idl = idls.first().map(|(_, idl)| *idl);
+    let program_name = idl.map(|idl| idl.get_name());
     let mut has_events = false;
     let mut computed_fields: Vec<(String, proc_macro2::TokenStream, syn::Type)> = Vec::new();
+    let mut resolve_specs: Vec<parse::ResolveSpec> = Vec::new();
 
     // Level 1: Declarative hook macros passed from caller
     // resolver_hooks and pda_registrations are now passed as parameters
@@ -137,18 +187,21 @@ pub fn process_entity_struct_with_idl(
                             let section = extract_section_from_struct_with_idl(
                                 &field_name,
                                 section_struct,
-                                None, // Top-level section, no parent
-                                idl,
+                                None,
+                                idls,
                             );
                             section_specs.push(section);
                         } else {
-                            // It's a non-section field (like capture fields) - add to root
                             let field_type_info = sections::analyze_field_type_with_idl(
                                 &field_name,
                                 &rust_type_name,
-                                idl,
+                                idls,
                             );
-                            root_fields.push(field_type_info);
+                            root_fields.push(field_emit_override(
+                                field,
+                                field_name,
+                                field_type_info,
+                            ));
                         }
                     }
                 }
@@ -156,12 +209,12 @@ pub fn process_entity_struct_with_idl(
                 // Even if it's a "wrapper", we might want its type info if it's not truly primitive
                 // For example, Option<ComplexType> should be included
                 let field_type_info =
-                    sections::analyze_field_type_with_idl(&field_name, &rust_type_name, idl);
+                    sections::analyze_field_type_with_idl(&field_name, &rust_type_name, idls);
                 // Only add if it has a resolved_type (meaning it's a complex type from IDL)
                 if field_type_info.resolved_type.is_some()
                     || field_type_info.base_type == crate::ast::BaseType::Object
                 {
-                    root_fields.push(field_type_info);
+                    root_fields.push(field_emit_override(field, field_name, field_type_info));
                 }
             }
         }
@@ -232,7 +285,7 @@ pub fn process_entity_struct_with_idl(
 
                     // Determine instruction path (type-safe or legacy)
                     if let Some((_instruction_path, instruction_str)) =
-                        determine_event_instruction(&mut event_attr, field_type)
+                        determine_event_instruction(&mut event_attr, field_type, program_name)
                     {
                         events_by_instruction
                             .entry(instruction_str)
@@ -276,28 +329,17 @@ pub fn process_entity_struct_with_idl(
                     if let Some(acct_path) = account_path {
                         let source_type_str = path_to_string(&acct_path);
 
-                        // Check if we have field transforms - encode them in source_field_name
-                        // so we can detect and process them differently during code generation
-                        let source_field_marker = if !snapshot_attr.field_transforms.is_empty() {
-                            format!(
-                                "__snapshot_with_transforms:{}",
-                                snapshot_attr
-                                    .field_transforms
-                                    .iter()
-                                    .map(|(k, v)| format!("{}={}", k, v))
-                                    .collect::<Vec<_>>()
-                                    .join(",")
-                            )
-                        } else {
-                            String::new()
-                        };
+                        // Determine source field name and whether this is a whole-source capture
+                        let (source_field_name, is_whole_source) =
+                            resolve_snapshot_source(&snapshot_attr);
 
                         let map_attr = parse::MapAttribute {
                             source_type_path: acct_path,
-                            source_field_name: source_field_marker,
+                            source_field_name,
                             target_field_name: snapshot_attr.target_field_name.clone(),
                             is_primary_key: false,
                             is_lookup_index: false,
+                            register_from: Vec::new(),
                             temporal_field: None,
                             strategy: snapshot_attr.strategy.clone(),
                             join_on: snapshot_attr
@@ -305,9 +347,15 @@ pub fn process_entity_struct_with_idl(
                                 .as_ref()
                                 .map(|fs| fs.ident.to_string()),
                             transform: None,
+                            resolver_transform: None,
                             is_instruction: false,
-                            is_whole_source: true, // Mark as whole source snapshot
+                            is_whole_source,
                             lookup_by: snapshot_attr.lookup_by.clone(),
+                            condition: None,
+                            when: snapshot_attr.when.clone(),
+                            stop: None,
+                            stop_lookup_by: None,
+                            emit: true,
                         };
 
                         sources_by_type
@@ -344,13 +392,20 @@ pub fn process_entity_struct_with_idl(
                             target_field_name: aggr_attr.target_field_name.clone(),
                             is_primary_key: false,
                             is_lookup_index: false,
+                            register_from: Vec::new(),
                             temporal_field: None,
                             strategy: aggr_attr.strategy.clone(),
                             join_on: aggr_attr.join_on.as_ref().map(|fs| fs.ident.to_string()),
                             transform: aggr_attr.transform.as_ref().map(|t| t.to_string()),
+                            resolver_transform: None,
                             is_instruction: true,
                             is_whole_source: false,
                             lookup_by: aggr_attr.lookup_by.clone(),
+                            condition: None,
+                            when: None,
+                            stop: None,
+                            stop_lookup_by: None,
+                            emit: true,
                         };
 
                         // Add to sources_by_type for handler generation
@@ -377,6 +432,63 @@ pub fn process_entity_struct_with_idl(
                             .or_default()
                             .push(derive_attr.clone());
                     }
+                } else if let Ok(Some(resolve_attr)) =
+                    parse::parse_resolve_attribute(attr, &field_name.to_string())
+                {
+                    has_attrs = true;
+
+                    state_fields.push(quote! {
+                        pub #field_name: #field_type
+                    });
+
+                    // Determine resolver type: URL resolver if url is present, otherwise Token resolver
+                    let resolver = if let Some(url_path) = resolve_attr.url.clone() {
+                        // URL resolver
+                        let method = resolve_attr
+                            .method
+                            .as_deref()
+                            .map(|m| match m.to_lowercase().as_str() {
+                                "post" => HttpMethod::Post,
+                                _ => HttpMethod::Get,
+                            })
+                            .unwrap_or(HttpMethod::Get);
+
+                        let url_source = if resolve_attr.url_is_template {
+                            UrlSource::Template(parse_url_template(&url_path))
+                        } else {
+                            UrlSource::FieldPath(url_path)
+                        };
+
+                        ResolverType::Url(UrlResolverConfig {
+                            url_source,
+                            method,
+                            extract_path: resolve_attr.extract.clone(),
+                        })
+                    } else if let Some(name) = resolve_attr.resolver.as_deref() {
+                        // Token resolver with explicit type
+                        parse_resolver_type_name(name, field_type)
+                            .unwrap_or_else(|err| panic!("{}", err))
+                    } else {
+                        // Token resolver with inferred type
+                        infer_resolver_type(field_type).unwrap_or_else(|err| panic!("{}", err))
+                    };
+
+                    let from = if resolve_attr.url_is_template {
+                        None
+                    } else {
+                        resolve_attr.url.clone().or(resolve_attr.from)
+                    };
+
+                    resolve_specs.push(parse::ResolveSpec {
+                        resolver,
+                        from,
+                        address: resolve_attr.address,
+                        extract: resolve_attr.extract,
+                        target_field_name: resolve_attr.target_field_name,
+                        strategy: resolve_attr.strategy,
+                        condition: resolve_attr.condition,
+                        schedule_at: resolve_attr.schedule_at,
+                    });
                 } else if let Ok(Some(computed_attr)) =
                     parse::parse_computed_attribute(attr, &field_name.to_string())
                 {
@@ -414,8 +526,10 @@ pub fn process_entity_struct_with_idl(
                                 &mut events_by_instruction,
                                 &mut has_events,
                                 &mut computed_fields,
+                                &mut resolve_specs,
                                 &mut derive_from_mappings,
                                 &mut aggregate_conditions,
+                                program_name,
                             );
                         }
                     }
@@ -459,15 +573,15 @@ pub fn process_entity_struct_with_idl(
         }
     }
 
-    // events_by_instruction already contains all events including those with lookup_by
-    // No need to merge - just use events_by_instruction directly
-
-    // =========================================================================
-    // UNIFIED HANDLER GENERATION
-    // =========================================================================
-    // Build the AST and write to disk for cloud compilation.
-    // Then use the same AST to generate handler code via shared codegen.
-    // This ensures identical output between #[hyperstack] and #[ast_spec].
+    let mut views = parse::parse_view_attributes(&input.attrs);
+    for view in &mut views {
+        if let crate::ast::ViewSource::Entity { name } = &mut view.source {
+            *name = entity_name.clone();
+        }
+        if !view.id.contains('/') {
+            view.id = format!("{}/{}", entity_name, view.id);
+        }
+    }
 
     let ast = build_and_write_ast(
         &entity_name,
@@ -480,9 +594,40 @@ pub fn process_entity_struct_with_idl(
         &derive_from_mappings,
         &aggregate_conditions,
         &computed_fields,
+        &resolve_specs,
         &section_specs,
-        idl,
+        idls,
+        views,
     );
+
+    let explicit_account_types: HashSet<String> = resolver_hooks
+        .iter()
+        .map(|h| {
+            let segments: Vec<String> = h
+                .account_path
+                .segments
+                .iter()
+                .map(|seg| seg.ident.to_string())
+                .collect();
+            let account_name = segments.last().cloned().unwrap_or_default();
+            let resolved_program = segments
+                .first()
+                .filter(|s| s.ends_with("_sdk"))
+                .map(|s| crate::event_type_helpers::program_name_from_sdk_prefix(s).to_string());
+            let prog = resolved_program.as_deref().or(program_name);
+            if let Some(p) = prog {
+                format!("{}::{}State", p, account_name)
+            } else {
+                format!("{}State", account_name)
+            }
+        })
+        .collect();
+    let auto_resolver_hooks: Vec<ResolverHook> = ast
+        .resolver_hooks
+        .iter()
+        .filter(|h| !explicit_account_types.contains(&h.account_type))
+        .cloned()
+        .collect();
 
     // Generate handler functions using the shared codegen
     let (handler_fns, _handler_calls) =
@@ -532,7 +677,9 @@ pub fn process_entity_struct_with_idl(
         quote! {
             /// No-op evaluate_computed_fields (no computed fields defined)
             pub fn evaluate_computed_fields(
-                _state: &mut hyperstack::runtime::serde_json::Value
+                _state: &mut hyperstack::runtime::serde_json::Value,
+                _context_slot: Option<u64>,
+                _context_timestamp: i64,
             ) -> Result<(), Box<dyn std::error::Error>> {
                 Ok(())
             }
@@ -544,14 +691,15 @@ pub fn process_entity_struct_with_idl(
         }
     };
 
-    // Level 1: Generate functions from declarative PDA macros
-    let resolver_fns = generate_resolver_functions(&resolver_hooks, idl);
-    let pda_registration_fns = generate_pda_registration_functions(&pda_registrations);
+    // Generate field accessors for type-safe view definitions
+    let field_accessors = codegen::generate_field_accessors(&section_specs);
 
     let module_name = format_ident!("{}", to_snake_case(&entity_name));
+    let stack_file_name = format!("{}.stack.json", stack_name);
 
     let output = quote! {
         #[derive(Debug, Clone, hyperstack::runtime::serde::Serialize, hyperstack::runtime::serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
         pub struct #state_name {
             #(#state_fields),*
         }
@@ -562,30 +710,115 @@ pub fn process_entity_struct_with_idl(
             use super::*;
 
             #(#accessor_defs)*
+
+            #field_accessors
+
+            #computed_fields_hook
         }
 
         pub fn #spec_fn_name() -> hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec<#state_name> {
-            // Load AST file at compile time (includes instruction_hooks!)
-            let ast_json = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/.hyperstack/", stringify!(#name), ".ast.json"));
+            let stack_json = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/.hyperstack/", #stack_file_name));
+            let stack_spec: hyperstack::runtime::hyperstack_interpreter::ast::SerializableStackSpec =
+                hyperstack::runtime::serde_json::from_str(stack_json)
+                    .expect("Failed to parse stack AST file");
 
-            // Deserialize the AST
-            let serializable_spec: hyperstack::runtime::hyperstack_interpreter::ast::SerializableStreamSpec = hyperstack::runtime::serde_json::from_str(ast_json)
-                .expect(&format!("Failed to parse AST file for {}", stringify!(#name)));
+            let entity_spec = stack_spec
+                .entities
+                .iter()
+                .find(|e| e.state_name == #entity_name)
+                .expect(&format!("Entity {} not found in stack AST", #entity_name));
 
-            // Convert to typed spec (this preserves instruction_hooks and all other fields!)
-            hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec::from_serializable(serializable_spec)
+            let mut spec = entity_spec.clone();
+            if spec.idl.is_none() {
+                spec.idl = stack_spec.idls.first().cloned();
+            }
+
+            hyperstack::runtime::hyperstack_interpreter::ast::TypedStreamSpec::from_serializable(spec)
         }
 
-        // Generated from declarative PDA macros
-        #resolver_fns
-        #pda_registration_fns
-
         #(#handler_fns)*
-
-        #computed_fields_hook
     };
 
-    output.into()
+    ProcessEntityResult {
+        token_stream: output.into(),
+        auto_resolver_hooks,
+        ast_spec: Some(ast),
+    }
+}
+
+fn field_emit_override(
+    field: &syn::Field,
+    field_name: String,
+    mut field_type_info: FieldTypeInfo,
+) -> FieldTypeInfo {
+    let mut found_mapping = false;
+    let mut any_emit = false;
+
+    for attr in &field.attrs {
+        if let Ok(Some(map_attrs)) = parse::parse_map_attribute(attr, &field_name) {
+            found_mapping = true;
+            if map_attrs.iter().any(|m| m.emit) {
+                any_emit = true;
+            }
+        }
+
+        if let Ok(Some(map_attrs)) = parse::parse_from_instruction_attribute(attr, &field_name) {
+            found_mapping = true;
+            if map_attrs.iter().any(|m| m.emit) {
+                any_emit = true;
+            }
+        }
+    }
+
+    if found_mapping {
+        field_type_info.emit = any_emit;
+    }
+
+    field_type_info
+}
+
+pub(super) fn parse_resolver_type_name(name: &str, field_type: &Type) -> syn::Result<ResolverType> {
+    match name.to_lowercase().as_str() {
+        "token" => Ok(ResolverType::Token),
+        _ => Err(syn::Error::new_spanned(
+            field_type,
+            format!("Unknown resolver type '{}'.", name),
+        )),
+    }
+}
+
+pub(super) fn infer_resolver_type(field_type: &Type) -> syn::Result<ResolverType> {
+    let type_ident = extract_resolver_type_ident(field_type).ok_or_else(|| {
+        syn::Error::new_spanned(field_type, "Unable to infer resolver type from field")
+    })?;
+
+    match type_ident.as_str() {
+        "TokenMetadata" => Ok(ResolverType::Token),
+        _ => Err(syn::Error::new_spanned(
+            field_type,
+            format!("No resolver registered for type '{}'.", type_ident),
+        )),
+    }
+}
+
+fn extract_resolver_type_ident(field_type: &Type) -> Option<String> {
+    match field_type {
+        Type::Path(type_path) => {
+            let segment = type_path.path.segments.last()?;
+            if segment.ident == "Option" || segment.ident == "Vec" {
+                if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                    for arg in &args.args {
+                        if let GenericArgument::Type(inner_ty) = arg {
+                            return extract_resolver_type_ident(inner_ty);
+                        }
+                    }
+                }
+                return None;
+            }
+            Some(segment.ident.to_string())
+        }
+        _ => None,
+    }
 }
 
 // ============================================================================
@@ -612,7 +845,7 @@ pub fn process_map_attribute(
         pub #field_name: #field_type
     });
 
-    let accessor_name = to_camel_case(&field_name.to_string());
+    let accessor_name = to_pascal_case(&field_name.to_string());
     let accessor_ident = format_ident!("{}", accessor_name);
 
     if accessor_names.insert(accessor_name.clone()) {
@@ -772,6 +1005,7 @@ fn generate_computed_fields_hook(
         // Get dependencies for this section
         let deps = section_dependencies.get(section).cloned().unwrap_or_default();
 
+        let _section_str = section.as_str();
         let field_evaluations: Vec<_> = fields.iter().map(|(field_name, expression, field_type)| {
             let field_str = field_name.as_str();
             let field_ident = format_ident!("{}", field_name);
@@ -791,10 +1025,9 @@ fn generate_computed_fields_hook(
                     let state = &section_parent_state;
                     #expr_code
                 };
-                section_obj.insert(#field_str.to_string(), hyperstack::runtime::serde_json::to_value(computed_value)?);
+                let serialized_value = hyperstack::runtime::serde_json::to_value(&computed_value)?;
+                section_obj.insert(#field_str.to_string(), serialized_value);
 
-                // Re-extract the field with a new binding for dependent computed fields
-                // This allows subsequent computed fields to reference this computed value
                 let #field_ident: #field_type = section_obj
                     .get(#field_str)
                     .and_then(|v| hyperstack::runtime::serde_json::from_value(v.clone()).ok());
@@ -814,6 +1047,8 @@ fn generate_computed_fields_hook(
             fn #eval_fn_name(
                 section_obj: &mut hyperstack::runtime::serde_json::Map<String, hyperstack::runtime::serde_json::Value>,
                 section_parent_state: &hyperstack::runtime::serde_json::Value,
+                __context_slot: Option<u64>,
+                __context_timestamp: i64,
                 #(#cross_section_params),*
             ) -> Result<(), Box<dyn std::error::Error>> {
                 // Create local bindings for all fields in the current section
@@ -872,13 +1107,12 @@ fn generate_computed_fields_hook(
         }).collect();
 
         if dep_extractions.is_empty() {
-            // No cross-section dependencies - simple case
-            // Clone the state for immutable reference during computation
             quote! {
                 let state_snapshot = state.clone();
+
                 if let Some(section_value) = state.get_mut(#section_str) {
                     if let Some(section_obj) = section_value.as_object_mut() {
-                        #eval_fn_name(section_obj, &state_snapshot)?;
+                        #eval_fn_name(section_obj, &state_snapshot, __context_slot, __context_timestamp)?;
                     }
                 }
             }
@@ -909,7 +1143,7 @@ fn generate_computed_fields_hook(
                     // Now get mutable borrow of target section and compute
                     if let Some(section_value) = state.get_mut(#section_str) {
                         if let Some(section_obj) = section_value.as_object_mut() {
-                            #eval_fn_name(section_obj, &state_snapshot, #(&#dep_param_names),*)?;
+                            #eval_fn_name(section_obj, &state_snapshot, __context_slot, __context_timestamp, #(&#dep_param_names),*)?;
                         }
                     }
                 } else {
@@ -935,7 +1169,9 @@ fn generate_computed_fields_hook(
         /// Evaluate all computed fields for the entity state
         /// This should be called after aggregations complete but before hooks run
         pub fn evaluate_computed_fields(
-            state: &mut hyperstack::runtime::serde_json::Value
+            state: &mut hyperstack::runtime::serde_json::Value,
+            __context_slot: Option<u64>,
+            __context_timestamp: i64,
         ) -> Result<(), Box<dyn std::error::Error>> {
             #(#eval_calls)*
             Ok(())

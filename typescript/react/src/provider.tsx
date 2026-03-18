@@ -1,114 +1,114 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, ReactNode, useSyncExternalStore } from 'react';
-import type { ConnectionState } from 'hyperstack-typescript';
-import type { HyperstackConfig, NetworkConfig } from './types';
-import { createRuntime, HyperstackRuntime } from './runtime';
+import React, { createContext, useContext, useEffect, useRef, ReactNode, useSyncExternalStore, useCallback } from 'react';
+import { HyperStack, type ConnectionState, type StackDefinition } from 'hyperstack-typescript';
+import type { HyperstackConfig } from './types';
+import { DEFAULT_FLUSH_INTERVAL_MS } from './types';
+import { ZustandAdapter } from './zustand-adapter';
+
+interface ClientEntry {
+  client: HyperStack<any>;
+  disconnect: () => void;
+}
 
 interface HyperstackContextValue {
-  runtime: HyperstackRuntime;
+  getOrCreateClient: <TStack extends StackDefinition>(stack: TStack, urlOverride?: string) => Promise<HyperStack<TStack>>;
+  getClient: <TStack extends StackDefinition>(stack: TStack | undefined) => HyperStack<TStack> | null;
+  subscribeToClientChanges: (callback: () => void) => () => void;
   config: HyperstackConfig;
 }
 
 const HyperstackContext = createContext<HyperstackContextValue | null>(null);
 
-function resolveNetworkConfig(network: 'devnet' | 'mainnet' | 'localnet' | NetworkConfig | undefined, websocketUrl?: string): NetworkConfig {
-  if (websocketUrl) {
-    return {
-      name: 'custom',
-      websocketUrl
-    };
-  }
-
-  if (typeof network === 'object') {
-    return network;
-  }
-
-  if (network === 'mainnet') {
-    return {
-      name: 'mainnet',
-      websocketUrl: 'wss://mainnet.hyperstack.xyz',
-    };
-  }
-
-  if (network === 'devnet') {
-    return {
-      name: 'devnet',
-      websocketUrl: 'ws://localhost:8080',
-    };
-  }
-
-  if (network === 'localnet') {
-    return {
-      name: 'localnet',
-      websocketUrl: 'ws://localhost:8080',
-    };
-  }
-
-  throw new Error('Must provide either network or websocketUrl');
-}
-
 export function HyperstackProvider({
   children,
+  fallback = null,
   ...config
 }: HyperstackConfig & {
   children: ReactNode;
+  fallback?: ReactNode;
 }) {
-  const networkConfig = useMemo(() => {
-    try {
-      return resolveNetworkConfig(config.network, config.websocketUrl);
-    } catch (error) {
-      console.error('[Hyperstack] Invalid network configuration:', error);
-      throw error;
+  const clientsRef = useRef<Map<string, ClientEntry>>(new Map());
+  const connectingRef = useRef<Map<string, Promise<HyperStack<any>>>>(new Map());
+  const clientChangeListenersRef = useRef<Set<() => void>>(new Set());
+  
+  const notifyClientChange = useCallback(() => {
+    clientChangeListenersRef.current.forEach(cb => { cb(); });
+  }, []);
+  
+  const subscribeToClientChanges = useCallback((callback: () => void) => {
+    clientChangeListenersRef.current.add(callback);
+    return () => {
+      clientChangeListenersRef.current.delete(callback);
+    };
+  }, []);
+
+  const getOrCreateClient = useCallback(async <TStack extends StackDefinition>(stack: TStack, urlOverride?: string): Promise<HyperStack<TStack>> => {
+    const cacheKey = urlOverride ? `${stack.name}:${urlOverride}` : stack.name;
+    
+    const existing = clientsRef.current.get(cacheKey);
+    if (existing) {
+      return existing.client as HyperStack<TStack>;
     }
-  }, [config.network, config.websocketUrl]);
 
-  const runtimeRef = useRef<HyperstackRuntime | null>(null);
+    const connecting = connectingRef.current.get(cacheKey);
+    if (connecting) {
+      return connecting as Promise<HyperStack<TStack>>;
+    }
 
-  if (!runtimeRef.current) {
-    try {
-      runtimeRef.current = createRuntime({
-        ...config,
-        websocketUrl: networkConfig.websocketUrl,
-        network: networkConfig
+    const adapter = new ZustandAdapter();
+    const connectionPromise = HyperStack.connect(stack, {
+      url: urlOverride,
+      storage: adapter,
+      autoReconnect: config.autoConnect,
+      reconnectIntervals: config.reconnectIntervals,
+      maxReconnectAttempts: config.maxReconnectAttempts,
+      maxEntriesPerView: config.maxEntriesPerView,
+      flushIntervalMs: config.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS,
+    }).then((client) => {
+      client.onConnectionStateChange((state, error) => {
+        adapter.setConnectionState(state, error);
       });
-    } catch (error) {
-      console.error('[Hyperstack] Failed to create runtime:', error);
-      throw error;
+      adapter.setConnectionState(client.connectionState);
+
+      clientsRef.current.set(cacheKey, {
+        client,
+        disconnect: () => client.disconnect()
+      });
+      connectingRef.current.delete(cacheKey);
+      notifyClientChange();
+      return client;
+    });
+
+    connectingRef.current.set(cacheKey, connectionPromise);
+    return connectionPromise as Promise<HyperStack<TStack>>;
+  }, [config.autoConnect, config.reconnectIntervals, config.maxReconnectAttempts, config.maxEntriesPerView, notifyClientChange]);
+
+  const getClient = useCallback(<TStack extends StackDefinition>(stack: TStack | undefined): HyperStack<TStack> | null => {
+    if (!stack) {
+      if (clientsRef.current.size === 1) {
+        const firstEntry = clientsRef.current.values().next().value;
+        return firstEntry ? (firstEntry.client as HyperStack<TStack>) : null;
+      }
+      return null;
     }
-  }
-
-  const runtime = runtimeRef.current;
-
-  const isMountedRef = useRef(true);
+    const entry = clientsRef.current.get(stack.name);
+    return entry ? (entry.client as HyperStack<TStack>) : null;
+  }, []);
 
   useEffect(() => {
-    isMountedRef.current = true;
-
-    if (config.autoConnect !== false) {
-      try {
-        runtime.connection.connect();
-      } catch (error) {
-        console.error('[Hyperstack] Failed to auto-connect:', error);
-      }
-    }
-
     return () => {
-      isMountedRef.current = false;
-      setTimeout(() => {
-        if (!isMountedRef.current) {
-          try {
-            runtime.subscriptionRegistry.clear();
-            runtime.connection.disconnect();
-          } catch (error) {
-            console.error('[Hyperstack] Failed to disconnect:', error);
-          }
-        }
-      }, 100);
+      clientsRef.current.forEach((entry) => {
+        entry.disconnect();
+      });
+      clientsRef.current.clear();
+      connectingRef.current.clear();
     };
-  }, [runtime, config.autoConnect]);
+  }, []);
 
   const value: HyperstackContextValue = {
-    runtime,
-    config: { ...config, network: networkConfig }
+    getOrCreateClient,
+    getClient,
+    subscribeToClientChanges,
+    config,
   };
 
   return (
@@ -126,38 +126,75 @@ export function useHyperstackContext() {
   return context;
 }
 
-export function useConnectionState(): ConnectionState {
-  const { runtime } = useHyperstackContext();
-  return useSyncExternalStore(
-    (callback) => {
-      const unsubscribe = runtime.zustandStore.subscribe(callback);
-      return unsubscribe;
-    },
-    () => runtime.zustandStore.getState().connectionState
-  );
+export function useConnectionState(stack?: StackDefinition): ConnectionState {
+  const { getClient, subscribeToClientChanges } = useHyperstackContext();
+  const [state, setState] = React.useState<ConnectionState>(() => {
+    const client = getClient(stack);
+    return client?.connectionState ?? 'disconnected';
+  });
+  const unsubscribeRef = React.useRef<(() => void) | undefined>(undefined);
+  
+  React.useEffect(() => {
+    let mounted = true;
+    
+    const setupClientSubscription = () => {
+      unsubscribeRef.current?.();
+      unsubscribeRef.current = undefined;
+      
+      const client = getClient(stack);
+      if (client && mounted) {
+        setState(client.connectionState);
+        unsubscribeRef.current = client.onConnectionStateChange((newState) => {
+          if (mounted) setState(newState);
+        });
+      } else if (mounted) {
+        setState('disconnected');
+      }
+    };
+    
+    const unsubscribeFromClientChanges = subscribeToClientChanges(setupClientSubscription);
+    setupClientSubscription();
+    
+    return () => {
+      mounted = false;
+      unsubscribeFromClientChanges();
+      unsubscribeRef.current?.();
+    };
+  }, [getClient, subscribeToClientChanges, stack]);
+  
+  return state;
 }
 
-export function useView<T>(viewPath: string): T[] {
-  const { runtime } = useHyperstackContext();
+export function useView<T>(stack: StackDefinition, viewPath: string): T[] {
+  const { getClient } = useHyperstackContext();
+  const client = getClient(stack);
+  
   return useSyncExternalStore(
-    (callback) => runtime.zustandStore.subscribe(callback),
+    (callback) => {
+      if (!client) return () => {};
+      return client.store.onUpdate(callback);
+    },
     () => {
-      const viewMap = runtime.zustandStore.getState().entities.get(viewPath);
-      if (!viewMap) return [];
-      return Array.from(viewMap.values()) as T[];
+      if (!client) return [];
+      const data = client.store.getAll(viewPath);
+      return data as T[];
     }
   );
 }
 
-export function useEntity<T>(viewPath: string, key: string): T | null {
-  const { runtime } = useHyperstackContext();
+export function useEntity<T>(stack: StackDefinition, viewPath: string, key: string): T | null {
+  const { getClient } = useHyperstackContext();
+  const client = getClient(stack);
+  
   return useSyncExternalStore(
-    (callback) => runtime.zustandStore.subscribe(callback),
+    (callback) => {
+      if (!client) return () => {};
+      return client.store.onUpdate(callback);
+    },
     () => {
-      const viewMap = runtime.zustandStore.getState().entities.get(viewPath);
-      if (!viewMap) return null;
-      const value = viewMap.get(key);
-      return value !== undefined ? (value as T) : null;
+      if (!client) return null;
+      const data = client.store.get(viewPath, key);
+      return data as T | null;
     }
   );
 }

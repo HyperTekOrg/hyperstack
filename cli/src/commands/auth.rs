@@ -16,82 +16,47 @@ fn credentials_path() -> String {
         .unwrap_or_else(|| "~/.hyperstack/credentials.toml".to_string())
 }
 
-pub fn register() -> Result<()> {
-    println!("{}", "Register for Hyperstack".bold());
-    println!();
-
-    print!("Username: ");
-    io::stdout().flush()?;
-
-    let mut username = String::new();
-    io::stdin().read_line(&mut username)?;
-    let username = username.trim();
-
-    let password = rpassword::prompt_password("Password: ")?;
-    let confirm_password = rpassword::prompt_password("Confirm password: ")?;
-
-    if password != confirm_password {
-        anyhow::bail!("Passwords do not match");
-    }
-
-    if password.len() < 8 {
-        anyhow::bail!("Password must be at least 8 characters long");
-    }
-
-    println!();
-    let spinner = ui::create_spinner("Creating account...");
-
-    let client = ApiClient::new()?;
-    let response = client.register(username, &password)?;
-
-    spinner.finish_and_clear();
-    ui::print_success("Account created successfully!");
-    println!("  Username: {}", response.user.username);
-
-    if let Some(api_key) = &response.api_key {
-        ApiClient::save_api_key(api_key)?;
-        ui::print_success("API key saved");
-        println!();
-        println!("You are now logged in and ready to use Hyperstack!");
+pub fn login(api_key: Option<String>) -> Result<()> {
+    let api_key = if let Some(key) = api_key {
+        key
     } else {
+        println!("{}", "Login to Hyperstack".bold());
         println!();
-        ui::print_warning(&response.message);
-        println!("Run 'hs auth login' to authenticate.");
+        print!("API Key: ");
+        io::stdout().flush()?;
+
+        let mut key = String::new();
+        io::stdin().read_line(&mut key)?;
+        key.trim().to_string()
+    };
+
+    if api_key.is_empty() {
+        anyhow::bail!("API key cannot be empty");
     }
 
-    Ok(())
-}
+    // Save the key
+    ApiClient::save_api_key(&api_key)?;
 
-pub fn login() -> Result<()> {
-    println!("{}", "Login to Hyperstack".bold());
-    println!();
-
-    print!("Username: ");
-    io::stdout().flush()?;
-
-    let mut username = String::new();
-    io::stdin().read_line(&mut username)?;
-    let username = username.trim();
-
-    let password = rpassword::prompt_password("Password: ")?;
-
-    println!();
-    let spinner = ui::create_spinner("Logging in...");
-
+    // Verify the key works
+    let spinner = ui::create_spinner("Verifying API key...");
     let client = ApiClient::new()?;
-    let response = client.login(username, &password)?;
 
-    spinner.finish_and_clear();
-    ui::print_success("Login successful!");
-    println!("  Username: {}", response.user.username);
-
-    if let Some(api_key) = &response.api_key {
-        ApiClient::save_api_key(api_key)?;
-        ui::print_success("API key saved");
+    match client.list_specs() {
+        Ok(_) => {
+            spinner.finish_and_clear();
+            ui::print_success("API key saved and verified!");
+            println!();
+            println!("  Credentials: {}", credentials_path().dimmed());
+            println!();
+            println!("You are now ready to use Hyperstack!");
+        }
+        Err(e) => {
+            spinner.finish_and_clear();
+            // Remove invalid key
+            let _ = ApiClient::delete_api_key();
+            anyhow::bail!("Invalid API key: {}", e);
+        }
     }
-
-    println!();
-    println!("{}", response.message);
 
     Ok(())
 }

@@ -4,6 +4,7 @@ import type {
   UpdateCallback,
   RichUpdateCallback,
   StorageAdapterConfig,
+  ViewSortConfig,
   Update,
   RichUpdate,
   ConnectionState,
@@ -11,6 +12,7 @@ import type {
 
 interface ZustandState {
   entities: Map<string, Map<string, unknown>>;
+  viewConfigs: Map<string, ViewSortConfig>;
   connectionState: ConnectionState;
   lastError?: string;
 }
@@ -20,6 +22,7 @@ interface ZustandActions {
   _delete: (viewPath: string, key: string) => void;
   _clear: (viewPath?: string) => void;
   _setConnectionState: (state: ConnectionState, error?: string) => void;
+  _setViewConfig: (viewPath: string, config: ViewSortConfig) => void;
 }
 
 export type HyperStackStore = ZustandState & ZustandActions;
@@ -34,6 +37,7 @@ export class ZustandAdapter implements StorageAdapter {
   constructor(_config: StorageAdapterConfig = {}) {
     this.store = create<HyperStackStore>((set) => ({
       entities: new Map(),
+      viewConfigs: new Map(),
       connectionState: 'disconnected',
       lastError: undefined,
 
@@ -74,34 +78,38 @@ export class ZustandAdapter implements StorageAdapter {
       _setConnectionState: (connectionState, lastError) => {
         set({ connectionState, lastError });
       },
+
+      _setViewConfig: (viewPath: string, config: ViewSortConfig) => {
+        set((state) => {
+          const newConfigs = new Map(state.viewConfigs);
+          newConfigs.set(viewPath, config);
+          return { viewConfigs: newConfigs };
+        });
+      },
     }));
   }
 
   get<T>(viewPath: string, key: string): T | null {
-    const entities = this.store.getState().entities;
-    const viewMap = entities.get(viewPath);
+    const viewMap = this.store.getState().entities.get(viewPath);
     if (!viewMap) return null;
     const value = viewMap.get(key);
     return value !== undefined ? (value as T) : null;
   }
 
   getAll<T>(viewPath: string): T[] {
-    const entities = this.store.getState().entities;
-    const viewMap = entities.get(viewPath);
+    const viewMap = this.store.getState().entities.get(viewPath);
     if (!viewMap) return [];
     return Array.from(viewMap.values()) as T[];
   }
 
   getAllSync<T>(viewPath: string): T[] | undefined {
-    const entities = this.store.getState().entities;
-    const viewMap = entities.get(viewPath);
+    const viewMap = this.store.getState().entities.get(viewPath);
     if (!viewMap) return undefined;
     return Array.from(viewMap.values()) as T[];
   }
 
   getSync<T>(viewPath: string, key: string): T | null | undefined {
-    const entities = this.store.getState().entities;
-    const viewMap = entities.get(viewPath);
+    const viewMap = this.store.getState().entities.get(viewPath);
     if (!viewMap) return undefined;
     const value = viewMap.get(key);
     return value !== undefined ? (value as T) : null;
@@ -194,5 +202,17 @@ export class ZustandAdapter implements StorageAdapter {
 
   setConnectionState(state: ConnectionState, error?: string): void {
     this.store.getState()._setConnectionState(state, error);
+  }
+
+  setViewConfig(viewPath: string, config: ViewSortConfig): void {
+    const state = this.store.getState();
+    const existingConfig = state.viewConfigs.get(viewPath);
+    if (existingConfig) return;
+
+    state._setViewConfig(viewPath, config);
+  }
+
+  getViewConfig(viewPath: string): ViewSortConfig | undefined {
+    return this.store.getState().viewConfigs.get(viewPath);
   }
 }

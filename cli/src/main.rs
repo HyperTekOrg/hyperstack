@@ -28,6 +28,8 @@ use std::process;
 mod api_client;
 mod commands;
 mod config;
+mod telemetry;
+mod templates;
 mod ui;
 
 #[derive(Parser)]
@@ -57,7 +59,29 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize a new Hyperstack project (auto-detects AST files)
+    /// Create a new Hyperstack project from a template
+    Create {
+        /// Project name (creates directory)
+        name: Option<String>,
+
+        /// Template: react-ore, rust-ore
+        #[arg(short, long)]
+        template: Option<String>,
+
+        /// Use cached templates only (no network)
+        #[arg(long)]
+        offline: bool,
+
+        /// Force re-download templates even if cached
+        #[arg(long)]
+        force_refresh: bool,
+
+        /// Skip installing dependencies
+        #[arg(long)]
+        skip_install: bool,
+    },
+
+    /// Initialize a new Hyperstack project (auto-detects stack files)
     Init,
 
     /// Deploy a stack: push, build, and watch until completion
@@ -80,6 +104,15 @@ enum Commands {
 
     /// Show overview of stacks, builds, and deployments
     Status,
+
+    /// Discover stacks and explore their schemas
+    Explore {
+        /// Stack name to explore
+        name: Option<String>,
+
+        /// Entity name to show field details
+        entity: Option<String>,
+    },
 
     /// Push local stacks to remote (alias for 'stack push')
     Push {
@@ -106,6 +139,13 @@ enum Commands {
     /// Build commands (advanced) - low-level build management
     #[command(subcommand, hide = true)]
     Build(BuildCommands),
+
+    /// Manage anonymous usage telemetry
+    #[command(subcommand)]
+    Telemetry(TelemetryCommands),
+
+    /// Inspect and analyze Anchor/Shank IDL files
+    Idl(commands::idl::IdlArgs),
 }
 
 #[derive(Subcommand)]
@@ -132,6 +172,10 @@ enum CreateCommands {
         /// Package name for TypeScript
         #[arg(short, long)]
         package_name: Option<String>,
+
+        /// WebSocket URL for the stack (overrides config)
+        #[arg(long)]
+        url: Option<String>,
     },
 
     /// Generate Rust SDK crate
@@ -150,6 +194,10 @@ enum CreateCommands {
         /// Generate as a module (mod.rs) instead of a standalone crate
         #[arg(long)]
         module: bool,
+
+        /// WebSocket URL for the stack (overrides config)
+        #[arg(long)]
+        url: Option<String>,
     },
 }
 
@@ -161,11 +209,12 @@ enum ConfigCommands {
 
 #[derive(Subcommand)]
 enum AuthCommands {
-    /// Register a new account
-    Register,
-
-    /// Login to your account
-    Login,
+    /// Login with your API key
+    Login {
+        /// API key (prompts if not provided)
+        #[arg(short, long)]
+        key: Option<String>,
+    },
 
     /// Logout (remove stored credentials)
     Logout,
@@ -182,7 +231,7 @@ enum StackCommands {
     /// List all stacks with their deployment status
     List,
 
-    /// Push local stacks with their AST to remote
+    /// Push local stacks with their stack file to remote
     Push {
         /// Name of specific stack to push (pushes all if not specified)
         stack_name: Option<String>,
@@ -259,6 +308,18 @@ enum StackCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum TelemetryCommands {
+    /// Show current telemetry status
+    Status,
+
+    /// Enable telemetry collection
+    Enable,
+
+    /// Disable telemetry collection
+    Disable,
+}
+
 /// Build commands - advanced low-level build management
 /// These are power-user commands; most users should use `hs up` instead.
 #[derive(Subcommand)]
@@ -272,7 +333,7 @@ enum BuildCommands {
         #[arg(short, long)]
         version: Option<i32>,
 
-        /// Use local AST file directly instead of stack version
+        /// Use local stack file directly instead of stack version
         #[arg(long)]
         ast_file: Option<String>,
 
@@ -316,9 +377,47 @@ fn main() {
         return;
     }
 
-    if let Err(e) = run(cli) {
+    telemetry::show_consent_banner_if_needed();
+
+    let cmd_name = cli.command.as_ref().map(command_name).unwrap_or("help");
+    let start = std::time::Instant::now();
+    let result = run(cli);
+
+    telemetry::record_command(
+        cmd_name,
+        result.is_ok(),
+        result
+            .as_ref()
+            .err()
+            .and_then(telemetry::extract_error_code)
+            .as_deref(),
+        start.elapsed(),
+        None,
+    );
+
+    telemetry::flush();
+
+    if let Err(e) = result {
         eprintln!("{} {}", "Error:".red().bold(), e);
         process::exit(1);
+    }
+}
+
+fn command_name(cmd: &Commands) -> &'static str {
+    match cmd {
+        Commands::Create { .. } => "create",
+        Commands::Init => "init",
+        Commands::Up { .. } => "up",
+        Commands::Status => "status",
+        Commands::Explore { .. } => "explore",
+        Commands::Push { .. } => "push",
+        Commands::Sdk(_) => "sdk",
+        Commands::Config(_) => "config",
+        Commands::Auth(_) => "auth",
+        Commands::Stack(_) => "stack",
+        Commands::Build(_) => "build",
+        Commands::Telemetry(_) => "telemetry",
+        Commands::Idl(_) => "idl",
     }
 }
 
@@ -329,6 +428,13 @@ fn run(cli: Cli) -> anyhow::Result<()> {
     };
 
     match command {
+        Commands::Create {
+            name,
+            template,
+            offline,
+            force_refresh,
+            skip_install,
+        } => commands::create::create(name, template, offline, force_refresh, skip_install),
         Commands::Init => commands::config::init(&cli.config),
         Commands::Up {
             stack_name,
@@ -337,6 +443,10 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             dry_run,
         } => commands::up::up(&cli.config, stack_name.as_deref(), branch, preview, dry_run),
         Commands::Status => commands::status::status(cli.json),
+        Commands::Explore { name, entity } => match name {
+            Some(name) => commands::explore::show(&name, entity.as_deref(), cli.json),
+            None => commands::explore::list(cli.json),
+        },
         Commands::Push { stack_name } => commands::stack::push(&cli.config, stack_name.as_deref()),
         Commands::Sdk(sdk_cmd) => match sdk_cmd {
             SdkCommands::Create(create_cmd) => match create_cmd {
@@ -344,17 +454,28 @@ fn run(cli: Cli) -> anyhow::Result<()> {
                     stack_name,
                     output,
                     package_name,
-                } => {
-                    commands::sdk::create_typescript(&cli.config, &stack_name, output, package_name)
-                }
+                    url,
+                } => commands::sdk::create_typescript(
+                    &cli.config,
+                    &stack_name,
+                    output,
+                    package_name,
+                    url,
+                ),
                 CreateCommands::Rust {
                     stack_name,
                     output,
                     crate_name,
                     module,
-                } => {
-                    commands::sdk::create_rust(&cli.config, &stack_name, output, crate_name, module)
-                }
+                    url,
+                } => commands::sdk::create_rust(
+                    &cli.config,
+                    &stack_name,
+                    output,
+                    crate_name,
+                    module,
+                    url,
+                ),
             },
             SdkCommands::List => commands::sdk::list(&cli.config),
         },
@@ -362,8 +483,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             ConfigCommands::Validate => commands::config::validate(&cli.config),
         },
         Commands::Auth(auth_cmd) => match auth_cmd {
-            AuthCommands::Register => commands::auth::register(),
-            AuthCommands::Login => commands::auth::login(),
+            AuthCommands::Login { key } => commands::auth::login(key),
             AuthCommands::Logout => commands::auth::logout(),
             AuthCommands::Status => commands::auth::status(),
             AuthCommands::Whoami => commands::auth::whoami(),
@@ -418,6 +538,12 @@ fn run(cli: Cli) -> anyhow::Result<()> {
                 watch,
                 json,
             } => commands::build::status(build_id, watch, json || cli.json),
+        },
+        Commands::Idl(args) => commands::idl::run(args),
+        Commands::Telemetry(telemetry_cmd) => match telemetry_cmd {
+            TelemetryCommands::Status => commands::telemetry::status(),
+            TelemetryCommands::Enable => commands::telemetry::enable(),
+            TelemetryCommands::Disable => commands::telemetry::disable(),
         },
     }
 }

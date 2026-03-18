@@ -1,9 +1,13 @@
 use crate::ast::*;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tracing;
 
 pub type Register = usize;
+
+fn stop_field_path(target_path: &str) -> String {
+    format!("__stop:{}", target_path)
+}
 
 #[derive(Debug, Clone)]
 pub enum OpCode {
@@ -135,6 +139,30 @@ pub enum OpCode {
         path: String,
         value: Register,
     },
+    /// Set field only if a specific instruction type was seen in the same transaction.
+    /// If not seen yet, defers the operation for later completion.
+    SetFieldWhen {
+        object: Register,
+        path: String,
+        value: Register,
+        when_instruction: String,
+        entity_name: String,
+        key_reg: Register,
+        condition_field: Option<FieldPath>,
+        condition_op: Option<ComparisonOp>,
+        condition_value: Option<Value>,
+    },
+    /// Set field unless stopped by a specific instruction.
+    /// Stop is tracked by a per-entity stop flag.
+    SetFieldUnlessStopped {
+        object: Register,
+        path: String,
+        value: Register,
+        stop_field: String,
+        stop_instruction: String,
+        entity_name: String,
+        key_reg: Register,
+    },
     /// Add value to unique set and update count
     /// Maintains internal Set, field stores count
     AddToUniqueSet {
@@ -167,6 +195,21 @@ pub enum OpCode {
         state: Register,
         computed_paths: Vec<String>,
     },
+    /// Queue a resolver for asynchronous enrichment
+    QueueResolver {
+        state_id: u32,
+        entity_name: String,
+        resolver: ResolverType,
+        input_path: Option<String>,
+        input_value: Option<Value>,
+        url_template: Option<Vec<UrlTemplatePart>>,
+        strategy: ResolveStrategy,
+        extracts: Vec<ResolverExtractSpec>,
+        condition: Option<ResolverCondition>,
+        schedule_at: Option<String>,
+        state: Register,
+        key: Register,
+    },
     /// Update PDA reverse lookup table
     /// Maps a PDA address to its primary key for reverse lookups
     UpdatePdaReverseLookup {
@@ -181,11 +224,21 @@ pub struct EntityBytecode {
     pub state_id: u32,
     pub handlers: HashMap<String, Vec<OpCode>>,
     pub entity_name: String,
+    pub when_events: HashSet<String>,
+    pub non_emitted_fields: HashSet<String>,
+    pub computed_paths: Vec<String>,
     /// Optional callback for evaluating computed fields
+    /// Parameters: state, context_slot (Option<u64>), context_timestamp (i64)
     #[allow(clippy::type_complexity)]
     pub computed_fields_evaluator: Option<
         Box<
-            dyn Fn(&mut Value) -> std::result::Result<(), Box<dyn std::error::Error>> + Send + Sync,
+            dyn Fn(
+                    &mut Value,
+                    Option<u64>,
+                    i64,
+                ) -> std::result::Result<(), Box<dyn std::error::Error>>
+                + Send
+                + Sync,
         >,
     >,
 }
@@ -196,6 +249,9 @@ impl std::fmt::Debug for EntityBytecode {
             .field("state_id", &self.state_id)
             .field("handlers", &self.handlers)
             .field("entity_name", &self.entity_name)
+            .field("when_events", &self.when_events)
+            .field("non_emitted_fields", &self.non_emitted_fields)
+            .field("computed_paths", &self.computed_paths)
             .field(
                 "computed_fields_evaluator",
                 &self.computed_fields_evaluator.is_some(),
@@ -208,6 +264,7 @@ impl std::fmt::Debug for EntityBytecode {
 pub struct MultiEntityBytecode {
     pub entities: HashMap<String, EntityBytecode>,
     pub event_routing: HashMap<String, Vec<String>>,
+    pub when_events: HashSet<String>,
     pub proto_router: crate::proto_router::ProtoRouter,
 }
 
@@ -218,6 +275,7 @@ impl MultiEntityBytecode {
 
         let mut entities = HashMap::new();
         let mut event_routing = HashMap::new();
+        let mut when_events = HashSet::new();
 
         for event_type in entity_bytecode.handlers.keys() {
             event_routing
@@ -226,11 +284,14 @@ impl MultiEntityBytecode {
                 .push(entity_name.clone());
         }
 
+        when_events.extend(entity_bytecode.when_events.iter().cloned());
+
         entities.insert(entity_name, entity_bytecode);
 
         MultiEntityBytecode {
             entities,
             event_routing,
+            when_events,
             proto_router: crate::proto_router::ProtoRouter::new(),
         }
     }
@@ -238,6 +299,7 @@ impl MultiEntityBytecode {
     pub fn from_entities(entities_vec: Vec<(String, Box<dyn std::any::Any>, u32)>) -> Self {
         let entities = HashMap::new();
         let event_routing = HashMap::new();
+        let when_events = HashSet::new();
 
         if let Some((_entity_name, _spec_any, _state_id)) = entities_vec.into_iter().next() {
             panic!("from_entities requires type information - use builder pattern instead");
@@ -246,6 +308,7 @@ impl MultiEntityBytecode {
         MultiEntityBytecode {
             entities,
             event_routing,
+            when_events,
             proto_router: crate::proto_router::ProtoRouter::new(),
         }
     }
@@ -255,6 +318,7 @@ impl MultiEntityBytecode {
         MultiEntityBytecodeBuilder {
             entities: HashMap::new(),
             event_routing: HashMap::new(),
+            when_events: HashSet::new(),
             proto_router: crate::proto_router::ProtoRouter::new(),
         }
     }
@@ -263,6 +327,7 @@ impl MultiEntityBytecode {
 pub struct MultiEntityBytecodeBuilder {
     entities: HashMap<String, EntityBytecode>,
     event_routing: HashMap<String, Vec<String>>,
+    when_events: HashSet<String>,
     proto_router: crate::proto_router::ProtoRouter,
 }
 
@@ -277,7 +342,13 @@ impl MultiEntityBytecodeBuilder {
             entity_name,
             spec,
             state_id,
-            None::<fn(&mut Value) -> std::result::Result<(), Box<dyn std::error::Error>>>,
+            None::<
+                fn(
+                    &mut Value,
+                    Option<u64>,
+                    i64,
+                ) -> std::result::Result<(), Box<dyn std::error::Error>>,
+            >,
         )
     }
 
@@ -289,7 +360,7 @@ impl MultiEntityBytecodeBuilder {
         evaluator: Option<F>,
     ) -> Self
     where
-        F: Fn(&mut Value) -> std::result::Result<(), Box<dyn std::error::Error>>
+        F: Fn(&mut Value, Option<u64>, i64) -> std::result::Result<(), Box<dyn std::error::Error>>
             + Send
             + Sync
             + 'static,
@@ -309,6 +380,9 @@ impl MultiEntityBytecodeBuilder {
                 .push(entity_name.clone());
         }
 
+        self.when_events
+            .extend(entity_bytecode.when_events.iter().cloned());
+
         self.entities.insert(entity_name, entity_bytecode);
         self
     }
@@ -317,6 +391,7 @@ impl MultiEntityBytecodeBuilder {
         MultiEntityBytecode {
             entities: self.entities,
             event_routing: self.event_routing,
+            when_events: self.when_events,
             proto_router: self.proto_router,
         }
     }
@@ -347,6 +422,7 @@ impl<S> TypedCompiler<S> {
 
         let mut entities = HashMap::new();
         let mut event_routing = HashMap::new();
+        let mut when_events = HashSet::new();
 
         for event_type in entity_bytecode.handlers.keys() {
             event_routing
@@ -355,17 +431,22 @@ impl<S> TypedCompiler<S> {
                 .push(self.entity_name.clone());
         }
 
+        when_events.extend(entity_bytecode.when_events.iter().cloned());
+
         entities.insert(self.entity_name.clone(), entity_bytecode);
 
         MultiEntityBytecode {
             entities,
             event_routing,
+            when_events,
             proto_router: crate::proto_router::ProtoRouter::new(),
         }
     }
 
     fn compile_entity(&self) -> EntityBytecode {
         let mut handlers: HashMap<String, Vec<OpCode>> = HashMap::new();
+        let mut when_events: HashSet<String> = HashSet::new();
+        let mut emit_by_path: HashMap<String, bool> = HashMap::new();
 
         // DEBUG: Collect all handler info before processing
         let mut debug_info = Vec::new();
@@ -395,6 +476,20 @@ impl<S> TypedCompiler<S> {
         // }
 
         for handler_spec in &self.spec.handlers {
+            for mapping in &handler_spec.mappings {
+                if let Some(when) = &mapping.when {
+                    when_events.insert(when.clone());
+                }
+                let entry = emit_by_path
+                    .entry(mapping.target_path.clone())
+                    .or_insert(false);
+                *entry |= mapping.emit;
+                if mapping.stop.is_some() {
+                    emit_by_path
+                        .entry(stop_field_path(&mapping.target_path))
+                        .or_insert(false);
+                }
+            }
             let opcodes = self.compile_handler(handler_spec);
             let event_type = self.get_event_type(&handler_spec.source);
 
@@ -546,10 +641,18 @@ impl<S> TypedCompiler<S> {
             }
         }
 
+        let non_emitted_fields: HashSet<String> = emit_by_path
+            .into_iter()
+            .filter_map(|(path, emit)| if emit { None } else { Some(path) })
+            .collect();
+
         EntityBytecode {
             state_id: self.state_id,
             handlers,
             entity_name: self.entity_name.clone(),
+            when_events,
+            non_emitted_fields,
+            computed_paths: self.spec.computed_fields.clone(),
             computed_fields_evaluator: None,
         }
     }
@@ -561,12 +664,6 @@ impl<S> TypedCompiler<S> {
 
         ops.extend(self.compile_key_loading(&spec.key_resolution, key_reg, &spec.mappings));
 
-        ops.extend(self.compile_temporal_index_update(
-            &spec.key_resolution,
-            key_reg,
-            &spec.mappings,
-        ));
-
         ops.push(OpCode::ReadOrInitState {
             state_id: self.state_id,
             key: key_reg,
@@ -574,9 +671,23 @@ impl<S> TypedCompiler<S> {
             dest: state_reg,
         });
 
+        // Index updates must come AFTER ReadOrInitState so the state table exists.
+        // ReadOrInitState lazily creates the state table via entry().or_insert_with(),
+        // but index opcodes (UpdateLookupIndex, UpdateTemporalIndex, UpdatePdaReverseLookup)
+        // use get_mut() which fails if the table doesn't exist yet.
+        // This ordering also means stale/duplicate updates (caught by ReadOrInitState's
+        // recency check) correctly skip index updates too.
+        ops.extend(self.compile_temporal_index_update(
+            &spec.key_resolution,
+            key_reg,
+            &spec.mappings,
+        ));
+
         for mapping in &spec.mappings {
-            ops.extend(self.compile_mapping(mapping, state_reg));
+            ops.extend(self.compile_mapping(mapping, state_reg, key_reg));
         }
+
+        ops.extend(self.compile_resolvers(state_reg, key_reg));
 
         // Evaluate computed fields after all mappings but before updating state
         ops.push(OpCode::EvaluateComputedFields {
@@ -601,7 +712,43 @@ impl<S> TypedCompiler<S> {
         ops
     }
 
-    fn compile_mapping(&self, mapping: &TypedFieldMapping<S>, state_reg: Register) -> Vec<OpCode> {
+    fn compile_resolvers(&self, state_reg: Register, key_reg: Register) -> Vec<OpCode> {
+        let mut ops = Vec::new();
+
+        for resolver_spec in &self.spec.resolver_specs {
+            let url_template = match &resolver_spec.resolver {
+                ResolverType::Url(config) => match &config.url_source {
+                    UrlSource::Template(parts) => Some(parts.clone()),
+                    _ => None,
+                },
+                _ => None,
+            };
+
+            ops.push(OpCode::QueueResolver {
+                state_id: self.state_id,
+                entity_name: self.entity_name.clone(),
+                resolver: resolver_spec.resolver.clone(),
+                input_path: resolver_spec.input_path.clone(),
+                input_value: resolver_spec.input_value.clone(),
+                url_template,
+                strategy: resolver_spec.strategy.clone(),
+                extracts: resolver_spec.extracts.clone(),
+                condition: resolver_spec.condition.clone(),
+                schedule_at: resolver_spec.schedule_at.clone(),
+                state: state_reg,
+                key: key_reg,
+            });
+        }
+
+        ops
+    }
+
+    fn compile_mapping(
+        &self,
+        mapping: &TypedFieldMapping<S>,
+        state_reg: Register,
+        key_reg: Register,
+    ) -> Vec<OpCode> {
         let mut ops = Vec::new();
         let temp_reg = 10;
 
@@ -613,6 +760,117 @@ impl<S> TypedCompiler<S> {
                 dest: temp_reg,
                 transformation: transform.clone(),
             });
+        }
+
+        if let Some(stop_instruction) = &mapping.stop {
+            if mapping.when.is_some() {
+                tracing::warn!(
+                    "#[map] stop and when both set for {}. Ignoring when.",
+                    mapping.target_path
+                );
+            }
+            if !matches!(mapping.population, PopulationStrategy::LastWrite)
+                && !matches!(mapping.population, PopulationStrategy::Merge)
+            {
+                tracing::warn!(
+                    "#[map] stop ignores population strategy {:?}",
+                    mapping.population
+                );
+            }
+
+            ops.push(OpCode::SetFieldUnlessStopped {
+                object: state_reg,
+                path: mapping.target_path.clone(),
+                value: temp_reg,
+                stop_field: stop_field_path(&mapping.target_path),
+                stop_instruction: stop_instruction.clone(),
+                entity_name: self.entity_name.clone(),
+                key_reg,
+            });
+            return ops;
+        }
+
+        if let Some(when_instruction) = &mapping.when {
+            if !matches!(mapping.population, PopulationStrategy::LastWrite)
+                && !matches!(mapping.population, PopulationStrategy::Merge)
+            {
+                tracing::warn!(
+                    "#[map] when ignores population strategy {:?}",
+                    mapping.population
+                );
+            }
+            let (condition_field, condition_op, condition_value) = mapping
+                .condition
+                .as_ref()
+                .and_then(|cond| cond.parsed.as_ref())
+                .and_then(|parsed| match parsed {
+                    ParsedCondition::Comparison { field, op, value } => {
+                        Some((Some(field.clone()), Some(op.clone()), Some(value.clone())))
+                    }
+                    ParsedCondition::Logical { .. } => {
+                        tracing::warn!("Logical conditions not yet supported for #[map] when");
+                        None
+                    }
+                })
+                .unwrap_or((None, None, None));
+
+            ops.push(OpCode::SetFieldWhen {
+                object: state_reg,
+                path: mapping.target_path.clone(),
+                value: temp_reg,
+                when_instruction: when_instruction.clone(),
+                entity_name: self.entity_name.clone(),
+                key_reg,
+                condition_field,
+                condition_op,
+                condition_value,
+            });
+            return ops;
+        }
+
+        if let Some(condition) = &mapping.condition {
+            if let Some(parsed) = &condition.parsed {
+                match parsed {
+                    ParsedCondition::Comparison {
+                        field,
+                        op,
+                        value: cond_value,
+                    } => {
+                        if matches!(mapping.population, PopulationStrategy::LastWrite)
+                            || matches!(mapping.population, PopulationStrategy::Merge)
+                        {
+                            ops.push(OpCode::ConditionalSetField {
+                                object: state_reg,
+                                path: mapping.target_path.clone(),
+                                value: temp_reg,
+                                condition_field: field.clone(),
+                                condition_op: op.clone(),
+                                condition_value: cond_value.clone(),
+                            });
+                            return ops;
+                        }
+
+                        if matches!(mapping.population, PopulationStrategy::Count) {
+                            ops.push(OpCode::ConditionalIncrement {
+                                object: state_reg,
+                                path: mapping.target_path.clone(),
+                                condition_field: field.clone(),
+                                condition_op: op.clone(),
+                                condition_value: cond_value.clone(),
+                            });
+                            return ops;
+                        }
+
+                        tracing::warn!(
+                            "Conditional #[map] not supported for population strategy {:?}",
+                            mapping.population
+                        );
+                    }
+                    ParsedCondition::Logical { .. } => {
+                        tracing::warn!("Logical conditions not yet supported for #[map]");
+                    }
+                }
+            }
         }
 
         match &mapping.population {
@@ -871,15 +1129,15 @@ impl<S> TypedCompiler<S> {
             default: Some(serde_json::json!(null)),
         });
 
-        // Copy to key_reg (unconditionally, may be null)
-        ops.push(OpCode::CopyRegister {
-            source: resolved_key_reg,
-            dest: key_reg,
-        });
-
-        // Now do the normal key resolution as a fallback (only if key_reg is still null)
+        // Now do the normal key resolution
         match resolution {
             KeyResolutionStrategy::Embedded { primary_field } => {
+                // Copy resolver result to key_reg (may be null)
+                ops.push(OpCode::CopyRegister {
+                    source: resolved_key_reg,
+                    dest: key_reg,
+                });
+
                 // Enhanced key resolution: check for auto-inheritance when primary_field is empty
                 let effective_primary_field = if primary_field.segments.is_empty() {
                     // Try to auto-detect primary field from account schema
@@ -938,10 +1196,21 @@ impl<S> TypedCompiler<S> {
                 let lookup_reg = 15;
                 let result_reg = 17;
 
+                // Prefer resolver-provided key as lookup input
+                ops.push(OpCode::CopyRegister {
+                    source: resolved_key_reg,
+                    dest: lookup_reg,
+                });
+
+                let temp_reg = 18;
                 ops.push(OpCode::LoadEventField {
                     path: primary_field.clone(),
-                    dest: lookup_reg,
+                    dest: temp_reg,
                     default: None,
+                });
+                ops.push(OpCode::CopyRegisterIfNull {
+                    source: temp_reg,
+                    dest: lookup_reg,
                 });
 
                 let index_name = self.find_lookup_index_for_lookup_field(primary_field, mappings);
@@ -961,7 +1230,17 @@ impl<S> TypedCompiler<S> {
                 // which caused the PDA address to be used as the key instead of the round_id.
                 // This resulted in mutations with key = PDA address instead of key = primary_key.
 
-                // Only use lookup result if key_reg is still null
+                // First, set key_reg to __resolved_primary_key (may be null).
+                // When the flush path provides a resolved key via PDA reverse lookup,
+                // this gives it priority over the LookupIndex result.
+                // This matches the pattern used by Embedded and Computed strategies.
+                ops.push(OpCode::CopyRegister {
+                    source: resolved_key_reg,
+                    dest: key_reg,
+                });
+                // If key_reg is still null (no resolved key from flush), use the LookupIndex result.
+                // This preserves the original behavior for first-arrival events where
+                // __resolved_primary_key is not yet set.
                 ops.push(OpCode::CopyRegisterIfNull {
                     source: result_reg,
                     dest: key_reg,
@@ -971,6 +1250,11 @@ impl<S> TypedCompiler<S> {
                 primary_field,
                 compute_partition: _,
             } => {
+                // Copy resolver result to key_reg (may be null)
+                ops.push(OpCode::CopyRegister {
+                    source: resolved_key_reg,
+                    dest: key_reg,
+                });
                 let temp_reg = 18;
                 ops.push(OpCode::LoadEventField {
                     path: primary_field.clone(),
@@ -987,6 +1271,11 @@ impl<S> TypedCompiler<S> {
                 timestamp_field,
                 index_name,
             } => {
+                // Copy resolver result to key_reg (may be null)
+                ops.push(OpCode::CopyRegister {
+                    source: resolved_key_reg,
+                    dest: key_reg,
+                });
                 let lookup_reg = 15;
                 let timestamp_reg = 16;
                 let result_reg = 17;

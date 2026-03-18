@@ -1,15 +1,13 @@
-import { OreDashboard } from './components/OreDashboard';
+import { OreDashboard } from './components';
 import { HyperstackProvider } from 'hyperstack-react';
-
-const websocketUrl = import.meta.env.VITE_HYPERSTACK_WS_URL;
+import { ThemeProvider } from './hooks/useTheme';
 
 export default function App() {
   return (
-    <HyperstackProvider
-      websocketUrl={websocketUrl}
-      autoConnect={true}
-    >
-      <OreDashboard />
-    </HyperstackProvider>
+    <ThemeProvider>
+      <HyperstackProvider autoConnect={true}>
+        <OreDashboard />
+      </HyperstackProvider>
+    </ThemeProvider>
   );
 }

@@ -1,3 +1,5 @@
+import type { WalletAdapter, Schema } from 'hyperstack-typescript';
+
 export type {
   ConnectionState,
   Subscription,
@@ -7,22 +9,16 @@ export type {
   SnapshotEntity,
   Update,
   RichUpdate,
+  StackDefinition,
+  ViewDef,
+  ViewGroup,
+  WalletAdapter,
+  Schema,
 } from 'hyperstack-typescript';
 
 export { DEFAULT_MAX_ENTRIES_PER_VIEW } from 'hyperstack-typescript';
 
 export type ViewMode = 'state' | 'list';
-
-export interface NetworkConfig {
-  name: string;
-  websocketUrl: string;
-}
-
-export interface ViewDef<T, TMode extends ViewMode> {
-  readonly mode: TMode;
-  readonly view: string;
-  readonly _entity?: T;
-}
 
 export interface TransactionDefinition<TParams = unknown> {
   build: (params: TParams) => {
@@ -32,37 +28,38 @@ export interface TransactionDefinition<TParams = unknown> {
   refresh?: Array<{ view: string; key?: string | ((params: TParams) => string) }>;
 }
 
-export interface StackDefinition {
-  readonly name: string;
-  readonly views: Record<string, ViewGroup>;
-  transactions?: Record<string, TransactionDefinition>;
-}
+export const DEFAULT_FLUSH_INTERVAL_MS = 16;
 
-export interface ViewGroup {
-  state?: ViewDef<unknown, 'state'>;
-  list?: ViewDef<unknown, 'list'>;
-}
-
+/**
+ * Global configuration for HyperstackProvider.
+ * 
+ * Note: WebSocket URL is no longer configured here. The URL is:
+ * 1. Embedded in the stack definition (stack.url)
+ * 2. Optionally overridden per-hook via useHyperstack(stack, { url: '...' })
+ */
 export interface HyperstackConfig {
-  websocketUrl?: string;
-  network?: 'devnet' | 'mainnet' | 'localnet' | NetworkConfig;
-  apiKey?: string;
   autoConnect?: boolean;
   wallet?: WalletAdapter;
   reconnectIntervals?: number[];
   maxReconnectAttempts?: number;
   maxEntriesPerView?: number | null;
+  flushIntervalMs?: number;
 }
 
-export interface WalletAdapter {
-  publicKey: string;
-  signAndSend: (transaction: unknown) => Promise<string>;
+/**
+ * Options for useHyperstack hook
+ */
+export interface UseHyperstackOptions {
+  /** Override the stack's embedded URL (useful for local development) */
+  url?: string;
 }
 
-export interface ViewHookOptions {
+export interface ViewHookOptions<TSchema = unknown> {
   enabled?: boolean;
   initialData?: unknown;
   refreshOnReconnect?: boolean;
+  /** Schema to validate entities. Returns undefined if validation fails. */
+  schema?: Schema<TSchema>;
 }
 
 export interface ViewHookResult<T> {
@@ -72,12 +69,25 @@ export interface ViewHookResult<T> {
   refresh: () => void;
 }
 
-export interface ListParams {
+export interface ListParamsBase<TSchema = unknown> {
   key?: string;
   where?: Record<string, unknown>;
   limit?: number;
   filters?: Record<string, string>;
+  skip?: number;
+  /** Schema to validate/filter entities. Only entities passing safeParse will be returned. */
+  schema?: Schema<TSchema>;
 }
+
+export interface ListParamsSingle<TSchema = unknown> extends ListParamsBase<TSchema> {
+  take: 1;
+}
+
+export interface ListParamsMultiple<TSchema = unknown> extends ListParamsBase<TSchema> {
+  take?: number;
+}
+
+export type ListParams<TSchema = unknown> = ListParamsSingle<TSchema> | ListParamsMultiple<TSchema>;
 
 export interface UseMutationReturn {
   submit: (instructionOrTx: unknown | unknown[]) => Promise<string>;
@@ -92,5 +102,7 @@ export interface StateViewHook<T> {
 }
 
 export interface ListViewHook<T> {
-  use: (params?: ListParams, options?: ViewHookOptions) => ViewHookResult<T[]>;
+  use<TSchema = T>(params: ListParamsSingle<TSchema>, options?: ViewHookOptions): ViewHookResult<TSchema | undefined>;
+  use<TSchema = T>(params?: ListParamsMultiple<TSchema>, options?: ViewHookOptions): ViewHookResult<TSchema[]>;
+  useOne: <TSchema = T>(params?: Omit<ListParamsBase<TSchema>, 'take'>, options?: ViewHookOptions) => ViewHookResult<TSchema | undefined>;
 }

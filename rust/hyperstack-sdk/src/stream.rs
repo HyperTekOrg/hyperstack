@@ -177,13 +177,15 @@ enum EntityStreamState<T> {
         store: SharedStore,
         subscription_view: String,
         subscription_key: Option<String>,
+        take: Option<u32>,
+        skip: Option<u32>,
     },
     Active {
         inner: BroadcastStream<StoreUpdate>,
     },
     Subscribing {
         fut: Pin<Box<dyn Future<Output = ()> + Send>>,
-        store: SharedStore,
+        inner: BroadcastStream<StoreUpdate>,
     },
     Invalid,
     _Phantom(PhantomData<T>),
@@ -235,12 +237,37 @@ impl<T: DeserializeOwned + Clone + Send + 'static> EntityStream<T> {
         key_filter: KeyFilter,
         subscription_key: Option<String>,
     ) -> Self {
+        Self::new_lazy_with_opts(
+            connection,
+            store,
+            entity_name,
+            subscription_view,
+            key_filter,
+            subscription_key,
+            None,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_lazy_with_opts(
+        connection: ConnectionManager,
+        store: SharedStore,
+        entity_name: String,
+        subscription_view: String,
+        key_filter: KeyFilter,
+        subscription_key: Option<String>,
+        take: Option<u32>,
+        skip: Option<u32>,
+    ) -> Self {
         Self {
             state: EntityStreamState::Lazy {
                 connection,
                 store,
                 subscription_view,
                 subscription_key,
+                take,
+                skip,
             },
             view: entity_name,
             key_filter,
@@ -284,31 +311,36 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for EntityStre
                         store,
                         subscription_view,
                         subscription_key,
+                        take,
+                        skip,
                     } = std::mem::replace(&mut this.state, EntityStreamState::Invalid)
                     else {
                         unreachable!()
                     };
 
+                    // Subscribe to broadcast BEFORE sending subscription to server
+                    // This ensures we don't miss any frames that arrive during setup
+                    let inner = BroadcastStream::new(store.subscribe());
+
                     let conn = connection.clone();
                     let view = subscription_view.clone();
                     let key = subscription_key.clone();
                     let fut = Box::pin(async move {
-                        conn.ensure_subscription(&view, key.as_deref()).await;
+                        conn.ensure_subscription_with_opts(&view, key.as_deref(), take, skip)
+                            .await;
                     });
 
-                    this.state = EntityStreamState::Subscribing { fut, store };
+                    this.state = EntityStreamState::Subscribing { fut, inner };
                     continue;
                 }
                 EntityStreamState::Subscribing { fut, .. } => match fut.as_mut().poll(cx) {
                     Poll::Ready(()) => {
-                        let EntityStreamState::Subscribing { store, .. } =
+                        let EntityStreamState::Subscribing { inner, .. } =
                             std::mem::replace(&mut this.state, EntityStreamState::Invalid)
                         else {
                             unreachable!()
                         };
-                        this.state = EntityStreamState::Active {
-                            inner: BroadcastStream::new(store.subscribe()),
-                        };
+                        this.state = EntityStreamState::Active { inner };
                         continue;
                     }
                     Poll::Pending => return Poll::Pending,
@@ -357,6 +389,9 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for EntityStre
                                     }
                                 }
                             }
+                            Operation::Subscribed => {
+                                continue;
+                            }
                         }
                     }
                     Poll::Ready(Some(Err(_lagged))) => {
@@ -392,13 +427,15 @@ enum RichEntityStreamState<T> {
         store: SharedStore,
         subscription_view: String,
         subscription_key: Option<String>,
+        take: Option<u32>,
+        skip: Option<u32>,
     },
     Active {
         inner: BroadcastStream<StoreUpdate>,
     },
     Subscribing {
         fut: Pin<Box<dyn Future<Output = ()> + Send>>,
-        store: SharedStore,
+        inner: BroadcastStream<StoreUpdate>,
     },
     Invalid,
     _Phantom(PhantomData<T>),
@@ -435,12 +472,37 @@ impl<T: DeserializeOwned + Clone + Send + 'static> RichEntityStream<T> {
         key_filter: KeyFilter,
         subscription_key: Option<String>,
     ) -> Self {
+        Self::new_lazy_with_opts(
+            connection,
+            store,
+            entity_name,
+            subscription_view,
+            key_filter,
+            subscription_key,
+            None,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_lazy_with_opts(
+        connection: ConnectionManager,
+        store: SharedStore,
+        entity_name: String,
+        subscription_view: String,
+        key_filter: KeyFilter,
+        subscription_key: Option<String>,
+        take: Option<u32>,
+        skip: Option<u32>,
+    ) -> Self {
         Self {
             state: RichEntityStreamState::Lazy {
                 connection,
                 store,
                 subscription_view,
                 subscription_key,
+                take,
+                skip,
             },
             view: entity_name,
             key_filter,
@@ -463,31 +525,36 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for RichEntity
                         store,
                         subscription_view,
                         subscription_key,
+                        take,
+                        skip,
                     } = std::mem::replace(&mut this.state, RichEntityStreamState::Invalid)
                     else {
                         unreachable!()
                     };
 
+                    // Subscribe to broadcast BEFORE sending subscription to server
+                    // This ensures we don't miss any frames that arrive during setup
+                    let inner = BroadcastStream::new(store.subscribe());
+
                     let conn = connection.clone();
                     let view = subscription_view.clone();
                     let key = subscription_key.clone();
                     let fut = Box::pin(async move {
-                        conn.ensure_subscription(&view, key.as_deref()).await;
+                        conn.ensure_subscription_with_opts(&view, key.as_deref(), take, skip)
+                            .await;
                     });
 
-                    this.state = RichEntityStreamState::Subscribing { fut, store };
+                    this.state = RichEntityStreamState::Subscribing { fut, inner };
                     continue;
                 }
                 RichEntityStreamState::Subscribing { fut, .. } => match fut.as_mut().poll(cx) {
                     Poll::Ready(()) => {
-                        let RichEntityStreamState::Subscribing { store, .. } =
+                        let RichEntityStreamState::Subscribing { inner, .. } =
                             std::mem::replace(&mut this.state, RichEntityStreamState::Invalid)
                         else {
                             unreachable!()
                         };
-                        this.state = RichEntityStreamState::Active {
-                            inner: BroadcastStream::new(store.subscribe()),
-                        };
+                        this.state = RichEntityStreamState::Active { inner };
                         continue;
                     }
                     Poll::Pending => return Poll::Pending,
@@ -550,6 +617,9 @@ impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for RichEntity
                                         }
                                     }
                                 }
+                            }
+                            Operation::Subscribed => {
+                                continue;
                             }
                         }
                     }
@@ -796,5 +866,240 @@ where
         F2: FnMut(U) -> V,
     {
         MapStream::new(self, f)
+    }
+}
+
+/// A stream that emits merged entity values directly (filtering out deletes).
+///
+/// This is the simplest streaming interface - it just yields `T` after each change,
+/// applying patches to give you the full merged entity state. Deletes are filtered out.
+///
+/// Corresponds to TypeScript SDK's `.use()` method.
+pub struct UseStream<T> {
+    state: UseStreamState<T>,
+    view: String,
+    key_filter: KeyFilter,
+    _marker: PhantomData<T>,
+}
+
+enum UseStreamState<T> {
+    Lazy {
+        connection: ConnectionManager,
+        store: SharedStore,
+        subscription_view: String,
+        subscription_key: Option<String>,
+        take: Option<u32>,
+        skip: Option<u32>,
+    },
+    Active {
+        inner: BroadcastStream<StoreUpdate>,
+    },
+    Subscribing {
+        fut: Pin<Box<dyn Future<Output = ()> + Send>>,
+        inner: BroadcastStream<StoreUpdate>,
+    },
+    Invalid,
+    _Phantom(PhantomData<T>),
+}
+
+impl<T: DeserializeOwned + Clone + Send + 'static> UseStream<T> {
+    pub fn new(rx: broadcast::Receiver<StoreUpdate>, view: String) -> Self {
+        Self {
+            state: UseStreamState::Active {
+                inner: BroadcastStream::new(rx),
+            },
+            view,
+            key_filter: KeyFilter::None,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn new_filtered(rx: broadcast::Receiver<StoreUpdate>, view: String, key: String) -> Self {
+        Self {
+            state: UseStreamState::Active {
+                inner: BroadcastStream::new(rx),
+            },
+            view,
+            key_filter: KeyFilter::Single(key),
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn new_lazy(
+        connection: ConnectionManager,
+        store: SharedStore,
+        entity_name: String,
+        subscription_view: String,
+        key_filter: KeyFilter,
+        subscription_key: Option<String>,
+    ) -> Self {
+        Self::new_lazy_with_opts(
+            connection,
+            store,
+            entity_name,
+            subscription_view,
+            key_filter,
+            subscription_key,
+            None,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_lazy_with_opts(
+        connection: ConnectionManager,
+        store: SharedStore,
+        entity_name: String,
+        subscription_view: String,
+        key_filter: KeyFilter,
+        subscription_key: Option<String>,
+        take: Option<u32>,
+        skip: Option<u32>,
+    ) -> Self {
+        Self {
+            state: UseStreamState::Lazy {
+                connection,
+                store,
+                subscription_view,
+                subscription_key,
+                take,
+                skip,
+            },
+            view: entity_name,
+            key_filter,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Filter the stream to only emit items matching the predicate.
+    pub fn filter<F>(self, predicate: F) -> FilteredStream<Self, T, F>
+    where
+        F: FnMut(&T) -> bool,
+    {
+        FilteredStream::new(self, predicate)
+    }
+
+    /// Filter and transform items in one step.
+    pub fn filter_map<U, F>(self, f: F) -> FilterMapStream<Self, T, U, F>
+    where
+        F: FnMut(T) -> Option<U>,
+    {
+        FilterMapStream::new(self, f)
+    }
+
+    /// Transform each item.
+    pub fn map<U, F>(self, f: F) -> MapStream<Self, T, U, F>
+    where
+        F: FnMut(T) -> U,
+    {
+        MapStream::new(self, f)
+    }
+}
+
+impl<T: DeserializeOwned + Clone + Send + Unpin + 'static> Stream for UseStream<T> {
+    type Item = T;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+
+        loop {
+            match &mut this.state {
+                UseStreamState::Lazy { .. } => {
+                    let UseStreamState::Lazy {
+                        connection,
+                        store,
+                        subscription_view,
+                        subscription_key,
+                        take,
+                        skip,
+                    } = std::mem::replace(&mut this.state, UseStreamState::Invalid)
+                    else {
+                        unreachable!()
+                    };
+
+                    // Subscribe to broadcast BEFORE sending subscription to server
+                    let inner = BroadcastStream::new(store.subscribe());
+
+                    let conn = connection.clone();
+                    let view = subscription_view.clone();
+                    let key = subscription_key.clone();
+                    let fut = Box::pin(async move {
+                        conn.ensure_subscription_with_opts(&view, key.as_deref(), take, skip)
+                            .await;
+                    });
+
+                    this.state = UseStreamState::Subscribing { fut, inner };
+                    continue;
+                }
+                UseStreamState::Subscribing { fut, .. } => match fut.as_mut().poll(cx) {
+                    Poll::Ready(()) => {
+                        let UseStreamState::Subscribing { inner, .. } =
+                            std::mem::replace(&mut this.state, UseStreamState::Invalid)
+                        else {
+                            unreachable!()
+                        };
+                        this.state = UseStreamState::Active { inner };
+                        continue;
+                    }
+                    Poll::Pending => return Poll::Pending,
+                },
+                UseStreamState::Active { inner } => match Pin::new(inner).poll_next(cx) {
+                    Poll::Ready(Some(Ok(update))) => {
+                        if update.view != this.view {
+                            continue;
+                        }
+
+                        if !this.key_filter.matches(&update.key) {
+                            continue;
+                        }
+
+                        // Filter out deletes - UseStream only emits actual entity data
+                        match update.operation {
+                            Operation::Delete => {
+                                // Skip deletes entirely
+                                continue;
+                            }
+                            Operation::Upsert
+                            | Operation::Create
+                            | Operation::Snapshot
+                            | Operation::Patch => {
+                                if let Some(data) = update.data {
+                                    match serde_json::from_value::<T>(data) {
+                                        Ok(typed) => {
+                                            return Poll::Ready(Some(typed));
+                                        }
+                                        Err(e) => {
+                                            tracing::warn!(
+                                                key = %update.key,
+                                                error = %e,
+                                                "UseStream: failed to deserialize entity, skipping"
+                                            );
+                                            continue;
+                                        }
+                                    }
+                                }
+                            }
+                            Operation::Subscribed => {
+                                continue;
+                            }
+                        }
+                    }
+                    Poll::Ready(Some(Err(_lagged))) => {
+                        tracing::warn!("UseStream lagged behind, some messages were dropped");
+                        continue;
+                    }
+                    Poll::Ready(None) => {
+                        return Poll::Ready(None);
+                    }
+                    Poll::Pending => {
+                        return Poll::Pending;
+                    }
+                },
+                UseStreamState::Invalid => {
+                    panic!("UseStream in invalid state");
+                }
+                UseStreamState::_Phantom(_) => unreachable!(),
+            }
+        }
     }
 }

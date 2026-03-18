@@ -12,8 +12,7 @@ use syn::{Fields, ItemStruct, Type};
 use crate::parse;
 use crate::utils::{path_to_string, to_snake_case};
 
-use super::ast_writer::write_ast_at_compile_time;
-use super::entity::process_map_attribute;
+use super::entity::{infer_resolver_type, parse_resolver_type_name, process_map_attribute};
 use super::handlers::{convert_event_to_map_attributes, determine_event_instruction};
 use super::sections::{is_primitive_or_wrapper, process_nested_struct};
 
@@ -46,6 +45,7 @@ pub fn process_struct_with_context(
     > = HashMap::new();
     let mut has_events = false;
     let mut computed_fields: Vec<(String, proc_macro2::TokenStream, Type)> = Vec::new();
+    let mut resolve_specs: Vec<parse::ResolveSpec> = Vec::new();
     let mut derive_from_mappings: HashMap<String, Vec<parse::DeriveFromAttribute>> = HashMap::new();
     let mut aggregate_conditions: HashMap<String, String> = HashMap::new();
 
@@ -104,7 +104,7 @@ pub fn process_struct_with_context(
 
                     // Determine instruction path (type-safe or legacy)
                     if let Some((_instruction_path, instruction_str)) =
-                        determine_event_instruction(&mut event_attr, field_type)
+                        determine_event_instruction(&mut event_attr, field_type, None)
                     {
                         events_by_instruction
                             .entry(instruction_str)
@@ -125,6 +125,32 @@ pub fn process_struct_with_context(
                                 field_type.clone(),
                             ));
                     }
+                } else if let Ok(Some(resolve_attr)) =
+                    parse::parse_resolve_attribute(attr, &field_name.to_string())
+                {
+                    has_attrs = true;
+
+                    state_fields.push(quote! {
+                        pub #field_name: #field_type
+                    });
+
+                    let resolver = if let Some(name) = resolve_attr.resolver.as_deref() {
+                        parse_resolver_type_name(name, field_type)
+                    } else {
+                        infer_resolver_type(field_type)
+                    }
+                    .unwrap_or_else(|err| panic!("{}", err));
+
+                    resolve_specs.push(parse::ResolveSpec {
+                        resolver,
+                        from: resolve_attr.from,
+                        address: resolve_attr.address,
+                        extract: resolve_attr.extract,
+                        target_field_name: resolve_attr.target_field_name,
+                        strategy: resolve_attr.strategy,
+                        condition: resolve_attr.condition,
+                        schedule_at: resolve_attr.schedule_at,
+                    });
                 }
             }
 
@@ -147,8 +173,10 @@ pub fn process_struct_with_context(
                                 &mut events_by_instruction,
                                 &mut has_events,
                                 &mut computed_fields,
+                                &mut resolve_specs,
                                 &mut derive_from_mappings,
                                 &mut aggregate_conditions,
+                                None,
                             );
                         }
                     }
@@ -277,6 +305,14 @@ pub fn process_struct_with_context(
                 mapping_expr
             };
 
+            let mapping_expr = if !mapping.emit {
+                quote! {
+                    #mapping_expr.with_emit(false)
+                }
+            } else {
+                mapping_expr
+            };
+
             field_mapping_code.push(mapping_expr);
 
             if mapping.is_primary_key {
@@ -339,6 +375,7 @@ pub fn process_struct_with_context(
                         program_id: None,
                         discriminator: None,
                         type_name: format!("{}{}", #account_type, #type_suffix),
+                        serialization: None,
                     },
                     #key_resolution,
                     vec![
@@ -388,21 +425,171 @@ pub fn process_struct_with_context(
         })
         .collect();
 
-    // Write AST file at compile time (during macro expansion)
-    write_ast_at_compile_time(
-        &name.to_string(),
-        &primary_keys,
-        &lookup_indexes,
-        &sources_by_type,
-        &events_by_instruction,
-        &[],             // No resolver hooks for proto-based specs
-        &[],             // No PDA registrations for proto-based specs
-        &HashMap::new(), // No derive_from mappings for proto-based specs
-        &HashMap::new(), // No aggregate conditions for proto-based specs
-        &[],             // No computed fields for proto-based specs
-        &[],             // Empty sections for proto-based specs
-        None,            // No IDL for proto-based specs
-    );
+    let mut resolver_specs_by_key: HashMap<
+        (crate::ast::ResolverType, String, String),
+        Vec<parse::ResolveSpec>,
+    > = HashMap::new();
+    for spec in &resolve_specs {
+        let input_key = if let Some(from) = &spec.from {
+            format!("path:{}", from)
+        } else if let Some(address) = &spec.address {
+            format!("value:{}", address)
+        } else {
+            "value:".to_string()
+        };
+        resolver_specs_by_key
+            .entry((spec.resolver.clone(), input_key, spec.strategy.clone()))
+            .or_default()
+            .push(spec.clone());
+    }
+
+    let resolver_specs_code: Vec<_> = resolver_specs_by_key
+        .into_iter()
+        .map(|((resolver, _input_key, strategy), specs)| {
+            let resolver_code = match resolver {
+                crate::ast::ResolverType::Token => quote! {
+                    hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Token
+                },
+                crate::ast::ResolverType::Url(config) => {
+                    let url_source_code = match &config.url_source {
+                        crate::ast::UrlSource::FieldPath(path) => {
+                            quote! {
+                                hyperstack::runtime::hyperstack_interpreter::ast::UrlSource::FieldPath(#path.to_string())
+                            }
+                        }
+                        crate::ast::UrlSource::Template(parts) => {
+                            let parts_code: Vec<_> = parts.iter().map(|part| match part {
+                                crate::ast::UrlTemplatePart::Literal(s) => quote! {
+                                    hyperstack::runtime::hyperstack_interpreter::ast::UrlTemplatePart::Literal(#s.to_string())
+                                },
+                                crate::ast::UrlTemplatePart::FieldRef(f) => quote! {
+                                    hyperstack::runtime::hyperstack_interpreter::ast::UrlTemplatePart::FieldRef(#f.to_string())
+                                },
+                            }).collect();
+                            quote! {
+                                hyperstack::runtime::hyperstack_interpreter::ast::UrlSource::Template(vec![#(#parts_code),*])
+                            }
+                        }
+                    };
+                    let method_code = match config.method {
+                        crate::ast::HttpMethod::Get => quote! {
+                            hyperstack::runtime::hyperstack_interpreter::ast::HttpMethod::Get
+                        },
+                        crate::ast::HttpMethod::Post => quote! {
+                            hyperstack::runtime::hyperstack_interpreter::ast::HttpMethod::Post
+                        },
+                    };
+                    let extract_path_code = match &config.extract_path {
+                        Some(path) => quote! { Some(#path.to_string()) },
+                        None => quote! { None },
+                    };
+                    quote! {
+                        hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(
+                            hyperstack::runtime::hyperstack_interpreter::ast::UrlResolverConfig {
+                                url_source: #url_source_code,
+                                method: #method_code,
+                                extract_path: #extract_path_code,
+                            }
+                        )
+                    }
+                },
+            };
+            let strategy_code = match strategy.as_str() {
+                "LastWrite" => quote! {
+                    hyperstack::runtime::hyperstack_interpreter::ast::ResolveStrategy::LastWrite
+                },
+                _ => quote! {
+                    hyperstack::runtime::hyperstack_interpreter::ast::ResolveStrategy::SetOnce
+                },
+            };
+            let input_path_code = match specs.first().and_then(|spec| spec.from.as_ref()) {
+                Some(value) => quote! { Some(#value.to_string()) },
+                None => quote! { None },
+            };
+            let input_value_code = match specs.first().and_then(|spec| spec.address.as_ref()) {
+                Some(value) => quote! {
+                    Some(hyperstack::runtime::serde_json::Value::String(#value.to_string()))
+                },
+                None => quote! { None },
+            };
+
+            let mut seen = HashSet::new();
+            let extracts_code: Vec<_> = specs
+                .iter()
+                .filter_map(|spec| {
+                    let key = format!("{}::{:?}", spec.target_field_name, spec.extract);
+                    if !seen.insert(key) {
+                        return None;
+                    }
+                    let target = &spec.target_field_name;
+                    let source = spec.extract.as_ref();
+                    let source_code = match source {
+                        Some(value) => quote! { Some(#value.to_string()) },
+                        None => quote! { None },
+                    };
+                    Some(quote! {
+                        hyperstack::runtime::hyperstack_interpreter::ast::ResolverExtractSpec {
+                            target_path: #target.to_string(),
+                            source_path: #source_code,
+                            transform: None,
+                        }
+                    })
+                })
+                .collect();
+
+            let condition_code = match specs.first().and_then(|s| s.condition.as_deref()) {
+                Some(cond_str) => {
+                    let parsed = super::ast_writer::parse_resolver_condition_from_str(cond_str);
+                    let field_path = &parsed.field_path;
+                    let op_code = match parsed.op {
+                        crate::ast::ComparisonOp::Equal => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::Equal },
+                        crate::ast::ComparisonOp::NotEqual => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::NotEqual },
+                        crate::ast::ComparisonOp::GreaterThan => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::GreaterThan },
+                        crate::ast::ComparisonOp::LessThan => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::LessThan },
+                        crate::ast::ComparisonOp::GreaterThanOrEqual => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::GreaterThanOrEqual },
+                        crate::ast::ComparisonOp::LessThanOrEqual => quote! { hyperstack::runtime::hyperstack_interpreter::ast::ComparisonOp::LessThanOrEqual },
+                    };
+                    let val_code = match &parsed.value {
+                        serde_json::Value::Null => quote! { hyperstack::runtime::serde_json::Value::Null },
+                        serde_json::Value::Bool(b) => quote! { hyperstack::runtime::serde_json::Value::Bool(#b) },
+                        serde_json::Value::Number(n) => {
+                            let n_str = n.to_string();
+                            quote! { hyperstack::runtime::serde_json::json!(#n_str.parse::<f64>().unwrap()) }
+                        }
+                        serde_json::Value::String(s) => quote! { hyperstack::runtime::serde_json::Value::String(#s.to_string()) },
+                        _ => quote! { hyperstack::runtime::serde_json::Value::Null },
+                    };
+                    quote! {
+                        Some(hyperstack::runtime::hyperstack_interpreter::ast::ResolverCondition {
+                            field_path: #field_path.to_string(),
+                            op: #op_code,
+                            value: #val_code,
+                        })
+                    }
+                }
+                None => quote! { None },
+            };
+
+            let schedule_at_code = match specs.first().and_then(|s| s.schedule_at.as_ref()) {
+                Some(path) => quote! { Some(#path.to_string()) },
+                None => quote! { None },
+            };
+
+            quote! {
+                hyperstack::runtime::hyperstack_interpreter::ast::ResolverSpec {
+                    resolver: #resolver_code,
+                    input_path: #input_path_code,
+                    input_value: #input_value_code,
+                    strategy: #strategy_code,
+                    extracts: vec![
+                        #(#extracts_code),*
+                    ],
+                    condition: #condition_code,
+                    schedule_at: #schedule_at_code,
+                }
+            }
+        })
+        .collect();
 
     let output = quote! {
         #[derive(Debug, Clone, hyperstack::runtime::serde::Serialize, hyperstack::runtime::serde::Deserialize)]
@@ -431,6 +618,9 @@ pub fn process_struct_with_context(
                     #(#handler_calls),*
                 ],
             )
+            .with_resolver_specs(vec![
+                #(#resolver_specs_code),*
+            ])
         }
 
         #(#handler_fns)*

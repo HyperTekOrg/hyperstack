@@ -19,6 +19,64 @@ class Operation(str, Enum):
     UPSERT = "upsert"
     PATCH = "patch"
     DELETE = "delete"
+    SNAPSHOT = "snapshot"
+    SUBSCRIBED = "subscribed"
+
+
+class SortOrder(str, Enum):
+    ASC = "asc"
+    DESC = "desc"
+
+
+@dataclass
+class SortConfig:
+    field: List[str]
+    order: SortOrder
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SortConfig":
+        return cls(
+            field=data["field"],
+            order=SortOrder(data["order"]),
+        )
+
+
+@dataclass
+class SubscribedFrame:
+    op: str
+    view: str
+    mode: Mode
+    sort: Optional[SortConfig] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SubscribedFrame":
+        sort_data = data.get("sort")
+        return cls(
+            op=data["op"],
+            view=data["view"],
+            mode=Mode(data["mode"]),
+            sort=SortConfig.from_dict(sort_data) if sort_data else None,
+        )
+
+    @classmethod
+    def from_message(cls, data: Union[bytes, str]) -> "SubscribedFrame":
+        parsed = parse_message(data)
+        return cls.from_dict(parsed)
+
+    @staticmethod
+    def is_subscribed_frame(data: Dict[str, Any]) -> bool:
+        return data.get("op") == "subscribed"
+
+
+def try_parse_subscribed_frame(data: Union[bytes, str]) -> Optional["SubscribedFrame"]:
+    """Try to parse a message as a SubscribedFrame. Returns None if not a subscribed frame."""
+    try:
+        parsed = parse_message(data)
+        if SubscribedFrame.is_subscribed_frame(parsed):
+            return SubscribedFrame.from_dict(parsed)
+        return None
+    except Exception:
+        return None
 
 
 class ConnectionState(str, Enum):

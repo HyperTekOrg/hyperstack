@@ -5,11 +5,13 @@
 //! - `idl` - Parsing of Anchor IDL JSON files
 //! - `proto` - Parsing of Protocol Buffer (.proto) files
 //! - `conditions` - Parsing of condition expressions
+//! - `pdas` - Parsing of pdas! macro blocks
 
 pub mod attributes;
 pub mod conditions;
 pub mod idl;
+pub mod pda_validation;
+pub mod pdas;
 pub mod proto;
 
-// Re-export commonly used types from attributes module
 pub use attributes::*;

@@ -1,0 +1,681 @@
+---
+title: React SDK
+sidebar:
+  order: 1
+---
+
+The `hyperstack-react` SDK provides hooks and providers for building live Solana applications with React. It's built on top of `hyperstack-typescript` and adds React-specific features like automatic re-rendering, connection state management, and data transformation.
+
+:::tip[Not using React?]
+See the [TypeScript SDK](/sdks/typescript/) for the framework-agnostic core SDK.
+:::
+
+---
+
+## Quick Start
+
+```tsx
+import { HyperstackProvider, useHyperstack } from "hyperstack-react";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
+
+function App() {
+  return (
+    <HyperstackProvider>
+      <Dashboard />
+    </HyperstackProvider>
+  );
+}
+
+function Dashboard() {
+  const { views, isConnected } = useHyperstack(ORE_STREAM_STACK);
+  const { data: rounds, isLoading } = views.OreRound.latest.use();
+
+  if (isLoading) return <p>Loading...</p>;
+
+  return (
+    <div>
+      <p>{isConnected ? "🟢 Live" : "Connecting..."}</p>
+      <ul>
+        {rounds?.map((round) => (
+          <li key={round.id?.round_id}>Round #{round.id?.round_id}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+---
+
+## Installation
+
+```bash
+npm install hyperstack-react zustand
+```
+
+### Peer Dependencies
+
+The SDK requires:
+
+- **React** (v19.0.0+)
+- **Zustand** (v4.0.0+) — Used for internal state management
+
+---
+
+## Project Setup
+
+### 1. Wrap Your App with the Provider
+
+```tsx
+// src/main.tsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { HyperstackProvider } from "hyperstack-react";
+import App from "./App";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <HyperstackProvider>
+      <App />
+    </HyperstackProvider>
+  </React.StrictMode>,
+);
+```
+
+The provider manages connections to stacks. Each stack definition includes its own URL, so the provider doesn't need a URL prop.
+
+#### Provider Props
+
+| Prop                | Type             | Default | Description                              |
+| ------------------- | ---------------- | ------- | ---------------------------------------- |
+| `websocketUrl`      | `string`         | -       | Override URL for all stacks (optional)   |
+| `autoConnect`       | `boolean`        | `true`  | Auto-connect on mount                    |
+| `maxEntriesPerView` | `number \| null` | `10000` | Max entries per view before LRU eviction |
+
+---
+
+### 2. Import Your Stack Definition
+
+You have two options for stack definitions:
+
+**Option A: Use curated Hyperstack feeds**
+
+Install the `hyperstack-stacks` package for pre-built, typed definitions of popular Solana programs:
+
+```bash
+npm install hyperstack-stacks
+```
+
+```typescript
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
+```
+
+Each stack includes its default URL (e.g., `wss://ore.stack.usehyperstack.com`).
+
+**Option B: Generate from your own stack**
+
+If you've [built your own stack](/building-stacks/workflow/), generate a typed SDK using the CLI:
+
+```bash
+hs sdk create typescript my-stack
+```
+
+```typescript
+import { MY_STACK } from "./stack";
+```
+
+See [CLI Commands](/cli/commands/) for all `hs sdk create` options.
+
+---
+
+## Using Views
+
+### useHyperstack Hook
+
+Access your stack's typed interface:
+
+```tsx
+import { useHyperstack } from "hyperstack-react";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
+
+function RoundList() {
+  const { views } = useHyperstack(ORE_STREAM_STACK);
+  const { data: rounds, isLoading, error } = views.OreRound.list.use();
+
+  if (isLoading) return <p>Loading...</p>;
+  if (error) return <p>Error: {error.message}</p>;
+
+  return (
+    <div>
+      {rounds?.map((round) => (
+        <div key={round.id?.round_id}>
+          Round #{round.id?.round_id} — {round.state?.motherlode}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+### List View: All Entities
+
+```tsx
+function RoundList() {
+  const { views } = useHyperstack(ORE_STREAM_STACK);
+  const { data: rounds, isLoading, error } = views.OreRound.list.use();
+
+  if (isLoading) return <div>Connecting...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+
+  return (
+    <ul>
+      {rounds?.map((round) => (
+        <li key={round.id?.round_id}>
+          Round #{round.id?.round_id} — Motherlode: {round.state?.motherlode}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### State View: Single Entity
+
+```tsx
+function RoundDetail({ roundAddress }: { roundAddress: string }) {
+  const { views } = useHyperstack(ORE_STREAM_STACK);
+  const { data: round, isLoading } = views.OreRound.state.use({
+    key: roundAddress,
+  });
+
+  if (isLoading) return <div>Loading...</div>;
+  if (!round) return <div>Round not found</div>;
+
+  return (
+    <div>
+      <h2>Round #{round.id?.round_id}</h2>
+      <p>Motherlode: {round.state?.motherlode}</p>
+      <p>Total Deployed: {round.state?.total_deployed}</p>
+    </div>
+  );
+}
+```
+
+---
+
+## View Options
+
+### Single Item Query
+
+```tsx
+const { views } = useHyperstack(MY_STACK);
+
+// Get only one item with type-safe return (T | undefined instead of T[])
+const { data: latestToken } = views.tokens.list.use({ take: 1 });
+// data: Token | undefined
+
+// Or use the dedicated useOne method
+const { data: latestToken } = views.tokens.list.useOne();
+// data: Token | undefined
+
+// useOne with filters
+const { data: topToken } = views.tokens.list.useOne({
+  where: { volume: { gte: 10000 } },
+});
+```
+
+### Filtering
+
+The SDK supports both server-side and client-side filtering:
+
+**Server-side** options reduce data sent over the wire:
+
+```tsx
+const { views } = useHyperstack(ORE_STREAM_STACK);
+const { data: rounds } = views.OreRound.list.use({
+  take: 10,  // Limit to 10 entities from server
+  skip: 20,  // Skip first 20 (for pagination)
+});
+```
+
+For advanced server-side filtering, use [custom views](/using-stacks/filtering-feeds/#server-side-filtering) defined in your stack.
+
+**Client-side** filtering happens after data is received. Use `where` with comparison operators:
+
+```tsx
+const { views } = useHyperstack(ORE_STREAM_STACK);
+const { data: highValueRounds } = views.OreRound.list.use({
+  where: {
+    // Supported operators: gte, lte, gt, lt, or exact match
+    motherlode: { gte: 1000000 },  // Greater than or equal
+    difficulty: { lt: 50 },        // Less than
+  },
+  limit: 10,  // Keep only first 10 matching results
+});
+```
+
+| Operator  | Description           |
+| --------- | --------------------- |
+| `gte`     | Greater than or equal |
+| `gt`      | Greater than          |
+| `lte`     | Less than or equal    |
+| `lt`      | Less than             |
+| _(value)_ | Exact match           |
+
+```tsx
+// Exact match example
+const { views } = useHyperstack(ORE_STREAM_STACK);
+const { data } = views.OreRound.list.use({
+  where: { status: "active" },  // Exact equality
+});
+```
+
+### Conditional Subscription
+
+```tsx
+const { views } = useHyperstack(ORE_STREAM_STACK);
+// Only subscribe when we have a valid address
+const { data: round } = views.OreRound.state.use(
+  { key: roundAddress },
+  { enabled: !!roundAddress },
+);
+```
+
+### Initial Data
+
+```tsx
+const { views } = useHyperstack(ORE_STREAM_STACK);
+// Show placeholder while connecting
+const { data: rounds } = views.OreRound.list.use({}, { initialData: [] });
+```
+
+### View Hook Parameters
+
+The `.use()` method accepts two arguments: params and options.
+
+#### List Params
+
+| Param   | Type     | Side   | Description                         |
+| ------- | -------- | ------ | ----------------------------------- |
+| `take`  | `number` | Server | Limit entities returned from server |
+| `skip`  | `number` | Server | Skip first N entities (pagination)  |
+| `where` | `object` | Client | Filter with comparison operators    |
+| `limit` | `number` | Client | Max results to keep after filtering |
+
+```typescript
+const { views } = useHyperstack(ORE_STREAM_STACK);
+const { data } = views.OreRound.list.use({
+  take: 50,                                // Server sends max 50
+  skip: 0,                                 // Start from beginning
+  where: { motherlode: { gte: 100000 } },  // Filter locally
+  limit: 10,                               // Keep first 10 matches
+});
+```
+
+#### View Hook Options
+
+```typescript
+const { views } = useHyperstack(MY_STACK);
+const { data } = views.tokens.list.use(
+  { limit: 10 }, // Params
+  {
+    enabled: true, // Enable/disable subscription
+    initialData: [], // Initial data before first response
+  },
+);
+```
+
+### View Hook Return Value
+
+| Property    | Type                    | Description                    |
+| ----------- | ----------------------- | ------------------------------ |
+| `data`      | `T \| T[] \| undefined` | Current view data              |
+| `isLoading` | `boolean`               | True until first data received |
+| `error`     | `Error \| undefined`    | Subscription error if any      |
+| `refresh`   | `() => void`            | Manually trigger refresh       |
+
+---
+
+## Connection State
+
+The `useHyperstack` hook returns connection state directly:
+
+```tsx
+import { useHyperstack } from "hyperstack-react";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
+
+function ConnectionStatus() {
+  const { connectionState, isConnected } = useHyperstack(ORE_STREAM_STACK);
+
+  const statusColors = {
+    connected: "green",
+    connecting: "yellow",
+    reconnecting: "orange",
+    disconnected: "gray",
+    error: "red",
+  };
+
+  return (
+    <div style={{ color: statusColors[connectionState] }}>
+      {isConnected ? "Live" : connectionState}
+    </div>
+  );
+}
+```
+
+### useHyperstack Return Values
+
+| Property          | Type              | Description                                      |
+| ----------------- | ----------------- | ------------------------------------------------ |
+| `views`           | `object`          | Typed view accessors                             |
+| `connectionState` | `ConnectionState` | Current WebSocket state                          |
+| `isConnected`     | `boolean`         | Convenience: `true` when `state === 'connected'` |
+| `isLoading`       | `boolean`         | `true` until client is ready                     |
+| `error`           | `Error \| null`   | Connection error if any                          |
+| `client`          | `HyperStack`      | Low-level client instance                        |
+
+### Connection States
+
+| State          | Description                     |
+| -------------- | ------------------------------- |
+| `disconnected` | Not connected                   |
+| `connecting`   | Establishing connection         |
+| `connected`    | Active and healthy              |
+| `reconnecting` | Auto-reconnecting after failure |
+| `error`        | Connection failed               |
+
+### Standalone useConnectionState Hook
+
+For cases where you need connection state outside of a component using `useHyperstack`, you can use the standalone hook:
+
+```tsx
+import { useConnectionState } from "hyperstack-react";
+
+function GlobalConnectionIndicator() {
+  const state = useConnectionState();
+  return <div>{state}</div>;
+}
+```
+
+:::note
+`useConnectionState()` without arguments returns the state of the single active client. If you have multiple stacks, pass the stack definition: `useConnectionState(MY_STACK)`.
+:::
+
+---
+
+## API Reference
+
+### `useHyperstack(stackDefinition, options?)`
+
+Returns a typed interface to your stack's views, along with connection state.
+
+```typescript
+const { views, connectionState, isConnected, isLoading, error, client } = useHyperstack(ORE_STREAM_STACK);
+
+// Access views
+views.OreRound.list.use()
+views.OreRound.state.use({ key })
+views.OreRound.latest.use()
+
+// Check connection
+if (isConnected) {
+  console.log('Live!');
+}
+```
+
+#### Options
+
+| Option | Type     | Description                      |
+| ------ | -------- | -------------------------------- |
+| `url`  | `string` | Override the stack's default URL |
+
+```typescript
+// Connect to local development server
+const { views, isConnected } = useHyperstack(ORE_STREAM_STACK, {
+  url: "ws://localhost:8878"
+});
+```
+
+### `useConnectionState(stack?)`
+
+Standalone hook for connection state. Prefer using `connectionState` from `useHyperstack` when possible.
+
+```typescript
+// Without argument: returns state of single active client
+const state = useConnectionState();
+
+// With stack: returns state for specific stack
+const state = useConnectionState(ORE_STREAM_STACK);
+
+// Returns: 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error'
+```
+
+### `HyperstackProvider`
+
+Wrap your application to initialize the SDK:
+
+```tsx
+<HyperstackProvider
+  autoConnect={true}
+  maxEntriesPerView={10000}
+>
+  <YourApp />
+</HyperstackProvider>
+```
+
+To override the URL for all stacks (e.g., for local development):
+
+```tsx
+<HyperstackProvider websocketUrl="ws://localhost:8878">
+  <YourApp />
+</HyperstackProvider>
+```
+
+### View `.useOne()`
+
+A convenience method for fetching a single item from a list view with proper typing.
+
+```typescript
+const { views } = useHyperstack(MY_STACK);
+const { data } = views.tokens.list.useOne();
+// data: Token | undefined (not Token[])
+```
+
+Equivalent to `.use({ take: 1 })` but with a cleaner API and explicit intent.
+
+---
+
+## Complete Example
+
+A full React component combining everything:
+
+```tsx
+// src/App.tsx
+import { useHyperstack } from "hyperstack-react";
+import { ORE_STREAM_STACK } from "hyperstack-stacks/ore";
+
+function OreDashboard() {
+  const { views, connectionState, isConnected } = useHyperstack(ORE_STREAM_STACK);
+
+  const {
+    data: rounds,
+    isLoading,
+    error,
+  } = views.OreRound.latest.use({
+    take: 5,
+  });
+
+  return (
+    <div className="app">
+      <header>
+        <h1>Live ORE Mining Rounds</h1>
+        <span className={`status ${connectionState}`}>
+          {isConnected ? "Live" : connectionState}
+        </span>
+      </header>
+
+      <main>
+        {isLoading && <p>Connecting to stream...</p>}
+        {error && <p className="error">Error: {error.message}</p>}
+
+        {rounds && (
+          <>
+            <p>{rounds.length} rounds streaming</p>
+            <div className="round-grid">
+              {rounds.map((round) => (
+                <div key={round.id?.round_id} className="round-card">
+                  <h3>Round #{round.id?.round_id}</h3>
+                  <p className="motherlode">{round.state?.motherlode}</p>
+                  <p className="deployed">
+                    Total Deployed: {round.state?.total_deployed}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default OreDashboard;
+```
+
+---
+
+## Schema Validation
+
+Every stack ships with Zod schemas that you can use to filter entities at the hook level. Pass a `schema` to `.use()` or `.useOne()` — entities that fail validation are silently excluded from results.
+
+### Filter with Generated Schemas
+
+Use the "Completed" schema variant to only render entities where all fields are present:
+
+```tsx
+import { useHyperstack } from "hyperstack-react";
+import {
+  ORE_STREAM_STACK,
+  OreRoundCompletedSchema,
+} from "hyperstack-stacks/ore";
+
+function FullyLoadedRounds() {
+  const { views } = useHyperstack(ORE_STREAM_STACK);
+
+  const { data: rounds } = views.OreRound.latest.use({
+    schema: OreRoundCompletedSchema,
+  });
+
+  return (
+    <ul>
+      {rounds?.map((round) => (
+        <li key={round.id.round_id}>
+          Round #{round.id.round_id} — {round.state.motherlode}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Filter with Custom Schemas
+
+Define your own Zod schema to validate only the fields your component needs:
+
+```tsx
+import { z } from "zod";
+import { useHyperstack } from "hyperstack-react";
+import { PUMPFUN_STREAM_STACK } from "hyperstack-stacks/pumpfun";
+
+const TradableTokenSchema = z.object({
+  id: z.object({ mint: z.string() }),
+  reserves: z.object({ current_price_sol: z.number() }),
+  trading: z.object({ total_volume: z.number() }),
+});
+
+function TokenList() {
+  const { views } = useHyperstack(PUMPFUN_STREAM_STACK);
+
+  // Only tokens with price and volume data
+  const { data: tokens } = views.PumpfunToken.list.use({
+    schema: TradableTokenSchema,
+  });
+
+  return (
+    <ul>
+      {tokens?.map((token) => (
+        <li key={token.id.mint}>
+          {token.reserves.current_price_sol} SOL — Vol: {token.trading.total_volume}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+See [Schema Validation](/sdks/validation/) for the full guide on frame validation, generated schemas, and the `Schema<T>` interface.
+
+---
+
+## Resolved Data
+
+Stacks can include data resolved server-side that doesn't live on-chain. For example, the ORE stack enriches rounds with token metadata (name, symbol, decimals) — no extra API calls needed:
+
+```tsx
+function RoundWithMetadata() {
+  const { views } = useHyperstack(ORE_STREAM_STACK);
+  const { data: round } = views.OreRound.latest.useOne();
+
+  return (
+    <div>
+      <p>Token: {round?.ore_metadata?.name} ({round?.ore_metadata?.symbol})</p>
+      <p>Decimals: {round?.ore_metadata?.decimals}</p>
+    </div>
+  );
+}
+```
+
+Resolved data arrives as part of the entity alongside on-chain fields. See [Resolvers](/building-stacks/rust-dsl/resolvers/) for details on how resolved data works.
+
+---
+
+## Accessing Core SDK
+
+The React SDK re-exports everything from `hyperstack-typescript`. Access low-level APIs when needed:
+
+```typescript
+// Import core features from React SDK
+import { HyperStack, ConnectionManager } from "hyperstack-react";
+```
+
+---
+
+## Choosing Between SDKs
+
+| Use Case                 | Recommended SDK         |
+| ------------------------ | ----------------------- |
+| React/Next.js apps       | `hyperstack-react`      |
+| Vue, Svelte, Solid, etc. | `hyperstack-typescript` |
+| Node.js backend/scripts  | `hyperstack-typescript` |
+| Custom state management  | `hyperstack-typescript` |
+| Need React hooks         | `hyperstack-react`      |
+| Maximum control          | `hyperstack-typescript` |
+
+---
+
+## Troubleshooting
+
+| Issue                         | Solution                                                                   |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| "WebSocket connection failed" | Check your connection to `wss://ore.stack.usehyperstack.com`               |
+| Data not updating             | Verify the view path matches the stack entity name (e.g., `OreRound/list`) |
+| TypeScript errors             | Ensure your interface matches the stack's data shape                       |
+
+---
+
+## Next Steps
+
+- [Schema Validation](/sdks/validation/) — Zod schemas for runtime validation and filtering
+- [TypeScript SDK](/sdks/typescript/) — Use Hyperstack without React
+- [Resolvers](/building-stacks/rust-dsl/resolvers/) — Enrich entities with token metadata and computed fields
+- [Build Your Own Stack](/building-stacks/workflow) — Create custom data streams

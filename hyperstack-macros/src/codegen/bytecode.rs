@@ -23,5 +23,13 @@ pub fn generate_bytecode_from_spec(spec: &SerializableStreamSpec) -> TokenStream
                 0,
             )
         }
+
+        /// Extract view definitions from the embedded AST specification.
+        pub fn get_view_definitions() -> Vec<hyperstack::runtime::hyperstack_interpreter::ast::ViewDef> {
+            let ast_json = #spec_json;
+            let spec: hyperstack::runtime::hyperstack_interpreter::ast::SerializableStreamSpec = hyperstack::runtime::serde_json::from_str(ast_json)
+                .expect("Failed to parse embedded AST JSON");
+            spec.views
+        }
     }
 }

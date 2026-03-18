@@ -60,7 +60,7 @@ We are committed to providing a welcoming and harassment-free experience for eve
 - Focus on what's best for the community
 - Show empathy toward others
 
-Unacceptable behavior includes harassment, trolling, personal attacks, and publishing others' private information. If you experience or witness unacceptable behavior, please report it to [conduct@hyperstack.dev](mailto:conduct@hyperstack.dev).
+Unacceptable behavior includes harassment, trolling, personal attacks, and publishing others' private information. If you experience or witness unacceptable behavior.
 
 For the full text, see our [Code of Conduct](CODE_OF_CONDUCT.md).
 

@@ -31,6 +31,13 @@ pub fn parse_computed_expression(tokens: &proc_macro2::TokenStream) -> ComputedE
     resolve_bindings_in_expr(expr, &HashSet::new())
 }
 
+fn resolver_for_method(method: &str) -> Option<&'static str> {
+    match method {
+        "ui_amount" | "raw_amount" => Some("TokenMetadata"),
+        _ => None,
+    }
+}
+
 /// Qualify unqualified field references in a computed expression with a section prefix.
 ///
 /// This ensures that field references like `total_buy_volume` become `trading.total_buy_volume`
@@ -63,6 +70,18 @@ pub fn qualify_field_refs(expr: ComputedExpr, section: &str) -> ComputedExpr {
         },
         ComputedExpr::MethodCall { expr, method, args } => ComputedExpr::MethodCall {
             expr: Box::new(qualify_field_refs(*expr, section)),
+            method,
+            args: args
+                .into_iter()
+                .map(|a| qualify_field_refs(a, section))
+                .collect(),
+        },
+        ComputedExpr::ResolverComputed {
+            resolver,
+            method,
+            args,
+        } => ComputedExpr::ResolverComputed {
+            resolver,
             method,
             args: args
                 .into_iter()
@@ -120,6 +139,8 @@ pub fn qualify_field_refs(expr: ComputedExpr, section: &str) -> ComputedExpr {
         ComputedExpr::JsonToBytes { expr } => ComputedExpr::JsonToBytes {
             expr: Box::new(qualify_field_refs(*expr, section)),
         },
+        ComputedExpr::ContextSlot => ComputedExpr::ContextSlot,
+        ComputedExpr::ContextTimestamp => ComputedExpr::ContextTimestamp,
     }
 }
 
@@ -315,6 +336,18 @@ fn resolve_bindings_in_expr(expr: ComputedExpr, bindings: &HashSet<String>) -> C
                 .map(|a| resolve_bindings_in_expr(a, bindings))
                 .collect(),
         },
+        ComputedExpr::ResolverComputed {
+            resolver,
+            method,
+            args,
+        } => ComputedExpr::ResolverComputed {
+            resolver,
+            method,
+            args: args
+                .into_iter()
+                .map(|a| resolve_bindings_in_expr(a, bindings))
+                .collect(),
+        },
         ComputedExpr::UnwrapOr { expr, default } => ComputedExpr::UnwrapOr {
             expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
             default,
@@ -360,7 +393,9 @@ fn resolve_bindings_in_expr(expr: ComputedExpr, bindings: &HashSet<String>) -> C
         ComputedExpr::Var { .. }
         | ComputedExpr::None
         | ComputedExpr::Literal { .. }
-        | ComputedExpr::ByteArray { .. } => expr,
+        | ComputedExpr::ByteArray { .. }
+        | ComputedExpr::ContextSlot
+        | ComputedExpr::ContextTimestamp => expr,
     }
 }
 
@@ -813,6 +848,19 @@ fn parse_postfix_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
                                     continue;
                                 }
 
+                                if let Some(resolver) = resolver_for_method(&name) {
+                                    let base_expr = expr;
+                                    let mut resolver_args = Vec::with_capacity(args.len() + 1);
+                                    resolver_args.push(base_expr);
+                                    resolver_args.extend(args);
+                                    expr = ComputedExpr::ResolverComputed {
+                                        resolver: resolver.to_string(),
+                                        method: name,
+                                        args: resolver_args,
+                                    };
+                                    continue;
+                                }
+
                                 expr = ComputedExpr::MethodCall {
                                     expr: Box::new(expr),
                                     method: name,
@@ -915,6 +963,15 @@ fn parse_primary_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
             (ComputedExpr::ByteArray { bytes }, start + 1)
         }
 
+        // Brace-delimited block expression: { let x = ...; expr }
+        proc_macro2::TokenTree::Group(group)
+            if group.delimiter() == proc_macro2::Delimiter::Brace =>
+        {
+            let inner_tokens: Vec<_> = group.stream().into_iter().collect();
+            let (inner_expr, _) = parse_expr(&inner_tokens, 0);
+            (inner_expr, start + 1)
+        }
+
         // Closure: |param| body
         proc_macro2::TokenTree::Punct(p) if p.as_char() == '|' => parse_closure(tokens, start),
 
@@ -925,6 +982,14 @@ fn parse_primary_expr(tokens: &[proc_macro2::TokenTree], start: usize) -> (Compu
             // Check for None
             if name == "None" {
                 return (ComputedExpr::None, start + 1);
+            }
+
+            // Check for context access special identifiers
+            if name == "__slot" {
+                return (ComputedExpr::ContextSlot, start + 1);
+            }
+            if name == "__timestamp" {
+                return (ComputedExpr::ContextTimestamp, start + 1);
             }
 
             // Check for Some(expr)

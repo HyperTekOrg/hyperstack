@@ -1,6 +1,6 @@
 # How Hyperstack Works
 
-Hyperstack is a declarative data layer for Solana. You define the data shape you need, and Hyperstack handles all the infrastructure to stream it to your app in real-time.
+Hyperstack is a declarative data layer for Solana. You define the data shape you need, and Hyperstack handles all the infrastructure to stream it to your app.
 
 ---
 
@@ -38,7 +38,7 @@ pub struct Token {
 Hyperstack then:
 - Subscribes to the relevant on-chain events
 - Transforms raw data into your entity shape
-- Streams updates to your app in real-time
+- Streams updates to your app as they happen on-chain
 - Generates type-safe SDKs for your frontend
 
 ---
@@ -147,7 +147,7 @@ pub struct Token {
 
 A **stack** is the client-side interface to your deployed stream. It provides:
 
-- **Views** - Real-time data subscriptions
+- **Views** - Live data subscriptions
 - **Transactions** - Instruction builders
 - **Helpers** - Utility functions
 
@@ -189,7 +189,7 @@ const TokenStack = defineStack({
 
 1. Connect to WebSocket
 2. Subscribe to views
-3. Receive real-time updates
+3. Receive live updates
 4. UI components update automatically (React) or stream yields items (Rust)
 
 ---
@@ -272,7 +272,9 @@ while let Some(alert) = alerts.next().await {
 
 ## Next Steps
 
-- [React Quickstart](/quickstart/react) - Build your first React app
-- [Rust SDK](https://github.com/HyperTekOrg/hyperstack/tree/main/rust/hyperstack-sdk) - Rust client documentation
-- [Stack API](/concepts/stack-api) - Client-side API reference (TypeScript)
+- [Quickstart](/using-stacks/quickstart) - Scaffold a working app in under 2 minutes
+- [React SDK](/sdks/react/) - Build a complete React app
+- [TypeScript SDK](/sdks/typescript/) - Framework-agnostic SDK
+- [Rust SDK](/sdks/rust/) - Native Rust client
+- [Stack API](/concepts/stack-api) - Client-side API reference
 - [CLI Commands](/cli/commands) - Deployment and management

@@ -3,6 +3,7 @@ use crate::cache::EntityCache;
 use crate::config::ServerConfig;
 use crate::health::HealthMonitor;
 use crate::http_health::HttpHealthServer;
+use crate::materialized_view::MaterializedViewRegistry;
 use crate::mutation_batch::MutationBatch;
 use crate::projector::Projector;
 use crate::view::ViewIndex;
@@ -46,11 +47,11 @@ async fn shutdown_signal() {
     }
 }
 
-/// Runtime orchestrator that manages all server components
 pub struct Runtime {
     config: ServerConfig,
     view_index: Arc<ViewIndex>,
     spec: Option<Spec>,
+    materialized_views: Option<MaterializedViewRegistry>,
     #[cfg(feature = "otel")]
     metrics: Option<Arc<Metrics>>,
 }
@@ -62,6 +63,7 @@ impl Runtime {
             config,
             view_index: Arc::new(view_index),
             spec: None,
+            materialized_views: None,
             metrics,
         }
     }
@@ -72,11 +74,17 @@ impl Runtime {
             config,
             view_index: Arc::new(view_index),
             spec: None,
+            materialized_views: None,
         }
     }
 
     pub fn with_spec(mut self, spec: Spec) -> Self {
         self.spec = Some(spec);
+        self
+    }
+
+    pub fn with_materialized_views(mut self, registry: MaterializedViewRegistry) -> Self {
+        self.materialized_views = Some(registry);
         self
     }
 
@@ -152,14 +160,18 @@ impl Runtime {
 
         let parser_handle = if let Some(spec) = self.spec {
             if let Some(parser_setup) = spec.parser_setup {
+                let program_id = spec
+                    .program_ids
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "unknown".to_string());
                 info!(
                     "Starting Vixen parser runtime for program: {}",
-                    spec.program_id
+                    program_id
                 );
                 let tx = mutations_tx.clone();
                 let health = health_monitor.clone();
                 let reconnection_config = self.config.reconnection.clone().unwrap_or_default();
-                let program_id = spec.program_id.clone();
                 Some(tokio::spawn(
                     async move {
                         if let Err(e) = parser_setup(tx, health, reconnection_config).await {
@@ -177,21 +189,34 @@ impl Runtime {
             None
         };
 
-        let http_health_handle = if let Some(http_health_config) = &self.config.http_health {
+        // Run the HTTP health server on a dedicated OS thread with its own single-threaded
+        // tokio runtime. This isolates it from the main runtime so that liveness probes
+        // always respond even when the event processing pipeline saturates worker threads
+        // (e.g. due to std::sync::Mutex contention on VmContext under high throughput).
+        let _http_health_handle = if let Some(http_health_config) = &self.config.http_health {
             let mut http_server = HttpHealthServer::new(http_health_config.bind_address);
             if let Some(monitor) = health_monitor.clone() {
                 http_server = http_server.with_health_monitor(monitor);
             }
 
             let bind_addr = http_health_config.bind_address;
-            Some(tokio::spawn(
-                async move {
-                    if let Err(e) = http_server.start().await {
-                        error!("HTTP health server error: {}", e);
-                    }
-                }
-                .instrument(info_span!("http.health", %bind_addr)),
-            ))
+            let join_handle = std::thread::Builder::new()
+                .name("health-server".into())
+                .spawn(move || {
+                    let rt = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("Failed to create health server runtime");
+                    rt.block_on(async move {
+                        let _span = info_span!("http.health", %bind_addr).entered();
+                        if let Err(e) = http_server.start().await {
+                            error!("HTTP health server error: {}", e);
+                        }
+                    });
+                })
+                .expect("Failed to spawn health server thread");
+            info!("HTTP health server running on dedicated thread at {}", bind_addr);
+            Some(join_handle)
         } else {
             None
         };
@@ -258,15 +283,6 @@ impl Runtime {
                 }
             } => {
                 info!("Parser runtime task completed");
-            }
-            _ = async {
-                if let Some(handle) = http_health_handle {
-                    handle.await
-                } else {
-                    std::future::pending().await
-                }
-            } => {
-                info!("HTTP health server task completed");
             }
             _ = bus_cleanup_handle => {
                 info!("Bus cleanup task completed");

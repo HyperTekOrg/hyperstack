@@ -23,7 +23,10 @@ export interface ViewDef<T, TMode extends 'state' | 'list'> {
 
 export interface StackDefinition {
   readonly name: string;
+  readonly url: string;
   readonly views: Record<string, ViewGroup>;
+  readonly schemas?: Record<string, Schema<unknown>>;
+  instructions?: Record<string, import('./instructions').InstructionHandler>;
 }
 
 export interface ViewGroup {
@@ -36,6 +39,23 @@ export interface Subscription {
   key?: string;
   partition?: string;
   filters?: Record<string, string>;
+  take?: number;
+  skip?: number;
+}
+
+export type SchemaResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: unknown };
+
+export interface Schema<T> {
+  safeParse: (input: unknown) => SchemaResult<T>;
+}
+
+export interface WatchOptions<TSchema = unknown> {
+  take?: number;
+  skip?: number;
+  filters?: Record<string, string>;
+  schema?: Schema<TSchema>;
 }
 
 export interface HyperStackOptions<TStack extends StackDefinition> {
@@ -43,6 +63,7 @@ export interface HyperStackOptions<TStack extends StackDefinition> {
   autoReconnect?: boolean;
   reconnectIntervals?: number[];
   maxReconnectAttempts?: number;
+  validateFrames?: boolean;
 }
 
 export const DEFAULT_MAX_ENTRIES_PER_VIEW = 10_000;
@@ -79,24 +100,25 @@ export type TypedViews<TViews extends StackDefinition['views']> = {
 };
 
 export type TypedViewGroup<TGroup> = {
-  state: TGroup extends { state: ViewDef<infer T, 'state'> }
+  [K in keyof TGroup]: TGroup[K] extends ViewDef<infer T, 'state'>
     ? TypedStateView<T>
-    : never;
-  list: TGroup extends { list: ViewDef<infer T, 'list'> }
-    ? TypedListView<T>
-    : never;
+    : TGroup[K] extends ViewDef<infer T, 'list'>
+      ? TypedListView<T>
+      : never;
 };
 
 export interface TypedStateView<T> {
-  watch(key: string): AsyncIterable<Update<T>>;
-  watchRich(key: string): AsyncIterable<RichUpdate<T>>;
+  use<TSchema = T>(key: string, options?: WatchOptions<TSchema>): AsyncIterable<TSchema>;
+  watch(key: string, options?: WatchOptions): AsyncIterable<Update<T>>;
+  watchRich(key: string, options?: WatchOptions): AsyncIterable<RichUpdate<T>>;
   get(key: string): Promise<T | null>;
   getSync(key: string): T | null | undefined;
 }
 
 export interface TypedListView<T> {
-  watch(): AsyncIterable<Update<T>>;
-  watchRich(): AsyncIterable<RichUpdate<T>>;
+  use<TSchema = T>(options?: WatchOptions<TSchema>): AsyncIterable<TSchema>;
+  watch(options?: WatchOptions): AsyncIterable<Update<T>>;
+  watchRich(options?: WatchOptions): AsyncIterable<RichUpdate<T>>;
   get(): Promise<T[]>;
   getSync(): T[] | undefined;
 }

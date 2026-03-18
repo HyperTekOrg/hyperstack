@@ -1,5 +1,5 @@
 {
-  "version": "3.7.5",
+  "version": "3.7.22",
   "name": "ore",
   "instructions": [
     {
@@ -61,6 +61,10 @@
         {
           "name": "strategy",
           "type": "u8"
+        },
+        {
+          "name": "reload",
+          "type": "u64"
         }
       ]
     },
@@ -255,6 +259,7 @@
       "docs": [
         "Deploys SOL to selected squares for the current round.",
         "Automation PDA seeds: [\"automation\", authority].",
+        "Config PDA seeds: [\"config\"].",
         "Miner PDA seeds: [\"miner\", authority].",
         "Round PDA seeds: [\"round\", board.round_id]."
       ],
@@ -280,6 +285,11 @@
           "isSigner": false
         },
         {
+          "name": "config",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "miner",
           "isMut": true,
           "isSigner": false
@@ -294,6 +304,12 @@
           "isMut": false,
           "isSigner": false,
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "oreProgram",
+          "isMut": false,
+          "isSigner": false,
+          "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv"
         },
         {
           "name": "entropyVar",
@@ -435,6 +451,17 @@
           "isMut": false,
           "isSigner": false,
           "address": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X"
+        },
+        {
+          "name": "mintAuthority",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "oreMintProgram",
+          "isMut": false,
+          "isSigner": false,
+          "address": "mintzxW6Kckmeyh1h6Zfdj9QcYgCzhPSGiC8ChZ6fCx"
         }
       ],
       "args": []
@@ -452,6 +479,11 @@
       "accounts": [
         {
           "name": "signer",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "payer",
           "isMut": true,
           "isSigner": true
         },
@@ -503,6 +535,10 @@
       "args": [
         {
           "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "compound_fee",
           "type": "u64"
         }
       ]
@@ -645,10 +681,22 @@
       ]
     },
     {
-      "name": "bury",
+      "name": "buyback",
       "discriminant": {
         "type": "u8",
         "value": 13
+      },
+      "docs": [
+        "Buys back ORE from the market."
+      ],
+      "accounts": [],
+      "args": []
+    },
+    {
+      "name": "bury",
+      "discriminant": {
+        "type": "u8",
+        "value": 24
       },
       "docs": [
         "Swaps vaulted SOL for ORE via a CPI and burns the proceeds.",
@@ -705,7 +753,12 @@
           "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "wrap",
@@ -745,7 +798,12 @@
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "setAdmin",
@@ -782,44 +840,10 @@
       ]
     },
     {
-      "name": "setFeeCollector",
-      "discriminant": {
-        "type": "u8",
-        "value": 16
-      },
-      "docs": [
-        "Updates the fee collector authority."
-      ],
-      "accounts": [
-        {
-          "name": "signer",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "config",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false,
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "feeCollector",
-          "type": "publicKey"
-        }
-      ]
-    },
-    {
       "name": "newVar",
       "discriminant": {
         "type": "u8",
-        "value": 17
+        "value": 19
       },
       "docs": [
         "Creates a new entropy var account through the entropy program."
@@ -884,38 +908,40 @@
       ]
     },
     {
-      "name": "setBuffer",
+      "name": "reloadSol",
       "discriminant": {
         "type": "u8",
-        "value": 18
+        "value": 21
       },
       "docs": [
-        "Updates the global buffer value."
+        "Reloads SOL into the automation account."
       ],
-      "accounts": [
-        {
-          "name": "signer",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "config",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false,
-          "address": "11111111111111111111111111111111"
-        }
+      "accounts": [],
+      "args": []
+    },
+    {
+      "name": "compoundYield",
+      "discriminant": {
+        "type": "u8",
+        "value": 22
+      },
+      "docs": [
+        "Compounds staking yield."
       ],
-      "args": [
-        {
-          "name": "buffer",
-          "type": "u64"
-        }
-      ]
+      "accounts": [],
+      "args": []
+    },
+    {
+      "name": "liq",
+      "discriminant": {
+        "type": "u8",
+        "value": 25
+      },
+      "docs": [
+        "Liquidation instruction."
+      ],
+      "accounts": [],
+      "args": []
     }
   ],
   "accounts": [
@@ -964,6 +990,10 @@
           {
             "name": "mask",
             "type": "u64"
+          },
+          {
+            "name": "reload",
+            "type": "u64"
           }
         ]
       }
@@ -997,6 +1027,10 @@
           {
             "name": "end_slot",
             "type": "u64"
+          },
+          {
+            "name": "epoch_id",
+            "type": "u64"
           }
         ]
       }
@@ -1024,23 +1058,23 @@
             "type": "publicKey"
           },
           {
-            "name": "bury_authority",
+            "name": "buffer_a",
             "type": "publicKey"
           },
           {
-            "name": "fee_collector",
+            "name": "buffer_b",
             "type": "publicKey"
           },
           {
-            "name": "swap_program",
+            "name": "buffer_c",
             "type": "publicKey"
           },
           {
-            "name": "var_address",
+            "name": "buffer_d",
             "type": "publicKey"
           },
           {
-            "name": "buffer",
+            "name": "buffer_e",
             "type": "u64"
           }
         ]
@@ -1131,6 +1165,10 @@
           {
             "name": "lifetime_rewards_ore",
             "type": "u64"
+          },
+          {
+            "name": "lifetime_deployed",
+            "type": "u64"
           }
         ]
       }
@@ -1209,6 +1247,10 @@
             "type": "u64"
           },
           {
+            "name": "total_miners",
+            "type": "u64"
+          },
+          {
             "name": "total_vaulted",
             "type": "u64"
           },
@@ -1246,6 +1288,26 @@
             "type": "u64"
           },
           {
+            "name": "buffer_a",
+            "type": "u64"
+          },
+          {
+            "name": "buffer_b",
+            "type": "u64"
+          },
+          {
+            "name": "buffer_c",
+            "type": "u64"
+          },
+          {
+            "name": "buffer_d",
+            "type": "u64"
+          },
+          {
+            "name": "compound_fee_reserve",
+            "type": "u64"
+          },
+          {
             "name": "last_claim_at",
             "type": "i64"
           },
@@ -1272,7 +1334,7 @@
             "type": "u64"
           },
           {
-            "name": "is_seeker",
+            "name": "buffer_f",
             "type": "u64"
           }
         ]
@@ -1301,6 +1363,10 @@
             "type": "u64"
           },
           {
+            "name": "buffer_a",
+            "type": "u64"
+          },
+          {
             "name": "motherlode",
             "type": "u64"
           },
@@ -1317,15 +1383,19 @@
             }
           },
           {
+            "name": "buffer_b",
+            "type": "u64"
+          },
+          {
+            "name": "total_refined",
+            "type": "u64"
+          },
+          {
             "name": "total_staked",
             "type": "u64"
           },
           {
             "name": "total_unclaimed",
-            "type": "u64"
-          },
-          {
-            "name": "total_refined",
             "type": "u64"
           }
         ]
@@ -1350,6 +1420,72 @@
               ]
             }
           }
+        ]
+      }
+    },
+    {
+      "name": "ResetEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {"name": "disc", "type": "u64"},
+          {"name": "round_id", "type": "u64"},
+          {"name": "start_slot", "type": "u64"},
+          {"name": "end_slot", "type": "u64"},
+          {"name": "winning_square", "type": "u64"},
+          {"name": "top_miner", "type": "publicKey"},
+          {"name": "num_winners", "type": "u64"},
+          {"name": "motherlode", "type": "u64"},
+          {"name": "total_deployed", "type": "u64"},
+          {"name": "total_vaulted", "type": "u64"},
+          {"name": "total_winnings", "type": "u64"},
+          {"name": "total_minted", "type": "u64"},
+          {"name": "ts", "type": "i64"},
+          {"name": "rng", "type": "u64"},
+          {"name": "deployed_winning_square", "type": "u64"}
+        ]
+      }
+    },
+    {
+      "name": "BuryEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {"name": "disc", "type": "u64"},
+          {"name": "ore_buried", "type": "u64"},
+          {"name": "ore_shared", "type": "u64"},
+          {"name": "sol_amount", "type": "u64"},
+          {"name": "new_circulating_supply", "type": "u64"},
+          {"name": "ts", "type": "i64"}
+        ]
+      }
+    },
+    {
+      "name": "DeployEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {"name": "disc", "type": "u64"},
+          {"name": "authority", "type": "publicKey"},
+          {"name": "amount", "type": "u64"},
+          {"name": "mask", "type": "u64"},
+          {"name": "round_id", "type": "u64"},
+          {"name": "signer", "type": "publicKey"},
+          {"name": "strategy", "type": "u64"},
+          {"name": "total_squares", "type": "u64"},
+          {"name": "ts", "type": "i64"}
+        ]
+      }
+    },
+    {
+      "name": "LiqEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {"name": "disc", "type": "u64"},
+          {"name": "sol_amount", "type": "u64"},
+          {"name": "recipient", "type": "publicKey"},
+          {"name": "ts", "type": "i64"}
         ]
       }
     }
@@ -1432,6 +1568,16 @@
           "name": "ts",
           "type": "i64",
           "index": false
+        },
+        {
+          "name": "rng",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "deployed_winning_square",
+          "type": "u64",
+          "index": false
         }
       ]
     },
@@ -1471,6 +1617,101 @@
         {
           "name": "new_circulating_supply",
           "type": "u64",
+          "index": false
+        },
+        {
+          "name": "ts",
+          "type": "i64",
+          "index": false
+        }
+      ]
+    },
+    {
+      "name": "DeployEvent",
+      "discriminator": [
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "fields": [
+        {
+          "name": "disc",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "authority",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "amount",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "mask",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "round_id",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "signer",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "strategy",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "total_squares",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "ts",
+          "type": "i64",
+          "index": false
+        }
+      ]
+    },
+    {
+      "name": "LiqEvent",
+      "discriminator": [
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "fields": [
+        {
+          "name": "disc",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "sol_amount",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "recipient",
+          "type": "publicKey",
           "index": false
         },
         {

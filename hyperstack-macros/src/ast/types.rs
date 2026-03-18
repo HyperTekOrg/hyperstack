@@ -11,11 +11,13 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+pub use hyperstack_idl::snapshot::*;
+
 // ============================================================================
 // Core AST Types
 // ============================================================================
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FieldPath {
     pub segments: Vec<String>,
     pub offsets: Option<Vec<usize>>,
@@ -58,159 +60,12 @@ pub enum PopulationStrategy {
     UniqueCount,
 }
 
-// ============================================================================
-// IDL Snapshot Types - Embedded IDL for AST-only compilation
-// ============================================================================
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlSnapshot {
-    pub name: String,
-    pub version: String,
-    pub accounts: Vec<IdlAccountSnapshot>,
-    pub instructions: Vec<IdlInstructionSnapshot>,
-    #[serde(default)]
-    pub types: Vec<IdlTypeDefSnapshot>,
-    #[serde(default)]
-    pub events: Vec<IdlEventSnapshot>,
-    #[serde(default)]
-    pub errors: Vec<IdlErrorSnapshot>,
-    /// Discriminant size in bytes (1 for Steel, 8 for Anchor)
-    /// Defaults to 8 (Anchor) for backwards compatibility
-    #[serde(default = "default_discriminant_size")]
-    pub discriminant_size: usize,
-}
-
+/// Default discriminant size (8 bytes for Anchor).
+/// Used by InstructionDef serde default.
 fn default_discriminant_size() -> usize {
     8
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlAccountSnapshot {
-    pub name: String,
-    pub discriminator: Vec<u8>,
-    #[serde(default)]
-    pub docs: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlInstructionSnapshot {
-    pub name: String,
-    pub discriminator: Vec<u8>,
-    #[serde(default)]
-    pub docs: Vec<String>,
-    pub accounts: Vec<IdlInstructionAccountSnapshot>,
-    pub args: Vec<IdlFieldSnapshot>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlInstructionAccountSnapshot {
-    pub name: String,
-    #[serde(default)]
-    pub writable: bool,
-    #[serde(default)]
-    pub signer: bool,
-    #[serde(default)]
-    pub optional: bool,
-    #[serde(default)]
-    pub address: Option<String>,
-    #[serde(default)]
-    pub docs: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlFieldSnapshot {
-    pub name: String,
-    #[serde(rename = "type")]
-    pub type_: IdlTypeSnapshot,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdlTypeSnapshot {
-    Simple(String),
-    Array(IdlArrayTypeSnapshot),
-    Option(IdlOptionTypeSnapshot),
-    Vec(IdlVecTypeSnapshot),
-    Defined(IdlDefinedTypeSnapshot),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlArrayTypeSnapshot {
-    pub array: Vec<IdlArrayElementSnapshot>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdlArrayElementSnapshot {
-    Type(IdlTypeSnapshot),
-    TypeName(String),
-    Size(u32),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlOptionTypeSnapshot {
-    pub option: Box<IdlTypeSnapshot>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlVecTypeSnapshot {
-    pub vec: Box<IdlTypeSnapshot>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlDefinedTypeSnapshot {
-    pub defined: IdlDefinedInnerSnapshot,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdlDefinedInnerSnapshot {
-    Named { name: String },
-    Simple(String),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlTypeDefSnapshot {
-    pub name: String,
-    #[serde(default)]
-    pub docs: Vec<String>,
-    #[serde(rename = "type")]
-    pub type_def: IdlTypeDefKindSnapshot,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdlTypeDefKindSnapshot {
-    Struct {
-        kind: String,
-        fields: Vec<IdlFieldSnapshot>,
-    },
-    Enum {
-        kind: String,
-        variants: Vec<IdlEnumVariantSnapshot>,
-    },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlEnumVariantSnapshot {
-    pub name: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlEventSnapshot {
-    pub name: String,
-    pub discriminator: Vec<u8>,
-    #[serde(default)]
-    pub docs: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdlErrorSnapshot {
-    pub code: u32,
-    pub name: String,
-    pub msg: String,
-}
-
 // ============================================================================
 // Computed Field Expression AST
 // ============================================================================
@@ -220,6 +75,85 @@ pub struct ComputedFieldSpec {
     pub target_path: String,
     pub expression: ComputedExpr,
     pub result_type: String,
+}
+
+// ==========================================================================
+// Resolver Specifications
+// ==========================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum ResolverType {
+    Token,
+    Url(UrlResolverConfig),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum HttpMethod {
+    #[default]
+    Get,
+    Post,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum UrlTemplatePart {
+    Literal(String),
+    FieldRef(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum UrlSource {
+    FieldPath(String),
+    Template(Vec<UrlTemplatePart>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct UrlResolverConfig {
+    pub url_source: UrlSource,
+    #[serde(default)]
+    pub method: HttpMethod,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extract_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolverExtractSpec {
+    pub target_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transform: Option<Transformation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum ResolveStrategy {
+    #[default]
+    SetOnce,
+    LastWrite,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolverCondition {
+    pub field_path: String,
+    pub op: ComparisonOp,
+    pub value: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolverSpec {
+    pub resolver: ResolverType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_value: Option<serde_json::Value>,
+    #[serde(default)]
+    pub strategy: ResolveStrategy,
+    pub extracts: Vec<ResolverExtractSpec>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<ResolverCondition>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schedule_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -243,6 +177,11 @@ pub enum ComputedExpr {
     },
     MethodCall {
         expr: Box<ComputedExpr>,
+        method: String,
+        args: Vec<ComputedExpr>,
+    },
+    ResolverComputed {
+        resolver: String,
         method: String,
         args: Vec<ComputedExpr>,
     },
@@ -318,6 +257,10 @@ pub enum ComputedExpr {
     JsonToBytes {
         expr: Box<ComputedExpr>,
     },
+
+    // Context access - slot and timestamp from the update that triggered evaluation
+    ContextSlot,
+    ContextTimestamp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -370,6 +313,8 @@ pub struct SerializableStreamSpec {
     pub resolver_hooks: Vec<ResolverHook>,
     pub instruction_hooks: Vec<InstructionHook>,
     #[serde(default)]
+    pub resolver_specs: Vec<ResolverSpec>,
+    #[serde(default)]
     pub computed_fields: Vec<String>,
     #[serde(default)]
     pub computed_field_specs: Vec<ComputedFieldSpec>,
@@ -377,6 +322,8 @@ pub struct SerializableStreamSpec {
     /// Used for deduplication and version tracking
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_hash: Option<String>,
+    #[serde(default)]
+    pub views: Vec<ViewDef>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -425,6 +372,8 @@ pub enum SourceSpec {
         program_id: Option<String>,
         discriminator: Option<Vec<u8>>,
         type_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        serialization: Option<IdlSerializationSnapshot>,
     },
 }
 
@@ -434,6 +383,22 @@ pub struct SerializableFieldMapping {
     pub source: MappingSource,
     pub transform: Option<Transformation>,
     pub population: PopulationStrategy,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<ConditionExpr>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop: Option<String>,
+    #[serde(default = "default_emit", skip_serializing_if = "is_true")]
+    pub emit: bool,
+}
+
+fn default_emit() -> bool {
+    true
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -502,6 +467,8 @@ pub struct FieldTypeInfo {
     /// Resolved type information for complex types (instructions, accounts, custom types)
     #[serde(default)]
     pub resolved_type: Option<ResolvedStructType>,
+    #[serde(default = "default_emit", skip_serializing_if = "is_true")]
+    pub emit: bool,
 }
 
 /// Resolved structure type with field information from IDL
@@ -628,6 +595,131 @@ pub enum LogicalOp {
 }
 
 // ============================================================================
+// View Pipeline Types - Composable View Definitions
+// ============================================================================
+
+/// Sort order for view transforms
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SortOrder {
+    #[default]
+    Asc,
+    Desc,
+}
+
+/// Comparison operators for predicates
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum CompareOp {
+    Eq,
+    Ne,
+    Gt,
+    Gte,
+    Lt,
+    Lte,
+}
+
+/// Value in a predicate comparison
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum PredicateValue {
+    /// Literal JSON value
+    Literal(serde_json::Value),
+    /// Dynamic runtime value (e.g., "now()" for current timestamp)
+    Dynamic(String),
+    /// Reference to another field
+    Field(FieldPath),
+}
+
+/// Predicate for filtering entities
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum Predicate {
+    /// Field comparison: field op value
+    Compare {
+        field: FieldPath,
+        op: CompareOp,
+        value: PredicateValue,
+    },
+    /// Logical AND of predicates
+    And(Vec<Predicate>),
+    /// Logical OR of predicates
+    Or(Vec<Predicate>),
+    /// Negation
+    Not(Box<Predicate>),
+    /// Field exists (is not null)
+    Exists { field: FieldPath },
+}
+
+/// Transform operation in a view pipeline
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ViewTransform {
+    /// Filter entities matching a predicate
+    Filter { predicate: Predicate },
+
+    /// Sort entities by a field
+    Sort {
+        key: FieldPath,
+        #[serde(default)]
+        order: SortOrder,
+    },
+
+    /// Take first N entities (after sort)
+    Take { count: usize },
+
+    /// Skip first N entities
+    Skip { count: usize },
+
+    /// Take only the first entity (after sort) - produces Single output
+    First,
+
+    /// Take only the last entity (after sort) - produces Single output
+    Last,
+
+    /// Get entity with maximum value for field - produces Single output
+    MaxBy { key: FieldPath },
+
+    /// Get entity with minimum value for field - produces Single output
+    MinBy { key: FieldPath },
+}
+
+/// Source for a view definition
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ViewSource {
+    /// Derive directly from entity mutations
+    Entity { name: String },
+    /// Derive from another view's output
+    View { id: String },
+}
+
+/// Output mode for a view
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub enum ViewOutput {
+    /// Multiple entities (list-like semantics)
+    #[default]
+    Collection,
+    /// Single entity (state-like semantics)
+    Single,
+    /// Keyed lookup by a specific field
+    Keyed { key_field: FieldPath },
+}
+
+/// Definition of a view in the pipeline
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ViewDef {
+    /// Unique view identifier (e.g., "OreRound/latest")
+    pub id: String,
+
+    /// Source this view derives from
+    pub source: ViewSource,
+
+    /// Pipeline of transforms to apply (in order)
+    #[serde(default)]
+    pub pipeline: Vec<ViewTransform>,
+
+    /// Output mode for this view
+    #[serde(default)]
+    pub output: ViewOutput,
+}
+
+// ============================================================================
 // SerializableStreamSpec Implementation
 // ============================================================================
 
@@ -672,6 +764,134 @@ impl SerializableStreamSpec {
 
     /// Set the content_hash field to the computed hash.
     #[allow(dead_code)]
+    pub fn with_content_hash(mut self) -> Self {
+        self.content_hash = Some(self.compute_content_hash());
+        self
+    }
+}
+
+// ============================================================================
+// PDA and Instruction Types — For SDK code generation
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PdaDefinition {
+    pub name: String,
+    pub seeds: Vec<PdaSeedDef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum PdaSeedDef {
+    Literal {
+        value: String,
+    },
+    Bytes {
+        value: Vec<u8>,
+    },
+    ArgRef {
+        arg_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        arg_type: Option<String>,
+    },
+    AccountRef {
+        account_name: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "category", rename_all = "camelCase")]
+pub enum AccountResolution {
+    Signer,
+    Known {
+        address: String,
+    },
+    PdaRef {
+        pda_name: String,
+    },
+    PdaInline {
+        seeds: Vec<PdaSeedDef>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        program_id: Option<String>,
+    },
+    UserProvided,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InstructionAccountDef {
+    pub name: String,
+    #[serde(default)]
+    pub is_signer: bool,
+    #[serde(default)]
+    pub is_writable: bool,
+    pub resolution: AccountResolution,
+    #[serde(default)]
+    pub is_optional: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InstructionArgDef {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub arg_type: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InstructionDef {
+    pub name: String,
+    pub discriminator: Vec<u8>,
+    #[serde(default = "default_discriminant_size")]
+    pub discriminator_size: usize,
+    pub accounts: Vec<InstructionAccountDef>,
+    pub args: Vec<InstructionArgDef>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<IdlErrorSnapshot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
+}
+
+// ============================================================================
+// Stack Spec — Unified multi-entity AST format
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SerializableStackSpec {
+    pub stack_name: String,
+    #[serde(default)]
+    pub program_ids: Vec<String>,
+    #[serde(default)]
+    pub idls: Vec<IdlSnapshot>,
+    pub entities: Vec<SerializableStreamSpec>,
+    /// Outer key = program name, inner key = PDA name
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub pdas: BTreeMap<String, BTreeMap<String, PdaDefinition>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub instructions: Vec<InstructionDef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_hash: Option<String>,
+}
+
+impl SerializableStackSpec {
+    /// Compute deterministic content hash (SHA256 of canonical JSON).
+    pub fn compute_content_hash(&self) -> String {
+        use sha2::{Digest, Sha256};
+        let mut spec_for_hash = self.clone();
+        spec_for_hash.content_hash = None;
+        let json = serde_json::to_string(&spec_for_hash)
+            .expect("Failed to serialize stack spec for hashing");
+        let mut hasher = Sha256::new();
+        hasher.update(json.as_bytes());
+        hex::encode(hasher.finalize())
+    }
+
     pub fn with_content_hash(mut self) -> Self {
         self.content_hash = Some(self.compute_content_hash());
         self

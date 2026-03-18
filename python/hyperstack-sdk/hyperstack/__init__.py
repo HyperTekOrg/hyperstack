@@ -1,15 +1,11 @@
 from hyperstack.client import HyperStackClient
-from hyperstack.store import Store, Update, SharedStore
+from hyperstack.store import Store, Update
 from hyperstack.types import (
-    Entity,
-    StackDefinition,
-    ViewDef,
-    ViewGroup,
-    state_view,
-    list_view,
-    ConnectionState,
+    SortOrder,
+    SortConfig,
+    SubscribedFrame,
+    try_parse_subscribed_frame,
 )
-from hyperstack.views import TypedViews
 from hyperstack.errors import (
     HyperStackError,
     ConnectionError,
@@ -24,15 +20,10 @@ __all__ = [
     "HyperStackClient",
     "Store",
     "Update",
-    "SharedStore",
-    "Entity",
-    "StackDefinition",
-    "ViewDef",
-    "ViewGroup",
-    "state_view",
-    "list_view",
-    "ConnectionState",
-    "TypedViews",
+    "SortOrder",
+    "SortConfig",
+    "SubscribedFrame",
+    "try_parse_subscribed_frame",
     "HyperStackError",
     "ConnectionError",
     "SubscriptionError",

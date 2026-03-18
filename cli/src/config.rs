@@ -63,7 +63,7 @@ pub struct StackConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 
-    pub ast: String,
+    pub stack: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -76,6 +76,11 @@ pub struct StackConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rust_module: Option<bool>,
+
+    /// WebSocket URL for the deployed stack (e.g., wss://ore-round-abc123.stack.usehyperstack.com)
+    /// This is typically set after first deployment and used for SDK generation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
 }
 
 impl HyperstackConfig {
@@ -117,9 +122,17 @@ impl HyperstackConfig {
     }
 
     pub fn find_stack(&self, name: &str) -> Option<&StackConfig> {
-        self.stacks
-            .iter()
-            .find(|s| s.name.as_deref() == Some(name) || s.ast == name)
+        let name_lower = name.to_lowercase();
+        let name_kebab = to_kebab_case(name);
+
+        self.stacks.iter().find(|s| {
+            s.name.as_deref() == Some(name)
+                || s.stack == name
+                || s.name.as_deref().map(|n| n.to_lowercase()) == Some(name_lower.clone())
+                || s.stack.to_lowercase() == name_lower
+                || to_kebab_case(&s.stack) == name_kebab
+                || to_kebab_case(&s.stack) == name_lower
+        })
     }
 
     pub fn get_output_dir(&self) -> &str {
@@ -185,46 +198,56 @@ impl HyperstackConfig {
 #[derive(Debug, Clone)]
 pub struct DiscoveredAst {
     pub path: PathBuf,
-    pub entity_name: String,
-    pub program_id: Option<String>,
+    pub stack_id: String,
+    pub program_ids: Vec<String>,
     pub stack_name: String,
 }
 
 impl DiscoveredAst {
     pub fn from_path(path: PathBuf) -> Result<Self> {
         let contents = fs::read_to_string(&path)
-            .with_context(|| format!("Failed to read AST file: {}", path.display()))?;
+            .with_context(|| format!("Failed to read stack file: {}", path.display()))?;
 
         let ast: serde_json::Value = serde_json::from_str(&contents)
-            .with_context(|| format!("Failed to parse AST JSON: {}", path.display()))?;
+            .with_context(|| format!("Failed to parse stack JSON: {}", path.display()))?;
 
-        let entity_name = ast
-            .get("state_name")
+        let stack_name = ast
+            .get("stack_name")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("AST missing 'state_name' field: {}", path.display()))?
-            .to_string();
+            .ok_or_else(|| {
+                anyhow::anyhow!("Stack file missing 'stack_name' field: {}", path.display())
+            })?;
 
-        let program_id = ast
-            .get("program_id")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-
-        let stack_name = to_kebab_case(&entity_name);
+        let program_ids = ast
+            .get("program_ids")
+            .and_then(|v| v.as_array())
+            .map(|ids| {
+                ids.iter()
+                    .filter_map(|id| id.as_str().map(|s| s.to_string()))
+                    .collect::<Vec<String>>()
+            })
+            .filter(|ids| !ids.is_empty())
+            .or_else(|| {
+                ast.get("program_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| vec![s.to_string()])
+            })
+            .unwrap_or_default();
 
         Ok(Self {
             path,
-            entity_name,
-            program_id,
-            stack_name,
+            stack_id: stack_name.to_string(),
+            program_ids,
+            stack_name: to_kebab_case(stack_name),
         })
     }
 
     pub fn load_ast(&self) -> Result<serde_json::Value> {
         let contents = fs::read_to_string(&self.path)
-            .with_context(|| format!("Failed to read AST file: {}", self.path.display()))?;
+            .with_context(|| format!("Failed to read stack file: {}", self.path.display()))?;
 
         serde_json::from_str(&contents)
-            .with_context(|| format!("Failed to parse AST JSON: {}", self.path.display()))
+            .with_context(|| format!("Failed to parse stack JSON: {}", self.path.display()))
     }
 }
 
@@ -255,7 +278,7 @@ pub fn discover_ast_files(base_path: Option<&Path>) -> Result<Vec<DiscoveredAst>
     discover_recursive(base, &mut discovered, 0, 3)?;
 
     let mut seen_entities = HashSet::new();
-    discovered.retain(|ast| seen_entities.insert(ast.entity_name.clone()));
+    discovered.retain(|ast| seen_entities.insert(ast.stack_id.clone()));
 
     Ok(discovered)
 }
@@ -271,7 +294,7 @@ fn discover_in_dir(dir: &Path, discovered: &mut Vec<DiscoveredAst>) -> Result<()
 
         if path.is_file() {
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if name.ends_with(".ast.json") {
+                if name.ends_with(".stack.json") {
                     match DiscoveredAst::from_path(path.clone()) {
                         Ok(ast) => discovered.push(ast),
                         Err(e) => {
@@ -326,7 +349,7 @@ pub fn find_ast_file(name: &str, base_path: Option<&Path>) -> Result<Option<Disc
     let name_kebab = to_kebab_case(name);
 
     Ok(discovered.into_iter().find(|ast| {
-        ast.entity_name.to_lowercase() == name_lower
+        ast.stack_id.to_lowercase() == name_lower
             || ast.stack_name == name_kebab
             || ast.stack_name == name_lower
     }))
@@ -339,8 +362,8 @@ pub fn resolve_stacks_to_push(
     if let Some(name) = stack_name {
         let ast = find_ast_file(name, None)?.ok_or_else(|| {
             anyhow::anyhow!(
-                "AST file not found for '{}'\n\nSearched in .hyperstack/ directories.\n\
-                 Make sure your stack is compiled (cargo build) and the AST file exists.",
+                "Stack file not found for '{}'\n\nSearched in .hyperstack/ directories.\n\
+                 Make sure your stack is compiled (cargo build) and the stack file exists.",
                 name
             )
         })?;
@@ -351,12 +374,12 @@ pub fn resolve_stacks_to_push(
         if !config.stacks.is_empty() {
             let mut result = Vec::new();
             for stack in &config.stacks {
-                let ast = find_ast_file(&stack.ast, None)?.ok_or_else(|| {
+                let ast = find_ast_file(&stack.stack, None)?.ok_or_else(|| {
                     anyhow::anyhow!(
-                        "AST file not found for stack '{}' (ast: '{}')\n\
-                         Make sure your stack is compiled and the AST file exists.",
-                        stack.name.as_deref().unwrap_or(&stack.ast),
-                        stack.ast
+                        "Stack file not found for stack '{}' (stack: '{}')\n\
+                         Make sure your stack is compiled and the stack file exists.",
+                        stack.name.as_deref().unwrap_or(&stack.stack),
+                        stack.stack
                     )
                 })?;
 
@@ -374,9 +397,9 @@ pub fn resolve_stacks_to_push(
 
     if discovered.is_empty() {
         anyhow::bail!(
-            "No AST files found.\n\n\
+            "No stack files found.\n\n\
              Make sure you have compiled your stack (cargo build) and have a\n\
-             .hyperstack/*.ast.json file in your project.\n\n\
+            .hyperstack/*.stack.json file in your project.\n\n\
              Alternatively, create a hyperstack.toml to configure your stacks."
         );
     }

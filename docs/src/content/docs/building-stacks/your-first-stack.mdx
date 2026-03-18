@@ -1,18 +1,22 @@
 ---
 title: Your First Stack
 sidebar:
-  order: 4
+  order: 5
 ---
 
-In this tutorial, you'll build an end-to-end real-time data pipeline in 15 minutes. We'll create a "Counter" stack that tracks on-chain increment events and displays the live count in a React app.
+In this tutorial, you'll build an end-to-end streaming data pipeline in 15 minutes. We'll create an "Ore" stack that tracks ORE mining rounds and displays live round data in a React app.
 
 ## What You'll Build
 
 A full-stack streaming application consisting of:
 
-1. **A Rust Definition**: Defines how to transform on-chain Solana events into a "Counter" entity.
+1. **A Rust Definition**: Defines how to transform on-chain ORE mining data into a queryable "OreRound" entity.
 2. **A Cloud Deployment**: A managed Hyperstack instance that processes the stream.
-3. **A React Frontend**: A live dashboard that updates instantly as on-chain events occur.
+3. **A React Frontend**: A live dashboard showing the latest ORE mining rounds that updates instantly as on-chain events occur.
+
+:::note[Demo Version]
+This tutorial uses a simplified version of the ORE stack. For the full production-ready version with all features (computed fields, snapshots, round results, etc.), run `hs create` and select the `ore` template.
+:::
 
 ---
 
@@ -23,8 +27,8 @@ The stack definition is the heart of your application. It tells Hyperstack which
 ### 1. Create a new Rust project
 
 ```bash
-cargo new counter-stack --lib
-cd counter-stack
+cargo new ore-stack --lib
+cd ore-stack
 ```
 
 ### 2. Add dependencies
@@ -33,47 +37,96 @@ Add `hyperstack` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hyperstack = "0.2"
+hyperstack = "{{VERSION}}"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
-### 3. Write your stack definition
+### 3. Get the ORE IDL
 
-Open `src/lib.rs` and define your projection. For this tutorial, we'll assume a simple Solana program with a `CounterAccount` and an `Increment` instruction.
+Download the ORE program IDL file and place it in an `idl/` directory:
+
+```bash
+mkdir -p idl
+curl -o idl/ore.json https://docs.usehyperstack.com/ore.json
+```
+
+:::tip[What is an IDL?]
+The IDL (Interface Definition Language) describes the Solana program's account structures and instructions. Hyperstack uses it to generate type-safe code for accessing on-chain data.
+:::
+
+:::tip[Generated SDK Naming]
+When you point to an IDL (e.g., `ore.json`), Hyperstack reads the program name from the IDL metadata and generates a typed SDK module named `{name}_sdk` — so `ore.json` produces `ore_sdk::accounts::*` and `ore_sdk::instructions::*`. All `#[map]` and `#[aggregate]` paths use this prefix.
+:::
+
+### 4. Write your stack definition
+
+Open `src/lib.rs` and define your projection. We'll create a simplified version of the ORE mining round tracker:
 
 ```rust
 // src/lib.rs
-use hyperstack::{hyperstack, Stream, Strategy};
+use hyperstack::prelude::*;
 
-#[hyperstack(idl = "counter_idl.json")]
-pub mod counter_stack {
-    use super::*;
+#[hyperstack(idl = "idl/ore.json")]
+pub mod ore_stream {
+    use hyperstack::macros::Stream;
+    use serde::{Deserialize, Serialize};
 
-    #[entity]
-    #[derive(Stream)]
-    pub struct Counter {
-        #[map(from = "CounterAccount", field = "authority", primary_key = true)]
-        pub owner: String,
+    // The main entity representing an ORE mining round
+    #[entity(name = "OreRound")]
+    #[view(name = "latest", sort_by = "id.round_id", order = "desc")]
+    pub struct OreRound {
+        pub id: RoundId,
+        pub state: RoundState,
+        pub metrics: RoundMetrics,
+    }
 
-        #[aggregate(from = "Increment", field = "amount", strategy = Sum)]
-        pub total_count: u64,
+    // Round identification with primary key
+    #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
+    pub struct RoundId {
+        #[map(ore_sdk::accounts::Round::id, primary_key, strategy = SetOnce)]
+        pub round_id: u64,
 
-        #[derive_from(from = "Increment", field = "__timestamp")]
-        pub last_updated: i64,
+        #[map(ore_sdk::accounts::Round::__account_address, lookup_index, strategy = SetOnce)]
+        pub round_address: String,
+    }
+
+    // Round state fields - updated on every change
+    #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
+    pub struct RoundState {
+        #[map(ore_sdk::accounts::Round::expires_at, strategy = LastWrite)]
+        pub expires_at: Option<u64>,
+
+        #[map(ore_sdk::accounts::Round::total_deployed, strategy = LastWrite)]
+        pub total_deployed: Option<u64>,
+
+        #[map(ore_sdk::accounts::Round::total_winnings, strategy = LastWrite)]
+        pub total_winnings: Option<u64>,
+    }
+
+    // Aggregated metrics computed from transactions
+    #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
+    pub struct RoundMetrics {
+        // Count of deploy instructions for this round
+        #[aggregate(from = ore_sdk::instructions::Deploy, strategy = Count, lookup_by = accounts::round)]
+        pub deploy_count: Option<u64>,
+
+        // Sum of all deployed SOL amounts
+        #[aggregate(from = ore_sdk::instructions::Deploy, field = amount, strategy = Sum, lookup_by = accounts::round)]
+        pub total_deployed_sol: Option<u64>,
     }
 }
 ```
 
-### 4. Build to generate AST
+### 5. Build to generate the stack file
 
-Hyperstack uses **AST serialization**. When you compile your code, it automatically generates a `.hyperstack/Counter.ast.json` file.
+When you compile your code, Hyperstack macros automatically generate a `.hyperstack/OreStream.stack.json` file containing all entities in your stack.
 
 ```bash
 cargo build
 ```
 
 :::tip[Checkpoint]
-Verify that the file `.hyperstack/Counter.ast.json` exists in your project root. This JSON file contains the compiled logic of your stream.
+Verify that the file `.hyperstack/OreStream.stack.json` exists in your project root. This JSON file contains the compiled specification for your stack, including all entities and their field mappings.
 :::
 
 ---
@@ -82,26 +135,24 @@ Verify that the file `.hyperstack/Counter.ast.json` exists in your project root.
 
 Now let's push your stack to the cloud. Hyperstack manages the infrastructure, so you don't need to worry about scaling or WebSocket servers.
 
-### 1. Login to the CLI
+:::caution[Closed Beta]
+Hyperstack is currently in closed beta. You'll need an API key to deploy. [Contact us on X](https://x.com/usehyperstack) to request access.
+:::
 
-```bash
-hs auth login
-```
+### 1. Initialize your project
 
-### 2. Initialize your project
-
-This creates a `hyperstack.toml` file that links your local AST to the cloud.
+This creates a `hyperstack.toml` file that links your local stack to the cloud.
 
 ```bash
 hs init
 ```
 
-### 3. Push and Deploy
+### 2. Push and Deploy
 
-The `up` command is a shortcut that pushes your AST, builds the container, and deploys it to a global cluster.
+The `up` command is a shortcut that pushes your stack, builds the container, and deploys it to a global cluster.
 
 ```bash
-hs up counter-stack
+hs up
 ```
 
 **Expected Output:**
@@ -110,7 +161,7 @@ hs up counter-stack
 ✔ Stack pushed (v1)
 ✔ Build created (id: bld_123...)
 ✔ Build completed
-🚀 Deployed to: wss://counter-stack.stack.usehyperstack.com
+🚀 Deployed to: wss://<your-stack-name>.stack.usehyperstack.com
 ```
 
 :::tip[Checkpoint]
@@ -119,26 +170,48 @@ Copy the **WebSocket URL** from the output. You'll need it for the React app.
 
 ---
 
-## Part 3: Connect from Your App
+## Part 3: Generate SDK and Connect
 
-Finally, let's build the frontend. You can use either the React SDK or the pure TypeScript SDK.
+Finally, let's build the frontend. First, generate a typed SDK from your deployed stack, then connect using React or TypeScript.
+
+:::tip[What is the SDK?]
+The generated SDK contains the typed interface to your stack — it tells the Hyperstack client what entities exist, what views are available, and the TypeScript types for each. You can share this SDK with your team or publish it.
+:::
+
+### 1. Generate the SDK
+
+From your stack project directory (where you ran `hs up`):
+
+```bash
+hs sdk create typescript ore-stack --output ./sdk
+```
+
+This creates a typed SDK in `./sdk/` with full TypeScript support.
+
+---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 <Tabs>
 <TabItem label="React">
 
-### 1. Set up your React app
+### 2. Set up your React app
 
 ```bash
-npx create-react-app my-counter-app --template typescript
-cd my-counter-app
+npx create-react-app my-ore-app --template typescript
+cd my-ore-app
 npm install hyperstack-react zustand
 ```
 
-### 2. Configure the Provider
+Copy the generated SDK into your React app:
 
-Wrap your app in `HyperstackProvider` using the URL you got from the previous step.
+```bash
+cp -r ../ore-stack/sdk ./src/ore-sdk
+```
+
+### 3. Configure the Provider
+
+Wrap your app in `HyperstackProvider` using the URL from `hs up`.
 
 ```tsx
 // src/index.tsx
@@ -146,66 +219,54 @@ import { HyperstackProvider } from "hyperstack-react";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 root.render(
-  <HyperstackProvider websocketUrl="wss://counter-stack.stack.usehyperstack.com">
+  <HyperstackProvider websocketUrl="wss://<your-stack-name>.stack.usehyperstack.com">
     <App />
   </HyperstackProvider>,
 );
 ```
 
-### 3. Define the Stack
-
-Tell the React SDK about your "Counter" entity.
-
-```tsx
-// src/stack.ts
-import { defineStack, createListView } from "hyperstack-react";
-
-export interface Counter {
-  owner: string;
-  total_count: number;
-  last_updated: number;
-}
-
-export const CounterStack = defineStack({
-  name: "counter-stack",
-  views: {
-    counters: {
-      list: createListView<Counter>("Counter/list"),
-    },
-  },
-});
-```
-
-### 4. Build the Component
-
-Create a component that displays the live data.
+### 4. Use the Generated Stack
 
 ```tsx
 // src/App.tsx
 import { useHyperstack } from "hyperstack-react";
-import { CounterStack } from "./stack";
+import { OreStack } from "./ore-sdk";
 
 export default function App() {
-  const stack = useHyperstack(CounterStack);
-  const { data: counters, isLoading } = stack.views.counters.list.use();
+  const stack = useHyperstack(OreStack);
+  const { data: rounds, isLoading } = stack.views.OreRound.latest.use({
+    take: 5,
+  });
 
   if (isLoading) return <div>Connecting to stream...</div>;
 
   return (
     <div>
-      <h1>Live Counters</h1>
-      {counters?.map((c) => (
+      <h1>Latest ORE Mining Rounds</h1>
+      {rounds?.map((round) => (
         <div
-          key={c.owner}
-          style={{ padding: "1rem", border: "1px solid #ccc" }}
+          key={round.id.round_id}
+          style={{
+            padding: "1rem",
+            border: "1px solid #ccc",
+            margin: "0.5rem 0",
+          }}
         >
-          <h3>Owner: {c.owner}</h3>
+          <h3>Round #{round.id.round_id}</h3>
+          <p>Address: {round.id.round_address}</p>
           <p>
-            Count: <strong>{c.total_count}</strong>
+            Total Deployed: {round.state.total_deployed?.toLocaleString()}{" "}
+            lamports
           </p>
-          <small>
-            Last updated: {new Date(c.last_updated * 1000).toLocaleString()}
-          </small>
+          <p>
+            Total Winnings: {round.state.total_winnings?.toLocaleString()}{" "}
+            lamports
+          </p>
+          <p>Deploy Count: {round.metrics.deploy_count || 0}</p>
+          <p>
+            Total SOL Deployed:{" "}
+            {round.metrics.total_deployed_sol?.toLocaleString()} lamports
+          </p>
         </div>
       ))}
     </div>
@@ -216,44 +277,49 @@ export default function App() {
 </TabItem>
 <TabItem label="TypeScript (Non-React)">
 
-### 1. Set up your project
+### 2. Set up your project
 
 ```bash
-mkdir my-counter-app && cd my-counter-app
+mkdir my-ore-app && cd my-ore-app
 npm init -y
 npm install hyperstack-typescript typescript
 ```
 
-### 2. Connect and stream data
+Copy the generated SDK:
+
+```bash
+cp -r ../ore-stack/sdk ./src/ore-sdk
+```
+
+### 3. Connect and stream data
 
 ```typescript
 // src/index.ts
 import { HyperStack } from "hyperstack-typescript";
-
-interface Counter {
-  owner: string;
-  total_count: number;
-  last_updated: number;
-}
+import { OreStack, type OreRound } from "./ore-sdk";
 
 async function main() {
-  // Connect to your deployed stack
+  // Connect to your deployed stack using the generated SDK
   const hs = await HyperStack.connect(
-    "wss://counter-stack.stack.usehyperstack.com",
+    "wss://<your-stack-name>.stack.usehyperstack.com",
+    { stack: OreStack },
   );
 
-  console.log("Connected! Streaming counters...\n");
+  console.log("Connected! Streaming ORE rounds...\n");
 
-  // Stream updates using AsyncIterable
-  for await (const update of hs.views.counters.list.watch()) {
+  // Stream updates with full type safety
+  for await (const update of hs.views.OreRound.latest.watch()) {
     if (update.type === "upsert") {
-      const counter = update.data as Counter;
-      console.log(`Counter updated:`);
-      console.log(`  Owner: ${counter.owner}`);
-      console.log(`  Count: ${counter.total_count}`);
+      const round = update.data;
+      console.log(`Round #${round.id.round_id}:`);
+      console.log(`  Address: ${round.id.round_address}`);
       console.log(
-        `  Last updated: ${new Date(counter.last_updated * 1000).toLocaleString()}`,
+        `  Total Deployed: ${round.state.total_deployed?.toLocaleString()} lamports`,
       );
+      console.log(
+        `  Total Winnings: ${round.state.total_winnings?.toLocaleString()} lamports`,
+      );
+      console.log(`  Deploy Count: ${round.metrics.deploy_count || 0}`);
       console.log("");
     }
   }
@@ -262,7 +328,7 @@ async function main() {
 main().catch(console.error);
 ```
 
-### 3. Run your app
+### 4. Run your app
 
 ```bash
 npx tsx src/index.ts
@@ -275,9 +341,9 @@ npx tsx src/index.ts
 
 ## Troubleshooting
 
-### "AST file not found"
+### "Stack file not found"
 
-Ensure you ran `cargo build` in your Rust project. The `#[hyperstack]` macro generates the AST file during compilation.
+Ensure you ran `cargo build` in your Rust project. The `#[hyperstack]` macro generates the `.stack.json` file during compilation.
 
 ### WebSocket connection fails
 
@@ -286,11 +352,12 @@ Ensure you ran `cargo build` in your Rust project. The `#[hyperstack]` macro gen
 
 ### Data is not appearing
 
-1. Verify that your Solana program is actually emitting the events or updating the accounts defined in your stack.
+1. Verify that the ORE program is emitting events and updating the Round accounts.
 2. Check the browser console for any subscription errors.
+3. Ensure your view path matches the entity name exactly (e.g., `OreRound/latest`).
 
 ## Next Steps
 
-- Learn more about [Stack Macros](/building-stacks/macros) to build complex pipelines.
-- Explore [Population Strategies](/building-stacks/strategies) for different data access patterns.
+- Learn more about [Stack Macros](/building-stacks/rust-dsl/macros) to build complex pipelines.
+- Explore [Population Strategies](/building-stacks/rust-dsl/strategies) for different data access patterns.
 - Check the [CLI Reference](/cli/commands) for advanced deployment options.

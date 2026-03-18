@@ -38,6 +38,7 @@
 
 // Public modules - AST types needed for SDK generation
 pub(crate) mod ast;
+pub(crate) mod event_type_helpers;
 
 // Internal modules - not exposed publicly
 mod codegen;
@@ -102,6 +103,7 @@ pub fn hyperstack(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - `#[aggregate(...)]` - Aggregate field values
 /// - `#[computed(...)]` - Computed fields from other fields
 /// - `#[derive_from(...)]` - Derive values from instructions
+/// - `#[resolve(...)]` - Resolve external data (token metadata via DAS API or data from URLs)
 #[proc_macro_derive(
     Stream,
     attributes(
@@ -111,7 +113,8 @@ pub fn hyperstack(attr: TokenStream, item: TokenStream) -> TokenStream {
         snapshot,
         aggregate,
         computed,
-        derive_from
+        derive_from,
+        resolve
     )
 )]
 pub fn stream_derive(_input: TokenStream) -> TokenStream {

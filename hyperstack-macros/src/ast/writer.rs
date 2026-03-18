@@ -31,8 +31,24 @@ pub fn write_ast_to_file(spec: &SerializableStreamSpec, entity_name: &str) -> st
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
 
     std::fs::write(&ast_file, json)?;
-    eprintln!("Generated AST: {}", ast_file.display());
 
+    Ok(())
+}
+
+/// Write a SerializableStackSpec to a JSON file.
+/// The file is written to `.hyperstack/{stack_name}.stack.json` relative to CARGO_MANIFEST_DIR.
+pub fn write_stack_to_file(
+    spec: &super::types::SerializableStackSpec,
+    stack_name: &str,
+) -> std::io::Result<()> {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e.to_string()))?;
+    let ast_dir = std::path::Path::new(&manifest_dir).join(".hyperstack");
+    std::fs::create_dir_all(&ast_dir)?;
+    let stack_file = ast_dir.join(format!("{}.stack.json", stack_name));
+    let json = serde_json::to_string_pretty(spec)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+    std::fs::write(&stack_file, json)?;
     Ok(())
 }
 
@@ -74,6 +90,13 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
         .map(|typedef| IdlTypeDefSnapshot {
             name: typedef.name.clone(),
             docs: typedef.docs.clone(),
+            serialization: typedef.serialization.as_ref().map(|s| match s {
+                idl_parser::IdlSerialization::Borsh => IdlSerializationSnapshot::Borsh,
+                idl_parser::IdlSerialization::Bytemuck => IdlSerializationSnapshot::Bytemuck,
+                idl_parser::IdlSerialization::BytemuckUnsafe => {
+                    IdlSerializationSnapshot::BytemuckUnsafe
+                }
+            }),
             type_def: match &typedef.type_def {
                 idl_parser::IdlTypeDefKind::Struct { kind, fields } => {
                     IdlTypeDefKindSnapshot::Struct {
@@ -85,6 +108,12 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
                                 type_: convert_idl_type(&f.type_),
                             })
                             .collect(),
+                    }
+                }
+                idl_parser::IdlTypeDefKind::TupleStruct { kind, fields } => {
+                    IdlTypeDefKindSnapshot::TupleStruct {
+                        kind: kind.clone(),
+                        fields: fields.iter().map(convert_idl_type).collect(),
                     }
                 }
                 idl_parser::IdlTypeDefKind::Enum { kind, variants } => {
@@ -117,6 +146,7 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
                     types.push(IdlTypeDefSnapshot {
                         name: account.name.clone(),
                         docs: account.docs.clone(),
+                        serialization: None,
                         type_def: IdlTypeDefKindSnapshot::Struct {
                             kind: kind.clone(),
                             fields: fields
@@ -129,10 +159,22 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
                         },
                     });
                 }
+                idl_parser::IdlTypeDefKind::TupleStruct { kind, fields } => {
+                    types.push(IdlTypeDefSnapshot {
+                        name: account.name.clone(),
+                        docs: account.docs.clone(),
+                        serialization: None,
+                        type_def: IdlTypeDefKindSnapshot::TupleStruct {
+                            kind: kind.clone(),
+                            fields: fields.iter().map(convert_idl_type).collect(),
+                        },
+                    });
+                }
                 idl_parser::IdlTypeDefKind::Enum { kind, variants } => {
                     types.push(IdlTypeDefSnapshot {
                         name: account.name.clone(),
                         docs: account.docs.clone(),
+                        serialization: None,
                         type_def: IdlTypeDefKindSnapshot::Enum {
                             kind: kind.clone(),
                             variants: variants
@@ -156,17 +198,39 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
         .iter()
         .any(|ix| ix.discriminant.is_some() && ix.discriminator.is_empty());
     let discriminant_size: usize = if uses_steel_discriminant { 1 } else { 8 };
+    let program_id = idl
+        .address
+        .clone()
+        .or_else(|| idl.metadata.as_ref().and_then(|m| m.address.clone()));
 
     IdlSnapshot {
         name: idl.get_name().to_string(),
+        program_id,
         version: idl.get_version().to_string(),
         accounts: idl
             .accounts
             .iter()
-            .map(|acc| IdlAccountSnapshot {
-                name: acc.name.clone(),
-                discriminator: acc.discriminator.clone(),
-                docs: acc.docs.clone(),
+            .map(|acc| {
+                let serialization = idl
+                    .types
+                    .iter()
+                    .find(|t| t.name == acc.name)
+                    .and_then(|t| t.serialization.as_ref())
+                    .map(|s| match s {
+                        idl_parser::IdlSerialization::Borsh => IdlSerializationSnapshot::Borsh,
+                        idl_parser::IdlSerialization::Bytemuck => {
+                            IdlSerializationSnapshot::Bytemuck
+                        }
+                        idl_parser::IdlSerialization::BytemuckUnsafe => {
+                            IdlSerializationSnapshot::BytemuckUnsafe
+                        }
+                    });
+                IdlAccountSnapshot {
+                    name: acc.name.clone(),
+                    discriminator: acc.get_discriminator(),
+                    docs: acc.docs.clone(),
+                    serialization,
+                }
             })
             .collect(),
         instructions: idl
@@ -204,7 +268,7 @@ pub fn convert_idl_to_snapshot(idl: &idl_parser::IdlSpec) -> IdlSnapshot {
             .iter()
             .map(|event| IdlEventSnapshot {
                 name: event.name.clone(),
-                discriminator: event.discriminator.clone(),
+                discriminator: event.get_discriminator(),
                 docs: event.docs.clone(),
             })
             .collect(),
@@ -256,6 +320,12 @@ pub fn convert_idl_type(idl_type: &idl_parser::IdlType) -> IdlTypeSnapshot {
                 }
             },
         }),
+        idl_parser::IdlType::HashMap(hm) => IdlTypeSnapshot::HashMap(IdlHashMapTypeSnapshot {
+            hash_map: (
+                Box::new(convert_idl_type(&hm.hash_map.0)),
+                Box::new(convert_idl_type(&hm.hash_map.1)),
+            ),
+        }),
     }
 }
 
@@ -266,6 +336,7 @@ pub fn build_handlers_from_sources(
     aggregate_conditions: &HashMap<String, String>,
     idl: Option<&idl_parser::IdlSpec>,
 ) -> Vec<SerializableHandlerSpec> {
+    let program_name = idl.map(|idl| idl.get_name());
     let mut handlers = Vec::new();
 
     // Group sources by type and join key (same logic as handler generation)
@@ -286,6 +357,9 @@ pub fn build_handlers_from_sources(
     for ((source_type, join_key), mappings) in &sources_by_type_and_join {
         let account_type = source_type.split("::").last().unwrap_or(source_type);
         let is_instruction = mappings.iter().any(|m| m.is_instruction);
+        // CPI events are sourced from `::events::` submodule paths.
+        // All event fields live under "data.*" (no "accounts.*" section).
+        let is_cpi_event = source_type.contains("::events::");
 
         // Skip if this is an event-derived mapping
         if is_instruction
@@ -333,7 +407,14 @@ pub fn build_handlers_from_sources(
 
                 MappingSource::AsCapture { field_transforms }
             } else {
-                let field_path = if is_instruction {
+                let field_path = if is_cpi_event {
+                    // CPI events: all fields are under "data"
+                    if mapping.source_field_name.is_empty() {
+                        FieldPath::new(&["data"])
+                    } else {
+                        FieldPath::new(&["data", &mapping.source_field_name])
+                    }
+                } else if is_instruction {
                     if mapping.source_field_name.is_empty() {
                         FieldPath::new(&["data"])
                     } else {
@@ -365,16 +446,48 @@ pub fn build_handlers_from_sources(
 
             let population = parse_population_strategy(&mapping.strategy);
 
+            let condition = mapping.condition.as_ref().map(|cond| ConditionExpr {
+                expression: cond.clone(),
+                parsed: condition_parser::parse_condition_expression(cond),
+            });
+
+            let when = mapping.when.as_ref().map(|when_path| {
+                let instr_type = path_to_string(when_path);
+                let instr_base = instr_type.split("::").last().unwrap_or(&instr_type);
+                if let Some(program_name) = program_name {
+                    format!("{}::{}IxState", program_name, instr_base)
+                } else {
+                    format!("{}IxState", instr_base)
+                }
+            });
+
+            let stop = mapping.stop.as_ref().map(|stop_path| {
+                let instr_type = path_to_string(stop_path);
+                let instr_base = instr_type.split("::").last().unwrap_or(&instr_type);
+                if let Some(program_name) = program_name {
+                    format!("{}::{}IxState", program_name, instr_base)
+                } else {
+                    format!("{}IxState", instr_base)
+                }
+            });
+
             serializable_mappings.push(SerializableFieldMapping {
                 target_path: mapping.target_field_name.clone(),
                 source,
                 transform: None,
                 population,
+                condition,
+                when,
+                stop,
+                emit: mapping.emit,
             });
 
             if mapping.is_primary_key {
                 has_primary_key = true;
-                if is_instruction {
+                if is_cpi_event {
+                    // CPI event fields are always in "data"
+                    primary_field = Some(format!("data.{}", mapping.source_field_name));
+                } else if is_instruction {
                     let prefix = idl
                         .and_then(|idl| {
                             idl.get_instruction_field_prefix(
@@ -403,10 +516,17 @@ pub fn build_handlers_from_sources(
             .find_map(|m| m.lookup_by.as_ref())
             .map(|fs| {
                 // FieldSpec has explicit_location which tells us if it's accounts:: or data::
+                // For CPI events, all fields (including identifiers) are under "data".
                 let prefix = match &fs.explicit_location {
                     Some(parse::FieldLocation::Account) => "accounts",
                     Some(parse::FieldLocation::InstructionArg) => "data",
-                    None => "accounts", // Default to accounts for compatibility
+                    None => {
+                        if is_cpi_event {
+                            "data" // CPI event fields are always in "data"
+                        } else {
+                            "accounts" // Default to accounts for instruction compatibility
+                        }
+                    }
                 };
                 format!("{}.{}", prefix, fs.ident)
             });
@@ -444,12 +564,44 @@ pub fn build_handlers_from_sources(
             }
         };
 
-        let type_suffix = if is_instruction { "IxState" } else { "State" };
+        // CPI events (from `::events::`) use "CpiEvent" suffix; instructions use "IxState"
+        let type_suffix = if is_cpi_event {
+            "CpiEvent"
+        } else if is_instruction {
+            "IxState"
+        } else {
+            "State"
+        };
+        let serialization = if is_instruction {
+            None
+        } else {
+            idl.and_then(|idl| {
+                idl.types
+                    .iter()
+                    .find(|t| t.name == account_type)
+                    .and_then(|t| t.serialization.as_ref())
+                    .map(|s| match s {
+                        idl_parser::IdlSerialization::Borsh => IdlSerializationSnapshot::Borsh,
+                        idl_parser::IdlSerialization::Bytemuck => {
+                            IdlSerializationSnapshot::Bytemuck
+                        }
+                        idl_parser::IdlSerialization::BytemuckUnsafe => {
+                            IdlSerializationSnapshot::BytemuckUnsafe
+                        }
+                    })
+            })
+        };
+        let type_name = if let Some(program_name) = program_name {
+            format!("{}::{}{}", program_name, account_type, type_suffix)
+        } else {
+            format!("{}{}", account_type, type_suffix)
+        };
         handlers.push(SerializableHandlerSpec {
             source: SourceSpec::Source {
                 program_id: None,
                 discriminator: None,
-                type_name: format!("{}{}", account_type, type_suffix),
+                type_name,
+                serialization,
             },
             key_resolution,
             mappings: serializable_mappings,
@@ -466,11 +618,17 @@ pub fn build_resolver_hooks(
     resolver_hooks: &[parse::ResolveKeyAttribute],
     idl: Option<&idl_parser::IdlSpec>,
 ) -> Vec<ResolverHook> {
+    let program_name = idl.map(|idl| idl.get_name());
     resolver_hooks
         .iter()
         .map(|hook| {
             let account_type = path_to_string(&hook.account_path);
-            let account_type_state = format!("{}State", account_type.split("::").last().unwrap());
+            let account_base = account_type.split("::").last().unwrap();
+            let account_type_state = if let Some(program_name) = program_name {
+                format!("{}::{}State", program_name, account_base)
+            } else {
+                format!("{}State", account_base)
+            };
 
             let strategy = match hook.strategy.as_str() {
                 "pda_reverse_lookup" => {
@@ -516,6 +674,7 @@ pub fn build_instruction_hooks(
     derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    program_name: Option<&str>,
 ) -> Vec<InstructionHook> {
     // Use BTreeMap for deterministic ordering in the final output
     let mut instruction_hooks_map: BTreeMap<String, InstructionHook> = BTreeMap::new();
@@ -523,7 +682,12 @@ pub fn build_instruction_hooks(
     // Process PDA registrations
     for registration in pda_registrations {
         let instr_type = path_to_string(&registration.instruction_path);
-        let instr_type_state = format!("{}IxState", instr_type.split("::").last().unwrap());
+        let instr_base = instr_type.split("::").last().unwrap();
+        let instr_type_state = if let Some(program_name) = program_name {
+            format!("{}::{}IxState", program_name, instr_base)
+        } else {
+            format!("{}IxState", instr_base)
+        };
 
         let action = HookAction::RegisterPdaMapping {
             pda_field: FieldPath::new(&["accounts", &registration.pda_field.ident.to_string()]),
@@ -549,7 +713,12 @@ pub fn build_instruction_hooks(
     let mut sorted_derive_from: Vec<_> = derive_from_mappings.iter().collect();
     sorted_derive_from.sort_by_key(|(k, _)| *k);
     for (instruction_type, derive_attrs) in sorted_derive_from {
-        let instr_type_state = format!("{}IxState", instruction_type.split("::").last().unwrap());
+        let instr_base = instruction_type.split("::").last().unwrap();
+        let instr_type_state = if let Some(program_name) = program_name {
+            format!("{}::{}IxState", program_name, instr_base)
+        } else {
+            format!("{}IxState", instr_base)
+        };
 
         for derive_attr in derive_attrs {
             let source = if derive_attr.field.ident.to_string().starts_with("__") {
@@ -628,8 +797,12 @@ pub fn build_instruction_hooks(
                         "Sum" | "Count" | "Min" | "Max" | "UniqueCount"
                     )
                 {
-                    let instr_type_state =
-                        format!("{}IxState", source_type.split("::").last().unwrap());
+                    let instr_base = source_type.split("::").last().unwrap();
+                    let instr_type_state = if let Some(program_name) = program_name {
+                        format!("{}::{}IxState", program_name, instr_base)
+                    } else {
+                        format!("{}IxState", instr_base)
+                    };
 
                     let condition = ConditionExpr {
                         expression: condition_str.clone(),
@@ -668,4 +841,161 @@ fn path_to_string(path: &syn::Path) -> String {
         .map(|seg| seg.ident.to_string())
         .collect::<Vec<_>>()
         .join("::")
+}
+
+// ============================================================================
+// PDA and Instruction Extraction from Anchor IDL
+// ============================================================================
+
+/// Extract PDA definitions from an Anchor IDL.
+/// Returns a map of PDA name -> PdaDefinition.
+pub fn extract_pdas_from_idl(idl: &idl_parser::IdlSpec) -> BTreeMap<String, PdaDefinition> {
+    let mut pdas = BTreeMap::new();
+
+    for instruction in &idl.instructions {
+        for account in &instruction.accounts {
+            if let Some(pda_info) = &account.pda {
+                let pda_def = convert_anchor_pda_to_def(&account.name, pda_info);
+                pdas.entry(account.name.clone()).or_insert(pda_def);
+            }
+        }
+    }
+
+    pdas
+}
+
+/// Convert Anchor IDL PDA info to our PdaDefinition type.
+fn convert_anchor_pda_to_def(name: &str, pda: &idl_parser::IdlPda) -> PdaDefinition {
+    let seeds = pda
+        .seeds
+        .iter()
+        .map(|seed| match seed {
+            idl_parser::IdlPdaSeed::Const { value } => {
+                if let Ok(s) = String::from_utf8(value.clone()) {
+                    PdaSeedDef::Literal { value: s }
+                } else {
+                    PdaSeedDef::Bytes {
+                        value: value.clone(),
+                    }
+                }
+            }
+            idl_parser::IdlPdaSeed::Account { path, .. } => PdaSeedDef::AccountRef {
+                account_name: path.clone(),
+            },
+            idl_parser::IdlPdaSeed::Arg { path, arg_type } => PdaSeedDef::ArgRef {
+                arg_name: path.clone(),
+                arg_type: arg_type.clone(),
+            },
+        })
+        .collect();
+
+    let program_id = pda.program.as_ref().and_then(|p| match p {
+        idl_parser::IdlPdaProgram::Literal { value, .. } => Some(value.clone()),
+        idl_parser::IdlPdaProgram::Const { value, .. } => Some(bs58::encode(value).into_string()),
+        idl_parser::IdlPdaProgram::Account { .. } => None,
+    });
+
+    PdaDefinition {
+        name: name.to_string(),
+        seeds,
+        program_id,
+    }
+}
+
+/// Extract instruction definitions from an Anchor IDL.
+pub fn extract_instructions_from_idl(
+    idl: &idl_parser::IdlSpec,
+    pdas: &BTreeMap<String, PdaDefinition>,
+) -> Vec<InstructionDef> {
+    let program_id = idl
+        .address
+        .clone()
+        .or_else(|| idl.metadata.as_ref().and_then(|m| m.address.clone()));
+
+    let uses_steel = idl
+        .instructions
+        .iter()
+        .any(|ix| ix.discriminant.is_some() && ix.discriminator.is_empty());
+    let discriminator_size = if uses_steel { 1 } else { 8 };
+
+    idl.instructions
+        .iter()
+        .map(|ix| {
+            let accounts = ix
+                .accounts
+                .iter()
+                .map(|acc| convert_account_to_def(acc, pdas))
+                .collect();
+
+            let args = ix
+                .args
+                .iter()
+                .map(|arg| InstructionArgDef {
+                    name: arg.name.clone(),
+                    arg_type: crate::parse::idl::to_rust_type_string(&arg.type_),
+                    docs: vec![],
+                })
+                .collect();
+
+            let errors: Vec<IdlErrorSnapshot> = idl
+                .errors
+                .iter()
+                .map(|e| IdlErrorSnapshot {
+                    code: e.code,
+                    name: e.name.clone(),
+                    msg: e.msg.clone(),
+                })
+                .collect();
+
+            InstructionDef {
+                name: ix.name.clone(),
+                discriminator: ix.get_discriminator(),
+                discriminator_size,
+                accounts,
+                args,
+                errors,
+                program_id: program_id.clone(),
+                docs: ix.docs.clone(),
+            }
+        })
+        .collect()
+}
+
+/// Convert an IDL account argument to our InstructionAccountDef type.
+fn convert_account_to_def(
+    acc: &idl_parser::IdlAccountArg,
+    pdas: &BTreeMap<String, PdaDefinition>,
+) -> InstructionAccountDef {
+    let resolution = if acc.is_signer && acc.address.is_none() && acc.pda.is_none() {
+        AccountResolution::Signer
+    } else if let Some(address) = &acc.address {
+        AccountResolution::Known {
+            address: address.clone(),
+        }
+    } else if acc.pda.is_some() {
+        if pdas.contains_key(&acc.name) {
+            AccountResolution::PdaRef {
+                pda_name: acc.name.clone(),
+            }
+        } else if let Some(pda_info) = &acc.pda {
+            let pda_def = convert_anchor_pda_to_def(&acc.name, pda_info);
+            AccountResolution::PdaInline {
+                seeds: pda_def.seeds,
+                program_id: pda_def.program_id,
+            }
+        } else {
+            AccountResolution::UserProvided
+        }
+    } else {
+        AccountResolution::UserProvided
+    };
+
+    InstructionAccountDef {
+        name: acc.name.clone(),
+        is_signer: acc.is_signer,
+        is_writable: acc.is_mut,
+        resolution,
+        is_optional: acc.optional,
+        docs: acc.docs.clone(),
+    }
 }

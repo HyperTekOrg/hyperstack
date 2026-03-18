@@ -27,10 +27,12 @@
 pub mod ast;
 pub mod canonical_log;
 pub mod compiler;
+pub mod event_type_helpers;
 pub mod metrics_context;
 pub mod proto_router;
 pub mod resolvers;
 pub mod rust;
+pub mod scheduler;
 pub mod spec_trait;
 pub mod typescript;
 pub mod vm;
@@ -38,11 +40,14 @@ pub mod vm_metrics;
 
 pub use canonical_log::{CanonicalLog, LogLevel};
 pub use metrics_context::{FieldAccessor, FieldRef, MetricsContext};
-pub use resolvers::{InstructionContext, KeyResolution, ResolveContext, ReverseLookupUpdater};
+pub use resolvers::{
+    InstructionContext, KeyResolution, ResolveContext, ReverseLookupUpdater, TokenMetadata,
+};
 pub use typescript::{write_typescript_to_file, TypeScriptCompiler, TypeScriptConfig};
 pub use vm::{
     CapacityWarning, CleanupResult, DirtyTracker, FieldChange, PendingAccountUpdate,
-    PendingQueueStats, QueuedAccountUpdate, StateTableConfig, UpdateContext, VmMemoryStats,
+    PendingQueueStats, QueuedAccountUpdate, ResolverRequest, ResolverTarget, ScheduledCallback,
+    StateTableConfig, UpdateContext, VmMemoryStats,
 };
 
 // Re-export macros for convenient use

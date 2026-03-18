@@ -1,6 +1,6 @@
 [package]
 name = "hyperstack-stacks"
-version = "0.3.2"
+version = "0.5.5"
 edition.workspace = true
 license = "MIT"
 repository.workspace = true
@@ -12,12 +12,11 @@ keywords = ["hyperstack", "solana", "blockchain", "streaming"]
 categories = ["api-bindings", "web-programming"]
 
 [features]
-default = ["pumpfun"]
-pumpfun = []
+default = ["ore"]
 ore = []
-full = ["pumpfun", "ore"]
+full = ["ore"]
 
 [dependencies]
-hyperstack-sdk = { version = "0.3.2", path = "../../../rust/hyperstack-sdk" }
+hyperstack-sdk = { version = "0.5.5", path = "../../../rust/hyperstack-sdk" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

@@ -1,8 +1,10 @@
 export { HyperstackProvider, useHyperstackContext, useConnectionState, useView, useEntity } from './provider';
 export { useHyperstack } from './stack';
-export { createRuntime } from './runtime';
 export { ZustandAdapter } from './zustand-adapter';
 export type { HyperStackStore } from './zustand-adapter';
+
+export { useInstructionMutation } from './hooks';
+export type { UseMutationOptions, UseMutationResult, MutationStatus } from './hooks';
 
 export {
   ConnectionManager,
@@ -17,6 +19,17 @@ export {
   HyperStackError,
   DEFAULT_CONFIG,
   DEFAULT_MAX_ENTRIES_PER_VIEW,
+  resolveAccounts,
+  validateAccountResolution,
+  derivePda,
+  createSeed,
+  createPublicKeySeed,
+  serializeInstructionData,
+  waitForConfirmation,
+  parseInstructionError,
+  formatProgramError,
+  executeInstruction,
+  createInstructionExecutor,
 } from 'hyperstack-typescript';
 
 export type {
@@ -26,6 +39,8 @@ export type {
   StorageAdapterConfig,
   FrameProcessorConfig,
   HyperStackOptionsWithStorage,
+  InstructionExecutorOptions,
+  InstructionExecutor,
   EntityFrame,
   SnapshotFrame,
   SnapshotEntity,
@@ -38,23 +53,45 @@ export type {
   Subscription,
   HyperStackOptions,
   HyperStackConfig,
+  WalletAdapter,
+  WalletState,
+  WalletConnectOptions,
+  AccountCategory,
+  AccountMeta,
+  PdaConfig,
+  PdaSeed,
+  ResolvedAccount,
+  ResolvedAccounts,
+  AccountResolutionResult,
+  AccountResolutionOptions,
+  ArgSchema,
+  ArgType,
+  ConfirmationLevel,
+  ExecuteOptions,
+  ExecutionResult,
+  ProgramError,
+  ErrorMetadata,
+  InstructionHandler,
+  InstructionDefinition,
+  BuiltInstruction,
 } from 'hyperstack-typescript';
 
 export type {
-  NetworkConfig,
   TransactionDefinition,
   StackDefinition,
   HyperstackConfig,
-  WalletAdapter,
+  UseHyperstackOptions,
   ViewHookOptions,
   ViewHookResult,
   ListParams,
+  ListParamsBase,
+  ListParamsSingle,
+  ListParamsMultiple,
   UseMutationReturn,
   StateViewHook,
   ListViewHook,
   ViewMode,
   ViewDef,
   ViewGroup,
+  Schema,
 } from './types';
-
-export type { HyperstackRuntime, SubscriptionHandle } from './runtime';

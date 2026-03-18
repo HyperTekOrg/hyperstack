@@ -7,17 +7,19 @@
 //! The same AST is used for both inline code generation (via `codegen::generate_handlers_from_specs`)
 //! and for the `#[ast_spec]` macro, ensuring identical output.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::ast::writer::{
     convert_idl_to_snapshot, parse_population_strategy, parse_transformation,
 };
 use crate::ast::{
-    ComputedFieldSpec, ConditionExpr, EntitySection, FieldPath, HookAction, IdentitySpec,
-    InstructionHook, KeyResolutionStrategy, LookupIndexSpec, MappingSource, ResolverHook,
-    ResolverStrategy, SerializableFieldMapping, SerializableHandlerSpec, SerializableStreamSpec,
-    SourceSpec,
+    ComparisonOp, ComputedFieldSpec, ConditionExpr, EntitySection, FieldPath, HookAction,
+    IdentitySpec, IdlSerializationSnapshot, InstructionHook, KeyResolutionStrategy,
+    LookupIndexSpec, MappingSource, ResolveStrategy, ResolverCondition, ResolverExtractSpec,
+    ResolverHook, ResolverSpec, ResolverStrategy, ResolverType, SerializableFieldMapping,
+    SerializableHandlerSpec, SerializableStreamSpec, SourceSpec,
 };
+use crate::event_type_helpers::{find_idl_for_type, program_name_for_type, IdlLookup};
 use crate::parse;
 use crate::parse::conditions as condition_parser;
 use crate::parse::idl as idl_parser;
@@ -51,6 +53,7 @@ use super::handlers::{find_field_in_instruction, get_join_on_field};
 /// * `computed_fields` - Computed field definitions
 /// * `section_specs` - Entity section specifications
 /// * `idl` - Optional IDL specification for field resolution
+/// * `views` - View definitions for derived views
 #[allow(clippy::too_many_arguments)]
 pub fn build_ast(
     entity_name: &str,
@@ -63,34 +66,41 @@ pub fn build_ast(
     derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
+    resolve_specs: &[parse::ResolveSpec],
     section_specs: &[EntitySection],
-    idl: Option<&idl_parser::IdlSpec>,
+    idls: IdlLookup,
+    views: Vec<crate::ast::ViewDef>,
 ) -> SerializableStreamSpec {
-    // Build handlers from sources and events
+    let idl = idls.first().map(|(_, idl)| *idl);
     let handlers = build_handlers(
         sources_by_type,
         events_by_instruction,
         primary_keys,
         lookup_indexes,
         aggregate_conditions,
-        idl,
+        idls,
     );
 
-    let resolver_hooks_ast = build_resolver_hooks_ast(resolver_hooks, idl);
+    let mut resolver_hooks_ast = build_resolver_hooks_ast(resolver_hooks, idls);
+    resolver_hooks_ast.extend(auto_generate_lookup_resolvers(
+        &handlers,
+        &resolver_hooks_ast,
+        sources_by_type,
+        idls,
+    ));
     let instruction_hooks_ast = build_instruction_hooks_ast(
         pda_registrations,
         derive_from_mappings,
         aggregate_conditions,
         sources_by_type,
+        idls,
     );
 
-    // Extract computed field paths
     let computed_field_paths: Vec<String> = computed_fields
         .iter()
         .map(|(path, _, _)| path.clone())
         .collect();
 
-    // Extract program_id and convert IDL to snapshot for embedding
     let program_id = idl.and_then(|i| {
         i.address.clone().or_else(|| {
             i.metadata
@@ -122,6 +132,8 @@ pub fn build_ast(
             }
         })
         .collect();
+
+    let resolver_specs = build_resolver_specs(resolve_specs);
 
     // Build field_mappings from sections - this provides type information for ALL fields
     let mut field_mappings = BTreeMap::new();
@@ -156,79 +168,152 @@ pub fn build_ast(
         field_mappings,
         resolver_hooks: resolver_hooks_ast,
         instruction_hooks: instruction_hooks_ast,
+        resolver_specs,
         computed_fields: computed_field_paths,
         computed_field_specs,
         content_hash: None,
+        views,
     };
     // Compute and set the content hash
     spec.content_hash = Some(spec.compute_content_hash());
     spec
 }
 
-// ============================================================================
-// AST Writing
-// ============================================================================
+fn build_resolver_specs(resolve_specs: &[parse::ResolveSpec]) -> Vec<ResolverSpec> {
+    let mut grouped: BTreeMap<String, ResolverSpec> = BTreeMap::new();
 
-/// Write AST to JSON file at compile time (during macro expansion).
-///
-/// This function calls `build_ast` and writes the result to disk.
-/// The AST file can be used by `#[ast_spec]` for cloud compilation.
-#[allow(clippy::too_many_arguments)]
-pub fn write_ast_at_compile_time(
-    entity_name: &str,
-    primary_keys: &[String],
-    lookup_indexes: &[(String, Option<String>)],
-    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
-    events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
-    resolver_hooks: &[parse::ResolveKeyAttribute],
-    pda_registrations: &[parse::RegisterPdaAttribute],
-    derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
-    aggregate_conditions: &HashMap<String, String>,
-    computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
-    section_specs: &[EntitySection],
-    idl: Option<&idl_parser::IdlSpec>,
-) {
-    // Only write if CARGO_MANIFEST_DIR is set (i.e., we're in a build)
-    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        let ast_dir = std::path::Path::new(&manifest_dir).join(".hyperstack");
-
-        // Create directory
-        if std::fs::create_dir_all(&ast_dir).is_err() {
-            return; // Silently fail if we can't create the directory
-        }
-
-        let ast_file = ast_dir.join(format!("{}.ast.json", entity_name));
-
-        // Build the AST using shared function
-        let ast = build_ast(
-            entity_name,
-            primary_keys,
-            lookup_indexes,
-            sources_by_type,
-            events_by_instruction,
-            resolver_hooks,
-            pda_registrations,
-            derive_from_mappings,
-            aggregate_conditions,
-            computed_fields,
-            section_specs,
-            idl,
+    for spec in resolve_specs {
+        let input_key = if let Some(from) = &spec.from {
+            format!("path:{}", from)
+        } else if let Some(address) = &spec.address {
+            format!("value:{}", address)
+        } else {
+            "value:".to_string()
+        };
+        let condition_key = spec.condition.as_deref().unwrap_or("");
+        let schedule_key = spec.schedule_at.as_deref().unwrap_or("");
+        let key = format!(
+            "{}::{}::{}::{}::{}",
+            resolver_type_key(&spec.resolver),
+            input_key,
+            spec.strategy,
+            condition_key,
+            schedule_key,
         );
 
-        // Serialize and write
-        if let Ok(json) = serde_json::to_string_pretty(&ast) {
-            let _ = std::fs::write(&ast_file, json);
-            eprintln!("Generated AST: {}", ast_file.display());
+        let condition = spec
+            .condition
+            .as_deref()
+            .map(|s| parse_resolver_condition(s).unwrap_or_else(|e| panic!("{}", e)));
+
+        let entry = grouped.entry(key).or_insert_with(|| ResolverSpec {
+            resolver: spec.resolver.clone(),
+            input_path: spec.from.clone(),
+            input_value: spec
+                .address
+                .as_ref()
+                .map(|value| serde_json::Value::String(value.clone())),
+            strategy: parse_resolve_strategy(&spec.strategy),
+            extracts: Vec::new(),
+            condition,
+            schedule_at: spec.schedule_at.clone(),
+        });
+
+        let source_path = spec.extract.clone();
+
+        let extract = ResolverExtractSpec {
+            target_path: spec.target_field_name.clone(),
+            source_path,
+            transform: None,
+        };
+
+        if !entry.extracts.iter().any(|existing| {
+            existing.target_path == extract.target_path
+                && existing.source_path == extract.source_path
+        }) {
+            entry.extracts.push(extract);
         }
+    }
+
+    grouped.into_values().collect()
+}
+
+fn parse_resolve_strategy(strategy: &str) -> ResolveStrategy {
+    match strategy {
+        "LastWrite" => ResolveStrategy::LastWrite,
+        _ => ResolveStrategy::SetOnce,
     }
 }
 
-/// Build AST and write to disk, returning the AST for code generation.
-///
-/// This is the main entry point for stream_spec processing. It:
-/// 1. Builds the `SerializableStreamSpec` from parsed attributes
-/// 2. Writes the AST to disk for cloud compilation
-/// 3. Returns the AST for inline code generation
+pub fn parse_resolver_condition_from_str(s: &str) -> ResolverCondition {
+    parse_resolver_condition(s).unwrap_or_else(|e| panic!("{}", e))
+}
+
+fn parse_resolver_condition(s: &str) -> Result<ResolverCondition, String> {
+    // Order matters: two-char operators (>=, <=) must precede single-char (>, <)
+    // to avoid partial matches.
+    let operators = ["==", "!=", ">=", "<=", ">", "<"];
+    for op_str in &operators {
+        if let Some(pos) = s.find(op_str) {
+            let field_path = s[..pos].trim().to_string();
+            let raw_value = s[pos + op_str.len()..].trim();
+            let op = match *op_str {
+                "==" => ComparisonOp::Equal,
+                "!=" => ComparisonOp::NotEqual,
+                ">=" => ComparisonOp::GreaterThanOrEqual,
+                "<=" => ComparisonOp::LessThanOrEqual,
+                ">" => ComparisonOp::GreaterThan,
+                "<" => ComparisonOp::LessThan,
+                _ => unreachable!(),
+            };
+            let value = match raw_value {
+                "null" => serde_json::Value::Null,
+                "true" => serde_json::Value::Bool(true),
+                "false" => serde_json::Value::Bool(false),
+                s if s.parse::<f64>().is_ok() => {
+                    serde_json::json!(s.parse::<f64>().unwrap())
+                }
+                s => serde_json::Value::String(s.trim_matches('"').to_string()),
+            };
+            return Ok(ResolverCondition {
+                field_path,
+                op,
+                value,
+            });
+        }
+    }
+    Err(format!(
+        "Invalid condition expression: '{}'. \
+         Expected format: 'field.path <op> value' \
+         (supported operators: ==, !=, >, >=, <, <=)",
+        s
+    ))
+}
+
+fn resolver_type_key(resolver: &ResolverType) -> String {
+    match resolver {
+        ResolverType::Token => "token".to_string(),
+        ResolverType::Url(config) => match &config.url_source {
+            crate::ast::UrlSource::FieldPath(path) => format!("url:{}", path),
+            crate::ast::UrlSource::Template(parts) => {
+                let key: String = parts
+                    .iter()
+                    .map(|p| match p {
+                        crate::ast::UrlTemplatePart::Literal(s) => s.clone(),
+                        crate::ast::UrlTemplatePart::FieldRef(f) => format!("{{{}}}", f),
+                    })
+                    .collect();
+                format!("url:{}", key)
+            }
+        },
+    }
+}
+
+// ============================================================================
+// AST Building (no file writing — unified stack file is written at module level)
+// ============================================================================
+
+/// Build AST, returning the AST for code generation.
 #[allow(clippy::too_many_arguments)]
 pub fn build_and_write_ast(
     entity_name: &str,
@@ -241,11 +326,12 @@ pub fn build_and_write_ast(
     derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
+    resolve_specs: &[parse::ResolveSpec],
     section_specs: &[EntitySection],
-    idl: Option<&idl_parser::IdlSpec>,
+    idls: IdlLookup,
+    views: Vec<crate::ast::ViewDef>,
 ) -> SerializableStreamSpec {
-    // Build the AST
-    let ast = build_ast(
+    build_ast(
         entity_name,
         primary_keys,
         lookup_indexes,
@@ -256,24 +342,11 @@ pub fn build_and_write_ast(
         derive_from_mappings,
         aggregate_conditions,
         computed_fields,
+        resolve_specs,
         section_specs,
-        idl,
-    );
-
-    // Write to disk
-    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        let ast_dir = std::path::Path::new(&manifest_dir).join(".hyperstack");
-
-        if std::fs::create_dir_all(&ast_dir).is_ok() {
-            let ast_file = ast_dir.join(format!("{}.ast.json", entity_name));
-            if let Ok(json) = serde_json::to_string_pretty(&ast) {
-                let _ = std::fs::write(&ast_file, json);
-                eprintln!("Generated AST: {}", ast_file.display());
-            }
-        }
-    }
-
-    ast
+        idls,
+        views,
+    )
 }
 
 // ============================================================================
@@ -286,7 +359,7 @@ fn build_handlers(
     primary_keys: &[String],
     lookup_indexes: &[(String, Option<String>)],
     aggregate_conditions: &HashMap<String, String>,
-    idl: Option<&idl_parser::IdlSpec>,
+    idls: IdlLookup,
 ) -> Vec<SerializableHandlerSpec> {
     let mut handlers = Vec::new();
 
@@ -303,7 +376,6 @@ fn build_handlers(
         }
     }
 
-    // Process account sources
     for ((source_type, join_key), mappings) in &sources_by_type_and_join {
         if let Some(handler) = build_source_handler(
             source_type,
@@ -312,7 +384,7 @@ fn build_handlers(
             aggregate_conditions,
             primary_keys,
             lookup_indexes,
-            idl,
+            idls,
         ) {
             handlers.push(handler);
         }
@@ -335,7 +407,6 @@ fn build_handlers(
         }
     }
 
-    // Process event sources
     for ((instruction, join_key), event_mappings) in &events_by_instruction_and_join {
         if let Some(handler) = build_event_handler(
             instruction,
@@ -343,7 +414,7 @@ fn build_handlers(
             event_mappings,
             primary_keys,
             lookup_indexes,
-            idl,
+            idls,
         ) {
             handlers.push(handler);
         }
@@ -359,10 +430,15 @@ fn build_source_handler(
     aggregate_conditions: &HashMap<String, String>,
     primary_keys: &[String],
     lookup_indexes: &[(String, Option<String>)],
-    idl: Option<&idl_parser::IdlSpec>,
+    idls: IdlLookup,
 ) -> Option<SerializableHandlerSpec> {
     let account_type = source_type.split("::").last().unwrap_or(source_type);
+    let idl = find_idl_for_type(source_type, idls);
+    let program_name = program_name_for_type(source_type, idls);
     let is_instruction = mappings.iter().any(|m| m.is_instruction);
+    // CPI events are sourced from `::events::` submodule paths (e.g. generated_sdk::events::Swap).
+    // All event fields are stored under "data.*" (no "accounts.*" section).
+    let is_cpi_event = source_type.contains("::events::");
 
     // Skip event-derived mappings
     if is_instruction
@@ -409,7 +485,14 @@ fn build_source_handler(
 
             MappingSource::AsCapture { field_transforms }
         } else {
-            let field_path = if is_instruction {
+            let field_path = if is_cpi_event {
+                // CPI events: all fields (including identifiers like lb_pair, from) are under "data"
+                if mapping.source_field_name.is_empty() {
+                    FieldPath::new(&["data"])
+                } else {
+                    FieldPath::new(&["data", &mapping.source_field_name])
+                }
+            } else if is_instruction {
                 if mapping.source_field_name.is_empty() {
                     FieldPath::new(&["data"])
                 } else {
@@ -441,16 +524,50 @@ fn build_source_handler(
 
         let population = parse_population_strategy(&mapping.strategy);
 
+        let condition = mapping.condition.as_ref().map(|cond| ConditionExpr {
+            expression: cond.clone(),
+            parsed: condition_parser::parse_condition_expression(cond),
+        });
+
+        let when = mapping.when.as_ref().map(|when_path| {
+            let instr_type = path_to_string(when_path);
+            let instr_base = instr_type.split("::").last().unwrap_or(&instr_type);
+            let program_name = program_name_for_type(&instr_type, idls);
+            if let Some(program_name) = program_name {
+                format!("{}::{}IxState", program_name, instr_base)
+            } else {
+                format!("{}IxState", instr_base)
+            }
+        });
+
+        let stop = mapping.stop.as_ref().map(|stop_path| {
+            let instr_type = path_to_string(stop_path);
+            let instr_base = instr_type.split("::").last().unwrap_or(&instr_type);
+            let program_name = program_name_for_type(&instr_type, idls);
+            if let Some(program_name) = program_name {
+                format!("{}::{}IxState", program_name, instr_base)
+            } else {
+                format!("{}IxState", instr_base)
+            }
+        });
+
         serializable_mappings.push(SerializableFieldMapping {
             target_path: mapping.target_field_name.clone(),
             source,
             transform: None,
             population,
+            condition,
+            when,
+            stop,
+            emit: mapping.emit,
         });
 
         if mapping.is_primary_key {
             has_primary_key = true;
-            if is_instruction {
+            if is_cpi_event {
+                // CPI event fields are always in "data"
+                primary_field = Some(format!("data.{}", mapping.source_field_name));
+            } else if is_instruction {
                 let prefix = idl
                     .and_then(|idl| {
                         idl.get_instruction_field_prefix(account_type, &mapping.source_field_name)
@@ -476,10 +593,17 @@ fn build_source_handler(
         .find_map(|m| m.lookup_by.as_ref())
         .map(|fs| {
             // FieldSpec has explicit_location which tells us if it's accounts:: or data::
+            // For CPI events, all fields (including identifiers) are under "data".
             let prefix = match &fs.explicit_location {
                 Some(parse::FieldLocation::Account) => "accounts",
                 Some(parse::FieldLocation::InstructionArg) => "data",
-                None => "accounts", // Default to accounts for compatibility
+                None => {
+                    if is_cpi_event {
+                        "data" // CPI event fields are always in "data"
+                    } else {
+                        "accounts" // Default to accounts for instruction compatibility
+                    }
+                }
             };
             format!("{}.{}", prefix, fs.ident)
         });
@@ -536,53 +660,60 @@ fn build_source_handler(
         KeyResolutionStrategy::Lookup {
             primary_field: FieldPath::new(&[join_field]),
         }
+    } else if !lookup_indexes.is_empty() && !is_instruction {
+        // Entity has lookup indexes and this is an account handler without an embedded
+        // primary key. Use Lookup strategy with __account_address so the VM can resolve
+        // the entity via the lookup index populated by instruction handlers.
+        // __resolved_primary_key from explicit resolvers takes precedence if set.
+        KeyResolutionStrategy::Lookup {
+            primary_field: FieldPath::new(&["__account_address"]),
+        }
     } else {
-        // Check if there's a lookup index configured for this account type
-        // If so, use Lookup strategy with __account_address to enable PDA reverse lookup
-        let account_has_lookup_index = lookup_indexes.iter().any(|(field_name, _)| {
-            // Extract the account type from the lookup index field name
-            // For example, "id.bonding_curve" -> check if this is "BondingCurve" account
-            field_name
-                .split('.')
-                .next_back()
-                .map(|last_part| {
-                    // Convert to account type name (e.g., "bonding_curve" -> "BondingCurve")
-                    let account_name = last_part
-                        .split('_')
-                        .map(|part| {
-                            let mut chars = part.chars();
-                            match chars.next() {
-                                None => String::new(),
-                                Some(first) => {
-                                    first.to_uppercase().collect::<String>() + chars.as_str()
-                                }
-                            }
-                        })
-                        .collect::<String>();
-                    account_name == account_type
-                })
-                .unwrap_or(false)
-        });
-
-        if account_has_lookup_index && !is_instruction {
-            // This is an account handler with a lookup index configured
-            // Use Lookup strategy with __account_address to enable PDA reverse lookup
-            KeyResolutionStrategy::Lookup {
-                primary_field: FieldPath::new(&["__account_address"]),
-            }
-        } else {
-            KeyResolutionStrategy::Embedded {
-                primary_field: FieldPath::new(&[]),
-            }
+        KeyResolutionStrategy::Embedded {
+            primary_field: FieldPath::new(&[]),
         }
     };
 
-    let type_suffix = if is_instruction { "IxState" } else { "State" };
+    // Determine type suffix:
+    // - CPI events (from `::events::` submodule) use "CpiEvent"
+    // - Instructions use "IxState"
+    // - Account state uses "State"
+    let type_suffix = if is_cpi_event {
+        "CpiEvent"
+    } else if is_instruction {
+        "IxState"
+    } else {
+        "State"
+    };
+    let serialization = if is_instruction {
+        None
+    } else {
+        idl.and_then(|idl| {
+            idl.types
+                .iter()
+                .find(|t| t.name == account_type)
+                .and_then(|t| t.serialization.as_ref())
+                .map(|s| match s {
+                    idl_parser::IdlSerialization::Borsh => IdlSerializationSnapshot::Borsh,
+                    idl_parser::IdlSerialization::Bytemuck => IdlSerializationSnapshot::Bytemuck,
+                    idl_parser::IdlSerialization::BytemuckUnsafe => {
+                        IdlSerializationSnapshot::BytemuckUnsafe
+                    }
+                })
+        })
+    };
+    let type_name = if let Some(program_name) = program_name {
+        format!("{}::{}{}", program_name, account_type, type_suffix)
+    } else {
+        format!("{}{}", account_type, type_suffix)
+    };
+
     Some(SerializableHandlerSpec {
         source: SourceSpec::Source {
             program_id: None,
             discriminator: None,
-            type_name: format!("{}{}", account_type, type_suffix),
+            type_name,
+            serialization,
         },
         key_resolution,
         mappings: serializable_mappings,
@@ -597,8 +728,26 @@ fn build_event_handler(
     event_mappings: &[(String, parse::EventAttribute, syn::Type)],
     primary_keys: &[String],
     lookup_indexes: &[(String, Option<String>)],
-    idl: Option<&idl_parser::IdlSpec>,
+    idls: IdlLookup,
 ) -> Option<SerializableHandlerSpec> {
+    let instruction_path_str = event_mappings
+        .first()
+        .and_then(|(_, attr, _)| {
+            attr.from_instruction
+                .as_ref()
+                .or(attr.inferred_instruction.as_ref())
+        })
+        .map(path_to_string);
+    let (idl, program_name) = match &instruction_path_str {
+        Some(path_str) => (
+            find_idl_for_type(path_str, idls),
+            program_name_for_type(path_str, idls),
+        ),
+        None => (
+            idls.first().map(|(_, idl)| *idl),
+            idls.first().map(|(_, idl)| idl.get_name()),
+        ),
+    };
     let parts: Vec<&str> = instruction.split("::").collect();
     if parts.len() != 2 {
         return None;
@@ -690,6 +839,10 @@ fn build_event_handler(
             source,
             transform: None,
             population,
+            condition: None,
+            when: None,
+            stop: None,
+            emit: true,
         });
     }
 
@@ -773,11 +926,18 @@ fn build_event_handler(
         }
     };
 
+    let type_name = if let Some(program_name) = program_name {
+        format!("{}::{}IxState", program_name, instruction_type_pascal)
+    } else {
+        format!("{}IxState", instruction_type_pascal)
+    };
+
     Some(SerializableHandlerSpec {
         source: SourceSpec::Source {
             program_id: Some(program_id.to_string()),
             discriminator: None,
-            type_name: format!("{}IxState", instruction_type_pascal),
+            type_name,
+            serialization: None,
         },
         key_resolution,
         mappings: serializable_mappings,
@@ -792,13 +952,20 @@ fn build_event_handler(
 
 fn build_resolver_hooks_ast(
     resolver_hooks: &[parse::ResolveKeyAttribute],
-    idl: Option<&idl_parser::IdlSpec>,
+    idls: IdlLookup,
 ) -> Vec<ResolverHook> {
     resolver_hooks
         .iter()
         .map(|hook| {
             let account_type = path_to_string(&hook.account_path);
-            let account_type_state = format!("{}State", account_type.split("::").last().unwrap());
+            let account_base = account_type.split("::").last().unwrap();
+            let program_name = program_name_for_type(&account_type, idls);
+            let idl = find_idl_for_type(&account_type, idls);
+            let account_type_state = if let Some(program_name) = program_name {
+                format!("{}::{}State", program_name, account_base)
+            } else {
+                format!("{}State", account_base)
+            };
 
             let strategy = match hook.strategy.as_str() {
                 "pda_reverse_lookup" => {
@@ -808,9 +975,10 @@ fn build_resolver_hooks_ast(
                         .filter_map(|instr_path| {
                             idl.and_then(|idl| {
                                 let instr_name = instr_path.segments.last()?.ident.to_string();
+                                let instr_snake = crate::utils::to_snake_case(&instr_name);
                                 idl.instructions
                                     .iter()
-                                    .find(|instr| instr.name.eq_ignore_ascii_case(&instr_name))
+                                    .find(|instr| instr.name == instr_snake)
                                     .map(|instr| instr.get_discriminator())
                             })
                         })
@@ -838,19 +1006,101 @@ fn build_resolver_hooks_ast(
         .collect()
 }
 
+fn auto_generate_lookup_resolvers(
+    handlers: &[SerializableHandlerSpec],
+    existing_resolvers: &[ResolverHook],
+    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    idls: IdlLookup,
+) -> Vec<ResolverHook> {
+    let mut auto_hooks = Vec::new();
+
+    let account_types_needing_resolver: Vec<String> = handlers
+        .iter()
+        .filter_map(|handler| {
+            if let KeyResolutionStrategy::Lookup { primary_field } = &handler.key_resolution {
+                if primary_field.segments.as_slice() == ["__account_address"] {
+                    let SourceSpec::Source { ref type_name, .. } = handler.source;
+                    if type_name.ends_with("State") && !type_name.ends_with("IxState") {
+                        return Some(type_name.to_string());
+                    }
+                }
+            }
+            None
+        })
+        .collect();
+
+    if account_types_needing_resolver.is_empty() {
+        return auto_hooks;
+    }
+
+    let mut queue_discriminators: Vec<Vec<u8>> = Vec::new();
+    for mappings in sources_by_type.values() {
+        for mapping in mappings {
+            if mapping.is_instruction && mapping.is_lookup_index {
+                let source_path_str = path_to_string(&mapping.source_type_path);
+                let idl = find_idl_for_type(&source_path_str, idls);
+                if let Some(idl) = idl {
+                    let instr_name = mapping
+                        .source_type_path
+                        .segments
+                        .last()
+                        .map(|s| s.ident.to_string())
+                        .unwrap_or_default();
+                    let instr_snake = crate::utils::to_snake_case(&instr_name);
+
+                    if let Some(idl_instr) = idl.instructions.iter().find(|i| i.name == instr_snake)
+                    {
+                        let disc = idl_instr.get_discriminator();
+                        if !disc.is_empty() && !queue_discriminators.contains(&disc) {
+                            queue_discriminators.push(disc);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut seen_account_types = HashSet::new();
+    for account_type in account_types_needing_resolver {
+        if !seen_account_types.insert(account_type.clone()) {
+            continue;
+        }
+        if existing_resolvers
+            .iter()
+            .any(|r| r.account_type == account_type)
+        {
+            continue;
+        }
+        auto_hooks.push(ResolverHook {
+            account_type,
+            strategy: ResolverStrategy::PdaReverseLookup {
+                lookup_name: "default_pda_lookup".to_string(),
+                queue_discriminators: queue_discriminators.clone(),
+            },
+        });
+    }
+
+    auto_hooks
+}
+
 fn build_instruction_hooks_ast(
     pda_registrations: &[parse::RegisterPdaAttribute],
     derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
     aggregate_conditions: &HashMap<String, String>,
     sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    idls: IdlLookup,
 ) -> Vec<InstructionHook> {
-    // Use BTreeMap for deterministic ordering in the final output
     let mut instruction_hooks_map: BTreeMap<String, InstructionHook> = BTreeMap::new();
 
-    // Process PDA registrations
     for registration in pda_registrations {
         let instr_type = path_to_string(&registration.instruction_path);
-        let instr_type_state = format!("{}IxState", instr_type.split("::").last().unwrap());
+        let instr_base = instr_type.split("::").last().unwrap();
+        let program_name = program_name_for_type(&instr_type, idls);
+        let instr_type_state = if let Some(program_name) = program_name {
+            format!("{}::{}IxState", program_name, instr_base)
+        } else {
+            format!("{}IxState", instr_base)
+        };
 
         let action = HookAction::RegisterPdaMapping {
             pda_field: FieldPath::new(&["accounts", &registration.pda_field.ident.to_string()]),
@@ -872,11 +1122,19 @@ fn build_instruction_hooks_ast(
             .push(action);
     }
 
-    // Process derive_from mappings (sorted for deterministic output)
     let mut sorted_derive_from: Vec<_> = derive_from_mappings.iter().collect();
     sorted_derive_from.sort_by_key(|(k, _)| *k);
     for (instruction_type, derive_attrs) in sorted_derive_from {
-        let instr_type_state = format!("{}IxState", instruction_type.split("::").last().unwrap());
+        let instr_base = instruction_type.split("::").last().unwrap();
+        let program_name = program_name_for_type(instruction_type, idls);
+        // CPI events (from `::events::` submodule) use "CpiEvent" suffix; instructions use "IxState"
+        let is_cpi_event = instruction_type.contains("::events::");
+        let type_suffix = if is_cpi_event { "CpiEvent" } else { "IxState" };
+        let instr_type_state = if let Some(program_name) = program_name {
+            format!("{}::{}{}", program_name, instr_base, type_suffix)
+        } else {
+            format!("{}{}", instr_base, type_suffix)
+        };
 
         for derive_attr in derive_attrs {
             let source = if derive_attr.field.ident.to_string().starts_with("__") {
@@ -893,9 +1151,14 @@ fn build_instruction_hooks_ast(
                     _ => continue,
                 }
             } else {
-                let path_prefix = match &derive_attr.field.explicit_location {
-                    Some(parse::FieldLocation::Account) => "accounts",
-                    Some(parse::FieldLocation::InstructionArg) | None => "data",
+                let path_prefix = if is_cpi_event {
+                    // CPI event fields are always under "data" (no "accounts" section)
+                    "data"
+                } else {
+                    match &derive_attr.field.explicit_location {
+                        Some(parse::FieldLocation::Account) => "accounts",
+                        Some(parse::FieldLocation::InstructionArg) | None => "data",
+                    }
                 };
 
                 MappingSource::FromSource {
@@ -919,10 +1182,11 @@ fn build_instruction_hooks_ast(
                 condition,
             };
 
-            let lookup_by = derive_attr
-                .lookup_by
-                .as_ref()
-                .map(|field_spec| FieldPath::new(&["accounts", &field_spec.ident.to_string()]));
+            // CPI events: lookup_by fields are under "data"; instructions: under "accounts"
+            let lookup_by_prefix = if is_cpi_event { "data" } else { "accounts" };
+            let lookup_by = derive_attr.lookup_by.as_ref().map(|field_spec| {
+                FieldPath::new(&[lookup_by_prefix, &field_spec.ident.to_string()])
+            });
 
             let hook = instruction_hooks_map
                 .entry(instr_type_state.clone())
@@ -940,11 +1204,78 @@ fn build_instruction_hooks_ast(
         }
     }
 
-    // Process aggregate conditions (sorted for deterministic output)
-    let mut sorted_aggregate_conditions: Vec<_> = aggregate_conditions.iter().collect();
-    sorted_aggregate_conditions.sort_by_key(|(k, _)| *k);
     let mut sorted_sources: Vec<_> = sources_by_type.iter().collect();
     sorted_sources.sort_by_key(|(k, _)| *k);
+    for (_source_type, mappings) in &sorted_sources {
+        for mapping in *mappings {
+            let Some(stop_path) = &mapping.stop else {
+                continue;
+            };
+
+            let stop_type = path_to_string(stop_path);
+            let stop_base = stop_type.split("::").last().unwrap_or(&stop_type);
+            let stop_program = program_name_for_type(&stop_type, idls);
+            let stop_type_state = if let Some(program_name) = stop_program {
+                format!("{}::{}IxState", program_name, stop_base)
+            } else {
+                format!("{}IxState", stop_base)
+            };
+
+            let stop_field = format!("__stop:{}", mapping.target_field_name);
+
+            let lookup_by = mapping
+                .stop_lookup_by
+                .as_ref()
+                .map(|field_spec| {
+                    let prefix = match &field_spec.explicit_location {
+                        Some(parse::FieldLocation::InstructionArg) => "data",
+                        _ => "accounts",
+                    };
+                    FieldPath::new(&[prefix, &field_spec.ident.to_string()])
+                })
+                .or_else(|| {
+                    mapping.lookup_by.as_ref().map(|field_spec| {
+                        FieldPath::new(&["accounts", &field_spec.ident.to_string()])
+                    })
+                })
+                .or_else(|| {
+                    mapping
+                        .register_from
+                        .iter()
+                        .find(|reg| path_to_string(&reg.instruction_path) == stop_type)
+                        .map(|reg| {
+                            let prefix = match &reg.primary_key_field.explicit_location {
+                                Some(parse::FieldLocation::InstructionArg) => "data",
+                                _ => "accounts",
+                            };
+                            FieldPath::new(&[prefix, &reg.primary_key_field.ident.to_string()])
+                        })
+                });
+
+            let action = HookAction::SetField {
+                target_field: stop_field,
+                source: MappingSource::Constant(serde_json::Value::Bool(true)),
+                condition: None,
+            };
+
+            let hook = instruction_hooks_map
+                .entry(stop_type_state.clone())
+                .or_insert_with(|| InstructionHook {
+                    instruction_type: stop_type_state.clone(),
+                    actions: Vec::new(),
+                    lookup_by: lookup_by.clone(),
+                });
+
+            hook.actions.push(action);
+
+            if hook.lookup_by.is_none() {
+                hook.lookup_by = lookup_by;
+            }
+        }
+    }
+
+    let mut sorted_aggregate_conditions: Vec<_> = aggregate_conditions.iter().collect();
+    sorted_aggregate_conditions.sort_by_key(|(k, _)| *k);
     for (field_path, condition_str) in sorted_aggregate_conditions {
         for (source_type, mappings) in &sorted_sources {
             for mapping in *mappings {
@@ -955,8 +1286,13 @@ fn build_instruction_hooks_ast(
                         "Sum" | "Count" | "Min" | "Max" | "UniqueCount"
                     )
                 {
-                    let instr_type_state =
-                        format!("{}IxState", source_type.split("::").last().unwrap());
+                    let instr_base = source_type.split("::").last().unwrap();
+                    let program_name = program_name_for_type(source_type, idls);
+                    let instr_type_state = if let Some(program_name) = program_name {
+                        format!("{}::{}IxState", program_name, instr_base)
+                    } else {
+                        format!("{}IxState", instr_base)
+                    };
 
                     let condition = ConditionExpr {
                         expression: condition_str.clone(),

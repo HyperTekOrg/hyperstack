@@ -2,7 +2,7 @@
 title: Stack Definitions
 sidebar:
   order: 2
-description: Introduction to the Hyperstack Rust DSL for defining real-time data streaming specifications.
+description: Introduction to the Hyperstack Rust DSL for defining streaming data specifications.
 ---
 
 Hyperstack uses a declarative Rust DSL (Domain Specific Language) to define how on-chain Solana data should be transformed, aggregated, and streamed to your application. Instead of writing complex ETL pipelines, you simply declare the final state you want, and Hyperstack handles the rest.
@@ -24,41 +24,74 @@ Building data pipelines for Solana typically involves manual account parsing, co
 
 ## Anatomy of a Stack Definition
 
-A Hyperstack definition is a Rust module annotated with `#[hyperstack]`. Inside this module, you define **Entities**—the structured data objects your application will consume.
+A Hyperstack definition is a Rust module annotated with `#[hyperstack]`. Inside this module, you define **Entities** — the structured data objects your application will consume. A single module can contain multiple `#[entity]` structs, all packaged into one stack.
+
+The ORE stack is a real example. Here's a simplified version showing the core concepts with a single IDL:
 
 ```rust
-use hyperstack_macros::{hyperstack, Stream};
+use hyperstack::prelude::*;
 
-#[hyperstack(idl = "path/to/idl.json")]
-pub mod my_stream {
-    #[entity(name = "Token")]
-    #[derive(Stream)]
-    pub struct Token {
-        /// The primary key (mint address)
-        #[from_instruction(Create::mint, primary_key)]
-        pub mint: String,
+#[hyperstack(idl = "idl/ore.json")]
+pub mod ore_stream {
+    use hyperstack::macros::Stream;
+    use serde::{Deserialize, Serialize};
 
-        /// Real-time reserves mapped from account state
-        #[map(BondingCurve::reserves)]
-        pub reserves: u64,
+    // OreRound is the main entity -- one instance per mining round.
+    // The `latest` view sorts rounds descending by round_id.
+    #[entity(name = "OreRound")]
+    #[view(name = "latest", sort_by = "id.round_id", order = "desc")]
+    pub struct OreRound {
+        pub id: RoundId,
+        pub state: RoundState,
+        pub metrics: RoundMetrics,
+    }
 
-        /// Total volume aggregated from individual trade events
-        #[aggregate(from = Trade, field = amount, strategy = Sum)]
-        pub total_volume: u64,
+    #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
+    pub struct RoundId {
+        // Primary key -- set once, never overwritten
+        #[map(ore_sdk::accounts::Round::id, primary_key, strategy = SetOnce)]
+        pub round_id: u64,
 
-        /// Computed field derived from existing fields
-        #[computed(reserves * price)]
-        pub tvl: u64,
+        #[map(ore_sdk::accounts::Round::__account_address, lookup_index, strategy = SetOnce)]
+        pub round_address: String,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
+    pub struct RoundState {
+        // LastWrite: overwritten each time the account updates
+        #[map(ore_sdk::accounts::Round::motherlode, strategy = LastWrite)]
+        pub motherlode: Option<u64>,
+
+        #[map(ore_sdk::accounts::Round::total_deployed, strategy = LastWrite)]
+        pub total_deployed: Option<u64>,
+
+        // Computed field: derived from other fields in this entity
+        #[computed(state.total_deployed.map(|d| d / 1_000_000_000))]
+        pub total_deployed_sol: Option<u64>,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
+    pub struct RoundMetrics {
+        // Aggregate: counts Deploy instructions referencing this round
+        #[aggregate(from = ore_sdk::instructions::Deploy, strategy = Count, lookup_by = accounts::round)]
+        pub deploy_count: Option<u64>,
     }
 }
 ```
 
+:::note[SDK Module Naming]
+Hyperstack derives the program name from the IDL metadata and generates a typed SDK module named `{name}_sdk`. The ORE IDL produces `ore_sdk::accounts::*` and `ore_sdk::instructions::*`. The Entropy IDL produces `entropy_sdk::*`. All `#[map]` and `#[aggregate]` paths use these prefixes.
+:::
+
 ### Key Components
 
-1.  **`#[hyperstack]` Module**: The container for your definition. It links to your data sources (IDL or Protobuf files).
-2.  **`#[entity]` Struct**: Defines a projection of on-chain data. Each entity represents a collection of related data that will be streamed as a single unit.
-3.  **Primary Key**: Every entity must have a primary key (usually a `Pubkey` or `String`). This is how Hyperstack tracks individual instances of an entity.
-4.  **Field Mappings**: Attributes on struct fields that define where the data comes from and how it's processed.
+1. **`#[hyperstack]` Module** — The container for your definition. The `idl` argument accepts a single path or an array for multi-program stacks.
+2. **`#[entity]` Struct** — An entity is an individual definition of some part of your app's data. Each entity represents a distinct concept — a round, a miner, a treasury — and declares exactly which on-chain fields belong to it, across as many accounts or programs as needed. A stack can have many entities.
+3. **`#[view]`** — A view is a projection over an entity's data. It defines what slice of the stream a client subscribes to. Every entity gets `state` (one item by key) and `list` (all items) by default. `#[view]` adds custom sorted or filtered projections on top — like `OreRound/latest` which streams rounds sorted by `round_id` descending.
+4. **`#[derive(Stream)]` Structs** — Nested structs containing the actual field mappings. Must derive `Stream`, `Debug`, `Clone`, `Serialize`, and `Deserialize`.
+5. **Primary Key** — Every entity needs one (annotated `primary_key`). This is how Hyperstack tracks individual entity instances.
+6. **Field Mappings** — Attributes on struct fields defining where data comes from and how it's processed.
+7. **Resolvers** — Fetch off-chain data (e.g. token metadata) and make it available to transforms.
 
 ---
 
@@ -66,15 +99,15 @@ pub mod my_stream {
 
 Hyperstack provides several mapping attributes to populate your entity fields:
 
-| Attribute             | Source              | Description                                                                        |
-| --------------------- | ------------------- | ---------------------------------------------------------------------------------- |
-| `#[map]`              | Account State       | Tracks fields within a Solana account. Updates whenever the account changes.       |
-| `#[from_instruction]` | Instructions        | Extracts arguments or account keys from a specific instruction.                    |
-| `#[aggregate]`        | Events/Instructions | Computes running values (Sum, Count, etc.) from a stream of events.                |
-| `#[event]`            | Events              | Captures specific instructions as a log of events within the entity.               |
-| `#[snapshot]`         | Account State       | Captures the entire state of an account at a specific point in time.               |
-| `#[computed]`         | Local Fields        | Derives a new value by performing calculations on other fields in the same entity. |
-| `#[derive_from]`      | Instructions        | Populates fields by deriving data from instruction context.                        |
+| Attribute             | Source              | Description                                                                                                                                                   |
+| --------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#[map]`              | Account State       | Tracks fields within a Solana account. Updates whenever the account changes. Supports `lookup_index(register_from = [...])` for cross-account PDA resolution. |
+| `#[from_instruction]` | Instructions        | Extracts arguments or account keys from a specific instruction.                                                                                               |
+| `#[aggregate]`        | Events/Instructions | Computes running values (Sum, Count, etc.) from a stream of events.                                                                                           |
+| `#[event]`            | Events              | Captures specific instructions as a log of events within the entity.                                                                                          |
+| `#[snapshot]`         | Account State       | Captures the entire state of an account at a specific point in time.                                                                                          |
+| `#[computed]`         | Local Fields        | Derives a new value by performing calculations on other fields in the same entity.                                                                            |
+| `#[derive_from]`      | Instructions        | Populates fields by deriving data from instruction context.                                                                                                   |
 
 ---
 
@@ -93,19 +126,72 @@ When data arrives, **Strategies** determine how the field value is updated. This
 
 ---
 
-## How Definitions Become Data Streams
+## Multi-Program Stacks
 
-When you build your Rust project containing a Hyperstack definition, the macros perform several steps:
+A single stack can consume data from multiple Solana programs by passing an array of IDL files:
 
-1.  **Validation**: The macro verifies that your mappings match the provided IDL or Protobuf definitions.
-2.  **AST Generation**: It generates a JSON-based **Abstract Syntax Tree (AST)** representing your data pipeline.
-3.  **Bytecode Compilation**: When you deploy your stack (`hs up`), Hyperstack Cloud compiles this AST into optimized bytecode.
-4.  **Execution**: The Hyperstack VM executes this bytecode in real-time against the Solana transaction firehose, updating your entity state and streaming diffs to your clients.
+```rust
+#[hyperstack(idl = ["idl/ore.json", "idl/entropy.json"])]
+pub mod ore_stream {
+    // ore_sdk::accounts::* and ore_sdk::instructions::* are available
+    // entropy_sdk::accounts::* and entropy_sdk::instructions::* are available
+}
+```
+
+Each IDL generates its own namespaced SDK module (e.g., `ore_sdk`, `entropy_sdk`). You can then map fields from any program's accounts and reference instructions from any program in `register_from`, `#[aggregate]`, `#[event]`, etc.
+
+To link accounts across programs, use `lookup_index(register_from = [...])` — see the [Macro Reference](/building-stacks/rust-dsl/macros#cross-account-resolution-with-register_from) for the full syntax and examples.
+
+---
+
+## Example WebSocket Frames
+
+The stack definition above produces WebSocket frames with the following structure. An `upsert` frame contains the full entity state:
+
+```json
+{
+  "op": "upsert",
+  "mode": "state",
+  "entity": "Token",
+  "key": "So11111111111111111111111111111111111111112",
+  "data": {
+    "id": {
+      "mint": "So11111111111111111111111111111111111111112"
+    },
+    "state": {
+      "reserves": 1500000000,
+      "tvl": 150000000000
+    },
+    "metrics": {
+      "total_volume": 42000000000
+    }
+  }
+}
+```
+
+When only specific fields change, a `patch` frame contains just the updated values:
+
+```json
+{
+  "op": "patch",
+  "mode": "state",
+  "entity": "Token",
+  "key": "So11111111111111111111111111111111111111112",
+  "data": {
+    "state": {
+      "reserves": 1520000000,
+      "tvl": 152000000000
+    }
+  }
+}
+```
+
+The SDK merges patches into local state automatically, so your application always sees the complete entity.
 
 ---
 
 ## Next Steps
 
-- [Mapping Macros](./macros) — Deep dive into every mapping attribute and its parameters.
-- [Aggregation Strategies](./strategies) — Learn how to build complex metrics using different strategies.
+- [Mapping Macros](./rust-dsl/macros) — Deep dive into every mapping attribute and its parameters.
+- [Aggregation Strategies](./rust-dsl/strategies) — Learn how to build complex metrics using different strategies.
 - [CLI Reference](/cli/commands) — Learn how to build and deploy your stacks.

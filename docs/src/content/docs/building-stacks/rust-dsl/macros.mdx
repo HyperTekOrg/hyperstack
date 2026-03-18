@@ -1,0 +1,403 @@
+---
+title: Macro Reference
+sidebar:
+  order: 2
+---
+
+Hyperstack uses Rust procedural macros to define data pipelines declaratively. These macros transform your Rust structs into a unified stack spec (`.stack.json`), which is then used for both local execution and cloud deployment.
+
+---
+
+## Module Macro
+
+### `#[hyperstack]`
+
+The entry point for any Hyperstack stream definition. It must be applied to a `pub mod` that contains your entity definitions.
+
+```rust
+#[hyperstack(idl = "idl.json")]
+pub mod my_stream {
+    // Entity definitions...
+}
+```
+
+**Arguments:**
+
+| Argument        | Type                | Required | Description                                                                                                                               |
+| --------------- | ------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `idl`           | `string` \| `array` | No\*     | Path(s) to Anchor IDL JSON file(s) relative to `Cargo.toml`. Use an array for multi-program stacks: `idl = ["ore.json", "entropy.json"]`. |
+| `proto`         | `string` \| `array` | No\*     | Path(s) to `.proto` files for Protobuf-based streams.                                                                                     |
+| `skip_decoders` | `bool`              | No       | If true, skips generating instruction decoders (useful for manual decoding).                                                              |
+
+_\* Either `idl` or `proto` must be provided._
+
+---
+
+## Entity Macro
+
+### `#[entity]`
+
+Defines a struct as a Hyperstack entity (state projection). Each entity results in a separate typed stream.
+
+```rust
+#[entity(name = "TradeTracker")]
+struct Tracker {
+    // Field mappings...
+}
+```
+
+**Arguments:**
+
+| Argument | Type     | Required | Description                                              |
+| -------- | -------- | -------- | -------------------------------------------------------- |
+| `name`   | `string` | No       | Custom name for the entity. Defaults to the struct name. |
+
+---
+
+## Field Mapping Macros
+
+These macros are applied to fields within an `#[entity]` struct to define how data is captured and updated.
+
+### `#[map]`
+
+Maps a field from a Solana account directly to an entity field.
+
+```rust
+#[map(pump_sdk::accounts::BondingCurve::virtual_sol_reserves, strategy = LastWrite)]
+pub reserves: u64,
+```
+
+The path prefix (`pump_sdk::accounts::`) is derived from the IDL's program name. See [Stack Definitions](/building-stacks/stack-definitions) for the naming convention.
+
+**Arguments:**
+
+| Argument         | Type           | Required | Description                                                                                                                                                                                                 |
+| ---------------- | -------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `from`           | `path`         | Yes      | Source account field (e.g., `AccountType::field_name`).                                                                                                                                                     |
+| `primary_key`    | `bool`         | No       | Marks this field as the primary key for the entity.                                                                                                                                                         |
+| `lookup_index`   | `bool` \| `fn` | No       | Creates a lookup index for this field. Accepts an optional `register_from` parameter for cross-account PDA resolution (see [Cross-Account Resolution](#cross-account-resolution-with-register_from) below). |
+| `strategy`       | `Strategy`     | No       | Update strategy (default: `SetOnce`).                                                                                                                                                                       |
+| `transform`      | `Transform`    | No       | Transformation to apply before storing.                                                                                                                                                                     |
+| `rename`         | `string`       | No       | Custom target field name in the projection.                                                                                                                                                                 |
+| `temporal_field` | `string`       | No       | Secondary field for temporal indexing.                                                                                                                                                                      |
+| `join_on`        | `string`       | No       | Field to join on for multi-entity lookups.                                                                                                                                                                  |
+
+### `#[from_instruction]`
+
+Maps a field from an instruction's arguments or accounts.
+
+```rust
+#[from_instruction(PlaceTrade::amount, strategy = Append)]
+pub trade_amounts: Vec<u64>,
+```
+
+**Arguments:**
+Accepts the same arguments as `#[map]`.
+
+### `#[event]`
+
+Captures multiple fields from an instruction as a single structured event.
+
+```rust
+#[event(
+    from = PlaceTrade,
+    fields = [amount, accounts::user],
+    strategy = Append
+)]
+pub trades: Vec<TradeEvent>,
+```
+
+**Arguments:**
+
+| Argument     | Type       | Required | Description                                                                                                                |
+| ------------ | ---------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `from`       | `path`     | Yes      | The source instruction type.                                                                                               |
+| `fields`     | `array`    | Yes      | List of fields to capture. Use `accounts::name` for instruction accounts and `args::name` (or `data::name`) for arguments. |
+| `strategy`   | `Strategy` | No       | Update strategy (default: `SetOnce`).                                                                                      |
+| `transforms` | `array`    | No       | List of `(field, Transform)` tuples for processing captured fields.                                                        |
+| `lookup_by`  | `field`    | No       | Field used to resolve the entity key.                                                                                      |
+| `rename`     | `string`   | No       | Custom target field name.                                                                                                  |
+| `join_on`    | `field`    | No       | Join field for multi-entity lookups.                                                                                       |
+
+### `#[snapshot]`
+
+Captures the entire state of a source account as a snapshot.
+
+```rust
+#[snapshot(from = BondingCurve, strategy = LastWrite)]
+pub latest_state: BondingCurve,
+```
+
+**Arguments:**
+
+| Argument     | Type       | Required | Description                                                  |
+| ------------ | ---------- | -------- | ------------------------------------------------------------ |
+| `from`       | `path`     | No       | Source account type (inferred from field type if omitted).   |
+| `strategy`   | `Strategy` | No       | Only `SetOnce` or `LastWrite` allowed.                       |
+| `transforms` | `array`    | No       | List of `(field, Transform)` tuples for specific sub-fields. |
+| `lookup_by`  | `field`    | No       | Field used to resolve the entity key.                        |
+| `rename`     | `string`   | No       | Custom target field name.                                    |
+| `join_on`    | `field`    | No       | Join field for multi-entity lookups.                         |
+
+### `#[aggregate]`
+
+Defines a declarative aggregation from instructions.
+
+```rust
+#[aggregate(from = [Buy, Sell], field = amount, strategy = Sum)]
+pub total_volume: u64,
+```
+
+**Arguments:**
+
+| Argument    | Type              | Required | Description                                                                             |
+| ----------- | ----------------- | -------- | --------------------------------------------------------------------------------------- |
+| `from`      | `path` \| `array` | Yes      | Instruction(s) to aggregate from.                                                       |
+| `field`     | `field`           | No       | Field to aggregate. Use `accounts::name` or `args::name`. If omitted, performs `Count`. |
+| `strategy`  | `Strategy`        | No       | `Sum`, `Count`, `Min`, `Max`, `UniqueCount`.                                            |
+| `condition` | `string`          | No       | Boolean expression (e.g., `"amount > 1_000_000"`).                                      |
+| `transform` | `Transform`       | No       | Transform to apply before aggregating.                                                  |
+| `lookup_by` | `field`           | No       | Field used to resolve the entity key.                                                   |
+| `rename`    | `string`          | No       | Custom target field name.                                                               |
+| `join_on`   | `field`           | No       | Join field for multi-entity lookups.                                                    |
+
+### `#[computed]`
+
+Defines a field derived from other fields in the same entity using a Rust-like expression.
+
+```rust
+#[computed(total_buy_volume + total_sell_volume)]
+pub total_volume: u64,
+```
+
+**Arguments:**
+Takes a single Rust expression. Can reference other fields in the entity.
+
+### `#[resolve]`
+
+Attaches a resolver to a field. Hyperstack fetches the external data server-side and delivers it as part of the entity — no extra API calls needed from the client.
+
+```rust
+#[resolve(address = "oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp")]
+pub ore_metadata: Option<TokenMetadata>,
+```
+
+**Arguments:**
+
+| Argument  | Type     | Required | Description                                                                         |
+| --------- | -------- | -------- | ----------------------------------------------------------------------------------- |
+| `address` | `string` | Yes      | The fixed address to resolve against. For `TokenMetadata` this is the mint address. |
+
+**Available resolvers:**
+
+| Resolver        | Type field              | What it fetches                                                   |
+| --------------- | ----------------------- | ----------------------------------------------------------------- |
+| `TokenMetadata` | `Option<TokenMetadata>` | SPL token metadata (name, symbol, decimals, logo) via the DAS API |
+
+Once resolved, the data is available to other fields in the same entity. Use `#[computed]` to derive values from it, or reference the resolver fields directly in `#[map]` transforms:
+
+```rust
+// Option A: use resolver decimals in a transform on #[map]
+#[map(ore_sdk::accounts::Round::motherlode, strategy = LastWrite,
+      transform = ui_amount(ore_metadata.decimals))]
+pub motherlode: Option<f64>,
+
+// Option B: use resolver computed methods in #[computed]
+#[map(ore_sdk::accounts::Round::motherlode, strategy = LastWrite)]
+pub motherlode_raw: Option<u64>,
+
+#[computed(state.motherlode_raw.and_then(|v| ore_metadata.ui_amount(v)))]
+pub motherlode_ui: Option<f64>,
+```
+
+Resolver data is cached server-side — metadata is fetched once per address and reused across all entities that reference it.
+
+See [Resolvers](./resolvers) for the full reference on `TokenMetadata` fields and computed methods.
+
+### `#[derive_from]`
+
+Derives values from instruction metadata or arguments.
+
+```rust
+#[derive_from(from = [Buy, Sell], field = __timestamp)]
+pub last_updated: i64,
+```
+
+**Arguments:**
+
+| Argument    | Type              | Required | Description                                                        |
+| ----------- | ----------------- | -------- | ------------------------------------------------------------------ |
+| `from`      | `path` \| `array` | Yes      | Instruction(s) to derive from.                                     |
+| `field`     | `field`           | Yes      | Target field. Can be a special field or a regular instruction arg. |
+| `strategy`  | `Strategy`        | No       | `LastWrite` or `SetOnce`.                                          |
+| `condition` | `string`          | No       | Boolean expression for conditional derivation.                     |
+| `transform` | `Transform`       | No       | Transform to apply.                                                |
+| `lookup_by` | `field`           | No       | Field used to resolve the entity key.                              |
+
+**Special Fields:**
+
+| Field         | Description                                                 |
+| ------------- | ----------------------------------------------------------- |
+| `__timestamp` | The Unix timestamp of the block containing the instruction. |
+| `__slot`      | The slot number of the block.                               |
+| `__signature` | The transaction signature (Base58 encoded).                 |
+
+---
+
+## Cross-Account Resolution with `register_from`
+
+When an entity's state includes data from a **secondary account** (one that doesn't store the entity's primary key directly), you need a way to tell Hyperstack how to map that account's address back to an entity instance. The `lookup_index(register_from = [...])` syntax on `#[map]` handles this declaratively.
+
+### The Problem
+
+Consider a Solana program where a `BondingCurve` PDA is derived from a token `mint`. When a `BondingCurve` account update arrives, Hyperstack needs to know which `Token` entity (keyed by `mint`) it belongs to. The `BondingCurve` account itself doesn't store the `mint` — the relationship only exists in instructions that reference both accounts together.
+
+### The Solution
+
+Add `register_from` to a `lookup_index` field that maps the secondary account's address:
+
+```rust
+#[map(pump_sdk::accounts::BondingCurve::__account_address, lookup_index(
+    register_from = [
+        (pump_sdk::instructions::Create, accounts::bonding_curve, accounts::mint),
+        (pump_sdk::instructions::Buy, accounts::bonding_curve, accounts::mint),
+        (pump_sdk::instructions::Sell, accounts::bonding_curve, accounts::mint)
+    ]
+), strategy = SetOnce)]
+pub bonding_curve: String,
+```
+
+Each tuple in `register_from` specifies:
+
+| Position | Meaning                                                     | Example                          |
+| -------- | ----------------------------------------------------------- | -------------------------------- |
+| 1st      | The instruction type to watch                               | `pump_sdk::instructions::Create` |
+| 2nd      | The instruction account containing the PDA address          | `accounts::bonding_curve`        |
+| 3rd      | The instruction account containing the entity's primary key | `accounts::mint`                 |
+
+When any of these instructions are processed, Hyperstack registers the mapping `bonding_curve_address → mint`. Subsequent `BondingCurve` account updates are then routed to the correct `Token` entity.
+
+### Cross-Program Example
+
+`register_from` also works across programs in multi-IDL stacks. For example, linking an entropy program's `Var` account to an ore program's `Round` entity:
+
+```rust
+#[hyperstack(idl = ["idl/ore.json", "idl/entropy.json"])]
+pub mod ore_stream {
+    // ... entity definition ...
+
+    #[derive(Debug, Clone, Serialize, Deserialize, Stream)]
+    pub struct EntropyState {
+        #[map(entropy_sdk::accounts::Var::value, strategy = LastWrite, transform = Base58Encode)]
+        pub entropy_value: Option<String>,
+
+        // The lookup_index with register_from links Var accounts to Round entities
+        #[map(entropy_sdk::accounts::Var::__account_address, lookup_index(
+            register_from = [
+                (ore_sdk::instructions::Deploy, accounts::entropyVar, accounts::round),
+                (ore_sdk::instructions::Reset, accounts::entropyVar, accounts::round)
+            ]
+        ), strategy = SetOnce)]
+        pub entropy_var_address: Option<String>,
+    }
+}
+```
+
+Here, the `Deploy` and `Reset` instructions (from the ore program) reference both the `entropyVar` account (from the entropy program) and the `round` account. This is enough for Hyperstack to establish the mapping.
+
+:::tip[When to use `register_from`]
+Use `register_from` whenever you map fields from an account that **doesn't contain the entity's primary key in its own data**. If the account already contains the primary key (or its address _is_ the primary key), a plain `lookup_index` is sufficient.
+:::
+
+:::note[Advanced: `#[resolve_key]` / `#[register_pda]`]
+The `register_from` syntax generates the same code as the standalone `#[resolve_key]` and `#[register_pda]` declarative hooks described below. Those hooks remain available as power-user escape hatches for custom resolution strategies or non-standard instruction patterns, but `register_from` is the preferred approach for most use cases.
+:::
+
+---
+
+## Declarative Hooks (Advanced)
+
+Declarative hooks are struct-level annotations for custom key resolution logic and PDA mappings. For most use cases, prefer `lookup_index(register_from = [...])` on field mappings (see above). These hooks are available as escape hatches for advanced scenarios.
+
+### `#[resolve_key]`
+
+Defines how an account's primary key is resolved. This is essential when an account doesn't store its "owner" ID directly, but its address can be derived via PDA or looked up in a registry.
+
+```rust
+#[resolve_key(
+    account = UserProfile,
+    strategy = "pda_reverse_lookup",
+    lookup_name = "user_pda"
+)]
+struct UserResolver;
+```
+
+**Arguments:**
+
+| Argument      | Type     | Required | Description                                                                    |
+| ------------- | -------- | -------- | ------------------------------------------------------------------------------ |
+| `account`     | `path`   | Yes      | The account type this resolver applies to.                                     |
+| `strategy`    | `string` | No       | `"pda_reverse_lookup"` (default) or `"direct_field"`.                          |
+| `lookup_name` | `string` | No       | The name of the registry to use for reverse lookups.                           |
+| `queue_until` | `array`  | No       | List of instructions to wait for before resolving (ensures PDA is registered). |
+
+### `#[register_pda]`
+
+Registers a mapping between a PDA address and a primary key during an instruction. This mapping is stored in a temporary registry to enable `#[resolve_key]` to work for accounts that are created or updated in the same transaction.
+
+```rust
+#[register_pda(
+    instruction = CreateUser,
+    pda_field = accounts::user_pda,
+    primary_key = args::user_id,
+    lookup_name = "user_pda"
+)]
+struct PdaMapper;
+```
+
+**Arguments:**
+
+| Argument      | Type     | Required | Description                                                         |
+| ------------- | -------- | -------- | ------------------------------------------------------------------- |
+| `instruction` | `path`   | Yes      | The instruction where the PDA is created/referenced.                |
+| `pda_field`   | `field`  | Yes      | The field containing the PDA address (e.g., `accounts::user_pda`).  |
+| `primary_key` | `field`  | Yes      | The primary key to associate with this PDA (e.g., `args::user_id`). |
+| `lookup_name` | `string` | No       | The name of the registry to store this mapping in.                  |
+
+---
+
+## Quick Reference
+
+### Update Strategies
+
+| Strategy      | Description                                 |
+| ------------- | ------------------------------------------- |
+| `SetOnce`     | Only write if the field is currently empty. |
+| `LastWrite`   | Always overwrite with the latest value.     |
+| `Append`      | Append to a `Vec`.                          |
+| `Merge`       | Deep-merge objects (for nested structs).    |
+| `Max`         | Keep the maximum value.                     |
+| `Sum`         | Accumulate numeric values.                  |
+| `Count`       | Increment by 1 for each occurrence.         |
+| `Min`         | Keep the minimum value.                     |
+| `UniqueCount` | Track unique values and store the count.    |
+
+### Transformations
+
+| Transform      | Description                                          |
+| -------------- | ---------------------------------------------------- |
+| `Base58Encode` | Encode bytes to Base58 string (default for Pubkeys). |
+| `Base58Decode` | Decode Base58 string to bytes.                       |
+| `HexEncode`    | Encode bytes to Hex string.                          |
+| `HexDecode`    | Decode Hex string to bytes.                          |
+| `ToString`     | Convert value to string.                             |
+| `ToNumber`     | Convert value to number.                             |
+
+### Resolver Computed Methods
+
+These methods are available in `#[computed]` expressions when using the `TokenMetadata` resolver. See [Resolvers](./resolvers) for details.
+
+| Method                                    | Description                                           |
+| ----------------------------------------- | ----------------------------------------------------- |
+| `TokenMetadata::ui_amount(raw, decimals)` | Convert raw token amount to human-readable UI amount. |
+| `TokenMetadata::raw_amount(ui, decimals)` | Convert UI amount back to raw token amount.           |

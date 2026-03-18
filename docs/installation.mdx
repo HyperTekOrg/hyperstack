@@ -66,12 +66,12 @@ use my_stack::{Token, TokenEntity};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let hs = HyperStack::connect("wss://your-stack.hyperstack.xyz").await?;
+    let hs = HyperStack::connect("wss://ore.stack.usehyperstack.com").await?;
     
     // List all entities
     let tokens = hs.list::<TokenEntity>().await;
     
-    // Watch for real-time updates (lazy - no await needed)
+    // Watch for live updates (lazy - no await needed)
     let mut stream = hs.watch::<TokenEntity>()
         .filter(|u| u.data().map(|t| t.volume > 1000).unwrap_or(false));
     
@@ -215,9 +215,11 @@ const TestStack = defineStack({
 
 ## Next Steps
 
-- [React Quickstart](/quickstart/react) - Build your first real-time app
+- [Quickstart](/using-stacks/quickstart) - Scaffold a working app in under 2 minutes
+- [React SDK](/sdks/react/) - Build a complete React app
+- [TypeScript SDK](/sdks/typescript/) - Framework-agnostic SDK
+- [Rust SDK](/sdks/rust/) - Native Rust client
 - [CLI Commands](/cli/commands) - Full command reference
-- [Creating Stacks](/guides/defining-stacks) - Create custom data streams
 
 ---
 

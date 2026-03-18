@@ -8,6 +8,15 @@ use std::collections::HashMap;
 use syn::parse::{Parse, ParseStream};
 use syn::{Attribute, Path, Token};
 
+use crate::ast::ResolverType;
+
+#[derive(Debug, Clone)]
+pub struct RegisterFromSpec {
+    pub instruction_path: Path,
+    pub pda_field: FieldSpec,
+    pub primary_key_field: FieldSpec,
+}
+
 #[derive(Debug, Clone)]
 pub struct MapAttribute {
     pub source_type_path: Path,
@@ -15,13 +24,31 @@ pub struct MapAttribute {
     pub target_field_name: String,
     pub is_primary_key: bool,
     pub is_lookup_index: bool,
+    pub register_from: Vec<RegisterFromSpec>,
     pub temporal_field: Option<String>,
     pub strategy: String,
     pub join_on: Option<String>,
     pub transform: Option<String>,
+    /// Resolver transform: a parameterized transform like `ui_amount(ore_metadata.decimals)`
+    /// that expands into a hidden raw field + synthesized computed field.
+    pub resolver_transform: Option<ResolverTransformSpec>,
     pub is_instruction: bool,
-    pub is_whole_source: bool, // NEW: true for whole instruction capture
-    pub lookup_by: Option<FieldSpec>, // For aggregate/event lookup
+    pub is_whole_source: bool,
+    pub lookup_by: Option<FieldSpec>,
+    pub condition: Option<String>,
+    pub when: Option<Path>,
+    pub stop: Option<Path>,
+    pub stop_lookup_by: Option<FieldSpec>,
+    pub emit: bool,
+}
+
+/// A parameterized resolver transform like `ui_amount(ore_metadata.decimals)`.
+/// The method name is resolved via `resolver_for_method()` to a resolver name.
+/// The args are token streams that will be parsed as computed expressions.
+#[derive(Debug, Clone)]
+pub struct ResolverTransformSpec {
+    pub method: String,
+    pub args: proc_macro2::TokenStream,
 }
 
 #[derive(Debug, Clone)]
@@ -50,6 +77,9 @@ pub struct CaptureAttribute {
     pub from_account: Option<Path>, // Explicit source via `from = ...`
     pub inferred_account: Option<Path>, // Inferred from field type
 
+    // Single field extraction from account (e.g., field = token_mint_0)
+    pub field: Option<syn::Ident>,
+
     // Field transformations
     pub field_transforms: HashMap<String, syn::Ident>, // Map field name to transformation
 
@@ -58,6 +88,7 @@ pub struct CaptureAttribute {
     pub target_field_name: String,
     pub join_on: Option<FieldSpec>,
     pub lookup_by: Option<FieldSpec>,
+    pub when: Option<Path>,
 }
 
 #[derive(Debug, Clone)]
@@ -87,11 +118,18 @@ struct MapAttributeArgs {
     source_paths: Vec<Path>,
     is_primary_key: bool,
     is_lookup_index: bool,
+    register_from: Vec<RegisterFromSpec>,
     temporal_field: Option<String>,
     strategy: Option<String>,
     rename: Option<String>,
     join_on: Option<String>,
     transform: Option<String>,
+    resolver_transform: Option<ResolverTransformSpec>,
+    condition: Option<String>,
+    when: Option<Path>,
+    stop: Option<Path>,
+    stop_lookup_by: Option<FieldSpec>,
+    emit: Option<bool>,
 }
 
 impl Parse for MapAttributeArgs {
@@ -113,11 +151,18 @@ impl Parse for MapAttributeArgs {
 
         let mut is_primary_key = false;
         let mut is_lookup_index = false;
+        let mut register_from = Vec::new();
         let mut temporal_field = None;
         let mut strategy = None;
         let mut rename = None;
         let mut join_on = None;
         let mut transform = None;
+        let mut resolver_transform = None;
+        let mut condition = None;
+        let mut when = None;
+        let mut stop = None;
+        let mut stop_lookup_by = None;
+        let mut emit = None;
 
         while !input.is_empty() {
             input.parse::<Token![,]>()?;
@@ -134,6 +179,11 @@ impl Parse for MapAttributeArgs {
                     is_primary_key = true;
                 } else if ident_str == "lookup_index" {
                     is_lookup_index = true;
+                    if input.peek(syn::token::Paren) {
+                        let content;
+                        syn::parenthesized!(content in input);
+                        register_from = parse_register_from_list(&content)?;
+                    }
                 } else if ident_str == "temporal_field" {
                     input.parse::<Token![=]>()?;
                     let temporal_lit: syn::LitStr = input.parse()?;
@@ -153,7 +203,36 @@ impl Parse for MapAttributeArgs {
                 } else if ident_str == "transform" {
                     input.parse::<Token![=]>()?;
                     let transform_ident: syn::Ident = input.parse()?;
-                    transform = Some(transform_ident.to_string());
+                    if input.peek(syn::token::Paren) {
+                        let content;
+                        syn::parenthesized!(content in input);
+                        let args: proc_macro2::TokenStream = content.parse()?;
+                        resolver_transform = Some(ResolverTransformSpec {
+                            method: transform_ident.to_string(),
+                            args,
+                        });
+                    } else {
+                        transform = Some(transform_ident.to_string());
+                    }
+                } else if ident_str == "condition" {
+                    input.parse::<Token![=]>()?;
+                    let condition_lit: syn::LitStr = input.parse()?;
+                    condition = Some(condition_lit.value());
+                } else if ident_str == "when" {
+                    input.parse::<Token![=]>()?;
+                    let when_path: Path = input.parse()?;
+                    when = Some(when_path);
+                } else if ident_str == "stop" {
+                    input.parse::<Token![=]>()?;
+                    let stop_path: Path = input.parse()?;
+                    stop = Some(stop_path);
+                } else if ident_str == "stop_lookup_by" {
+                    input.parse::<Token![=]>()?;
+                    stop_lookup_by = Some(parse_field_spec(input)?);
+                } else if ident_str == "emit" {
+                    input.parse::<Token![=]>()?;
+                    let emit_lit: syn::LitBool = input.parse()?;
+                    emit = Some(emit_lit.value);
                 } else {
                     return Err(syn::Error::new(
                         ident.span(),
@@ -169,11 +248,18 @@ impl Parse for MapAttributeArgs {
             source_paths,
             is_primary_key,
             is_lookup_index,
+            register_from,
             temporal_field,
             strategy,
             rename,
             join_on,
             transform,
+            resolver_transform,
+            condition,
+            when,
+            stop,
+            stop_lookup_by,
+            emit,
         })
     }
 }
@@ -196,7 +282,17 @@ pub fn parse_map_attribute(
     }
 
     let strategy = args.strategy.unwrap_or_else(|| "SetOnce".to_string());
+    if strategy != "SetOnce" && strategy != "LastWrite" {
+        return Err(syn::Error::new_spanned(
+            attr,
+            format!(
+                "Invalid strategy '{}' for #[resolve]. Only 'SetOnce' or 'LastWrite' are allowed.",
+                strategy
+            ),
+        ));
+    }
     let target_name = args.rename.unwrap_or_else(|| target_field_name.to_string());
+    let emit = args.emit.unwrap_or(true);
 
     let mut results = Vec::new();
     for source_path in args.source_paths {
@@ -208,13 +304,20 @@ pub fn parse_map_attribute(
             target_field_name: target_name.clone(),
             is_primary_key: args.is_primary_key,
             is_lookup_index: args.is_lookup_index,
+            register_from: args.register_from.clone(),
             temporal_field: args.temporal_field.clone(),
             strategy: strategy.clone(),
             join_on: args.join_on.clone(),
             transform: args.transform.clone(),
+            resolver_transform: args.resolver_transform.clone(),
             is_instruction: false,
             is_whole_source: false,
             lookup_by: None,
+            condition: args.condition.clone(),
+            when: args.when.clone(),
+            stop: args.stop.clone(),
+            stop_lookup_by: args.stop_lookup_by.clone(),
+            emit,
         });
     }
 
@@ -240,6 +343,7 @@ pub fn parse_from_instruction_attribute(
 
     let strategy = args.strategy.unwrap_or_else(|| "SetOnce".to_string());
     let target_name = args.rename.unwrap_or_else(|| target_field_name.to_string());
+    let emit = args.emit.unwrap_or(true);
 
     let mut results = Vec::new();
     for source_path in args.source_paths {
@@ -251,13 +355,20 @@ pub fn parse_from_instruction_attribute(
             target_field_name: target_name.clone(),
             is_primary_key: args.is_primary_key,
             is_lookup_index: args.is_lookup_index,
+            register_from: args.register_from.clone(),
             temporal_field: args.temporal_field.clone(),
             strategy: strategy.clone(),
             join_on: args.join_on.clone(),
             transform: args.transform.clone(),
+            resolver_transform: args.resolver_transform.clone(),
             is_instruction: true,
             is_whole_source: false,
             lookup_by: None,
+            condition: args.condition.clone(),
+            when: args.when.clone(),
+            stop: args.stop.clone(),
+            stop_lookup_by: args.stop_lookup_by.clone(),
+            emit,
         });
     }
 
@@ -566,21 +677,25 @@ pub fn parse_event_attribute(
 // Parse args for #[snapshot] attribute
 struct SnapshotAttributeArgs {
     from: Option<Path>,
+    field: Option<syn::Ident>,
     strategy: Option<syn::Ident>,
     rename: Option<String>,
     join_on: Option<FieldSpec>,
     lookup_by: Option<FieldSpec>,
     transforms: Vec<(String, syn::Ident)>, // Field transformations: (field_name, transform)
+    when: Option<Path>,
 }
 
 impl Parse for SnapshotAttributeArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut from = None;
+        let mut field = None;
         let mut strategy = None;
         let mut rename = None;
         let mut join_on = None;
         let mut lookup_by = None;
         let mut transforms = Vec::new();
+        let mut when = None;
 
         while !input.is_empty() {
             let ident: syn::Ident = input.parse()?;
@@ -590,6 +705,8 @@ impl Parse for SnapshotAttributeArgs {
 
             if ident_str == "from" {
                 from = Some(input.parse()?);
+            } else if ident_str == "field" {
+                field = Some(input.parse()?);
             } else if ident_str == "strategy" {
                 strategy = Some(input.parse()?);
             } else if ident_str == "rename" {
@@ -636,6 +753,8 @@ impl Parse for SnapshotAttributeArgs {
                         content.parse::<Token![,]>()?;
                     }
                 }
+            } else if ident_str == "when" {
+                when = Some(input.parse()?);
             } else {
                 return Err(syn::Error::new(
                     ident.span(),
@@ -650,11 +769,13 @@ impl Parse for SnapshotAttributeArgs {
 
         Ok(SnapshotAttributeArgs {
             from,
+            field,
             strategy,
             rename,
             join_on,
             lookup_by,
             transforms,
+            when,
         })
     }
 }
@@ -691,11 +812,13 @@ pub fn parse_snapshot_attribute(
     Ok(Some(CaptureAttribute {
         from_account: args.from,
         inferred_account: None, // Will be filled in later from field type
+        field: args.field,
         field_transforms: args.transforms.into_iter().collect(),
         strategy,
         target_field_name: target_name,
         join_on: args.join_on,
         lookup_by: args.lookup_by,
+        when: args.when,
     }))
 }
 
@@ -887,6 +1010,217 @@ pub fn parse_aggregate_attribute(
 // ============================================================================
 
 #[derive(Debug, Clone)]
+pub struct ResolveAttribute {
+    pub from: Option<String>,
+    pub address: Option<String>,
+    pub url: Option<String>,
+    pub url_is_template: bool,
+    pub method: Option<String>,
+    pub extract: Option<String>,
+    pub target_field_name: String,
+    pub resolver: Option<String>,
+    pub strategy: String,
+    pub condition: Option<String>,
+    pub schedule_at: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolveSpec {
+    pub resolver: ResolverType,
+    pub from: Option<String>,
+    pub address: Option<String>,
+    pub extract: Option<String>,
+    pub target_field_name: String,
+    pub strategy: String,
+    pub condition: Option<String>,
+    pub schedule_at: Option<String>,
+}
+
+struct ResolveAttributeArgs {
+    from: Option<String>,
+    address: Option<String>,
+    url: Option<String>,
+    url_is_template: bool,
+    method: Option<syn::Ident>,
+    extract: Option<String>,
+    resolver: Option<String>,
+    strategy: Option<String>,
+    condition: Option<String>,
+    schedule_at: Option<String>,
+}
+
+impl Parse for ResolveAttributeArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut from = None;
+        let mut address = None;
+        let mut url = None;
+        let mut url_is_template = false;
+        let mut method = None;
+        let mut extract = None;
+        let mut resolver = None;
+        let mut strategy = None;
+        let mut condition = None;
+        let mut schedule_at = None;
+
+        while !input.is_empty() {
+            let ident: syn::Ident = input.parse()?;
+            let ident_str = ident.to_string();
+
+            input.parse::<Token![=]>()?;
+
+            if ident_str == "from" {
+                let lit: syn::LitStr = input.parse()?;
+                from = Some(lit.value());
+            } else if ident_str == "address" {
+                let lit: syn::LitStr = input.parse()?;
+                address = Some(lit.value());
+            } else if ident_str == "url" {
+                if input.peek(syn::LitStr) {
+                    let lit: syn::LitStr = input.parse()?;
+                    url = Some(lit.value());
+                    url_is_template = true;
+                } else {
+                    let mut parts = Vec::new();
+                    let first: syn::Ident = input.parse()?;
+                    parts.push(first.to_string());
+
+                    while input.peek(Token![.]) {
+                        input.parse::<Token![.]>()?;
+                        let next: syn::Ident = input.parse()?;
+                        parts.push(next.to_string());
+                    }
+
+                    url = Some(parts.join("."));
+                }
+            } else if ident_str == "method" {
+                let method_ident: syn::Ident = input.parse()?;
+                match method_ident.to_string().to_lowercase().as_str() {
+                    "get" | "post" => method = Some(method_ident),
+                    _ => {
+                        return Err(syn::Error::new(
+                            method_ident.span(),
+                            "Invalid HTTP method. Only 'GET' or 'POST' are supported.",
+                        ))
+                    }
+                }
+            } else if ident_str == "extract" {
+                let lit: syn::LitStr = input.parse()?;
+                extract = Some(lit.value());
+            } else if ident_str == "resolver" {
+                if input.peek(syn::LitStr) {
+                    let lit: syn::LitStr = input.parse()?;
+                    resolver = Some(lit.value());
+                } else {
+                    let ident: syn::Ident = input.parse()?;
+                    resolver = Some(ident.to_string());
+                }
+            } else if ident_str == "strategy" {
+                let ident: syn::Ident = input.parse()?;
+                strategy = Some(ident.to_string());
+            } else if ident_str == "condition" {
+                let lit: syn::LitStr = input.parse()?;
+                condition = Some(lit.value());
+            } else if ident_str == "schedule_at" {
+                let mut parts = Vec::new();
+                let first: syn::Ident = input.parse()?;
+                parts.push(first.to_string());
+
+                while input.peek(Token![.]) {
+                    input.parse::<Token![.]>()?;
+                    let next: syn::Ident = input.parse()?;
+                    parts.push(next.to_string());
+                }
+
+                schedule_at = Some(parts.join("."));
+            } else {
+                return Err(syn::Error::new(
+                    ident.span(),
+                    format!("Unknown resolve attribute argument: {}", ident_str),
+                ));
+            }
+
+            if !input.is_empty() {
+                input.parse::<Token![,]>()?;
+            }
+        }
+
+        Ok(ResolveAttributeArgs {
+            from,
+            address,
+            url,
+            url_is_template,
+            method,
+            extract,
+            resolver,
+            strategy,
+            condition,
+            schedule_at,
+        })
+    }
+}
+
+pub fn parse_resolve_attribute(
+    attr: &Attribute,
+    target_field_name: &str,
+) -> syn::Result<Option<ResolveAttribute>> {
+    if !attr.path().is_ident("resolve") {
+        return Ok(None);
+    }
+
+    let args: ResolveAttributeArgs = attr.parse_args()?;
+
+    // Check for mutually exclusive parameters: url vs (from/address)
+    let has_url = args.url.is_some();
+    let has_token_source = args.from.is_some() || args.address.is_some();
+
+    if has_url && has_token_source {
+        return Err(syn::Error::new_spanned(
+            attr,
+            "#[resolve] cannot specify 'url' together with 'from' or 'address'",
+        ));
+    }
+
+    if !has_url && !has_token_source {
+        return Err(syn::Error::new_spanned(
+            attr,
+            "#[resolve] requires either 'url' or 'from'/'address' parameter",
+        ));
+    }
+
+    // Token resolvers: cannot have both from and address
+    if args.from.is_some() && args.address.is_some() {
+        return Err(syn::Error::new_spanned(
+            attr,
+            "#[resolve] cannot specify both 'from' and 'address'",
+        ));
+    }
+
+    // URL resolvers require extract parameter
+    if has_url && args.extract.is_none() {
+        return Err(syn::Error::new_spanned(
+            attr,
+            "#[resolve] with 'url' requires 'extract' parameter",
+        ));
+    }
+
+    let strategy = args.strategy.unwrap_or_else(|| "SetOnce".to_string());
+
+    Ok(Some(ResolveAttribute {
+        from: args.from,
+        address: args.address,
+        url: args.url,
+        url_is_template: args.url_is_template,
+        method: args.method.map(|m| m.to_string()),
+        extract: args.extract,
+        target_field_name: target_field_name.to_string(),
+        resolver: args.resolver,
+        strategy,
+        condition: args.condition,
+        schedule_at: args.schedule_at,
+    }))
+}
+
+#[derive(Debug, Clone)]
 pub struct ComputedAttribute {
     /// The expression to evaluate (stored as TokenStream for code generation)
     pub expression: proc_macro2::TokenStream,
@@ -912,7 +1246,6 @@ pub fn parse_computed_attribute(
         target_field_name: target_field_name.to_string(),
     }))
 }
-
 pub fn has_entity_attribute(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("entity"))
 }
@@ -941,20 +1274,20 @@ pub fn parse_entity_name(attrs: &[Attribute]) -> Option<String> {
 #[derive(Debug, Clone)]
 pub struct StreamSpecAttribute {
     pub proto_files: Vec<String>,
-    pub idl_file: String,
+    pub idl_files: Vec<String>,
     pub skip_decoders: bool,
 }
 
 struct StreamSpecAttributeArgs {
     proto_files: Vec<String>,
-    idl_file: Option<String>,
+    idl_files: Vec<String>,
     skip_decoders: bool,
 }
 
 impl Parse for StreamSpecAttributeArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut proto_files = Vec::new();
-        let mut idl_file = None;
+        let mut idl_files = Vec::new();
         let mut skip_decoders = false;
 
         while !input.is_empty() {
@@ -984,8 +1317,27 @@ impl Parse for StreamSpecAttributeArgs {
                 }
             } else if ident_str == "idl" {
                 input.parse::<Token![=]>()?;
-                let lit: syn::LitStr = input.parse()?;
-                idl_file = Some(lit.value());
+
+                if input.peek(syn::LitStr) {
+                    let lit: syn::LitStr = input.parse()?;
+                    idl_files.push(lit.value());
+                } else if input.peek(syn::token::Bracket) {
+                    let content;
+                    syn::bracketed!(content in input);
+
+                    while !content.is_empty() {
+                        let file_lit: syn::LitStr = content.parse()?;
+                        idl_files.push(file_lit.value());
+
+                        if !content.is_empty() {
+                            content.parse::<Token![,]>()?;
+                        }
+                    }
+                } else {
+                    return Err(
+                        input.error("Expected string literal or array of string literals for idl")
+                    );
+                }
             } else if ident_str == "skip_decoders" {
                 skip_decoders = true;
             } else {
@@ -1002,7 +1354,7 @@ impl Parse for StreamSpecAttributeArgs {
 
         Ok(StreamSpecAttributeArgs {
             proto_files,
-            idl_file,
+            idl_files,
             skip_decoders,
         })
     }
@@ -1014,7 +1366,7 @@ pub fn parse_stream_spec_attribute(
     if attr.is_empty() {
         return Ok(StreamSpecAttribute {
             proto_files: Vec::new(),
-            idl_file: String::new(),
+            idl_files: Vec::new(),
             skip_decoders: false,
         });
     }
@@ -1023,7 +1375,7 @@ pub fn parse_stream_spec_attribute(
 
     Ok(StreamSpecAttribute {
         proto_files: args.proto_files,
-        idl_file: args.idl_file.unwrap_or_default(),
+        idl_files: args.idl_files,
         skip_decoders: args.skip_decoders,
     })
 }
@@ -1293,6 +1645,44 @@ pub fn parse_derive_from_attribute(
     }))
 }
 
+fn parse_register_from_list(input: ParseStream) -> syn::Result<Vec<RegisterFromSpec>> {
+    let ident: syn::Ident = input.parse()?;
+    if ident != "register_from" {
+        return Err(syn::Error::new(
+            ident.span(),
+            format!("Expected 'register_from', found '{}'", ident),
+        ));
+    }
+    input.parse::<Token![=]>()?;
+
+    let content;
+    syn::bracketed!(content in input);
+
+    let mut specs = Vec::new();
+    while !content.is_empty() {
+        let tuple_content;
+        syn::parenthesized!(tuple_content in content);
+
+        let instruction_path: Path = tuple_content.parse()?;
+        tuple_content.parse::<Token![,]>()?;
+        let pda_field = parse_field_spec(&tuple_content)?;
+        tuple_content.parse::<Token![,]>()?;
+        let primary_key_field = parse_field_spec(&tuple_content)?;
+
+        specs.push(RegisterFromSpec {
+            instruction_path,
+            pda_field,
+            primary_key_field,
+        });
+
+        if !content.is_empty() {
+            content.parse::<Token![,]>()?;
+        }
+    }
+
+    Ok(specs)
+}
+
 // #[resolve_key] Attribute Parser
 #[derive(Debug, Clone)]
 pub struct ResolveKeyAttribute {
@@ -1476,4 +1866,75 @@ pub fn parse_register_pda_attribute(attr: &Attribute) -> syn::Result<Option<Regi
         primary_key_field,
         lookup_name,
     }))
+}
+
+/// Parse #[view(name = "latest", sort_by = "id.round_id", order = "desc")] attributes
+pub fn parse_view_attributes(attrs: &[Attribute]) -> Vec<crate::ast::ViewDef> {
+    use crate::ast::{FieldPath, SortOrder, ViewDef, ViewOutput, ViewSource, ViewTransform};
+
+    let mut views = Vec::new();
+
+    for attr in attrs {
+        if !attr.path().is_ident("view") {
+            continue;
+        }
+
+        let mut name: Option<String> = None;
+        let mut sort_by: Option<String> = None;
+        let mut order = SortOrder::Desc;
+        let mut take: Option<usize> = None;
+        let output = ViewOutput::Collection;
+
+        if let syn::Meta::List(meta_list) = &attr.meta {
+            let _ = meta_list.parse_nested_meta(|meta| {
+                if meta.path.is_ident("name") {
+                    let value: syn::LitStr = meta.value()?.parse()?;
+                    name = Some(value.value());
+                } else if meta.path.is_ident("sort_by") {
+                    let value: syn::LitStr = meta.value()?.parse()?;
+                    sort_by = Some(value.value());
+                } else if meta.path.is_ident("order") {
+                    let value: syn::LitStr = meta.value()?.parse()?;
+                    order = match value.value().to_lowercase().as_str() {
+                        "asc" => SortOrder::Asc,
+                        _ => SortOrder::Desc,
+                    };
+                } else if meta.path.is_ident("take") {
+                    let value: syn::LitInt = meta.value()?.parse()?;
+                    take = Some(value.base10_parse::<usize>()?);
+                }
+                Ok(())
+            });
+        }
+
+        if let (Some(view_name), Some(sort_field)) = (name, sort_by) {
+            // Keep segments in snake_case to match AST field paths
+            let segments: Vec<String> = sort_field.split('.').map(String::from).collect();
+            let mut pipeline = vec![ViewTransform::Sort {
+                key: FieldPath {
+                    segments,
+                    offsets: None,
+                },
+                order,
+            }];
+
+            // Only add Take transform if explicitly specified in the view definition.
+            // Views return all matching entities by default - users can limit results
+            // at query time using take() on the SDK side.
+            if let Some(n) = take {
+                pipeline.push(ViewTransform::Take { count: n });
+            }
+
+            views.push(ViewDef {
+                id: view_name,
+                source: ViewSource::Entity {
+                    name: String::new(),
+                },
+                pipeline,
+                output,
+            });
+        }
+    }
+
+    views
 }

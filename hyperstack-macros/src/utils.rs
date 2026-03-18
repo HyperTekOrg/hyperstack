@@ -54,28 +54,6 @@ pub fn to_pascal_case(s: &str) -> String {
         .collect()
 }
 
-/// Convert a string to camelCase.
-///
-/// Splits on underscores and dots, capitalizing each word after the first.
-///
-/// # Examples
-///
-/// ```ignore
-/// assert_eq!(to_camel_case("my_type_name"), "MyTypeName");
-/// assert_eq!(to_camel_case("section.field_name"), "SectionFieldName");
-/// ```
-pub fn to_camel_case(s: &str) -> String {
-    s.split(['_', '.'])
-        .map(|word| {
-            let mut c = word.chars();
-            match c.next() {
-                None => String::new(),
-                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-            }
-        })
-        .collect()
-}
-
 /// Convert a syn::Path to a string representation.
 ///
 /// Joins path segments with "::" separator.
@@ -144,11 +122,5 @@ mod tests {
     fn test_to_pascal_case() {
         assert_eq!(to_pascal_case("my_type_name"), "MyTypeName");
         assert_eq!(to_pascal_case("hello"), "Hello");
-    }
-
-    #[test]
-    fn test_to_camel_case() {
-        assert_eq!(to_camel_case("my_type_name"), "MyTypeName");
-        assert_eq!(to_camel_case("section.field_name"), "SectionFieldName");
     }
 }

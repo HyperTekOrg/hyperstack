@@ -35,3 +35,6 @@ Issues = "https://github.com/HyperTekOrg/hyperstack/issues"
 
 [tool.setuptools.packages.find]
 include = ["hyperstack*"]
+
+[tool.setuptools.package-data]
+hyperstack = ["py.typed"]

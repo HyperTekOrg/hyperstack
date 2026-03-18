@@ -3,16 +3,18 @@
 //! This module handles processing of `#[hyperstack]` attributes applied to modules,
 //! coordinating the processing of multiple entity structs within a module.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Item, ItemMod};
 
+use crate::ast::SerializableStackSpec;
 use crate::codegen::generate_multi_entity_builder;
 use crate::parse;
 use crate::parse::proto as proto_parser;
 use crate::proto_codegen;
+use crate::utils::to_pascal_case;
 
 use super::entity::process_entity_struct;
 use super::proto_struct::process_struct_with_context;
@@ -33,11 +35,10 @@ pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
     let mut entity_structs = Vec::new();
     let mut has_game_event = false;
 
-    let (proto_analyses, skip_decoders, idl_file) = parse_proto_files_from_attr(attr.clone());
+    let (proto_analyses, skip_decoders, idl_files) = parse_proto_files_from_attr(attr.clone());
 
-    // If IDL file is specified, process it separately
-    if !idl_file.is_empty() {
-        return super::idl_spec::process_idl_spec(module, &idl_file);
+    if !idl_files.is_empty() {
+        return super::idl_spec::process_idl_spec(module, &idl_files);
     }
 
     if let Some((_, items)) = &module.content {
@@ -77,6 +78,7 @@ pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
     }
 
     if !entity_structs.is_empty() {
+        let stack_name = to_pascal_case(&module.ident.to_string());
         let mut all_outputs = Vec::new();
         let mut entity_names = Vec::new();
 
@@ -89,6 +91,7 @@ pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
                 entity_name,
                 section_structs.clone(),
                 has_game_event,
+                &stack_name,
             );
             all_outputs.push(output);
         }
@@ -113,16 +116,40 @@ pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
                 }
             }
 
-            for output in all_outputs {
-                if let Ok(generated_items) = syn::parse::<syn::File>(output) {
+            for output in &all_outputs {
+                if let Ok(generated_items) = syn::parse::<syn::File>(output.token_stream.clone()) {
                     for gen_item in generated_items.items {
                         items.push(gen_item);
                     }
                 }
             }
 
-            let multi_entity_builder =
-                generate_multi_entity_builder(&entity_names, &proto_analyses, skip_decoders);
+            let entity_asts: Vec<crate::ast::SerializableStreamSpec> = all_outputs
+                .iter()
+                .filter_map(|result| result.ast_spec.clone())
+                .collect();
+
+            let stack_spec = SerializableStackSpec {
+                stack_name: stack_name.clone(),
+                program_ids: vec![],
+                idls: vec![],
+                entities: entity_asts,
+                pdas: BTreeMap::new(),
+                instructions: vec![],
+                content_hash: None,
+            }
+            .with_content_hash();
+
+            if let Err(e) = crate::ast::writer::write_stack_to_file(&stack_spec, &stack_name) {
+                eprintln!("Warning: Failed to write stack AST: {}", e);
+            }
+
+            let multi_entity_builder = generate_multi_entity_builder(
+                &entity_names,
+                &proto_analyses,
+                skip_decoders,
+                &stack_name,
+            );
             if let Ok(generated_items) = syn::parse::<syn::File>(multi_entity_builder.into()) {
                 for gen_item in generated_items.items {
                     items.push(gen_item);
@@ -162,24 +189,22 @@ pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
 // Attribute Parsing
 // ============================================================================
 
-/// Parse proto files and other options from the `#[hyperstack(...)]` attribute.
-///
-/// Returns:
-/// - Vec of (path, ProtoAnalysis) tuples
-/// - skip_decoders flag
-/// - idl_file path (empty string if not specified)
 pub fn parse_proto_files_from_attr(
     attr: TokenStream,
-) -> (Vec<(String, proto_parser::ProtoAnalysis)>, bool, String) {
+) -> (
+    Vec<(String, proto_parser::ProtoAnalysis)>,
+    bool,
+    Vec<String>,
+) {
     let hyperstack_attr = match parse::parse_stream_spec_attribute(attr) {
         Ok(attr) => attr,
-        Err(_) => return (Vec::new(), false, String::new()),
+        Err(_) => return (Vec::new(), false, Vec::new()),
     };
 
-    let idl_file = hyperstack_attr.idl_file.clone();
+    let idl_files = hyperstack_attr.idl_files.clone();
 
     if hyperstack_attr.proto_files.is_empty() {
-        return (Vec::new(), hyperstack_attr.skip_decoders, idl_file);
+        return (Vec::new(), hyperstack_attr.skip_decoders, idl_files);
     }
 
     let mut analyses = Vec::new();
@@ -202,5 +227,5 @@ pub fn parse_proto_files_from_attr(
         }
     }
 
-    (analyses, hyperstack_attr.skip_decoders, idl_file)
+    (analyses, hyperstack_attr.skip_decoders, idl_files)
 }

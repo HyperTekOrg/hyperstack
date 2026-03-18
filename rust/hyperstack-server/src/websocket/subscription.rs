@@ -20,6 +20,12 @@ pub struct Subscription {
     pub key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub partition: Option<String>,
+    /// Number of items to return (for windowed subscriptions)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub take: Option<usize>,
+    /// Number of items to skip (for windowed subscriptions)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skip: Option<usize>,
 }
 
 /// Client unsubscription request
@@ -95,6 +101,8 @@ mod tests {
             view: "SettlementGame/list".to_string(),
             key: Some("835".to_string()),
             partition: None,
+            take: None,
+            skip: None,
         };
 
         assert!(sub.matches("SettlementGame/list", "835"));
@@ -108,6 +116,8 @@ mod tests {
             view: "SettlementGame/list".to_string(),
             key: None,
             partition: None,
+            take: None,
+            skip: None,
         };
 
         assert!(sub.matches("SettlementGame/list", "835"));
@@ -177,6 +187,8 @@ mod tests {
             view: "SettlementGame/list".to_string(),
             key: Some("835".to_string()),
             partition: None,
+            take: None,
+            skip: None,
         };
         assert_eq!(sub.sub_key(), "SettlementGame/list:835");
     }
@@ -187,6 +199,8 @@ mod tests {
             view: "SettlementGame/list".to_string(),
             key: None,
             partition: None,
+            take: None,
+            skip: None,
         };
         assert_eq!(sub.sub_key(), "SettlementGame/list:*");
     }
@@ -204,5 +218,25 @@ mod tests {
             key: None,
         };
         assert_eq!(unsub_all.sub_key(), "SettlementGame/list:*");
+    }
+
+    #[test]
+    fn test_subscription_with_take_skip() {
+        let json = json!({
+            "type": "subscribe",
+            "view": "OreRound/latest",
+            "take": 10,
+            "skip": 0
+        });
+
+        let msg: ClientMessage = serde_json::from_value(json).unwrap();
+        match msg {
+            ClientMessage::Subscribe(sub) => {
+                assert_eq!(sub.view, "OreRound/latest");
+                assert_eq!(sub.take, Some(10));
+                assert_eq!(sub.skip, Some(0));
+            }
+            _ => panic!("Expected Subscribe"),
+        }
     }
 }

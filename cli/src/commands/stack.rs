@@ -6,17 +6,18 @@ use std::thread;
 use std::time::Duration;
 
 use crate::api_client::{
-    ApiClient, Build, BuildStatus, CreateBuildRequest, CreateSpecRequest, DeploymentStatus,
-    Spec as ApiSpec, DEFAULT_DOMAIN_SUFFIX,
+    ApiClient, Build, BuildStatus, CreateBuildRequest, CreateSpecRequest, DeploymentResponse,
+    DeploymentStatus, Spec as ApiSpec, DEFAULT_DOMAIN_SUFFIX,
 };
 use crate::config::{resolve_stacks_to_push, DiscoveredAst, HyperstackConfig};
+use crate::telemetry;
 
 pub fn push(config_path: &str, stack_name: Option<&str>) -> Result<()> {
     let config = HyperstackConfig::load_optional(config_path)?;
 
     if config.is_none() && stack_name.is_none() {
         println!(
-            "{} No hyperstack.toml found, auto-discovering AST files...",
+            "{} No hyperstack.toml found, auto-discovering stack files...",
             "→".blue().bold()
         );
     } else if config.is_some() {
@@ -28,7 +29,7 @@ pub fn push(config_path: &str, stack_name: Option<&str>) -> Result<()> {
     if stacks_to_push.is_empty() {
         println!("{}", "No stacks found to push.".yellow());
         println!("\n{}", "To push stacks, either:".dimmed());
-        println!("  1. Build your stack crate to generate .hyperstack/*.ast.json files");
+        println!("  1. Build your stack crate to generate .hyperstack/*.stack.json files");
         println!("  2. Create a hyperstack.toml with your stack configuration");
         return Ok(());
     }
@@ -671,7 +672,9 @@ pub fn rollback(
 
     if watch {
         println!();
-        return watch_build(&client, response.build_id);
+        let result = watch_build(&client, response.build_id);
+        telemetry::record_stack_rollback(result.is_ok());
+        return result;
     }
 
     println!();
@@ -681,18 +684,115 @@ pub fn rollback(
         format!("hs build status {} --watch", response.build_id).cyan()
     );
 
+    telemetry::record_stack_rollback(true);
+
     Ok(())
 }
 
-pub fn stop(stack_name: &str, _branch: Option<&str>, _force: bool) -> Result<()> {
-    bail!(
-        "Stop deployment is not yet implemented.\n\n\
-         To stop a deployment for '{}', you can:\n\
-         1. Delete the stack: hs stack delete {}\n\
-         2. Or manually scale down in Kubernetes",
+pub fn stop(stack_name: &str, branch: Option<&str>, force: bool) -> Result<()> {
+    let client = ApiClient::new()?;
+
+    println!("{} Looking up stack '{}'...", "→".blue().bold(), stack_name);
+
+    let spec = client
+        .get_spec_by_name(stack_name)?
+        .ok_or_else(|| anyhow::anyhow!("Stack '{}' not found", stack_name))?;
+
+    // Get deployments and find the one for this spec
+    let deployments = client.list_deployments(100)?;
+
+    let deployment = find_deployment(&deployments, spec.id, branch).ok_or_else(|| {
+        let branch_msg = branch.unwrap_or("production");
+        anyhow::anyhow!(
+            "No {} deployment found for stack '{}'",
+            branch_msg,
+            stack_name
+        )
+    })?;
+
+    // Check if already stopped
+    if deployment.status == DeploymentStatus::Stopped {
+        println!(
+            "{} Deployment for '{}' is already stopped.",
+            "!".yellow().bold(),
+            stack_name
+        );
+        return Ok(());
+    }
+
+    let branch_display = branch.unwrap_or("production");
+
+    if !force {
+        println!();
+        println!(
+            "{} You are about to stop the deployment for '{}'",
+            "!".yellow().bold(),
+            stack_name
+        );
+        println!("  Branch: {}", branch_display);
+        println!(
+            "  Current status: {}",
+            format_deployment_status(deployment.status)
+        );
+        println!();
+        println!("  This will stop the running deployment.");
+        println!("  You can restart it later with 'hs up'.");
+        println!();
+
+        print!("Continue? [y/N] ");
+        use std::io::{self, Write};
+        io::stdout().flush()?;
+
+        let mut confirmation = String::new();
+        io::stdin().read_line(&mut confirmation)?;
+        let confirmation = confirmation.trim().to_lowercase();
+
+        if confirmation != "y" && confirmation != "yes" {
+            println!();
+            println!("{} Stop cancelled.", "!".yellow().bold());
+            return Ok(());
+        }
+    }
+
+    println!("{} Stopping deployment...", "→".blue().bold());
+
+    client.stop_deployment(deployment.id)?;
+
+    println!(
+        "{} Deployment for '{}' ({}) stopped successfully.",
+        "✓".green().bold(),
         stack_name,
-        stack_name
+        branch_display
     );
+
+    println!();
+    println!("To restart, run:");
+    println!("  {}", format!("hs up {}", stack_name).cyan());
+
+    Ok(())
+}
+
+fn find_deployment<'a>(
+    deployments: &'a [DeploymentResponse],
+    spec_id: i32,
+    branch: Option<&str>,
+) -> Option<&'a DeploymentResponse> {
+    deployments.iter().find(|d| {
+        d.spec_id == spec_id
+            && match branch {
+                Some(b) => d.branch.as_deref() == Some(b),
+                None => d.branch.is_none(), // production deployment has no branch
+            }
+    })
+}
+
+fn format_deployment_status(status: DeploymentStatus) -> String {
+    match status {
+        DeploymentStatus::Active => "active".green().to_string(),
+        DeploymentStatus::Updating => "updating".yellow().to_string(),
+        DeploymentStatus::Stopped => "stopped".dimmed().to_string(),
+        DeploymentStatus::Failed => "failed".red().to_string(),
+    }
 }
 
 fn load_and_upload_ast(
@@ -705,13 +805,13 @@ fn load_and_upload_ast(
 }
 
 fn stack_needs_update(local: &DiscoveredAst, remote: &ApiSpec) -> bool {
-    local.entity_name != remote.entity_name
+    local.stack_id != remote.entity_name
 }
 
 fn create_remote_stack(client: &ApiClient, ast: &DiscoveredAst) -> Result<ApiSpec> {
     let req = CreateSpecRequest {
         name: ast.stack_name.clone(),
-        entity_name: ast.entity_name.clone(),
+        entity_name: ast.stack_id.clone(),
         crate_name: String::new(),
         module_path: String::new(),
         description: None,
@@ -725,7 +825,7 @@ fn create_remote_stack(client: &ApiClient, ast: &DiscoveredAst) -> Result<ApiSpe
 fn update_remote_stack(client: &ApiClient, spec_id: i32, ast: &DiscoveredAst) -> Result<ApiSpec> {
     let req = crate::api_client::UpdateSpecRequest {
         name: Some(ast.stack_name.clone()),
-        entity_name: Some(ast.entity_name.clone()),
+        entity_name: Some(ast.stack_id.clone()),
         crate_name: None,
         module_path: None,
         description: None,

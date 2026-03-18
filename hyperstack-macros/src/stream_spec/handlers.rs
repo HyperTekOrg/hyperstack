@@ -9,6 +9,7 @@
 use quote::{format_ident, quote};
 use syn::{Path, Type};
 
+use crate::ast::{ResolverHook, ResolverStrategy};
 use crate::parse;
 use crate::parse::idl as idl_parser;
 use crate::utils::{path_to_string, to_snake_case};
@@ -204,6 +205,7 @@ pub fn find_field_in_instruction(
 pub fn determine_event_instruction(
     event_attr: &mut parse::EventAttribute,
     field_type: &Type,
+    program_name: Option<&str>,
 ) -> Option<(Path, String)> {
     // Priority 1: Explicit `from = ...`
     if let Some(ref path) = event_attr.from_instruction {
@@ -239,7 +241,11 @@ pub fn determine_event_instruction(
         if parts.len() == 2 {
             let instruction_name = parts[1];
             // Construct a simple path - this is a best-effort approach
-            let path_str = format!("generated_sdk::instructions::{}", instruction_name);
+            let path_str = if let Some(program_name) = program_name {
+                format!("{}_sdk::instructions::{}", program_name, instruction_name)
+            } else {
+                format!("generated_sdk::instructions::{}", instruction_name)
+            };
             if let Ok(path) = syn::parse_str::<Path>(&path_str) {
                 return Some((path, event_attr.instruction.clone()));
             }
@@ -289,17 +295,24 @@ pub fn convert_event_to_map_attributes(
         // Whole instruction capture - create a single mapping for the whole source
         map_attrs.push(parse::MapAttribute {
             source_type_path: instruction_path.clone(),
-            source_field_name: String::new(), // Empty = whole source
+            source_field_name: String::new(),
             target_field_name: target_field.to_string(),
             is_primary_key: false,
             is_lookup_index: false,
+            register_from: Vec::new(),
             temporal_field: None,
             strategy: event_attr.strategy.clone(),
             join_on: get_join_on_field(&event_attr.join_on),
             transform: None,
+            resolver_transform: None,
             is_instruction: true,
-            is_whole_source: true, // Mark as whole source
+            is_whole_source: true,
             lookup_by: event_attr.lookup_by.clone(),
+            condition: None,
+            when: None,
+            stop: None,
+            stop_lookup_by: None,
+            emit: true,
         });
         return map_attrs;
     }
@@ -315,16 +328,23 @@ pub fn convert_event_to_map_attributes(
         map_attrs.push(parse::MapAttribute {
             source_type_path: instruction_path.clone(),
             source_field_name: field_name.clone(),
-            target_field_name: format!("{}.{}", target_field, field_name), // Nested path
+            target_field_name: format!("{}.{}", target_field, field_name),
             is_primary_key: false,
             is_lookup_index: false,
+            register_from: Vec::new(),
             temporal_field: None,
             strategy: event_attr.strategy.clone(),
             join_on: get_join_on_field(&event_attr.join_on),
             transform,
+            resolver_transform: None,
             is_instruction: true,
             is_whole_source: false,
             lookup_by: event_attr.lookup_by.clone(),
+            condition: None,
+            when: None,
+            stop: None,
+            stop_lookup_by: None,
+            emit: true,
         });
     }
 
@@ -341,13 +361,20 @@ pub fn convert_event_to_map_attributes(
             target_field_name: format!("{}.{}", target_field, field_name),
             is_primary_key: false,
             is_lookup_index: false,
+            register_from: Vec::new(),
             temporal_field: None,
             strategy: event_attr.strategy.clone(),
             join_on: get_join_on_field(&event_attr.join_on),
             transform,
+            resolver_transform: None,
             is_instruction: true,
             is_whole_source: false,
             lookup_by: event_attr.lookup_by.clone(),
+            condition: None,
+            when: None,
+            stop: None,
+            stop_lookup_by: None,
+            emit: true,
         });
     }
 
@@ -507,20 +534,57 @@ pub fn generate_pda_registration_functions(
     for (i, registration) in pda_registrations.iter().enumerate() {
         let _instruction_type = &registration.instruction_path;
         let fn_name = format_ident!("register_pda_{}", i);
-        let pda_field = registration.pda_field.ident.to_string();
-        let primary_key_field = registration.primary_key_field.ident.to_string();
+        let pda_raw = registration.pda_field.ident.to_string();
+        let pk_raw = registration.primary_key_field.ident.to_string();
+        let pda_camel = crate::event_type_helpers::snake_to_lower_camel(&pda_raw);
+        let pk_camel = crate::event_type_helpers::snake_to_lower_camel(&pk_raw);
 
-        // Note: We do NOT emit #[after_instruction] attribute here because:
-        // 1. These functions are generated during macro expansion
-        // 2. The instruction hooks need to be registered in the AST/bytecode system
-        // 3. These will be called through the bytecode VM's instruction processing
+        // IDL account names can be camelCase (e.g. Pumpfun: "bondingCurve") or
+        // snake_case (e.g. Raydium: "pool_state"). The register_from attribute
+        // uses Rust field names (always snake_case), so try both the camelCase
+        // conversion and the raw snake_case name to match the IDL.
         functions.push(quote! {
                     pub fn #fn_name(ctx: &mut hyperstack::runtime::hyperstack_interpreter::resolvers::InstructionContext) {
-                        if let (Some(primary_key), Some(pda)) = (ctx.account(#primary_key_field), ctx.account(#pda_field)) {
+                        let pk_val = ctx.account(#pk_camel).or_else(|| ctx.account(#pk_raw));
+                        let pda_val = ctx.account(#pda_camel).or_else(|| ctx.account(#pda_raw));
+                        if let (Some(primary_key), Some(pda)) = (pk_val, pda_val) {
                             ctx.register_pda_reverse_lookup(&pda, &primary_key);
                         }
                     }
                 });
+    }
+
+    quote! { #(#functions)* }
+}
+
+pub fn generate_auto_resolver_functions(hooks: &[ResolverHook]) -> proc_macro2::TokenStream {
+    let mut functions = Vec::new();
+
+    for hook in hooks {
+        let account_name = crate::event_type_helpers::strip_event_type_suffix(&hook.account_type);
+        let fn_name = format_ident!("resolve_{}_key", to_snake_case(account_name));
+
+        match &hook.strategy {
+            ResolverStrategy::PdaReverseLookup {
+                queue_discriminators,
+                ..
+            } => {
+                let disc_bytes: Vec<u8> = queue_discriminators.iter().flatten().copied().collect();
+                functions.push(quote! {
+                    pub fn #fn_name(
+                        account_address: &str,
+                        _account_data: &hyperstack::runtime::serde_json::Value,
+                        ctx: &mut hyperstack::runtime::hyperstack_interpreter::resolvers::ResolveContext,
+                    ) -> hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution {
+                        if let Some(key) = ctx.pda_reverse_lookup(account_address) {
+                            return hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::Found(key);
+                        }
+                        hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(&[#(#disc_bytes),*])
+                    }
+                });
+            }
+            ResolverStrategy::DirectField { .. } => {}
+        }
     }
 
     quote! { #(#functions)* }

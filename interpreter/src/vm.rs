@@ -1,17 +1,17 @@
 use crate::ast::{
-    BinaryOp, ComparisonOp, ComputedExpr, ComputedFieldSpec, FieldPath, Transformation,
+    self, BinaryOp, ComparisonOp, ComputedExpr, ComputedFieldSpec, FieldPath, ResolveStrategy,
+    ResolverExtractSpec, ResolverType, Transformation,
 };
 use crate::compiler::{MultiEntityBytecode, OpCode};
 use crate::Mutation;
 use dashmap::DashMap;
 use lru::LruCache;
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::num::NonZeroUsize;
 
 #[cfg(feature = "otel")]
 use tracing::instrument;
-
 /// Context metadata for blockchain updates (accounts and instructions)
 /// This structure is designed to be extended over time with additional metadata
 #[derive(Debug, Clone, Default)]
@@ -98,6 +98,16 @@ impl UpdateContext {
     }
 
     /// Add custom metadata
+    /// Returns true if this is an account update context (has write_version, no txn_index)
+    pub fn is_account_update(&self) -> bool {
+        self.write_version.is_some() && self.txn_index.is_none()
+    }
+
+    /// Returns true if this is an instruction update context (has txn_index, no write_version)
+    pub fn is_instruction_update(&self) -> bool {
+        self.txn_index.is_some() && self.write_version.is_none()
+    }
+
     pub fn with_metadata(mut self, key: String, value: Value) -> Self {
         self.metadata.insert(key, value);
         self
@@ -154,9 +164,15 @@ const DEFAULT_MAX_LOOKUP_INDEX_ENTRIES: usize = 2_500;
 
 const DEFAULT_MAX_VERSION_TRACKER_ENTRIES: usize = 2_500;
 
+// Smaller cache for instruction deduplication - provides shorter effective TTL
+// since we don't expect instruction duplicates to arrive much later
+const DEFAULT_MAX_INSTRUCTION_DEDUP_ENTRIES: usize = 500;
+
 const DEFAULT_MAX_TEMPORAL_INDEX_KEYS: usize = 2_500;
 
 const DEFAULT_MAX_PDA_REVERSE_LOOKUP_ENTRIES: usize = 2_500;
+
+const DEFAULT_MAX_RESOLVER_CACHE_ENTRIES: usize = 5_000;
 
 /// Estimate the size of a JSON value in bytes
 fn estimate_json_size(value: &Value) -> usize {
@@ -294,8 +310,18 @@ pub struct VmContext {
     pub pda_cache_hits: u64,
     pub pda_cache_misses: u64,
     pub pending_queue_size: u64,
+    resolver_requests: VecDeque<ResolverRequest>,
+    resolver_pending: HashMap<String, PendingResolverEntry>,
+    resolver_cache: LruCache<String, Value>,
+    pub resolver_cache_hits: u64,
+    pub resolver_cache_misses: u64,
     current_context: Option<UpdateContext>,
     warnings: Vec<String>,
+    last_pda_lookup_miss: Option<String>,
+    last_lookup_index_miss: Option<String>,
+    last_pda_registered: Option<String>,
+    last_lookup_index_keys: Vec<String>,
+    scheduled_callbacks: Vec<(u64, ScheduledCallback)>,
 }
 
 #[derive(Debug)]
@@ -349,6 +375,33 @@ fn value_to_cache_key(value: &Value) -> String {
         Value::Null => "null".to_string(),
         _ => serde_json::to_string(value).unwrap_or_else(|_| "unknown".to_string()),
     }
+}
+
+fn resolver_type_key(resolver: &ResolverType) -> String {
+    match resolver {
+        ResolverType::Token => "token".to_string(),
+        ResolverType::Url(config) => match &config.url_source {
+            ast::UrlSource::FieldPath(path) => format!("url:{}", path),
+            ast::UrlSource::Template(parts) => {
+                let key: String = parts
+                    .iter()
+                    .map(|p| match p {
+                        ast::UrlTemplatePart::Literal(s) => s.clone(),
+                        ast::UrlTemplatePart::FieldRef(f) => format!("{{{}}}", f),
+                    })
+                    .collect();
+                format!("url:{}", key)
+            }
+        },
+    }
+}
+
+fn resolver_cache_key(resolver: &ResolverType, input: &Value) -> String {
+    format!(
+        "{}:{}",
+        resolver_type_key(resolver),
+        value_to_cache_key(input)
+    )
 }
 
 #[derive(Debug)]
@@ -482,6 +535,10 @@ impl PdaReverseLookup {
     pub fn is_empty(&self) -> bool {
         self.index.is_empty()
     }
+
+    pub fn contains(&self, pda_address: &str) -> bool {
+        self.index.peek(pda_address).is_some()
+    }
 }
 
 /// Input for queueing an account update.
@@ -505,6 +562,102 @@ pub struct PendingAccountUpdate {
     pub write_version: u64,
     pub signature: String,
     pub queued_at: i64,
+}
+
+/// Input for queueing an instruction event when PDA lookup fails.
+#[derive(Debug, Clone)]
+pub struct QueuedInstructionEvent {
+    pub pda_address: String,
+    pub event_type: String,
+    pub event_data: Value,
+    pub slot: u64,
+    pub signature: String,
+}
+
+/// Internal representation of a pending instruction event with queue metadata.
+#[derive(Debug, Clone)]
+pub struct PendingInstructionEvent {
+    pub event_type: String,
+    pub pda_address: String,
+    pub event_data: Value,
+    pub slot: u64,
+    pub signature: String,
+    pub queued_at: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct DeferredWhenOperation {
+    pub entity_name: String,
+    pub primary_key: Value,
+    pub field_path: String,
+    pub field_value: Value,
+    pub when_instruction: String,
+    pub signature: String,
+    pub slot: u64,
+    pub deferred_at: i64,
+    pub emit: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolverRequest {
+    pub cache_key: String,
+    pub resolver: ResolverType,
+    pub input: Value,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolverTarget {
+    pub state_id: u32,
+    pub entity_name: String,
+    pub primary_key: Value,
+    pub extracts: Vec<ResolverExtractSpec>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingResolverEntry {
+    pub resolver: ResolverType,
+    pub input: Value,
+    pub targets: Vec<ResolverTarget>,
+    pub queued_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScheduledCallback {
+    pub state_id: u32,
+    pub entity_name: String,
+    pub primary_key: Value,
+    pub resolver: ResolverType,
+    pub url_template: Option<Vec<ast::UrlTemplatePart>>,
+    pub input_value: Option<Value>,
+    pub input_path: Option<String>,
+    pub condition: Option<ast::ResolverCondition>,
+    pub strategy: ResolveStrategy,
+    pub extracts: Vec<ResolverExtractSpec>,
+    pub retry_count: u32,
+}
+
+impl PendingResolverEntry {
+    fn add_target(&mut self, target: ResolverTarget) {
+        if let Some(existing) = self.targets.iter_mut().find(|t| {
+            t.state_id == target.state_id
+                && t.entity_name == target.entity_name
+                && t.primary_key == target.primary_key
+        }) {
+            let mut seen = HashSet::new();
+            for extract in &existing.extracts {
+                seen.insert((extract.target_path.clone(), extract.source_path.clone()));
+            }
+
+            for extract in target.extracts {
+                let key = (extract.target_path.clone(), extract.source_path.clone());
+                if seen.insert(key) {
+                    existing.extracts.push(extract);
+                }
+            }
+        } else {
+            self.targets.push(target);
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -615,10 +768,15 @@ pub struct StateTable {
     pub temporal_indexes: HashMap<String, TemporalIndex>,
     pub pda_reverse_lookups: HashMap<String, PdaReverseLookup>,
     pub pending_updates: DashMap<String, Vec<PendingAccountUpdate>>,
+    pub pending_instruction_events: DashMap<String, Vec<PendingInstructionEvent>>,
     version_tracker: VersionTracker,
+    instruction_dedup_cache: VersionTracker,
     config: StateTableConfig,
     #[cfg_attr(not(feature = "otel"), allow(dead_code))]
     entity_name: String,
+    pub recent_tx_instructions:
+        std::sync::Mutex<lru::LruCache<String, std::collections::HashSet<String>>>,
+    pub deferred_when_ops: DashMap<(String, String), Vec<DeferredWhenOperation>>,
 }
 
 impl StateTable {
@@ -718,6 +876,37 @@ impl StateTable {
             .insert(primary_key, event_type, slot, ordering_value);
         true
     }
+
+    /// Check if an instruction is a duplicate of one we've seen recently.
+    /// Returns true if this exact instruction has been seen before (is a duplicate).
+    /// Returns false if this is a new instruction that should be processed.
+    ///
+    /// Unlike account updates, instructions don't use recency checks - all
+    /// unique instructions are processed. Only exact duplicates are skipped.
+    /// Uses a smaller cache capacity for shorter effective TTL.
+    pub fn is_duplicate_instruction(
+        &self,
+        primary_key: &Value,
+        event_type: &str,
+        slot: u64,
+        txn_index: u64,
+    ) -> bool {
+        // Check if we've seen this exact instruction before
+        let is_duplicate = self
+            .instruction_dedup_cache
+            .get(primary_key, event_type)
+            .map(|(last_slot, last_txn_index)| slot == last_slot && txn_index == last_txn_index)
+            .unwrap_or(false);
+
+        if is_duplicate {
+            return true;
+        }
+
+        // Record this instruction for deduplication
+        self.instruction_dedup_cache
+            .insert(primary_key, event_type, slot, txn_index);
+        false
+    }
 }
 
 impl VmContext {
@@ -731,8 +920,21 @@ impl VmContext {
             pda_cache_hits: 0,
             pda_cache_misses: 0,
             pending_queue_size: 0,
+            resolver_requests: VecDeque::new(),
+            resolver_pending: HashMap::new(),
+            resolver_cache: LruCache::new(
+                NonZeroUsize::new(DEFAULT_MAX_RESOLVER_CACHE_ENTRIES)
+                    .expect("capacity must be > 0"),
+            ),
+            resolver_cache_hits: 0,
+            resolver_cache_misses: 0,
             current_context: None,
             warnings: Vec::new(),
+            last_pda_lookup_miss: None,
+            last_lookup_index_miss: None,
+            last_pda_registered: None,
+            last_lookup_index_keys: Vec::new(),
+            scheduled_callbacks: Vec::new(),
         };
         vm.states.insert(
             0,
@@ -743,9 +945,17 @@ impl VmContext {
                 temporal_indexes: HashMap::new(),
                 pda_reverse_lookups: HashMap::new(),
                 pending_updates: DashMap::new(),
+                pending_instruction_events: DashMap::new(),
                 version_tracker: VersionTracker::new(),
+                instruction_dedup_cache: VersionTracker::with_capacity(
+                    DEFAULT_MAX_INSTRUCTION_DEDUP_ENTRIES,
+                ),
                 config: StateTableConfig::default(),
                 entity_name: "default".to_string(),
+                recent_tx_instructions: std::sync::Mutex::new(LruCache::new(
+                    NonZeroUsize::new(1000).unwrap(),
+                )),
+                deferred_when_ops: DashMap::new(),
             },
         );
         vm
@@ -761,8 +971,21 @@ impl VmContext {
             pda_cache_hits: 0,
             pda_cache_misses: 0,
             pending_queue_size: 0,
+            resolver_requests: VecDeque::new(),
+            resolver_pending: HashMap::new(),
+            resolver_cache: LruCache::new(
+                NonZeroUsize::new(DEFAULT_MAX_RESOLVER_CACHE_ENTRIES)
+                    .expect("capacity must be > 0"),
+            ),
+            resolver_cache_hits: 0,
+            resolver_cache_misses: 0,
             current_context: None,
             warnings: Vec::new(),
+            last_pda_lookup_miss: None,
+            last_lookup_index_miss: None,
+            last_pda_registered: None,
+            last_lookup_index_keys: Vec::new(),
+            scheduled_callbacks: Vec::new(),
         };
         vm.states.insert(
             0,
@@ -773,12 +996,257 @@ impl VmContext {
                 temporal_indexes: HashMap::new(),
                 pda_reverse_lookups: HashMap::new(),
                 pending_updates: DashMap::new(),
+                pending_instruction_events: DashMap::new(),
                 version_tracker: VersionTracker::new(),
+                instruction_dedup_cache: VersionTracker::with_capacity(
+                    DEFAULT_MAX_INSTRUCTION_DEDUP_ENTRIES,
+                ),
                 config: state_config,
                 entity_name: "default".to_string(),
+                recent_tx_instructions: std::sync::Mutex::new(LruCache::new(
+                    NonZeroUsize::new(1000).unwrap(),
+                )),
+                deferred_when_ops: DashMap::new(),
             },
         );
         vm
+    }
+
+    pub fn take_resolver_requests(&mut self) -> Vec<ResolverRequest> {
+        self.resolver_requests.drain(..).collect()
+    }
+
+    pub fn take_scheduled_callbacks(&mut self) -> Vec<(u64, ScheduledCallback)> {
+        std::mem::take(&mut self.scheduled_callbacks)
+    }
+
+    pub fn get_entity_state(&self, state_id: u32, key: &Value) -> Option<Value> {
+        self.states.get(&state_id)?.get_and_touch(key)
+    }
+
+    pub fn restore_resolver_requests(&mut self, requests: Vec<ResolverRequest>) {
+        if requests.is_empty() {
+            return;
+        }
+
+        self.resolver_requests.extend(requests);
+    }
+
+    pub fn apply_resolver_result(
+        &mut self,
+        bytecode: &MultiEntityBytecode,
+        cache_key: &str,
+        resolved_value: Value,
+    ) -> Result<Vec<Mutation>> {
+        self.resolver_cache
+            .put(cache_key.to_string(), resolved_value.clone());
+
+        let entry = match self.resolver_pending.remove(cache_key) {
+            Some(entry) => entry,
+            None => return Ok(Vec::new()),
+        };
+
+        let mut mutations = Vec::new();
+
+        for target in entry.targets {
+            if target.primary_key.is_null() {
+                continue;
+            }
+
+            let entity_bytecode = match bytecode.entities.get(&target.entity_name) {
+                Some(bc) => bc,
+                None => continue,
+            };
+
+            let state = match self.states.get(&target.state_id) {
+                Some(s) => s,
+                None => continue,
+            };
+
+            let mut entity_state = state
+                .get_and_touch(&target.primary_key)
+                .unwrap_or_else(|| json!({}));
+
+            let mut dirty_tracker = DirtyTracker::new();
+            let should_emit = |path: &str| !entity_bytecode.non_emitted_fields.contains(path);
+
+            Self::apply_resolver_extractions_to_value(
+                &mut entity_state,
+                &resolved_value,
+                &target.extracts,
+                &mut dirty_tracker,
+                &should_emit,
+            )?;
+
+            if let Some(evaluator) = entity_bytecode.computed_fields_evaluator.as_ref() {
+                let old_values: Vec<_> = entity_bytecode
+                    .computed_paths
+                    .iter()
+                    .map(|path| Self::get_value_at_path(&entity_state, path))
+                    .collect();
+
+                let context_slot = self.current_context.as_ref().and_then(|c| c.slot);
+                let context_timestamp = self
+                    .current_context
+                    .as_ref()
+                    .map(|c| c.timestamp())
+                    .unwrap_or_else(|| {
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs() as i64
+                    });
+                let eval_result = evaluator(&mut entity_state, context_slot, context_timestamp);
+                if eval_result.is_ok() {
+                    for (path, old_value) in
+                        entity_bytecode.computed_paths.iter().zip(old_values.iter())
+                    {
+                        let new_value = Self::get_value_at_path(&entity_state, path);
+                        if new_value != *old_value && should_emit(path) {
+                            dirty_tracker.mark_replaced(path);
+                        }
+                    }
+                }
+            }
+
+            state.insert_with_eviction(target.primary_key.clone(), entity_state.clone());
+
+            if dirty_tracker.is_empty() {
+                continue;
+            }
+
+            let patch = Self::build_partial_state_from_value(&entity_state, &dirty_tracker)?;
+
+            mutations.push(Mutation {
+                export: target.entity_name.clone(),
+                key: target.primary_key.clone(),
+                patch,
+                append: vec![],
+            });
+        }
+
+        Ok(mutations)
+    }
+
+    pub fn enqueue_resolver_request(
+        &mut self,
+        cache_key: String,
+        resolver: ResolverType,
+        input: Value,
+        target: ResolverTarget,
+    ) {
+        if let Some(entry) = self.resolver_pending.get_mut(&cache_key) {
+            entry.add_target(target);
+            return;
+        }
+
+        let queued_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        self.resolver_pending.insert(
+            cache_key.clone(),
+            PendingResolverEntry {
+                resolver: resolver.clone(),
+                input: input.clone(),
+                targets: vec![target],
+                queued_at,
+            },
+        );
+
+        self.resolver_requests.push_back(ResolverRequest {
+            cache_key,
+            resolver,
+            input,
+        });
+    }
+
+    fn apply_resolver_extractions_to_value<F>(
+        state: &mut Value,
+        resolved_value: &Value,
+        extracts: &[ResolverExtractSpec],
+        dirty_tracker: &mut DirtyTracker,
+        should_emit: &F,
+    ) -> Result<()>
+    where
+        F: Fn(&str) -> bool,
+    {
+        for extract in extracts {
+            let resolved = match extract.source_path.as_deref() {
+                Some(path) => Self::get_value_at_path(resolved_value, path),
+                None => Some(resolved_value.clone()),
+            };
+
+            let Some(value) = resolved else {
+                continue;
+            };
+
+            let value = if let Some(transform) = &extract.transform {
+                Self::apply_transformation(&value, transform)?
+            } else {
+                value
+            };
+
+            Self::set_nested_field_value(state, &extract.target_path, value)?;
+            if should_emit(&extract.target_path) {
+                dirty_tracker.mark_replaced(&extract.target_path);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn build_partial_state_from_value(state: &Value, tracker: &DirtyTracker) -> Result<Value> {
+        if tracker.is_empty() {
+            return Ok(json!({}));
+        }
+
+        let mut partial = serde_json::Map::new();
+
+        for (path, change) in tracker.iter() {
+            let segments: Vec<&str> = path.split('.').collect();
+
+            let value_to_insert = match change {
+                FieldChange::Replaced => {
+                    let mut current = state;
+                    let mut found = true;
+
+                    for segment in &segments {
+                        match current.get(*segment) {
+                            Some(v) => current = v,
+                            None => {
+                                found = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if !found {
+                        continue;
+                    }
+                    current.clone()
+                }
+                FieldChange::Appended(values) => Value::Array(values.clone()),
+            };
+
+            let mut target = &mut partial;
+            for (i, segment) in segments.iter().enumerate() {
+                if i == segments.len() - 1 {
+                    target.insert(segment.to_string(), value_to_insert.clone());
+                } else {
+                    target
+                        .entry(segment.to_string())
+                        .or_insert_with(|| json!({}));
+                    target = target
+                        .get_mut(*segment)
+                        .and_then(|v| v.as_object_mut())
+                        .ok_or("Failed to build nested structure")?;
+                }
+            }
+        }
+
+        Ok(Value::Object(partial))
     }
 
     /// Get a mutable reference to a state table by ID
@@ -800,6 +1268,11 @@ impl VmContext {
     /// Get the current update context
     pub fn current_context(&self) -> Option<&UpdateContext> {
         self.current_context.as_ref()
+    }
+
+    /// Set the current update context for computed field evaluation
+    pub fn set_current_context(&mut self, context: Option<UpdateContext>) {
+        self.current_context = context;
     }
 
     fn add_warning(&mut self, msg: String) {
@@ -989,6 +1462,43 @@ impl VmContext {
 
         let mut all_mutations = Vec::new();
 
+        if event_type.ends_with("IxState") && bytecode.when_events.contains(event_type) {
+            if let Some(ctx) = context {
+                if let Some(signature) = ctx.signature.clone() {
+                    let state_ids: Vec<u32> = self.states.keys().cloned().collect();
+                    for state_id in state_ids {
+                        if let Some(state) = self.states.get(&state_id) {
+                            {
+                                let mut cache = state.recent_tx_instructions.lock().unwrap();
+                                let entry =
+                                    cache.get_or_insert_mut(signature.clone(), HashSet::new);
+                                entry.insert(event_type.to_string());
+                            }
+
+                            let key = (signature.clone(), event_type.to_string());
+                            if let Some((_, deferred_ops)) = state.deferred_when_ops.remove(&key) {
+                                tracing::debug!(
+                                    event_type = %event_type,
+                                    signature = %signature,
+                                    deferred_count = deferred_ops.len(),
+                                    "flushing deferred when-ops"
+                                );
+                                for op in deferred_ops {
+                                    match self.apply_deferred_when_op(state_id, &op) {
+                                        Ok(mutations) => all_mutations.extend(mutations),
+                                        Err(e) => tracing::warn!(
+                                            "Failed to apply deferred when-op: {}",
+                                            e
+                                        ),
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if let Some(entity_names) = bytecode.event_routing.get(event_type) {
             for entity_name in entity_names {
                 if let Some(entity_bytecode) = bytecode.entities.get(entity_name) {
@@ -1010,6 +1520,7 @@ impl VmContext {
                             entity_bytecode.state_id,
                             entity_name,
                             entity_bytecode.computed_fields_evaluator.as_ref(),
+                            Some(&entity_bytecode.non_emitted_fields),
                         )?;
 
                         if let Some(ref mut log) = log {
@@ -1025,7 +1536,204 @@ impl VmContext {
                             );
                         }
 
+                        if mutations.is_empty() {
+                            // CPI events (suffix "CpiEvent") are transaction-scoped like instructions
+                            // (suffix "IxState") and should be queued the same way when PDA lookup fails.
+                            let is_tx_event =
+                                event_type.ends_with("IxState") || event_type.ends_with("CpiEvent");
+                            if let Some(missed_pda) = self.take_last_pda_lookup_miss() {
+                                if is_tx_event {
+                                    let slot = context.and_then(|c| c.slot).unwrap_or(0);
+                                    let signature = context
+                                        .and_then(|c| c.signature.clone())
+                                        .unwrap_or_default();
+                                    let _ = self.queue_instruction_event(
+                                        entity_bytecode.state_id,
+                                        QueuedInstructionEvent {
+                                            pda_address: missed_pda,
+                                            event_type: event_type.to_string(),
+                                            event_data: event_value.clone(),
+                                            slot,
+                                            signature,
+                                        },
+                                    );
+                                } else {
+                                    // Queue account updates (e.g. BondingCurve) when PDA
+                                    // reverse lookup fails. These will be flushed when an
+                                    // instruction registers the PDA mapping via
+                                    // UpdateLookupIndex.
+                                    let slot = context.and_then(|c| c.slot).unwrap_or(0);
+                                    let signature = context
+                                        .and_then(|c| c.signature.clone())
+                                        .unwrap_or_default();
+                                    if let Some(write_version) =
+                                        context.and_then(|c| c.write_version)
+                                    {
+                                        let _ = self.queue_account_update(
+                                            entity_bytecode.state_id,
+                                            QueuedAccountUpdate {
+                                                pda_address: missed_pda,
+                                                account_type: event_type.to_string(),
+                                                account_data: event_value.clone(),
+                                                slot,
+                                                write_version,
+                                                signature,
+                                            },
+                                        );
+                                    } else {
+                                        tracing::warn!(
+                                            event_type = %event_type,
+                                            "Dropping queued account update: write_version missing from context"
+                                        );
+                                    }
+                                }
+                            }
+                            if let Some(missed_lookup) = self.take_last_lookup_index_miss() {
+                                if !is_tx_event {
+                                    let slot = context.and_then(|c| c.slot).unwrap_or(0);
+                                    let signature = context
+                                        .and_then(|c| c.signature.clone())
+                                        .unwrap_or_default();
+                                    if let Some(write_version) =
+                                        context.and_then(|c| c.write_version)
+                                    {
+                                        let _ = self.queue_account_update(
+                                            entity_bytecode.state_id,
+                                            QueuedAccountUpdate {
+                                                pda_address: missed_lookup,
+                                                account_type: event_type.to_string(),
+                                                account_data: event_value.clone(),
+                                                slot,
+                                                write_version,
+                                                signature,
+                                            },
+                                        );
+                                    } else {
+                                        tracing::trace!(
+                                            event_type = %event_type,
+                                            "Discarding lookup_index_miss for tx-scoped event (IxState/CpiEvent do not use lookup-index queuing)"
+                                        );
+                                    }
+                                }
+                            }
+                        }
+
                         all_mutations.extend(mutations);
+
+                        if event_type.ends_with("IxState") || event_type.ends_with("CpiEvent") {
+                            if let Some(ctx) = context {
+                                if let Some(ref signature) = ctx.signature {
+                                    if let Some(state) = self.states.get(&entity_bytecode.state_id)
+                                    {
+                                        {
+                                            let mut cache =
+                                                state.recent_tx_instructions.lock().unwrap();
+                                            let entry = cache
+                                                .get_or_insert_mut(signature.clone(), HashSet::new);
+                                            entry.insert(event_type.to_string());
+                                        }
+
+                                        let key = (signature.clone(), event_type.to_string());
+                                        if let Some((_, deferred_ops)) =
+                                            state.deferred_when_ops.remove(&key)
+                                        {
+                                            tracing::debug!(
+                                                event_type = %event_type,
+                                                signature = %signature,
+                                                deferred_count = deferred_ops.len(),
+                                                "flushing deferred when-ops"
+                                            );
+                                            for op in deferred_ops {
+                                                match self.apply_deferred_when_op(
+                                                    entity_bytecode.state_id,
+                                                    &op,
+                                                ) {
+                                                    Ok(mutations) => {
+                                                        all_mutations.extend(mutations)
+                                                    }
+                                                    Err(e) => {
+                                                        tracing::warn!(
+                                                            "Failed to apply deferred when-op: {}",
+                                                            e
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if let Some(registered_pda) = self.take_last_pda_registered() {
+                            let pending_events = self.flush_pending_instruction_events(
+                                entity_bytecode.state_id,
+                                &registered_pda,
+                            );
+                            for pending in pending_events {
+                                if let Some(pending_handler) =
+                                    entity_bytecode.handlers.get(&pending.event_type)
+                                {
+                                    if let Ok(reprocessed_mutations) = self.execute_handler(
+                                        pending_handler,
+                                        &pending.event_data,
+                                        &pending.event_type,
+                                        entity_bytecode.state_id,
+                                        entity_name,
+                                        entity_bytecode.computed_fields_evaluator.as_ref(),
+                                        Some(&entity_bytecode.non_emitted_fields),
+                                    ) {
+                                        all_mutations.extend(reprocessed_mutations);
+                                    }
+                                }
+                            }
+                        }
+
+                        let lookup_keys = self.take_last_lookup_index_keys();
+                        if !lookup_keys.is_empty() {
+                            tracing::info!(
+                                keys = ?lookup_keys,
+                                entity = %entity_name,
+                                "vm.process_event: flushing pending updates for lookup_keys"
+                            );
+                        }
+                        for lookup_key in lookup_keys {
+                            if let Ok(pending_updates) =
+                                self.flush_pending_updates(entity_bytecode.state_id, &lookup_key)
+                            {
+                                for pending in pending_updates {
+                                    if let Some(pending_handler) =
+                                        entity_bytecode.handlers.get(&pending.account_type)
+                                    {
+                                        self.current_context = Some(UpdateContext::new_account(
+                                            pending.slot,
+                                            pending.signature.clone(),
+                                            pending.write_version,
+                                        ));
+                                        match self.execute_handler(
+                                            pending_handler,
+                                            &pending.account_data,
+                                            &pending.account_type,
+                                            entity_bytecode.state_id,
+                                            entity_name,
+                                            entity_bytecode.computed_fields_evaluator.as_ref(),
+                                            Some(&entity_bytecode.non_emitted_fields),
+                                        ) {
+                                            Ok(reprocessed) => {
+                                                all_mutations.extend(reprocessed);
+                                            }
+                                            Err(e) => {
+                                                tracing::warn!(
+                                                    error = %e,
+                                                    account_type = %pending.account_type,
+                                                    "Flushed event reprocessing failed"
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     } else if let Some(ref mut log) = log {
                         log.set("skip_reason", "no_handler");
                     }
@@ -1063,6 +1771,20 @@ impl VmContext {
             self.warnings.clear();
         }
 
+        if self.instructions_executed.is_multiple_of(1000) {
+            let state_ids: Vec<u32> = self.states.keys().cloned().collect();
+            for state_id in state_ids {
+                let expired = self.cleanup_expired_when_ops(state_id, 60);
+                if expired > 0 {
+                    tracing::debug!(
+                        "Cleaned up {} expired deferred when-ops for state {}",
+                        expired,
+                        state_id
+                    );
+                }
+            }
+        }
+
         Ok(all_mutations)
     }
 
@@ -1084,7 +1806,7 @@ impl VmContext {
             handler_opcodes = handler.len(),
         )
     ))]
-    #[allow(clippy::type_complexity)]
+    #[allow(clippy::type_complexity, clippy::too_many_arguments)]
     fn execute_handler(
         &mut self,
         handler: &[OpCode],
@@ -1092,13 +1814,22 @@ impl VmContext {
         event_type: &str,
         override_state_id: u32,
         entity_name: &str,
-        entity_evaluator: Option<&Box<dyn Fn(&mut Value) -> Result<()> + Send + Sync>>,
+        entity_evaluator: Option<
+            &Box<dyn Fn(&mut Value, Option<u64>, i64) -> Result<()> + Send + Sync>,
+        >,
+        non_emitted_fields: Option<&HashSet<String>>,
     ) -> Result<Vec<Mutation>> {
         self.reset_registers();
+        self.last_pda_lookup_miss = None;
 
         let mut pc: usize = 0;
         let mut output = Vec::new();
         let mut dirty_tracker = DirtyTracker::new();
+        let should_emit = |path: &str| {
+            non_emitted_fields
+                .map(|fields| !fields.contains(path))
+                .unwrap_or(true)
+        };
 
         while pc < handler.len() {
             match &handler[pc] {
@@ -1139,13 +1870,17 @@ impl VmContext {
                     value,
                 } => {
                     self.set_field_auto_vivify(*object, path, *value)?;
-                    dirty_tracker.mark_replaced(path);
+                    if should_emit(path) {
+                        dirty_tracker.mark_replaced(path);
+                    }
                     pc += 1;
                 }
                 OpCode::SetFields { object, fields } => {
                     for (path, value_reg) in fields {
                         self.set_field_auto_vivify(*object, path, *value_reg)?;
-                        dirty_tracker.mark_replaced(path);
+                        if should_emit(path) {
+                            dirty_tracker.mark_replaced(path);
+                        }
                     }
                     pc += 1;
                 }
@@ -1171,14 +1906,24 @@ impl VmContext {
                             temporal_indexes: HashMap::new(),
                             pda_reverse_lookups: HashMap::new(),
                             pending_updates: DashMap::new(),
+                            pending_instruction_events: DashMap::new(),
                             version_tracker: VersionTracker::new(),
+                            instruction_dedup_cache: VersionTracker::with_capacity(
+                                DEFAULT_MAX_INSTRUCTION_DEDUP_ENTRIES,
+                            ),
                             config: StateTableConfig::default(),
                             entity_name: entity_name_owned,
+                            recent_tx_instructions: std::sync::Mutex::new(LruCache::new(
+                                NonZeroUsize::new(1000).unwrap(),
+                            )),
+                            deferred_when_ops: DashMap::new(),
                         });
                     let key_value = self.registers[*key].clone();
+                    // Warn if key is null for account state events (not instruction events or CPI events)
                     let warn_null_key = key_value.is_null()
                         && event_type.ends_with("State")
-                        && !event_type.ends_with("IxState");
+                        && !event_type.ends_with("IxState")
+                        && !event_type.ends_with("CpiEvent");
 
                     if warn_null_key {
                         self.add_warning(format!(
@@ -1194,14 +1939,37 @@ impl VmContext {
 
                     if !key_value.is_null() {
                         if let Some(ctx) = &self.current_context {
-                            let ordering_value = ctx.write_version.or(ctx.txn_index);
-                            if let (Some(slot), Some(version)) = (ctx.slot, ordering_value) {
-                                if !state.is_fresh_update(&key_value, event_type, slot, version) {
-                                    self.add_warning(format!(
-                                        "Stale update skipped: slot={}, version={}",
-                                        slot, version
-                                    ));
-                                    return Ok(Vec::new());
+                            // Account updates: use recency check to discard stale updates
+                            if ctx.is_account_update() {
+                                if let (Some(slot), Some(write_version)) =
+                                    (ctx.slot, ctx.write_version)
+                                {
+                                    if !state.is_fresh_update(
+                                        &key_value,
+                                        event_type,
+                                        slot,
+                                        write_version,
+                                    ) {
+                                        self.add_warning(format!(
+                                            "Stale account update skipped: slot={}, write_version={}",
+                                            slot, write_version
+                                        ));
+                                        return Ok(Vec::new());
+                                    }
+                                }
+                            }
+                            // Instruction updates: process all, but skip exact duplicates
+                            else if ctx.is_instruction_update() {
+                                if let (Some(slot), Some(txn_index)) = (ctx.slot, ctx.txn_index) {
+                                    if state.is_duplicate_instruction(
+                                        &key_value, event_type, slot, txn_index,
+                                    ) {
+                                        self.add_warning(format!(
+                                            "Duplicate instruction skipped: slot={}, txn_index={}",
+                                            slot, txn_index
+                                        ));
+                                        return Ok(Vec::new());
+                                    }
                                 }
                             }
                         }
@@ -1241,7 +2009,9 @@ impl VmContext {
                         .map(|s| s.max_array_length())
                         .unwrap_or(DEFAULT_MAX_ARRAY_LENGTH);
                     self.append_to_array(*object, path, *value, max_len)?;
-                    dirty_tracker.mark_appended(path, appended_value);
+                    if should_emit(path) {
+                        dirty_tracker.mark_appended(path, appended_value);
+                    }
                     pc += 1;
                 }
                 OpCode::GetCurrentTimestamp { dest } => {
@@ -1329,7 +2099,7 @@ impl VmContext {
                         self.transform_in_place(*source, transformation)?;
                     } else {
                         let source_value = &self.registers[*source];
-                        let value = self.apply_transformation(source_value, transformation)?;
+                        let value = Self::apply_transformation(source_value, transformation)?;
                         self.registers[*dest] = value;
                     }
                     pc += 1;
@@ -1356,6 +2126,7 @@ impl VmContext {
                     } else {
                         let patch =
                             self.extract_partial_state_with_tracker(*state, &dirty_tracker)?;
+
                         let append = dirty_tracker.appended_paths();
                         let mutation = Mutation {
                             export: entity_name.clone(),
@@ -1373,7 +2144,7 @@ impl VmContext {
                     value,
                 } => {
                     let was_set = self.set_field_if_null(*object, path, *value)?;
-                    if was_set {
+                    if was_set && should_emit(path) {
                         dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
@@ -1384,7 +2155,7 @@ impl VmContext {
                     value,
                 } => {
                     let was_updated = self.set_field_max(*object, path, *value)?;
-                    if was_updated {
+                    if was_updated && should_emit(path) {
                         dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
@@ -1485,7 +2256,13 @@ impl VmContext {
                     let lookup_val = self.registers[*lookup_value].clone();
                     let pk_val = self.registers[*primary_key].clone();
 
-                    index.insert(lookup_val, pk_val);
+                    index.insert(lookup_val.clone(), pk_val);
+
+                    // Track lookup keys so process_event can flush queued account updates
+                    if let Some(key_str) = lookup_val.as_str() {
+                        self.last_lookup_index_keys.push(key_str.to_string());
+                    }
+
                     pc += 1;
                 }
                 OpCode::LookupIndex {
@@ -1495,51 +2272,89 @@ impl VmContext {
                     dest,
                 } => {
                     let actual_state_id = override_state_id;
-                    let lookup_val = self.registers[*lookup_value].clone();
+                    let mut current_value = self.registers[*lookup_value].clone();
 
-                    let result = {
-                        let state = self
-                            .states
-                            .get(&actual_state_id)
-                            .ok_or("State table not found")?;
+                    const MAX_CHAIN_DEPTH: usize = 5;
+                    let mut iterations = 0;
 
-                        if let Some(index) = state.lookup_indexes.get(index_name) {
-                            let found = index.lookup(&lookup_val).unwrap_or(Value::Null);
-                            #[cfg(feature = "otel")]
-                            if found.is_null() {
-                                crate::vm_metrics::record_lookup_index_miss(index_name);
-                            } else {
-                                crate::vm_metrics::record_lookup_index_hit(index_name);
+                    let final_result = if self.states.contains_key(&actual_state_id) {
+                        loop {
+                            iterations += 1;
+                            if iterations > MAX_CHAIN_DEPTH {
+                                break current_value;
                             }
-                            found
-                        } else {
-                            Value::Null
-                        }
-                    };
 
-                    let final_result = if result.is_null() {
-                        if let Some(pda_str) = lookup_val.as_str() {
-                            let state = self
+                            let resolved = self
                                 .states
-                                .get_mut(&actual_state_id)
-                                .ok_or("State table not found")?;
+                                .get(&actual_state_id)
+                                .and_then(|state| {
+                                    if let Some(index) = state.lookup_indexes.get(index_name) {
+                                        if let Some(found) = index.lookup(&current_value) {
+                                            return Some(found);
+                                        }
+                                    }
 
-                            if let Some(pda_lookup) =
-                                state.pda_reverse_lookups.get_mut("default_pda_lookup")
-                            {
-                                if let Some(resolved) = pda_lookup.lookup(pda_str) {
-                                    Value::String(resolved)
+                                    for (name, index) in state.lookup_indexes.iter() {
+                                        if name == index_name {
+                                            continue;
+                                        }
+                                        if let Some(found) = index.lookup(&current_value) {
+                                            return Some(found);
+                                        }
+                                    }
+
+                                    None
+                                })
+                                .unwrap_or(Value::Null);
+
+                            let mut resolved_from_pda = false;
+                            let resolved = if resolved.is_null() {
+                                if let Some(pda_str) = current_value.as_str() {
+                                    resolved_from_pda = true;
+                                    self.states
+                                        .get_mut(&actual_state_id)
+                                        .and_then(|state_mut| {
+                                            state_mut
+                                                .pda_reverse_lookups
+                                                .get_mut("default_pda_lookup")
+                                        })
+                                        .and_then(|pda_lookup| pda_lookup.lookup(pda_str))
+                                        .map(Value::String)
+                                        .unwrap_or(Value::Null)
                                 } else {
                                     Value::Null
                                 }
                             } else {
-                                Value::Null
+                                resolved
+                            };
+
+                            if resolved.is_null() {
+                                if iterations == 1 {
+                                    if let Some(pda_str) = current_value.as_str() {
+                                        self.last_pda_lookup_miss = Some(pda_str.to_string());
+                                    }
+                                }
+                                break Value::Null;
                             }
-                        } else {
-                            Value::Null
+
+                            let can_chain =
+                                self.can_resolve_further(&resolved, actual_state_id, index_name);
+
+                            if !can_chain {
+                                if resolved_from_pda {
+                                    if let Some(resolved_str) = resolved.as_str() {
+                                        self.last_lookup_index_miss =
+                                            Some(resolved_str.to_string());
+                                    }
+                                    break Value::Null;
+                                }
+                                break resolved;
+                            }
+
+                            current_value = resolved;
                         }
                     } else {
-                        result
+                        Value::Null
                     };
 
                     self.registers[*dest] = final_result;
@@ -1551,14 +2366,14 @@ impl VmContext {
                     value,
                 } => {
                     let was_updated = self.set_field_sum(*object, path, *value)?;
-                    if was_updated {
+                    if was_updated && should_emit(path) {
                         dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
                 }
                 OpCode::SetFieldIncrement { object, path } => {
                     let was_updated = self.set_field_increment(*object, path)?;
-                    if was_updated {
+                    if was_updated && should_emit(path) {
                         dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
@@ -1569,7 +2384,7 @@ impl VmContext {
                     value,
                 } => {
                     let was_updated = self.set_field_min(*object, path, *value)?;
-                    if was_updated {
+                    if was_updated && should_emit(path) {
                         dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
@@ -1611,7 +2426,9 @@ impl VmContext {
                     if was_new {
                         self.registers[100] = Value::Number(serde_json::Number::from(set.len()));
                         self.set_field_auto_vivify(*count_object, count_path, 100)?;
-                        dirty_tracker.mark_replaced(count_path);
+                        if should_emit(count_path) {
+                            dirty_tracker.mark_replaced(count_path);
+                        }
                     }
 
                     pc += 1;
@@ -1630,6 +2447,125 @@ impl VmContext {
 
                     if condition_met {
                         self.set_field_auto_vivify(*object, path, *value)?;
+                        if should_emit(path) {
+                            dirty_tracker.mark_replaced(path);
+                        }
+                    }
+                    pc += 1;
+                }
+                OpCode::SetFieldWhen {
+                    object,
+                    path,
+                    value,
+                    when_instruction,
+                    entity_name,
+                    key_reg,
+                    condition_field,
+                    condition_op,
+                    condition_value,
+                } => {
+                    let actual_state_id = override_state_id;
+                    let condition_met = if let (Some(field), Some(op), Some(cond_value)) = (
+                        condition_field.as_ref(),
+                        condition_op.as_ref(),
+                        condition_value.as_ref(),
+                    ) {
+                        let field_value = self.load_field(event_value, field, None)?;
+                        self.evaluate_comparison(&field_value, op, cond_value)?
+                    } else {
+                        true
+                    };
+
+                    if !condition_met {
+                        pc += 1;
+                        continue;
+                    }
+
+                    let signature = self
+                        .current_context
+                        .as_ref()
+                        .and_then(|c| c.signature.clone())
+                        .unwrap_or_default();
+
+                    let emit = should_emit(path);
+
+                    let instruction_seen = if !signature.is_empty() {
+                        if let Some(state) = self.states.get(&actual_state_id) {
+                            let mut cache = state.recent_tx_instructions.lock().unwrap();
+                            cache
+                                .get(&signature)
+                                .map(|set| set.contains(when_instruction))
+                                .unwrap_or(false)
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
+                    if instruction_seen {
+                        self.set_field_auto_vivify(*object, path, *value)?;
+                        if emit {
+                            dirty_tracker.mark_replaced(path);
+                        }
+                    } else if !signature.is_empty() {
+                        let deferred = DeferredWhenOperation {
+                            entity_name: entity_name.clone(),
+                            primary_key: self.registers[*key_reg].clone(),
+                            field_path: path.clone(),
+                            field_value: self.registers[*value].clone(),
+                            when_instruction: when_instruction.clone(),
+                            signature: signature.clone(),
+                            slot: self
+                                .current_context
+                                .as_ref()
+                                .and_then(|c| c.slot)
+                                .unwrap_or(0),
+                            deferred_at: std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs() as i64,
+                            emit,
+                        };
+
+                        if let Some(state) = self.states.get(&actual_state_id) {
+                            let key = (signature, when_instruction.clone());
+                            state
+                                .deferred_when_ops
+                                .entry(key)
+                                .or_insert_with(Vec::new)
+                                .push(deferred);
+                        }
+                    }
+
+                    pc += 1;
+                }
+                OpCode::SetFieldUnlessStopped {
+                    object,
+                    path,
+                    value,
+                    stop_field,
+                    stop_instruction,
+                    entity_name,
+                    key_reg: _,
+                } => {
+                    let stop_value = self.get_field(*object, stop_field).unwrap_or(Value::Null);
+                    let stopped = stop_value.as_bool().unwrap_or(false);
+
+                    if stopped {
+                        tracing::debug!(
+                            entity = %entity_name,
+                            field = %path,
+                            stop_field = %stop_field,
+                            stop_instruction = %stop_instruction,
+                            "stop flag set; skipping field update"
+                        );
+                        pc += 1;
+                        continue;
+                    }
+
+                    self.set_field_auto_vivify(*object, path, *value)?;
+                    if should_emit(path) {
                         dirty_tracker.mark_replaced(path);
                     }
                     pc += 1;
@@ -1647,7 +2583,7 @@ impl VmContext {
 
                     if condition_met {
                         let was_updated = self.set_field_increment(*object, path)?;
-                        if was_updated {
+                        if was_updated && should_emit(path) {
                             dirty_tracker.mark_replaced(path);
                         }
                     }
@@ -1664,16 +2600,198 @@ impl VmContext {
                             .collect();
 
                         let state_value = &mut self.registers[*state];
-                        if evaluator(state_value).is_ok() {
+                        let context_slot = self.current_context.as_ref().and_then(|c| c.slot);
+                        let context_timestamp = self
+                            .current_context
+                            .as_ref()
+                            .map(|c| c.timestamp())
+                            .unwrap_or_else(|| {
+                                std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs() as i64
+                            });
+                        let eval_result = evaluator(state_value, context_slot, context_timestamp);
+
+                        if eval_result.is_ok() {
                             for (path, old_value) in computed_paths.iter().zip(old_values.iter()) {
                                 let new_value =
                                     Self::get_value_at_path(&self.registers[*state], path);
-                                if new_value != *old_value {
+
+                                if new_value != *old_value && should_emit(path) {
                                     dirty_tracker.mark_replaced(path);
                                 }
                             }
                         }
                     }
+                    pc += 1;
+                }
+                OpCode::QueueResolver {
+                    state_id: _,
+                    entity_name,
+                    resolver,
+                    input_path,
+                    input_value,
+                    url_template,
+                    strategy,
+                    extracts,
+                    condition,
+                    schedule_at,
+                    state,
+                    key,
+                } => {
+                    let actual_state_id = override_state_id;
+
+                    // Evaluate condition if present
+                    if let Some(cond) = condition {
+                        let field_val =
+                            Self::get_value_at_path(&self.registers[*state], &cond.field_path)
+                                .unwrap_or(Value::Null);
+                        if !self.evaluate_comparison(&field_val, &cond.op, &cond.value)? {
+                            pc += 1;
+                            continue;
+                        }
+                    }
+
+                    // Check schedule_at: defer if target slot is in the future
+                    if let Some(schedule_path) = schedule_at {
+                        let target_val =
+                            Self::get_value_at_path(&self.registers[*state], schedule_path);
+
+                        match target_val.and_then(|v| v.as_u64()) {
+                            Some(target_slot) => {
+                                let current_slot = self
+                                    .current_context
+                                    .as_ref()
+                                    .and_then(|ctx| ctx.slot)
+                                    .unwrap_or(0);
+                                if current_slot < target_slot {
+                                    let key_value = &self.registers[*key];
+                                    if !key_value.is_null() {
+                                        self.scheduled_callbacks.push((
+                                            target_slot,
+                                            ScheduledCallback {
+                                                state_id: actual_state_id,
+                                                entity_name: entity_name.clone(),
+                                                primary_key: key_value.clone(),
+                                                resolver: resolver.clone(),
+                                                url_template: url_template.clone(),
+                                                input_value: input_value.clone(),
+                                                input_path: input_path.clone(),
+                                                condition: condition.clone(),
+                                                strategy: strategy.clone(),
+                                                extracts: extracts.clone(),
+                                                retry_count: 0,
+                                            },
+                                        ));
+                                    }
+                                    pc += 1;
+                                    continue;
+                                }
+                                // current_slot >= target_slot: fall through to immediate resolution
+                            }
+                            None => {
+                                // schedule_at path is missing or value is not a u64 —
+                                // skip resolver entirely rather than executing immediately,
+                                // since the state likely hasn't been fully populated yet.
+                                tracing::warn!(
+                                    schedule_at_path = %schedule_path,
+                                    entity = %entity_name,
+                                    "schedule_at field path is missing or not a valid u64 in state; \
+                                     skipping resolver (state may not be fully populated yet)"
+                                );
+                                pc += 1;
+                                continue;
+                            }
+                        }
+                    }
+
+                    // Build resolver input from template, literal value, or field path
+                    let resolved_input = if let Some(template) = url_template {
+                        crate::scheduler::build_url_from_template(template, &self.registers[*state])
+                            .map(Value::String)
+                    } else if let Some(value) = input_value {
+                        Some(value.clone())
+                    } else if let Some(path) = input_path.as_ref() {
+                        Self::get_value_at_path(&self.registers[*state], path)
+                    } else {
+                        None
+                    };
+
+                    if let Some(input) = resolved_input {
+                        let key_value = &self.registers[*key];
+
+                        if input.is_null() || key_value.is_null() {
+                            tracing::warn!(
+                                entity = %entity_name,
+                                resolver = ?resolver,
+                                input_path = %input_path.as_deref().unwrap_or("<literal>"),
+                                input_is_null = input.is_null(),
+                                key_is_null = key_value.is_null(),
+                                input = ?input,
+                                key = ?key_value,
+                                "Resolver skipped: null input or key"
+                            );
+                            pc += 1;
+                            continue;
+                        }
+
+                        if matches!(strategy, ResolveStrategy::SetOnce)
+                            // all(): fire resolver if any target is still null.
+                            // Already-set fields are protected from overwrite by
+                            // set_value_at_path's SetOnce null-source guard.
+                            && extracts.iter().all(|extract| {
+                                match Self::get_value_at_path(
+                                    &self.registers[*state],
+                                    &extract.target_path,
+                                ) {
+                                    Some(value) => !value.is_null(),
+                                    None => false,
+                                }
+                            })
+                        {
+                            pc += 1;
+                            continue;
+                        }
+
+                        let cache_key = resolver_cache_key(resolver, &input);
+
+                        let cached_value = self.resolver_cache.get(&cache_key).cloned();
+                        if let Some(cached) = cached_value {
+                            self.resolver_cache_hits += 1;
+                            Self::apply_resolver_extractions_to_value(
+                                &mut self.registers[*state],
+                                &cached,
+                                extracts,
+                                &mut dirty_tracker,
+                                &should_emit,
+                            )?;
+                        } else {
+                            self.resolver_cache_misses += 1;
+                            let target = ResolverTarget {
+                                state_id: actual_state_id,
+                                entity_name: entity_name.clone(),
+                                primary_key: self.registers[*key].clone(),
+                                extracts: extracts.clone(),
+                            };
+
+                            self.enqueue_resolver_request(
+                                cache_key,
+                                resolver.clone(),
+                                input,
+                                target,
+                            );
+                        }
+                    } else {
+                        tracing::warn!(
+                            entity = %entity_name,
+                            resolver = ?resolver,
+                            input_path = %input_path.as_deref().unwrap_or("<literal>"),
+                            state = ?self.registers[*state],
+                            "Resolver skipped: input path not found in state"
+                        );
+                    }
+
                     pc += 1;
                 }
                 OpCode::UpdatePdaReverseLookup {
@@ -1700,6 +2818,7 @@ impl VmContext {
                             });
 
                         pda_lookup.insert(pda_str.to_string(), pk_str.to_string());
+                        self.last_pda_registered = Some(pda_str.to_string());
                     } else if !pk_val.is_null() {
                         if let Some(pk_num) = pk_val.as_u64() {
                             if let Some(pda_str) = pda_val.as_str() {
@@ -1713,6 +2832,7 @@ impl VmContext {
                                     });
 
                                 pda_lookup.insert(pda_str.to_string(), pk_num.to_string());
+                                self.last_pda_registered = Some(pda_str.to_string());
                             }
                         }
                     }
@@ -1749,10 +2869,18 @@ impl VmContext {
         for segment in path.segments.iter() {
             current = match current.get(segment) {
                 Some(v) => v,
-                None => return Ok(default.cloned().unwrap_or(Value::Null)),
+                None => {
+                    tracing::trace!(
+                        "load_field: segment={:?} not found in {:?}, returning default",
+                        segment,
+                        current
+                    );
+                    return Ok(default.cloned().unwrap_or(Value::Null));
+                }
             };
         }
 
+        tracing::trace!("load_field: path={:?}, result={:?}", path.segments, current);
         Ok(current.clone())
     }
 
@@ -1810,6 +2938,13 @@ impl VmContext {
         let compiled = self.get_compiled_path(path);
         let segments = compiled.segments();
         let value = self.registers[value_reg].clone();
+
+        // SetOnce should only set meaningful values. A null source typically means
+        // the field doesn't exist in this event type (e.g., instruction events don't
+        // have account data). Skip to preserve any existing value.
+        if value.is_null() {
+            return Ok(false);
+        }
 
         if !self.registers[object_reg].is_object() {
             self.registers[object_reg] = json!({});
@@ -1918,6 +3053,19 @@ impl VmContext {
         let new_value = &self.registers[value_reg];
 
         // Extract numeric value before borrowing object_reg mutably
+        tracing::trace!(
+            "set_field_sum: path={:?}, value={:?}, value_type={}",
+            path,
+            new_value,
+            match new_value {
+                serde_json::Value::Null => "null",
+                serde_json::Value::Bool(_) => "bool",
+                serde_json::Value::Number(_) => "number",
+                serde_json::Value::String(_) => "string",
+                serde_json::Value::Array(_) => "array",
+                serde_json::Value::Object(_) => "object",
+            }
+        );
         let new_val_num = new_value
             .as_i64()
             .or_else(|| new_value.as_u64().map(|n| n as i64))
@@ -2137,16 +3285,12 @@ impl VmContext {
 
     fn transform_in_place(&mut self, reg: Register, transformation: &Transformation) -> Result<()> {
         let value = &self.registers[reg];
-        let transformed = self.apply_transformation(value, transformation)?;
+        let transformed = Self::apply_transformation(value, transformation)?;
         self.registers[reg] = transformed;
         Ok(())
     }
 
-    fn apply_transformation(
-        &self,
-        value: &Value,
-        transformation: &Transformation,
-    ) -> Result<Value> {
+    fn apply_transformation(value: &Value, transformation: &Transformation) -> Result<Value> {
         match transformation {
             Transformation::HexEncode => {
                 if let Some(arr) = value.as_array() {
@@ -2156,6 +3300,8 @@ impl VmContext {
                         .collect();
                     let hex = hex::encode(&bytes);
                     Ok(json!(hex))
+                } else if value.is_string() {
+                    Ok(value.clone())
                 } else {
                     Err("HexEncode requires an array of numbers".into())
                 }
@@ -2264,6 +3410,116 @@ impl VmContext {
                 },
             },
         }
+    }
+
+    fn can_resolve_further(&self, value: &Value, state_id: u32, index_name: &str) -> bool {
+        if let Some(state) = self.states.get(&state_id) {
+            if let Some(index) = state.lookup_indexes.get(index_name) {
+                if index.lookup(value).is_some() {
+                    return true;
+                }
+            }
+
+            for (name, index) in state.lookup_indexes.iter() {
+                if name == index_name {
+                    continue;
+                }
+                if index.lookup(value).is_some() {
+                    return true;
+                }
+            }
+
+            if let Some(pda_str) = value.as_str() {
+                if let Some(pda_lookup) = state.pda_reverse_lookups.get("default_pda_lookup") {
+                    if pda_lookup.contains(pda_str) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    fn apply_deferred_when_op(
+        &mut self,
+        state_id: u32,
+        op: &DeferredWhenOperation,
+    ) -> Result<Vec<Mutation>> {
+        let state = self.states.get(&state_id).ok_or("State not found")?;
+
+        if op.primary_key.is_null() {
+            return Ok(vec![]);
+        }
+
+        let mut entity_state = state
+            .get_and_touch(&op.primary_key)
+            .unwrap_or_else(|| json!({}));
+
+        Self::set_nested_field_value(&mut entity_state, &op.field_path, op.field_value.clone())?;
+
+        state.insert_with_eviction(op.primary_key.clone(), entity_state);
+
+        if !op.emit {
+            return Ok(vec![]);
+        }
+
+        let mut patch = json!({});
+        Self::set_nested_field_value(&mut patch, &op.field_path, op.field_value.clone())?;
+
+        Ok(vec![Mutation {
+            export: op.entity_name.clone(),
+            key: op.primary_key.clone(),
+            patch,
+            append: vec![],
+        }])
+    }
+
+    fn set_nested_field_value(obj: &mut Value, path: &str, value: Value) -> Result<()> {
+        let parts: Vec<&str> = path.split('.').collect();
+        let mut current = obj;
+
+        for (i, part) in parts.iter().enumerate() {
+            if i == parts.len() - 1 {
+                if let Some(map) = current.as_object_mut() {
+                    map.insert(part.to_string(), value);
+                    return Ok(());
+                }
+                return Err("Cannot set field on non-object".into());
+            }
+
+            if current.get(*part).is_none() || !current.get(*part).unwrap().is_object() {
+                if let Some(map) = current.as_object_mut() {
+                    map.insert(part.to_string(), json!({}));
+                }
+            }
+
+            current = current.get_mut(*part).ok_or("Path navigation failed")?;
+        }
+
+        Ok(())
+    }
+
+    pub fn cleanup_expired_when_ops(&mut self, state_id: u32, max_age_secs: i64) -> usize {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        let state = match self.states.get(&state_id) {
+            Some(s) => s,
+            None => return 0,
+        };
+
+        let mut removed = 0;
+        state.deferred_when_ops.retain(|_, ops| {
+            let before = ops.len();
+            ops.retain(|op| now - op.deferred_at < max_age_secs);
+            removed += before - ops.len();
+            !ops.is_empty()
+        });
+
+        removed
     }
 
     /// Update a PDA reverse lookup and return pending updates for reprocessing.
@@ -2456,6 +3712,77 @@ impl VmContext {
         crate::vm_metrics::record_pending_update_queued(&state.entity_name);
 
         Ok(())
+    }
+
+    pub fn queue_instruction_event(
+        &mut self,
+        state_id: u32,
+        event: QueuedInstructionEvent,
+    ) -> Result<()> {
+        let state = self
+            .states
+            .get_mut(&state_id)
+            .ok_or("State table not found")?;
+
+        let pda_address = event.pda_address.clone();
+
+        let pending = PendingInstructionEvent {
+            event_type: event.event_type,
+            pda_address: event.pda_address,
+            event_data: event.event_data,
+            slot: event.slot,
+            signature: event.signature,
+            queued_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64,
+        };
+
+        let mut events = state
+            .pending_instruction_events
+            .entry(pda_address)
+            .or_insert_with(Vec::new);
+
+        if events.len() >= MAX_PENDING_UPDATES_PER_PDA {
+            events.remove(0);
+        }
+
+        events.push(pending);
+
+        Ok(())
+    }
+
+    pub fn take_last_pda_lookup_miss(&mut self) -> Option<String> {
+        self.last_pda_lookup_miss.take()
+    }
+
+    pub fn take_last_lookup_index_miss(&mut self) -> Option<String> {
+        self.last_lookup_index_miss.take()
+    }
+
+    pub fn take_last_pda_registered(&mut self) -> Option<String> {
+        self.last_pda_registered.take()
+    }
+
+    pub fn take_last_lookup_index_keys(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.last_lookup_index_keys)
+    }
+
+    pub fn flush_pending_instruction_events(
+        &mut self,
+        state_id: u32,
+        pda_address: &str,
+    ) -> Vec<PendingInstructionEvent> {
+        let state = match self.states.get_mut(&state_id) {
+            Some(s) => s,
+            None => return Vec::new(),
+        };
+
+        if let Some((_, events)) = state.pending_instruction_events.remove(pda_address) {
+            events
+        } else {
+            Vec::new()
+        }
     }
 
     /// Get statistics about the pending queue for monitoring
@@ -2820,6 +4147,18 @@ impl VmContext {
                 self.apply_cast(&val, to_type)
             }
 
+            ComputedExpr::ResolverComputed {
+                resolver,
+                method,
+                args,
+            } => {
+                let evaluated_args: Vec<Value> = args
+                    .iter()
+                    .map(|arg| self.evaluate_computed_expr_with_env(arg, state, env))
+                    .collect::<Result<Vec<_>>>()?;
+                crate::resolvers::evaluate_resolver_computed(resolver, method, &evaluated_args)
+            }
+
             ComputedExpr::MethodCall { expr, method, args } => {
                 let val = self.evaluate_computed_expr_with_env(expr, state, env)?;
                 // Special handling for map() with closures
@@ -2829,7 +4168,19 @@ impl VmContext {
                         if val.is_null() {
                             return Ok(Value::Null);
                         }
-                        // Evaluate the closure body with the value bound to param
+
+                        if let Value::Array(arr) = &val {
+                            let results: Result<Vec<Value>> = arr
+                                .iter()
+                                .map(|elem| {
+                                    let mut closure_env = env.clone();
+                                    closure_env.insert(param.clone(), elem.clone());
+                                    self.evaluate_computed_expr_with_env(body, state, &closure_env)
+                                })
+                                .collect();
+                            return Ok(Value::Array(results?));
+                        }
+
                         let mut closure_env = env.clone();
                         closure_env.insert(param.clone(), val);
                         return self.evaluate_computed_expr_with_env(body, state, &closure_env);
@@ -2845,6 +4196,19 @@ impl VmContext {
             ComputedExpr::Literal { value } => Ok(value.clone()),
 
             ComputedExpr::Paren { expr } => self.evaluate_computed_expr_with_env(expr, state, env),
+
+            ComputedExpr::ContextSlot => Ok(self
+                .current_context
+                .as_ref()
+                .and_then(|ctx| ctx.slot)
+                .map(|s| json!(s))
+                .unwrap_or(Value::Null)),
+
+            ComputedExpr::ContextTimestamp => Ok(self
+                .current_context
+                .as_ref()
+                .map(|ctx| json!(ctx.timestamp()))
+                .unwrap_or(Value::Null)),
         }
     }
 
@@ -3259,6 +4623,8 @@ impl VmContext {
     ) -> Result<Vec<String>> {
         let mut updated_paths = Vec::new();
 
+        crate::resolvers::validate_resolver_computed_specs(computed_field_specs)?;
+
         for spec in computed_field_specs {
             if let Ok(result) = self.evaluate_computed_expr(&spec.expression, state) {
                 self.set_field_in_state(state, &spec.target_path, result)?;
@@ -3305,11 +4671,14 @@ impl VmContext {
     /// This returns a function that can be passed to the bytecode builder
     pub fn create_evaluator_from_specs(
         specs: Vec<ComputedFieldSpec>,
-    ) -> impl Fn(&mut Value) -> Result<()> + Send + Sync + 'static {
-        move |state: &mut Value| {
-            // Create a temporary VmContext just for evaluation
-            // (We only need the expression evaluation methods)
-            let vm = VmContext::new();
+    ) -> impl Fn(&mut Value, Option<u64>, i64) -> Result<()> + Send + Sync + 'static {
+        move |state: &mut Value, context_slot: Option<u64>, context_timestamp: i64| {
+            let mut vm = VmContext::new();
+            vm.current_context = Some(UpdateContext {
+                slot: context_slot,
+                timestamp: Some(context_timestamp),
+                ..Default::default()
+            });
             vm.evaluate_computed_fields_from_ast(state, &specs)?;
             Ok(())
         }
@@ -3432,6 +4801,287 @@ mod tests {
             !sell_serialized.contains('.'),
             "Sell volume should not have decimal: {}",
             sell_serialized
+        );
+    }
+
+    #[test]
+    fn test_lookup_index_chaining() {
+        let mut vm = VmContext::new();
+
+        let state = vm.states.get_mut(&0).unwrap();
+
+        state
+            .pda_reverse_lookups
+            .entry("default_pda_lookup".to_string())
+            .or_insert_with(|| PdaReverseLookup::new(1000))
+            .insert("pda_123".to_string(), "addr_456".to_string());
+
+        state
+            .lookup_indexes
+            .entry("round_address_lookup_index".to_string())
+            .or_insert_with(LookupIndex::new)
+            .insert(json!("addr_456"), json!(789));
+
+        let handler = vec![
+            OpCode::LoadConstant {
+                value: json!("pda_123"),
+                dest: 0,
+            },
+            OpCode::LookupIndex {
+                state_id: 0,
+                index_name: "round_address_lookup_index".to_string(),
+                lookup_value: 0,
+                dest: 1,
+            },
+        ];
+
+        vm.execute_handler(&handler, &json!({}), "test", 0, "TestEntity", None, None)
+            .unwrap();
+
+        assert_eq!(vm.registers[1], json!(789));
+    }
+
+    #[test]
+    fn test_lookup_index_no_chain() {
+        let mut vm = VmContext::new();
+
+        let state = vm.states.get_mut(&0).unwrap();
+        state
+            .lookup_indexes
+            .entry("test_index".to_string())
+            .or_insert_with(LookupIndex::new)
+            .insert(json!("key_abc"), json!(42));
+
+        let handler = vec![
+            OpCode::LoadConstant {
+                value: json!("key_abc"),
+                dest: 0,
+            },
+            OpCode::LookupIndex {
+                state_id: 0,
+                index_name: "test_index".to_string(),
+                lookup_value: 0,
+                dest: 1,
+            },
+        ];
+
+        vm.execute_handler(&handler, &json!({}), "test", 0, "TestEntity", None, None)
+            .unwrap();
+
+        assert_eq!(vm.registers[1], json!(42));
+    }
+
+    #[test]
+    fn test_conditional_set_field_with_zero_array() {
+        let mut vm = VmContext::new();
+
+        let event_zeros = json!({
+            "value": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        });
+
+        let event_nonzero = json!({
+            "value": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+                      17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]
+        });
+
+        let zero_32: Value = json!([
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0
+        ]);
+
+        let handler = vec![
+            OpCode::CreateObject { dest: 2 },
+            OpCode::LoadEventField {
+                path: FieldPath::new(&["value"]),
+                dest: 10,
+                default: None,
+            },
+            OpCode::ConditionalSetField {
+                object: 2,
+                path: "captured_value".to_string(),
+                value: 10,
+                condition_field: FieldPath::new(&["value"]),
+                condition_op: ComparisonOp::NotEqual,
+                condition_value: zero_32,
+            },
+        ];
+
+        vm.execute_handler(&handler, &event_zeros, "test", 0, "Test", None, None)
+            .unwrap();
+        assert!(
+            vm.registers[2].get("captured_value").is_none(),
+            "Field should not be set when value is all zeros"
+        );
+
+        vm.reset_registers();
+        vm.execute_handler(&handler, &event_nonzero, "test", 0, "Test", None, None)
+            .unwrap();
+        assert!(
+            vm.registers[2].get("captured_value").is_some(),
+            "Field should be set when value is non-zero"
+        );
+    }
+
+    #[test]
+    fn test_when_instruction_arrives_first() {
+        let mut vm = VmContext::new();
+
+        let signature = "test_sig_123".to_string();
+
+        {
+            let state = vm.states.get(&0).unwrap();
+            let mut cache = state.recent_tx_instructions.lock().unwrap();
+            let mut set = HashSet::new();
+            set.insert("RevealIxState".to_string());
+            cache.put(signature.clone(), set);
+        }
+
+        vm.current_context = Some(UpdateContext::new(100, signature.clone()));
+
+        let handler = vec![
+            OpCode::CreateObject { dest: 2 },
+            OpCode::LoadConstant {
+                value: json!("primary_key_value"),
+                dest: 1,
+            },
+            OpCode::LoadConstant {
+                value: json!("the_revealed_value"),
+                dest: 10,
+            },
+            OpCode::SetFieldWhen {
+                object: 2,
+                path: "entropy_value".to_string(),
+                value: 10,
+                when_instruction: "RevealIxState".to_string(),
+                entity_name: "TestEntity".to_string(),
+                key_reg: 1,
+                condition_field: None,
+                condition_op: None,
+                condition_value: None,
+            },
+        ];
+
+        vm.execute_handler(
+            &handler,
+            &json!({}),
+            "VarState",
+            0,
+            "TestEntity",
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(
+            vm.registers[2].get("entropy_value").unwrap(),
+            "the_revealed_value",
+            "Field should be set when instruction was already seen"
+        );
+    }
+
+    #[test]
+    fn test_when_account_arrives_first() {
+        let mut vm = VmContext::new();
+
+        let signature = "test_sig_456".to_string();
+
+        vm.current_context = Some(UpdateContext::new(100, signature.clone()));
+
+        let handler = vec![
+            OpCode::CreateObject { dest: 2 },
+            OpCode::LoadConstant {
+                value: json!("pk_123"),
+                dest: 1,
+            },
+            OpCode::LoadConstant {
+                value: json!("deferred_value"),
+                dest: 10,
+            },
+            OpCode::SetFieldWhen {
+                object: 2,
+                path: "entropy_value".to_string(),
+                value: 10,
+                when_instruction: "RevealIxState".to_string(),
+                entity_name: "TestEntity".to_string(),
+                key_reg: 1,
+                condition_field: None,
+                condition_op: None,
+                condition_value: None,
+            },
+        ];
+
+        vm.execute_handler(
+            &handler,
+            &json!({}),
+            "VarState",
+            0,
+            "TestEntity",
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(
+            vm.registers[2].get("entropy_value").is_none(),
+            "Field should not be set when instruction hasn't been seen"
+        );
+
+        let state = vm.states.get(&0).unwrap();
+        let key = (signature.clone(), "RevealIxState".to_string());
+        assert!(
+            state.deferred_when_ops.contains_key(&key),
+            "Operation should be queued"
+        );
+
+        {
+            let mut cache = state.recent_tx_instructions.lock().unwrap();
+            let mut set = HashSet::new();
+            set.insert("RevealIxState".to_string());
+            cache.put(signature.clone(), set);
+        }
+
+        let deferred = state.deferred_when_ops.remove(&key).unwrap().1;
+        for op in deferred {
+            vm.apply_deferred_when_op(0, &op).unwrap();
+        }
+
+        let state = vm.states.get(&0).unwrap();
+        let entity = state.data.get(&json!("pk_123")).unwrap();
+        assert_eq!(
+            entity.get("entropy_value").unwrap(),
+            "deferred_value",
+            "Field should be set after instruction arrives"
+        );
+    }
+
+    #[test]
+    fn test_when_cleanup_expired() {
+        let mut vm = VmContext::new();
+
+        let state = vm.states.get(&0).unwrap();
+        let key = ("old_sig".to_string(), "SomeIxState".to_string());
+        state.deferred_when_ops.insert(
+            key,
+            vec![DeferredWhenOperation {
+                entity_name: "Test".to_string(),
+                primary_key: json!("pk"),
+                field_path: "field".to_string(),
+                field_value: json!("value"),
+                when_instruction: "SomeIxState".to_string(),
+                signature: "old_sig".to_string(),
+                slot: 0,
+                deferred_at: 0,
+                emit: true,
+            }],
+        );
+
+        let removed = vm.cleanup_expired_when_ops(0, 60);
+
+        assert_eq!(removed, 1, "Should have removed 1 expired op");
+        assert!(
+            vm.states.get(&0).unwrap().deferred_when_ops.is_empty(),
+            "Deferred ops should be empty after cleanup"
         );
     }
 }

@@ -45,6 +45,7 @@ function MyComponent() {
 - **Type Safety**: Full TypeScript support with comprehensive type definitions
 - **View Definitions**: Create state and list views for your data
 - **Transaction Handling**: Define and execute transactions with hooks
+- **Single Item Queries**: Type-safe single item fetching with `take: 1` or `useOne()`
 
 ### API
 
@@ -56,6 +57,12 @@ function MyComponent() {
 
 - `useHyperstack` - Main hook for accessing stack functionality
 - `useHyperstackContext` - Access the runtime context directly
+
+#### View Methods
+
+- `.use()` - Subscribe to view data (returns `T[]` for lists, `T` for state)
+- `.use({ take: 1 })` - Subscribe to single item with type narrowing (returns `T | undefined`)
+- `.useOne()` - Convenience method for single item queries (returns `T | undefined`)
 
 #### Factory Functions
 

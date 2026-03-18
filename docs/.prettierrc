@@ -6,6 +6,12 @@
       "options": {
         "parser": "astro"
       }
+    },
+    {
+      "files": ["*.md", "*.mdx"],
+      "options": {
+        "embeddedLanguageFormatting": "off"
+      }
     }
   ]
 }

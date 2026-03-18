@@ -15,7 +15,7 @@ use crate::parse::idl::IdlSpec;
 use super::{
     generate_bytecode_from_spec, generate_computed_evaluator, generate_handlers_from_specs,
     generate_parsers_from_idl, generate_resolver_registries, generate_sdk_from_idl,
-    generate_spec_function, generate_vm_handler,
+    generate_spec_function, generate_vm_handler, RuntimeGenConfig,
 };
 
 /// Configuration for code generation.
@@ -99,14 +99,15 @@ pub fn generate_all_from_spec(
     );
 
     // Generate each component based on config
+    let sdk_module_name = format!("{}_sdk", program_name);
     let sdk_types = if config.sdk_types {
-        generate_sdk_from_idl(ctx.idl)
+        generate_sdk_from_idl(ctx.idl, &sdk_module_name)
     } else {
         quote! {}
     };
 
     let parsers = if config.parsers {
-        generate_parsers_from_idl(ctx.idl, ctx.program_id)
+        generate_parsers_from_idl(ctx.idl, ctx.program_id, &sdk_module_name)
     } else {
         quote! {}
     };
@@ -136,7 +137,13 @@ pub fn generate_all_from_spec(
     };
 
     let spec_fn = if config.spec_fn {
-        generate_spec_function(&state_enum_name, &instruction_enum_name, program_name)
+        let runtime_config = RuntimeGenConfig::for_generate_all();
+        generate_spec_function(
+            &state_enum_name,
+            &instruction_enum_name,
+            program_name,
+            &runtime_config,
+        )
     } else {
         quote! {}
     };
@@ -200,14 +207,15 @@ pub fn generate_components_from_spec(
         crate::parse::idl::to_pascal_case(program_name)
     );
 
+    let sdk_module_name = format!("{}_sdk", program_name);
     GeneratedComponents {
         sdk_types: if config.sdk_types {
-            generate_sdk_from_idl(ctx.idl)
+            generate_sdk_from_idl(ctx.idl, &sdk_module_name)
         } else {
             quote! {}
         },
         parsers: if config.parsers {
-            generate_parsers_from_idl(ctx.idl, ctx.program_id)
+            generate_parsers_from_idl(ctx.idl, ctx.program_id, &sdk_module_name)
         } else {
             quote! {}
         },
@@ -232,7 +240,13 @@ pub fn generate_components_from_spec(
             quote! {}
         },
         spec_fn: if config.spec_fn {
-            generate_spec_function(&state_enum_name, &instruction_enum_name, program_name)
+            let runtime_config = RuntimeGenConfig::for_generate_all();
+            generate_spec_function(
+                &state_enum_name,
+                &instruction_enum_name,
+                program_name,
+                &runtime_config,
+            )
         } else {
             quote! {}
         },

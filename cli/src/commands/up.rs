@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use crate::api_client::{ApiClient, BuildStatus, CreateBuildRequest, DEFAULT_DOMAIN_SUFFIX};
 use crate::config::{resolve_stacks_to_push, HyperstackConfig};
+use crate::telemetry;
 use crate::ui;
 
 fn generate_short_uuid() -> String {
@@ -23,6 +24,7 @@ pub fn up(
     preview: bool,
     dry_run: bool,
 ) -> Result<()> {
+    let start = std::time::Instant::now();
     let config = HyperstackConfig::load_optional(config_path)?;
 
     let branch = if preview {
@@ -51,10 +53,12 @@ pub fn up(
         );
     }
 
-    for ast in stacks {
-        deploy_single_stack(&client, &ast, branch.as_deref())?;
+    for ast in &stacks {
+        deploy_single_stack(&client, ast, branch.as_deref())?;
         println!();
     }
+
+    telemetry::record_stack_deployed(stack_name.unwrap_or(""), start.elapsed());
 
     Ok(())
 }
@@ -78,10 +82,10 @@ fn show_dry_run(stacks: &[crate::config::DiscoveredAst], branch: Option<&str>) -
             ui::symbols::BULLET.dimmed(),
             ast.stack_name.green().bold()
         );
-        println!("    Entity: {}", ast.entity_name);
-        println!("    AST: {}", ast.path.display());
-        if let Some(pid) = &ast.program_id {
-            println!("    Program ID: {}", pid);
+        println!("    Stack: {}", ast.stack_id);
+        println!("    Stack: {}", ast.path.display());
+        if !ast.program_ids.is_empty() {
+            println!("    Program IDs: {}", ast.program_ids.join(", "));
         }
 
         let url = get_expected_url(&client, &ast.stack_name, branch);
@@ -170,7 +174,7 @@ fn deploy_single_stack(
         let spinner = ui::create_spinner("Creating stack...");
         let req = crate::api_client::CreateSpecRequest {
             name: ast.stack_name.clone(),
-            entity_name: ast.entity_name.clone(),
+            entity_name: ast.stack_id.clone(),
             crate_name: String::new(),
             module_path: String::new(),
             description: None,
@@ -182,7 +186,7 @@ fn deploy_single_stack(
         new_spec.id
     };
 
-    let spinner = ui::create_spinner("Uploading AST...");
+    let spinner = ui::create_spinner("Uploading stack...");
     let ast_payload = ast.load_ast()?;
     let version_response = client.create_spec_version(spec_id, ast_payload)?;
 

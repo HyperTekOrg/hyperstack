@@ -6,10 +6,11 @@ import type {
   ViewDef,
   StackDefinition,
   TypedViews,
+  WatchOptions,
 } from './types';
 import type { StorageAdapter } from './storage/adapter';
 import type { SubscriptionRegistry } from './subscription';
-import { createUpdateStream, createRichUpdateStream } from './stream';
+import { createUpdateStream, createEntityStream, createRichUpdateStream } from './stream';
 
 export function createTypedStateView<T>(
   viewDef: ViewDef<T, 'state'>,
@@ -17,20 +18,33 @@ export function createTypedStateView<T>(
   subscriptionRegistry: SubscriptionRegistry
 ): TypedStateView<T> {
   return {
-    watch(key: string): AsyncIterable<Update<T>> {
+    use<TSchema = T>(key: string, options?: WatchOptions<TSchema>): AsyncIterable<TSchema> {
+      const { schema: _schema, ...subscriptionOptions } = options ?? {};
+      return createEntityStream<T>(
+        storage,
+        subscriptionRegistry,
+        { view: viewDef.view, key, ...subscriptionOptions },
+        options,
+        key
+      ) as AsyncIterable<TSchema>;
+    },
+
+    watch(key: string, options?: WatchOptions): AsyncIterable<Update<T>> {
+      const { schema: _schema, ...subscriptionOptions } = options ?? {};
       return createUpdateStream<T>(
         storage,
         subscriptionRegistry,
-        { view: viewDef.view, key },
+        { view: viewDef.view, key, ...subscriptionOptions },
         key
       );
     },
 
-    watchRich(key: string): AsyncIterable<RichUpdate<T>> {
+    watchRich(key: string, options?: WatchOptions): AsyncIterable<RichUpdate<T>> {
+      const { schema: _schema, ...subscriptionOptions } = options ?? {};
       return createRichUpdateStream<T>(
         storage,
         subscriptionRegistry,
-        { view: viewDef.view, key },
+        { view: viewDef.view, key, ...subscriptionOptions },
         key
       );
     },
@@ -51,12 +65,24 @@ export function createTypedListView<T>(
   subscriptionRegistry: SubscriptionRegistry
 ): TypedListView<T> {
   return {
-    watch(): AsyncIterable<Update<T>> {
-      return createUpdateStream<T>(storage, subscriptionRegistry, { view: viewDef.view });
+    use<TSchema = T>(options?: WatchOptions<TSchema>): AsyncIterable<TSchema> {
+      const { schema: _schema, ...subscriptionOptions } = options ?? {};
+      return createEntityStream<T>(
+        storage,
+        subscriptionRegistry,
+        { view: viewDef.view, ...subscriptionOptions },
+        options
+      ) as AsyncIterable<TSchema>;
     },
 
-    watchRich(): AsyncIterable<RichUpdate<T>> {
-      return createRichUpdateStream<T>(storage, subscriptionRegistry, { view: viewDef.view });
+    watch(options?: WatchOptions): AsyncIterable<Update<T>> {
+      const { schema: _schema, ...subscriptionOptions } = options ?? {};
+      return createUpdateStream<T>(storage, subscriptionRegistry, { view: viewDef.view, ...subscriptionOptions });
+    },
+
+    watchRich(options?: WatchOptions): AsyncIterable<RichUpdate<T>> {
+      const { schema: _schema, ...subscriptionOptions } = options ?? {};
+      return createRichUpdateStream<T>(storage, subscriptionRegistry, { view: viewDef.view, ...subscriptionOptions });
     },
 
     async get(): Promise<T[]> {
@@ -69,35 +95,26 @@ export function createTypedListView<T>(
   };
 }
 
-type InferViewGroup<TGroup> = {
-  state: TGroup extends { state: ViewDef<infer T, 'state'> }
-    ? TypedStateView<T>
-    : never;
-  list: TGroup extends { list: ViewDef<infer T, 'list'> }
-    ? TypedListView<T>
-    : never;
-};
-
 export function createTypedViews<TStack extends StackDefinition>(
   stack: TStack,
   storage: StorageAdapter,
   subscriptionRegistry: SubscriptionRegistry
 ): TypedViews<TStack['views']> {
-  const views = {} as Record<string, unknown>;
+  const views = {} as Record<string, Record<string, unknown>>;
 
-  for (const [viewName, viewGroup] of Object.entries(stack.views)) {
-    const group = viewGroup as { state?: ViewDef<unknown, 'state'>; list?: ViewDef<unknown, 'list'> };
-    const typedGroup: Partial<InferViewGroup<typeof group>> = {};
+  for (const [entityName, viewGroup] of Object.entries(stack.views)) {
+    const group = viewGroup as Record<string, ViewDef<unknown, 'state' | 'list'>>;
+    const typedGroup: Record<string, unknown> = {};
 
-    if (group.state) {
-      typedGroup.state = createTypedStateView(group.state, storage, subscriptionRegistry) as never;
+    for (const [viewName, viewDef] of Object.entries(group)) {
+      if (viewDef.mode === 'state') {
+        typedGroup[viewName] = createTypedStateView(viewDef as ViewDef<unknown, 'state'>, storage, subscriptionRegistry);
+      } else if (viewDef.mode === 'list') {
+        typedGroup[viewName] = createTypedListView(viewDef as ViewDef<unknown, 'list'>, storage, subscriptionRegistry);
+      }
     }
 
-    if (group.list) {
-      typedGroup.list = createTypedListView(group.list, storage, subscriptionRegistry) as never;
-    }
-
-    views[viewName] = typedGroup;
+    views[entityName] = typedGroup;
   }
 
   return views as TypedViews<TStack['views']>;

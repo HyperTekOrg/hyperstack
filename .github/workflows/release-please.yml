@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created }}
+      cli_version: ${{ steps.release.outputs['cli--version'] }}
+      cli_release_created: ${{ steps.release.outputs['cli--release_created'] }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -33,12 +35,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install protoc
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
-          protoc --version
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -46,6 +42,12 @@ jobs:
         run: cargo login ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       # Publish in dependency order with waits for crates.io index propagation
+      - name: Publish hyperstack-idl
+        run: |
+          cd hyperstack-idl
+          cargo publish --allow-dirty || echo "Package may already be published"
+          sleep 30
+
       - name: Publish hyperstack-macros
         run: |
           cd hyperstack-macros
@@ -151,6 +153,137 @@ jobs:
       - name: Publish stacks
         run: npm publish --access public || echo "Package may already be published"
         working-directory: stacks/sdk/typescript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  bundle-templates:
+    name: Bundle CLI Templates
+    needs: [release-please, publish-npm, publish-rust]
+    runs-on: ubuntu-latest
+    if: needs.release-please.outputs.cli_release_created == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Update example versions
+        run: |
+          VERSION="${{ needs.release-please.outputs.cli_version }}"
+          ./scripts/update-example-versions.sh "$VERSION"
+
+      - name: Create templates tarball
+        run: |
+          VERSION="${{ needs.release-please.outputs.cli_version }}"
+          echo "Bundling templates for version ${VERSION}"
+          
+          # Create tarball with only the template directories (excluding build artifacts)
+          tar -czvf "hyperstack-templates-v${VERSION}.tar.gz" \
+            --exclude='node_modules' \
+            --exclude='dist' \
+            --exclude='.env' \
+            --exclude='package-lock.json' \
+            --exclude='target' \
+            --exclude='Cargo.lock' \
+            -C examples \
+            ore-react \
+            ore-rust \
+            ore-typescript
+
+      - name: Upload templates to CLI release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.release-please.outputs.cli_version }}"
+          gh release upload "hyperstack-cli-v${VERSION}" \
+            "hyperstack-templates-v${VERSION}.tar.gz" \
+            --clobber
+
+  build-cli-binaries:
+    name: Build CLI Binaries
+    needs: release-please
+    if: needs.release-please.outputs.cli_release_created == 'true'
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            binary_name: hs-darwin-arm64
+          - os: macos-15-large
+            target: x86_64-apple-darwin
+            binary_name: hs-darwin-x64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary_name: hs-linux-x64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            binary_name: hs-linux-arm64
+            cross: true
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary_name: hs-win32-x64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cargo-zigbuild
+        if: matrix.cross
+        run: |
+          pip3 install ziglang
+          cargo install cargo-zigbuild
+
+      - name: Build binary
+        run: |
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            cargo zigbuild --release --target ${{ matrix.target }} --package hyperstack-cli
+          else
+            cargo build --release --target ${{ matrix.target }} --package hyperstack-cli
+          fi
+        shell: bash
+
+      - name: Rename binary
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp target/${{ matrix.target }}/release/hs.exe ${{ matrix.binary_name }}
+          else
+            cp target/${{ matrix.target }}/release/hs ${{ matrix.binary_name }}
+          fi
+        shell: bash
+
+      - name: Upload binary to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.release-please.outputs.cli_version }}"
+          gh release upload "hyperstack-cli-v${VERSION}" \
+            "${{ matrix.binary_name }}" \
+            --clobber
+        shell: bash
+
+  publish-npm-cli:
+    name: Publish CLI to npm
+    needs: [release-please, build-cli-binaries]
+    runs-on: ubuntu-latest
+    if: needs.release-please.outputs.cli_release_created == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish hyperstack CLI wrapper
+        run: npm publish --access public || echo "Package may already be published"
+        working-directory: packages/hyperstack
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

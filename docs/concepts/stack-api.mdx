@@ -437,14 +437,16 @@ function TokenCard({ token }: { token: Token }) {
 
 ## Connection State
 
-Monitor WebSocket connection status.
+Monitor WebSocket connection status via `useHyperstack`:
 
 ```typescript
-import { useConnectionState } from 'hyperstack-react';
+import { useHyperstack } from 'hyperstack-react';
+import { MY_STACK } from './stack';
 
 function ConnectionIndicator() {
-  const state = useConnectionState();
-  // 'disconnected' | 'connecting' | 'connected' | 'error' | 'reconnecting'
+  const { connectionState, isConnected } = useHyperstack(MY_STACK);
+  // connectionState: 'disconnected' | 'connecting' | 'connected' | 'error' | 'reconnecting'
+  // isConnected: boolean (true when connectionState === 'connected')
   
   const colors = {
     disconnected: 'gray',
@@ -454,7 +456,7 @@ function ConnectionIndicator() {
     reconnecting: 'orange',
   };
   
-  return <span style={{ color: colors[state] }}>{state}</span>;
+  return <span style={{ color: colors[connectionState] }}>{isConnected ? 'Live' : connectionState}</span>;
 }
 ```
 

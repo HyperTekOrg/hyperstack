@@ -1,0 +1,332 @@
+{
+  "version": "0.1.5",
+  "name": "entropy",
+  "instructions": [
+    {
+      "name": "open",
+      "discriminant": {
+        "type": "u8",
+        "value": 0
+      },
+      "docs": [
+        "Creates a new entropy var account.",
+        "Var PDA seeds: [\"var\", authority, id]."
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "payer",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "provider",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "var",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false,
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u64"
+        },
+        {
+          "name": "commit",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "isAuto",
+          "type": "u64"
+        },
+        {
+          "name": "samples",
+          "type": "u64"
+        },
+        {
+          "name": "endAt",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "close",
+      "discriminant": {
+        "type": "u8",
+        "value": 1
+      },
+      "docs": [
+        "Closes an entropy var account and returns rent to the authority."
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "var",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false,
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "next",
+      "discriminant": {
+        "type": "u8",
+        "value": 2
+      },
+      "docs": [
+        "Updates the var for the next random value sample.",
+        "Resets the commit to the previous seed and clears slot_hash, seed, and value."
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "var",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "endAt",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "reveal",
+      "discriminant": {
+        "type": "u8",
+        "value": 4
+      },
+      "docs": [
+        "Reveals the seed and finalizes the random value.",
+        "The seed must hash to the commit stored in the var account."
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "var",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "seed",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "sample",
+      "discriminant": {
+        "type": "u8",
+        "value": 5
+      },
+      "docs": [
+        "Samples the slot hash at the end_at slot.",
+        "Must be called after the end_at slot has passed."
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "var",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "slotHashesSysvar",
+          "isMut": false,
+          "isSigner": false,
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Var",
+      "discriminator": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "docs": [
+        "An entropy variable account that stores randomness generation state."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "docs": [
+              "The creator of the variable."
+            ],
+            "type": "publicKey"
+          },
+          {
+            "name": "id",
+            "docs": [
+              "The id of the variable."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "provider",
+            "docs": [
+              "The provider of the entropy data."
+            ],
+            "type": "publicKey"
+          },
+          {
+            "name": "commit",
+            "docs": [
+              "The commit provided by the Entropy provider."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "seed",
+            "docs": [
+              "The revealed seed."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "slot_hash",
+            "docs": [
+              "The slot hash."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "value",
+            "docs": [
+              "The current value of the variable."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "samples",
+            "docs": [
+              "The number of random variables remaining to be sampled."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_auto",
+            "docs": [
+              "Whether or not the Entropy provider should automatically sample the slot hash."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "start_at",
+            "docs": [
+              "The slot at which the variable was opened."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "end_at",
+            "docs": [
+              "The slot at which the variable should sample the slothash."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ],
+  "types": [],
+  "events": [],
+  "errors": [
+    {
+      "code": 0,
+      "name": "IncompleteDigest",
+      "msg": "Incomplete digest"
+    },
+    {
+      "code": 1,
+      "name": "InvalidSeed",
+      "msg": "Invalid seed"
+    }
+  ],
+  "metadata": {
+    "address": "3jSkUuYBoJzQPMEzTvkDFXCZUBksPamrVhrnHR9igu2X",
+    "origin": "steel"
+  }
+}

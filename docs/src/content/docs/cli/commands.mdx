@@ -23,13 +23,59 @@ Complete reference for the Hyperstack CLI (`hs`).
 
 ## Quick Reference
 
-| Command         | Description                          |
-| --------------- | ------------------------------------ |
-| `hs init`       | Initialize project                   |
-| `hs up [stack]` | Deploy stack (push + build + deploy) |
-| `hs status`     | Show project overview                |
-| `hs stack list` | List all stacks                      |
-| `hs stack show` | Show stack details                   |
+| Command                        | Description                          |
+| ------------------------------ | ------------------------------------ |
+| `hyperstack-cli create [name]` | Scaffold a new app from a template   |
+| `hs init`                      | Initialize a stack project           |
+| `hs up [stack]`                | Deploy stack (push + build + deploy) |
+| `hs push [stack]`              | Push stack to remote (alias)         |
+| `hs status`                    | Show project overview                |
+| `hs stack list`                | List all stacks                      |
+| `hs stack show`                | Show stack details                   |
+| `hs telemetry status`          | Show telemetry status                |
+| `hs explore`                   | Discover stacks and schemas          |
+
+:::note[npm vs Cargo]
+When installed via npm (`npm install -g hyperstack-cli`), the command is `hyperstack-cli`. When installed via Cargo (`cargo install hyperstack-cli`), the command is `hs`. Both are the same CLI.
+:::
+
+---
+
+## Create a New App
+
+### hyperstack-cli create [name]
+
+Scaffold a new Hyperstack project from a template. This is the fastest way to get started.
+
+```bash
+# Interactive — prompts for name and template
+npx hyperstack-cli create
+
+# With project name
+npx hyperstack-cli create my-app
+
+# With specific template
+npx hyperstack-cli create my-app --template react-ore
+```
+
+**Available templates:**
+
+| Template         | Aliases                              | Description                               |
+| ---------------- | ------------------------------------ | ----------------------------------------- |
+| `react-ore`      | `ore-react`                          | ORE mining rounds viewer (React + Vite)   |
+| `rust-ore`       | `ore-rust`                           | ORE mining rounds client (Rust + Tokio)   |
+| `typescript-ore` | `ore-typescript`, `ts-ore`, `ore-ts` | ORE mining rounds client (TypeScript CLI) |
+
+**Options:**
+
+| Flag                | Description                           |
+| ------------------- | ------------------------------------- |
+| `--template <name>` | Skip interactive selection            |
+| `--offline`         | Use cached templates only             |
+| `--force-refresh`   | Clear template cache and re-download  |
+| `--skip-install`    | Don't run `npm install` automatically |
+
+Templates are downloaded from GitHub releases and cached in `~/.hyperstack/templates/`.
 
 ---
 
@@ -43,7 +89,7 @@ Initialize a new Hyperstack project.
 hs init
 ```
 
-Creates `hyperstack.toml` with auto-discovered stacks from `.hyperstack/*.ast.json`.
+Creates `hyperstack.toml` with auto-discovered stacks from `.hyperstack/*.stack.json`.
 
 ### hs config validate
 
@@ -57,23 +103,25 @@ hs config validate
 
 ## Authentication
 
-### hs auth register
-
-Create a new account.
-
-```bash
-hs auth register
-```
-
-Prompts for username and password (min 8 characters).
+Hyperstack is currently in closed beta. Contact us to receive an API key.
 
 ### hs auth login
 
-Login to your account.
+Save your API key to authenticate.
 
 ```bash
+# Interactive — prompts for API key
 hs auth login
+
+# Or pass directly
+hs auth login --key <your-api-key>
 ```
+
+**Options:**
+
+| Flag        | Description                       |
+| ----------- | --------------------------------- |
+| `--key, -k` | API key (prompts if not provided) |
 
 ### hs auth logout
 
@@ -100,6 +148,47 @@ hs auth whoami
 ```
 
 **Credentials location:** `~/.hyperstack/credentials.toml`
+
+---
+
+## Schema Discovery
+
+### hs explore
+
+Discover available stacks and explore their schemas. Works without authentication for public stacks.
+
+```bash
+# List all available stacks
+hs explore
+
+# Show entities and views for a stack
+hs explore ore
+
+# Show fields and types for a specific entity
+hs explore ore OreRound
+
+# JSON output (for agents and scripts)
+hs explore --json
+hs explore ore --json
+hs explore ore OreRound --json
+```
+
+**Arguments:**
+
+| Argument   | Description                       |
+| ---------- | --------------------------------- |
+| `[name]`   | Stack name to explore             |
+| `[entity]` | Entity name to show field details |
+
+**Output varies by specificity:**
+
+| Command                       | Shows                                         |
+| ----------------------------- | --------------------------------------------- |
+| `hs explore`                  | All available stacks with entity names        |
+| `hs explore <stack>`          | Stack entities, views, and field counts       |
+| `hs explore <stack> <entity>` | Entity fields with types, sections, and views |
+
+Public stacks are visible without authentication. Log in with `hs auth login` to also see global stacks and your own deployed stacks.
 
 ---
 
@@ -184,7 +273,14 @@ Show detailed stack information including deployment status and versions.
 ```bash
 hs stack show my-stack
 hs stack show my-stack --version 3
+hs stack show my-stack -v 3
 ```
+
+**Options:**
+
+| Flag                | Description                   |
+| ------------------- | ----------------------------- |
+| `--version, -v <n>` | Show specific version details |
 
 **Output includes:**
 
@@ -200,7 +296,14 @@ Show version history.
 ```bash
 hs stack versions my-stack
 hs stack versions my-stack --limit 10
+hs stack versions my-stack -l 10
 ```
+
+**Options:**
+
+| Flag              | Description                              |
+| ----------------- | ---------------------------------------- |
+| `--limit, -l <n>` | Maximum number of versions (default: 20) |
 
 ### hs stack delete \<stack-name\>
 
@@ -209,7 +312,14 @@ Delete a stack from remote.
 ```bash
 hs stack delete my-stack
 hs stack delete my-stack --force  # Skip confirmation
+hs stack delete my-stack -f
 ```
+
+**Options:**
+
+| Flag          | Description              |
+| ------------- | ------------------------ |
+| `--force, -f` | Skip confirmation prompt |
 
 ### hs stack rollback \<stack-name\>
 
@@ -231,13 +341,13 @@ hs stack rollback my-stack --branch staging
 
 **Options:**
 
-| Flag              | Description          |
-| ----------------- | -------------------- |
-| `--to <version>`  | Target version       |
-| `--build <id>`    | Target build ID      |
-| `--branch <name>` | Branch to rollback   |
-| `--rebuild`       | Force full rebuild   |
-| `--no-wait`       | Don't watch progress |
+| Flag              | Description                              |
+| ----------------- | ---------------------------------------- |
+| `--to <version>`  | Target version                           |
+| `--build <id>`    | Target build ID                          |
+| `--branch <name>` | Branch to rollback (default: production) |
+| `--rebuild`       | Force full rebuild                       |
+| `--no-wait`       | Don't watch progress                     |
 
 ### hs stack stop \<stack-name\>
 
@@ -246,7 +356,15 @@ Stop a deployment.
 ```bash
 hs stack stop my-stack
 hs stack stop my-stack --branch staging
+hs stack stop my-stack --force  # Skip confirmation
 ```
+
+**Options:**
+
+| Flag              | Description               |
+| ----------------- | ------------------------- |
+| `--branch <name>` | Branch deployment to stop |
+| `--force, -f`     | Skip confirmation prompt  |
 
 ---
 
@@ -268,7 +386,16 @@ Generate TypeScript SDK.
 hs sdk create typescript my-stack
 hs sdk create typescript my-stack --output ./src/generated/
 hs sdk create typescript my-stack --package-name @myorg/my-sdk
+hs sdk create typescript my-stack --url wss://my-stack.stack.usehyperstack.com
 ```
+
+**Options:**
+
+| Flag                        | Description                         |
+| --------------------------- | ----------------------------------- |
+| `--output, -o <path>`       | Output file path (overrides config) |
+| `--package-name, -p <name>` | Package name for TypeScript         |
+| `--url <url>`               | WebSocket URL for the stack         |
 
 ### hs sdk create rust \<stack-name\>
 
@@ -279,6 +406,7 @@ hs sdk create rust my-stack
 hs sdk create rust my-stack --output ./crates/
 hs sdk create rust my-stack --crate-name my-stack-sdk
 hs sdk create rust my-stack --module  # Generate as module instead of crate
+hs sdk create rust my-stack --url wss://my-stack.stack.usehyperstack.com
 ```
 
 **Options:**
@@ -288,6 +416,7 @@ hs sdk create rust my-stack --module  # Generate as module instead of crate
 | `--output, -o <path>` | Output directory path (overrides config)                    |
 | `--crate-name <name>` | Custom crate name for generated Rust crate                  |
 | `--module`            | Generate as a module (mod.rs) instead of a standalone crate |
+| `--url <url>`         | WebSocket URL for the stack                                 |
 
 The `--module` flag generates the SDK as a Rust module (with `mod.rs`) that can be embedded directly into an existing crate, rather than creating a standalone crate with its own `Cargo.toml`. This is useful for monorepo setups or when you want to include generated code within your own crate.
 
@@ -314,11 +443,11 @@ rust_module_mode = false                               # Generate Rust SDKs as m
 watch_by_default = true
 
 # Stack definitions
-# Auto-discovered from .hyperstack/*.ast.json
+# Auto-discovered from .hyperstack/*.stack.json
 # Define explicitly for custom naming or per-stack overrides:
 [[stacks]]
 name = "my-game"
-ast = "SettlementGame"                                 # Entity name or path to .ast.json
+stack = "SettlementGame"                               # Stack name or path to .stack.json
 description = "Settlement game tracking"
 typescript_output_file = "./src/generated/game.ts"    # Per-stack TypeScript output path
 rust_output_crate = "./crates/game-stack"             # Per-stack Rust output path
@@ -345,7 +474,7 @@ For most projects, you only need:
 name = "my-project"
 ```
 
-The CLI auto-discovers stacks from `.hyperstack/*.ast.json` files.
+The CLI auto-discovers stacks from `.hyperstack/*.stack.json` files.
 
 ---
 
@@ -382,8 +511,8 @@ pending → uploading → queued → building → pushing → deploying → comp
 # Initialize project
 hs init
 
-# Create account and login
-hs auth register
+# Login with your API key
+hs auth login
 
 # Validate configuration
 hs config validate
@@ -428,23 +557,55 @@ hs stack rollback my-stack --to 2
 
 ---
 
+## Telemetry
+
+Hyperstack collects anonymous usage data to improve the CLI. No personal information or project details are sent.
+
+### hs telemetry status
+
+Show current telemetry status.
+
+```bash
+hs telemetry status
+```
+
+### hs telemetry enable
+
+Enable telemetry collection.
+
+```bash
+hs telemetry enable
+```
+
+### hs telemetry disable
+
+Disable telemetry collection.
+
+```bash
+hs telemetry disable
+```
+
+---
+
 ## Environment Variables
 
-| Variable             | Description           |
-| -------------------- | --------------------- |
-| `HYPERSTACK_API_URL` | Override API endpoint |
+| Variable                          | Description                             |
+| --------------------------------- | --------------------------------------- |
+| `HYPERSTACK_API_URL`              | Override API endpoint                   |
+| `DO_NOT_TRACK=1`                  | Disable telemetry (standard)            |
+| `HYPERSTACK_TELEMETRY_DISABLED=1` | Disable telemetry (Hyperstack-specific) |
 
 ---
 
 ## Error Reference
 
-| Error                | Solution                                   |
-| -------------------- | ------------------------------------------ |
-| `Not authenticated`  | Run `hs auth login`                        |
-| `Stack not found`    | Check `hs stack list` for available stacks |
-| `AST file not found` | Run `cargo build` to generate AST          |
-| `Build failed`       | Try again                                  |
-| `Config invalid`     | Run `hs config validate`                   |
+| Error                  | Solution                                   |
+| ---------------------- | ------------------------------------------ |
+| `Not authenticated`    | Run `hs auth login`                        |
+| `Stack not found`      | Check `hs stack list` for available stacks |
+| `Stack file not found` | Run `cargo build` to generate stack spec   |
+| `Build failed`         | Try again                                  |
+| `Config invalid`       | Run `hs config validate`                   |
 
 ---
 

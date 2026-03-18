@@ -1,0 +1,142 @@
+---
+title: Agent Skills
+sidebar:
+  order: 1
+description: How the Hyperstack CLI, agent skills, and agent.md work together to give your AI agent everything it needs to build with Hyperstack.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+import CopyPrompt from "../../../components/CopyPrompt.astro";
+
+:::tip[New to coding?]
+If you haven't set up an AI coding tool yet, start with [AI Tooling Setup](/agent-skills/setup-tools/) which walks you through everything from scratch.
+:::
+
+Hyperstack is designed to be built with AI agents. This page explains the three pieces that make that work: the **CLI**, the **agent skills**, and **agent.md**.
+
+---
+
+## The CLI
+
+The Hyperstack CLI (`hs`) is the primary interface between your agent and Hyperstack. It handles scaffolding, deployment, SDK generation, and — most importantly — live schema discovery.
+
+```bash
+# Install via Cargo (recommended)
+cargo install hyperstack-cli
+
+# Or via npm
+npm install -g hyperstack-cli
+```
+
+The key command for agents is `hs explore`:
+
+```bash
+hs explore --json
+```
+
+This queries the Hyperstack API and returns the live schemas for all available stacks — their entities, fields, views, and types. Because your agent runs this at setup time, it always works with accurate, up-to-date type information rather than guessing from training data.
+
+---
+
+## Agent Skills
+
+Agent skills are markdown files that teach your agent how to use Hyperstack correctly. They're installed into your project so your agent picks them up automatically as context.
+
+Three skills are installed:
+
+| Skill                | What it teaches                                                           |
+| -------------------- | ------------------------------------------------------------------------- |
+| `hyperstack`         | Router skill — detects intent and routes the agent to the right sub-skill |
+| `hyperstack-consume` | SDK patterns for connecting to streams in TypeScript, React, and Rust     |
+| `hyperstack-build`   | Rust DSL syntax for building custom stacks from Solana program IDLs       |
+
+Install them manually with:
+
+```bash
+npx skills add usehyperstack/skills
+```
+
+Once installed, your agent knows the correct hook names, view patterns, subscription syntax, and CLI commands. Without the skills, an agent will hallucinate API shapes based on outdated training data.
+
+---
+
+## agent.md
+
+`agent.md` is a plain text file hosted at `https://docs.usehyperstack.com/agent.md`. It's the bootstrap instruction set — a single URL your agent can read to set everything up from scratch.
+
+When your agent reads `agent.md`, it:
+
+1. Installs the Hyperstack CLI (prefers Cargo, falls back to npm)
+2. Installs the agent skills into the project
+3. Runs `hs explore --json` to load live schemas
+4. Understands it's ready to build
+
+This is why the one-liner works:
+
+<CopyPrompt>
+Read https://docs.usehyperstack.com/agent.md and follow the instructions to set up Hyperstack in this project
+</CopyPrompt>
+
+---
+
+## How They Fit Together
+
+```
+agent.md  ──▶  CLI installed  ──▶  hs explore --json  ──▶  live schemas
+               Skills installed ─▶  SDK patterns + DSL syntax
+
+                         ┌────────────────────────────┐
+                         │         AI Agent            │
+                         │  (Cursor, Claude Code, etc) │
+                         │                             │
+                         │  Skills  +  Live schemas    │
+                         └────────────┬───────────────┘
+                                      │
+                              builds correct code
+                                      │
+                                      ▼
+                               Your Hyperstack app
+```
+
+The CLI gives the agent **live data**. The skills give the agent **correct patterns**. Together they remove the two main failure modes: wrong types and wrong API usage.
+
+---
+
+## Prefer to Set Up Manually?
+
+<Tabs>
+<TabItem label="New Project">
+
+```bash
+cargo install hyperstack-cli
+# Or: npm install -g hyperstack-cli
+
+npx hyperstack-cli create my-app --template react-ore
+cd my-app
+
+npx skills add usehyperstack/skills
+```
+
+</TabItem>
+<TabItem label="Existing Project">
+
+```bash
+cargo install hyperstack-cli
+# Or: npm install -g hyperstack-cli
+
+npx skills add usehyperstack/skills
+```
+
+</TabItem>
+</Tabs>
+
+For editor-specific file locations and manual configuration, see [Editor Setup](/agent-skills/setup/).
+
+---
+
+## Next Steps
+
+- [Prompt Cookbook](/agent-skills/prompts/) — Copy-paste prompts for common tasks
+- [Tutorial: ORE Dashboard](/agent-skills/tutorial-ore-dashboard/) — Build a complete app step by step
+- [Schema Discovery](/agent-skills/explore/) — How `hs explore` provides live type information
+- [Editor Setup](/agent-skills/setup/) — Manual setup for specific editors
