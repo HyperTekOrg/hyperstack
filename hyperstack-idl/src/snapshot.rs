@@ -1,10 +1,10 @@
 //! Snapshot type definitions
 
-use serde::{de::Error, Deserialize, Deserializer, Serialize};
+use serde::{de::Error as DeError, Deserialize, Deserializer, Serialize};
 
 use crate::types::SteelDiscriminant;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct IdlSnapshot {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "address")]
@@ -18,12 +18,73 @@ pub struct IdlSnapshot {
     pub events: Vec<IdlEventSnapshot>,
     #[serde(default)]
     pub errors: Vec<IdlErrorSnapshot>,
-    #[serde(default = "default_discriminant_size")]
     pub discriminant_size: usize,
 }
 
-fn default_discriminant_size() -> usize {
-    8
+impl<'de> Deserialize<'de> for IdlSnapshot {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // First deserialize to a generic Value to inspect instructions
+        let value = serde_json::Value::deserialize(deserializer)?;
+
+        // Check if any instruction has discriminant (Steel-style) vs discriminator (Anchor-style)
+        let discriminant_size = value
+            .get("instructions")
+            .and_then(|instrs| instrs.as_array())
+            .map(|instrs| {
+                instrs.iter().any(|ix| {
+                    // Steel-style: has discriminant field, no discriminator or empty discriminator
+                    let has_discriminant = ix.get("discriminant").is_some();
+                    let discriminator = ix.get("discriminator");
+                    let has_discriminator = discriminator
+                        .map(|d| {
+                            !d.is_null() && d.as_array().map(|a| !a.is_empty()).unwrap_or(true)
+                        })
+                        .unwrap_or(false);
+                    has_discriminant && !has_discriminator
+                })
+            })
+            .map(|is_steel| if is_steel { 1 } else { 8 })
+            .unwrap_or(8); // Default to 8 if no instructions
+
+        // Now deserialize the full struct
+        let mut intermediate: IdlSnapshotIntermediate = serde_json::from_value(value)
+            .map_err(|e| DeError::custom(format!("Failed to deserialize IDL: {}", e)))?;
+        intermediate.discriminant_size = discriminant_size;
+
+        Ok(IdlSnapshot {
+            name: intermediate.name,
+            program_id: intermediate.program_id,
+            version: intermediate.version,
+            accounts: intermediate.accounts,
+            instructions: intermediate.instructions,
+            types: intermediate.types,
+            events: intermediate.events,
+            errors: intermediate.errors,
+            discriminant_size: intermediate.discriminant_size,
+        })
+    }
+}
+
+// Intermediate struct for deserialization
+#[derive(Debug, Clone, Deserialize)]
+struct IdlSnapshotIntermediate {
+    pub name: String,
+    #[serde(default, alias = "address")]
+    pub program_id: Option<String>,
+    pub version: String,
+    pub accounts: Vec<IdlAccountSnapshot>,
+    pub instructions: Vec<IdlInstructionSnapshot>,
+    #[serde(default)]
+    pub types: Vec<IdlTypeDefSnapshot>,
+    #[serde(default)]
+    pub events: Vec<IdlEventSnapshot>,
+    #[serde(default)]
+    pub errors: Vec<IdlErrorSnapshot>,
+    #[serde(default)]
+    pub discriminant_size: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -124,6 +185,7 @@ fn deserialize_hash_map<'de, D>(
 where
     D: Deserializer<'de>,
 {
+    use serde::de::Error;
     let values: Vec<IdlTypeSnapshot> = Vec::deserialize(deserializer)?;
     if values.len() != 2 {
         return Err(D::Error::custom("hashMap must have exactly 2 elements"));
@@ -243,6 +305,8 @@ mod tests {
                 discriminator: vec![1, 2, 3, 4, 5, 6, 7, 8],
                 docs: vec!["Example account".to_string()],
                 serialization: Some(IdlSerializationSnapshot::Borsh),
+                fields: vec![],
+                type_def: None,
             }],
             instructions: vec![IdlInstructionSnapshot {
                 name: "example_instruction".to_string(),
@@ -289,7 +353,7 @@ mod tests {
                 name: "ExampleError".to_string(),
                 msg: Some("example".to_string()),
             }],
-            discriminant_size: default_discriminant_size(),
+            discriminant_size: 8,
         };
 
         let serialized = serde_json::to_value(&snapshot).expect("serialize snapshot");

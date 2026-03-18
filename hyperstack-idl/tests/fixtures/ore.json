@@ -1,6 +1,7 @@
 {
   "version": "3.7.22",
   "name": "ore",
+  "address": "oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv",
   "instructions": [
     {
       "name": "automate",
