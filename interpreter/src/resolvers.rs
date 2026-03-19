@@ -126,6 +126,9 @@ pub trait ResolverDefinition: Send + Sync {
     fn typescript_schema(&self) -> Option<ResolverTypeScriptSchema> {
         None
     }
+    fn extra_output_types(&self) -> &'static [&'static str] {
+        &[]
+    }
 }
 
 pub struct ResolverRegistry {
@@ -159,24 +162,8 @@ impl ResolverRegistry {
 
     pub fn is_output_type(&self, type_name: &str) -> bool {
         self.resolvers.values().any(|resolver| {
-            // Check primary output type
-            if resolver.output_type() == type_name {
-                return true;
-            }
-            // Check for additional types defined in typescript_interface
-            if let Some(interface) = resolver.typescript_interface() {
-                // Look for type aliases like: export type TypeName = ...
-                let type_pattern = format!("export type {} =", type_name);
-                if interface.contains(&type_pattern) {
-                    return true;
-                }
-                // Look for interfaces like: export interface TypeName ...
-                let interface_pattern = format!("export interface {}", type_name);
-                if interface.contains(&interface_pattern) {
-                    return true;
-                }
-            }
-            false
+            resolver.output_type() == type_name
+                || resolver.extra_output_types().contains(&type_name)
         })
     }
 
@@ -900,6 +887,10 @@ impl ResolverDefinition for SlotHashResolver {
 
 export type KeccakRngValue = string;"#,
         )
+    }
+
+    fn extra_output_types(&self) -> &'static [&'static str] {
+        &["SlotHashBytes", "KeccakRngValue"]
     }
 
     fn typescript_schema(&self) -> Option<ResolverTypeScriptSchema> {
