@@ -607,7 +607,7 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
             }
         }
         // Check field_mappings for computed fields (they may have resolver types not in sections)
-        for (_field_path, field_info) in &self.spec.field_mappings {
+        for field_info in self.spec.field_mappings.values() {
             if field_info.inner_type.as_deref() == Some(type_name) {
                 return true;
             }
