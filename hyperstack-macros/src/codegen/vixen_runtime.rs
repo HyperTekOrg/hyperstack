@@ -315,7 +315,7 @@ fn generate_slot_subscription_task() -> TokenStream {
                         };
                         use hyperstack::runtime::futures::StreamExt;
 
-                        let mut client = hyperstack::runtime::yellowstone_grpc_client::GeyserGrpcClient
+                        let mut builder = hyperstack::runtime::yellowstone_grpc_client::GeyserGrpcClient
                             ::build_from_shared(endpoint.clone())?
                             .x_token(x_token.clone())?
                             .max_decoding_message_size(usize::MAX)
@@ -323,13 +323,16 @@ fn generate_slot_subscription_task() -> TokenStream {
                                 hyperstack::runtime::yellowstone_grpc_proto::tonic::codec::CompressionEncoding::Zstd
                             )
                             .connect_timeout(std::time::Duration::from_secs(30))
-                            .timeout(std::time::Duration::from_secs(60))
-                            .tls_config(
+                            .timeout(std::time::Duration::from_secs(60));
+
+                        if endpoint.starts_with("https://") || endpoint.starts_with("grpcs://") {
+                            builder = builder.tls_config(
                                 hyperstack::runtime::yellowstone_grpc_proto::tonic::transport::ClientTlsConfig::new()
                                     .with_native_roots()
-                            )?
-                            .connect()
-                            .await?;
+                            )?;
+                        }
+
+                        let mut client = builder.connect().await?;
 
                         // Solana SlotHashes sysvar address
                         let slot_hashes_sysvar = "SysvarS1otHashes111111111111111111111111111".to_string();
