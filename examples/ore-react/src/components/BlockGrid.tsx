@@ -9,7 +9,7 @@ export function BlockGrid({ round }: BlockGridProps) {
   const blocks = round
     ? (round.state?.deployed_per_square_ui || []).map((deployedUi, i) => ({
       id: i + 1,
-      minerCount: round.state.count_per_square[i],
+      minerCount: round.state?.count_per_square?.[i],
       deployedUi,
       isWinner: (round.results?.winning_square === i) || (round.results?.pre_reveal_winning_square === i),
     }))
