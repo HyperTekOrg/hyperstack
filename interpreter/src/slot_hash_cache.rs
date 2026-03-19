@@ -11,7 +11,7 @@ static SLOT_HASH_CACHE: once_cell::sync::Lazy<Arc<RwLock<BTreeMap<u64, String>>>
     once_cell::sync::Lazy::new(|| Arc::new(RwLock::new(BTreeMap::new())));
 
 /// Maximum number of slot hashes to keep in cache (prevent unbounded growth)
-const MAX_CACHE_SIZE: usize = 50000;
+const MAX_CACHE_SIZE: usize = 1000;
 
 /// Record a slot hash in the global cache
 pub fn record_slot_hash(slot: u64, slot_hash: String) {
@@ -20,10 +20,10 @@ pub fn record_slot_hash(slot: u64, slot_hash: String) {
 
     // Prune old entries if cache is too large
     if cache.len() > MAX_CACHE_SIZE {
-        // Remove oldest 25% of entries
-        let slots_to_remove: Vec<u64> = cache.keys().take(cache.len() / 4).copied().collect();
-        for slot in slots_to_remove {
-            cache.remove(&slot);
+        // Remove oldest 25% of entries using pop_first for O(log n) per removal
+        let target_size = cache.len() - cache.len() / 4;
+        while cache.len() > target_size {
+            cache.pop_first();
         }
     }
 }
