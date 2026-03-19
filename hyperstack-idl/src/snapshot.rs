@@ -38,15 +38,28 @@ impl<'de> Deserialize<'de> for IdlSnapshot {
                     return false;
                 }
                 instrs.iter().all(|ix| {
-                    // Steel-style: has discriminant field, no discriminator or empty discriminator
-                    let has_discriminant = ix.get("discriminant").is_some();
                     let discriminator = ix.get("discriminator");
+                    let disc_len = discriminator
+                        .and_then(|d| d.as_array())
+                        .map(|a| a.len())
+                        .unwrap_or(0);
+
+                    // Steel-style variant 1: has explicit discriminant field, no discriminator
+                    let has_discriminant = ix.get("discriminant").is_some();
                     let has_discriminator = discriminator
                         .map(|d| {
                             !d.is_null() && d.as_array().map(|a| !a.is_empty()).unwrap_or(true)
                         })
                         .unwrap_or(false);
-                    has_discriminant && !has_discriminator
+                    let is_steel_discriminant = has_discriminant && !has_discriminator;
+
+                    // Steel-style variant 2: discriminator is stored as a 1-byte array (no
+                    // discriminant field). This happens when the AST was generated from a
+                    // Steel IDL that serialised its u8 discriminant directly into the
+                    // discriminator field.
+                    let is_steel_short_discriminator = !has_discriminant && disc_len == 1;
+
+                    is_steel_discriminant || is_steel_short_discriminator
                 })
             })
             .map(|is_steel| if is_steel { 1 } else { 8 })
