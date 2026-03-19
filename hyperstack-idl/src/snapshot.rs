@@ -123,8 +123,12 @@ impl<'de> Deserialize<'de> for IdlAccountSnapshot {
         let intermediate = IdlAccountSnapshotIntermediate::deserialize(deserializer)?;
 
         // Normalize fields: if empty but type_def has fields, use those
-        let fields = if intermediate.fields.is_empty() && intermediate.type_def.is_some() {
-            intermediate.type_def.as_ref().unwrap().fields.clone()
+        let fields = if intermediate.fields.is_empty() {
+            if let Some(type_def) = intermediate.type_def.as_ref() {
+                type_def.fields.clone()
+            } else {
+                intermediate.fields
+            }
         } else {
             intermediate.fields
         };
