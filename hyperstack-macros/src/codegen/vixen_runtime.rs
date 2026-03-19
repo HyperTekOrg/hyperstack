@@ -278,8 +278,10 @@ fn generate_slot_subscription_task() -> TokenStream {
                 data[4], data[5], data[6], data[7],
             ]) as usize;
 
-            let entry_size = 40;
-            let expected_size = 8 + (len * entry_size);
+            let entry_size: usize = 40;
+            let expected_size = 8_usize
+                .checked_add(len.checked_mul(entry_size).ok_or("len * entry_size overflow")?)
+                .ok_or("expected_size overflow")?;
 
             if data.len() < expected_size {
                 return Err(format!("Data too short: expected {}, got {}", expected_size, data.len()).into());
