@@ -39,11 +39,11 @@ impl SlotTracker {
     pub async fn record_slot_hash(&self, slot: u64, slot_hash: String) {
         let mut hashes = self.slot_hashes.write().await;
         hashes.insert(slot, slot_hash);
-        
+
         // Prune old entries to prevent unbounded growth (keep last 10000 slots)
         let slots_to_remove: Vec<u64> = hashes
             .keys()
-            .filter(|&&s| s < slot.saturating_sub(10000))
+            .filter(|&&s| s < slot.saturating_sub(1000))
             .copied()
             .collect();
         for s in slots_to_remove {
