@@ -44,19 +44,26 @@ impl<'de> Deserialize<'de> for IdlSnapshot {
                         .map(|a| a.len())
                         .unwrap_or(0);
 
-                    // Steel-style variant 1: has explicit discriminant field, no discriminator
-                    let has_discriminant = ix.get("discriminant").is_some();
+                    // Treat discriminant as present only if the value is non-null.
+                    // ix.get("discriminant").is_some() returns true even for `null`,
+                    // which causes misclassification when the AST serializer writes
+                    // `discriminant: null` explicitly (as the ore AST does).
+                    let has_discriminant = ix
+                        .get("discriminant")
+                        .map(|v| !v.is_null())
+                        .unwrap_or(false);
                     let has_discriminator = discriminator
                         .map(|d| {
                             !d.is_null() && d.as_array().map(|a| !a.is_empty()).unwrap_or(true)
                         })
                         .unwrap_or(false);
+
+                    // Steel-style variant 1: explicit discriminant object, no discriminator array
                     let is_steel_discriminant = has_discriminant && !has_discriminator;
 
-                    // Steel-style variant 2: discriminator is stored as a 1-byte array (no
-                    // discriminant field). This happens when the AST was generated from a
-                    // Steel IDL that serialised its u8 discriminant directly into the
-                    // discriminator field.
+                    // Steel-style variant 2: discriminator is stored as a 1-byte array with no
+                    // discriminant value. This happens when the AST serializer flattens the
+                    // Steel u8 discriminant directly into the discriminator field.
                     let is_steel_short_discriminator = !has_discriminant && disc_len == 1;
 
                     is_steel_discriminant || is_steel_short_discriminator
