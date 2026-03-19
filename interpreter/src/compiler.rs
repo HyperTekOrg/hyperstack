@@ -19,6 +19,7 @@ pub enum OpCode {
     /// process_event's miss-handling logic.
     AbortIfNullKey {
         key: Register,
+        is_account_event: bool,
     },
     LoadEventField {
         path: FieldPath,
@@ -678,7 +679,12 @@ impl<S> TypedCompiler<S> {
         // for later reprocessing.  Without this, downstream opcodes would
         // create a phantom entity keyed by null and produce non-empty
         // mutations that prevent queueing.
-        ops.push(OpCode::AbortIfNullKey { key: key_reg });
+        let event_type = self.get_event_type(&spec.source);
+        let is_account_event = event_type.ends_with("State") && !event_type.ends_with("IxState");
+        ops.push(OpCode::AbortIfNullKey {
+            key: key_reg,
+            is_account_event,
+        });
 
         ops.push(OpCode::ReadOrInitState {
             state_id: self.state_id,

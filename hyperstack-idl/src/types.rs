@@ -78,7 +78,7 @@ impl IdlInstruction {
 
         if let Some(disc) = &self.discriminant {
             let value = disc.value as u8;
-            return vec![value, 0, 0, 0, 0, 0, 0, 0];
+            return vec![value];
         }
 
         crate::discriminator::anchor_discriminator(&format!("global:{}", self.name))

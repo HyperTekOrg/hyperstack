@@ -55,8 +55,8 @@ fn test_ore_instructions_have_discriminators() {
 
     assert_eq!(
         automate.get_discriminator(),
-        vec![0, 0, 0, 0, 0, 0, 0, 0],
-        "automate instruction should have discriminator [0,0,0,0,0,0,0,0]"
+        vec![0],
+        "automate instruction should have discriminator [0]"
     );
 
     // Verify program_id is parsed from address field (using ore.json fixture)

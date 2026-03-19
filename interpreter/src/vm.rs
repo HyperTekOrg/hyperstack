@@ -1988,12 +1988,12 @@ impl VmContext {
                     self.registers[*dest] = value;
                     pc += 1;
                 }
-                OpCode::AbortIfNullKey { key } => {
+                OpCode::AbortIfNullKey {
+                    key,
+                    is_account_event,
+                } => {
                     let key_value = &self.registers[*key];
-                    if key_value.is_null()
-                        && event_type.ends_with("State")
-                        && !event_type.ends_with("IxState")
-                    {
+                    if key_value.is_null() && *is_account_event {
                         tracing::debug!(
                             event_type = %event_type,
                             "AbortIfNullKey: key is null for account state event, \
