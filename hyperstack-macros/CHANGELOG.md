@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.5.6](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.5.5...hyperstack-macros-v0.5.6) (2026-03-19)
+
+
+### Features
+
+* add Keccak256 hashing and slot hash caching ([768c407](https://github.com/HyperTekOrg/hyperstack/commit/768c407adce786003c30c634432279456baa5102))
+* improve slot scheduler with notification-based waiting and enhanced logging ([0b8681e](https://github.com/HyperTekOrg/hyperstack/commit/0b8681eb8cf399e09140495c749872dcae91b1c1))
+
+
+### Bug Fixes
+
+* cache account data for all entity states that route an event type ([1b59633](https://github.com/HyperTekOrg/hyperstack/commit/1b59633f542dad2e140e914ff3e787019dd75944))
+* conditionally enable TLS only for https/grpcs endpoints in slot subscription ([8c8875b](https://github.com/HyperTekOrg/hyperstack/commit/8c8875b4c587f282e6f3993c1651aebe816004c1))
+* Core interpreter and server improvements ([b05ae9b](https://github.com/HyperTekOrg/hyperstack/commit/b05ae9bd169f48c2cfd1222d8fa4adc882d96adc))
+* correct resolver output types and schema generation in TypeScript emitter ([b37ef43](https://github.com/HyperTekOrg/hyperstack/commit/b37ef43e93d5c20903b01831424d94f6bb86bd72))
+* derive state_id from bytecode routing for PDA cache ([927b364](https://github.com/HyperTekOrg/hyperstack/commit/927b364a996ce9047641a35a66d346485feac4d8))
+* keep gRPC subscription sender alive to prevent stream termination ([42460d2](https://github.com/HyperTekOrg/hyperstack/commit/42460d2c2cf5dbb582da78e73100ab42b6213786))
+* prevent integer overflow in SlotHashes sysvar parsing ([99427f6](https://github.com/HyperTekOrg/hyperstack/commit/99427f6d6ca03c691c9556f1dc69065ca5b2b1e0))
+* prevent panic in SlotHash resolver when using current_thread runtime ([3525397](https://github.com/HyperTekOrg/hyperstack/commit/3525397a8adec127ac261b1c6e6cab2617f1217b))
+* remove unnecessary async from parse_and_cache_slot_hashes ([03e00aa](https://github.com/HyperTekOrg/hyperstack/commit/03e00aa4248be85146e60c133cc88130c240dcc1))
+* resolve clippy warnings across workspace ([c19d1ec](https://github.com/HyperTekOrg/hyperstack/commit/c19d1ec5926ee9099c6ab4254bde30b2c794e27f))
+* restore cross-account lookup resolution at round boundaries ([0af0835](https://github.com/HyperTekOrg/hyperstack/commit/0af0835ea6c7d35c5c1efd6f63899706dd85ab91))
+* serialize u64-from-bytes computed fields as strings to avoid JS precision loss ([1f67a7a](https://github.com/HyperTekOrg/hyperstack/commit/1f67a7a9589823262a972ea01c71ad4e04e24ffe))
+* use dynamic-length discriminator slice in generated code ([d67b727](https://github.com/HyperTekOrg/hyperstack/commit/d67b727e3cb34f2f9eb66d75f15add86bc8dbbd6))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-idl bumped from 0.1.2 to 0.1.3
+
 ## [0.5.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.5.4...hyperstack-macros-v0.5.5) (2026-03-14)
 
 

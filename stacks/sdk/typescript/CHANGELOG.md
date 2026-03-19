@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.5.6](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.5.5...hyperstack-stacks-v0.5.6) (2026-03-19)
+
+
+### Features
+
+* add Yellowstone gRPC dependencies and update Ore examples ([2f23205](https://github.com/HyperTekOrg/hyperstack/commit/2f23205577c814572e57e5628bee9225d4631f4b))
+
+
+### Bug Fixes
+
+* correct resolver output types and schema generation in TypeScript emitter ([b37ef43](https://github.com/HyperTekOrg/hyperstack/commit/b37ef43e93d5c20903b01831424d94f6bb86bd72))
+* Keccak types ([7af4cf3](https://github.com/HyperTekOrg/hyperstack/commit/7af4cf3a82df4ce92a6dba98828406dd8d198419))
+* Ore sdk ([5f423da](https://github.com/HyperTekOrg/hyperstack/commit/5f423dacf10fb9beae9659e29e444e6becef67c8))
+* serialize pre_reveal_rng as string to avoid JS precision loss ([9f07692](https://github.com/HyperTekOrg/hyperstack/commit/9f0769209f382291d3fd8119d8fc39549d0314d1))
+* TypeScript generator now correctly types computed fields using resolver output types ([5d28937](https://github.com/HyperTekOrg/hyperstack/commit/5d28937796b8c7672cff02c1f648ac0f37f48c44))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * devDependencies
+    * hyperstack-typescript bumped from file:../../../typescript/core to 0.5.6
+  * peerDependencies
+    * hyperstack-react bumped from >=0.5.5 to >=0.5.6
+    * hyperstack-typescript bumped from >=0.5.5 to >=0.5.6
+
 ## [0.5.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-stacks-v0.5.4...hyperstack-stacks-v0.5.5) (2026-03-14)
 
 

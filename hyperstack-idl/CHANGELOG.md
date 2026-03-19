@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-idl-v0.1.2...hyperstack-idl-v0.1.3) (2026-03-19)
+
+
+### Bug Fixes
+
+* align Steel discriminant size with get_discriminator return value ([4d283f2](https://github.com/HyperTekOrg/hyperstack/commit/4d283f2bd749690eb7b79e1c80e0447c79b35d8d))
+* change any() to all() for Steel-style IDL detection ([77d2566](https://github.com/HyperTekOrg/hyperstack/commit/77d2566db00255cc5460e3ea4490302d0e530a25))
+* Core interpreter and server improvements ([b05ae9b](https://github.com/HyperTekOrg/hyperstack/commit/b05ae9bd169f48c2cfd1222d8fa4adc882d96adc))
+* implement discriminant size inference and fix test failures ([c8b26d5](https://github.com/HyperTekOrg/hyperstack/commit/c8b26d58f62041cb7c5fe1624f5313f63a9ef9d9))
+* prevent empty instruction arrays from being misclassified as Steel-style ([abad594](https://github.com/HyperTekOrg/hyperstack/commit/abad594108d0f9b1f795d7f320e7f69b1027fce6))
+* replace panicking expect with graceful fallback in get_discriminator ([fa09ef9](https://github.com/HyperTekOrg/hyperstack/commit/fa09ef9cce75b64df295971c35ade31a724522c5))
+* replace silent u8 truncation of Steel discriminant with try_from ([f4de6ef](https://github.com/HyperTekOrg/hyperstack/commit/f4de6ef1a835f204a8af39b4610481356bd62410))
+* replace unnecessary unwrap with if let pattern ([b3e6dac](https://github.com/HyperTekOrg/hyperstack/commit/b3e6dac0cda3428471f2d648200c3b866f26e108))
+* **tests:** replace diagnostic println with assertion for discriminant_size ([f391581](https://github.com/HyperTekOrg/hyperstack/commit/f39158107e551a544bb610ca4a8d7a59e81f6460))
+
 ## [0.1.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-idl-v0.1.1...hyperstack-idl-v0.1.2) (2026-03-14)
 
 
