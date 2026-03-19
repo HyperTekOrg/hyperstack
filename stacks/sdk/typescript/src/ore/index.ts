@@ -61,6 +61,13 @@ export interface OreRound {
   ore_metadata?: TokenMetadata | null;
 }
 
+export interface SlotHashBytes {
+  /** 32-byte slot hash as array of numbers (0-255) */
+  bytes: number[];
+}
+
+export type KeccakRngValue = string;
+
 export interface TokenMetadata {
   mint: string;
   name?: string | null;
@@ -69,12 +76,11 @@ export interface TokenMetadata {
   logo_uri?: string | null;
 }
 
-export interface SlotHashBytes {
-  /** 32-byte slot hash as array of numbers (0-255) */
-  bytes: number[];
-}
+export const SlotHashBytesSchema = z.object({
+  bytes: z.array(z.number().int().min(0).max(255)).length(32),
+});
 
-export type KeccakRngValue = string;
+export const KeccakRngValueSchema = z.string();
 
 export const TokenMetadataSchema = z.object({
   mint: z.string(),
@@ -83,12 +89,6 @@ export const TokenMetadataSchema = z.object({
   decimals: z.number().nullable().optional(),
   logo_uri: z.string().nullable().optional(),
 });
-
-export const SlotHashBytesSchema = z.object({
-  bytes: z.array(z.number().int().min(0).max(255)).length(32),
-});
-
-export const KeccakRngValueSchema = z.string();
 
 export const OreRoundEntropySchema = z.object({
   entropy_end_at: z.number().nullable().optional(),
