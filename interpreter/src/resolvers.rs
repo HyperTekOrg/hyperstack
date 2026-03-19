@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::OnceLock;
 
 use futures::future::join_all;
@@ -129,7 +129,7 @@ pub trait ResolverDefinition: Send + Sync {
 }
 
 pub struct ResolverRegistry {
-    resolvers: HashMap<String, Box<dyn ResolverDefinition>>,
+    resolvers: BTreeMap<String, Box<dyn ResolverDefinition>>,
 }
 
 impl Default for ResolverRegistry {
@@ -141,7 +141,7 @@ impl Default for ResolverRegistry {
 impl ResolverRegistry {
     pub fn new() -> Self {
         Self {
-            resolvers: HashMap::new(),
+            resolvers: BTreeMap::new(),
         }
     }
 
