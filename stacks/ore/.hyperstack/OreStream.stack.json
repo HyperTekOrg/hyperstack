@@ -4225,15 +4225,6 @@
       },
       "resolver_hooks": [
         {
-          "account_type": "entropy::VarState",
-          "strategy": {
-            "PdaReverseLookup": {
-              "lookup_name": "default_pda_lookup",
-              "queue_discriminators": []
-            }
-          }
-        },
-        {
           "account_type": "ore::TreasuryState",
           "strategy": {
             "PdaReverseLookup": {
@@ -4243,6 +4234,15 @@
                   9
                 ]
               ]
+            }
+          }
+        },
+        {
+          "account_type": "entropy::VarState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": []
             }
           }
         }
@@ -5206,7 +5206,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "2499bee255d1ab8600d1e2abe118043e3c7c04ea6164dc0c81eba2fa33bb03e4",
+      "content_hash": "71c8796142e933db057e499e2e4a69de15e119e69cd075418ff50de18d51adec",
       "views": [
         {
           "id": "OreRound/latest",
@@ -5695,15 +5695,6 @@
       },
       "resolver_hooks": [
         {
-          "account_type": "entropy::VarState",
-          "strategy": {
-            "PdaReverseLookup": {
-              "lookup_name": "default_pda_lookup",
-              "queue_discriminators": []
-            }
-          }
-        },
-        {
           "account_type": "ore::TreasuryState",
           "strategy": {
             "PdaReverseLookup": {
@@ -5713,6 +5704,15 @@
                   9
                 ]
               ]
+            }
+          }
+        },
+        {
+          "account_type": "entropy::VarState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": []
             }
           }
         }
@@ -5815,7 +5815,7 @@
           "result_type": "Option < f64 >"
         }
       ],
-      "content_hash": "ffec247e90689c746263a287f04388f5eefe1ee5058713739673c197f030731b",
+      "content_hash": "5e4e0c9ad6793cd2f8c0f5016320b373ea1537edd10f9634159c3739f1db4f80",
       "views": []
     },
     {
@@ -7140,15 +7140,6 @@
       },
       "resolver_hooks": [
         {
-          "account_type": "entropy::VarState",
-          "strategy": {
-            "PdaReverseLookup": {
-              "lookup_name": "default_pda_lookup",
-              "queue_discriminators": []
-            }
-          }
-        },
-        {
           "account_type": "ore::TreasuryState",
           "strategy": {
             "PdaReverseLookup": {
@@ -7160,13 +7151,22 @@
               ]
             }
           }
+        },
+        {
+          "account_type": "entropy::VarState",
+          "strategy": {
+            "PdaReverseLookup": {
+              "lookup_name": "default_pda_lookup",
+              "queue_discriminators": []
+            }
+          }
         }
       ],
       "instruction_hooks": [],
       "resolver_specs": [],
       "computed_fields": [],
       "computed_field_specs": [],
-      "content_hash": "9155b664af8383fd8a2d2272d69df1480f8181c1316cc12cb83ff444a95610bb",
+      "content_hash": "aab096b52a9436ab7c2927e6c7f79408ada29daa124b2364cb9f36364f5050b4",
       "views": []
     }
   ],
@@ -9106,5 +9106,5 @@
       ]
     }
   ],
-  "content_hash": "80c3ed1638194dc541594dd82dd1e80f8660aee2254d71b3e78cfae7edadfb2f"
+  "content_hash": "88eb65a18eb2103607ae49f4f407c9b76fea89fe3cc93a08f935f7c3c4025d27"
 }
