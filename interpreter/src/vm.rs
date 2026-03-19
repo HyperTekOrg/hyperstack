@@ -2767,21 +2767,6 @@ impl VmContext {
                 } => {
                     let actual_state_id = override_state_id;
 
-                    // Log what triggered this resolver
-                    let _trigger_info = if let Some(ref ctx) = self.current_context {
-                        if let Some(ref sig) = ctx.signature {
-                            format!(
-                                "instruction (slot={}, sig={})",
-                                ctx.slot.unwrap_or(0),
-                                &sig[..std::cmp::min(16, sig.len())]
-                            )
-                        } else {
-                            format!("account update (slot={})", ctx.slot.unwrap_or(0))
-                        }
-                    } else {
-                        "unknown".to_string()
-                    };
-
                     // Skip resolvers for reprocessed cached data from PDA mapping changes.
                     // Stale data can carry wrong field values (e.g. old entropy_value) and
                     // wrong schedule_at slots that would lock in incorrect results via SetOnce.
