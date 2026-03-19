@@ -820,13 +820,7 @@ impl SlotHashResolver {
         }
 
         // Try to get the slot hash from the global cache
-        // Note: This runs in an async context but the resolver interface is sync
-        // We use block_in_place to avoid blocking the runtime
-        let slot_hash = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                crate::slot_hash_cache::get_slot_hash(slot).await
-            })
-        });
+        let slot_hash = crate::slot_hash_cache::get_slot_hash(slot);
 
         match slot_hash {
             Some(hash) => {
@@ -878,20 +872,11 @@ impl ResolverDefinition for SlotHashResolver {
     }
 
     fn typescript_interface(&self) -> Option<&'static str> {
-        Some(
-            r#"export interface SlotHash {
-  hash: string;
-}"#,
-        )
+        None
     }
 
     fn typescript_schema(&self) -> Option<ResolverTypeScriptSchema> {
-        Some(ResolverTypeScriptSchema {
-            name: "SlotHashSchema",
-            definition: r#"export const SlotHashSchema = z.object({
-  hash: z.string(),
-});"#,
-        })
+        None
     }
 }
 

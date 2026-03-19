@@ -293,7 +293,7 @@ fn generate_slot_subscription_task() -> TokenStream {
                 ]);
                 let hash_bytes = &data[offset + 8..offset + 40];
                 let hash = hyperstack::runtime::bs58::encode(hash_bytes).into_string();
-                hyperstack::runtime::hyperstack_interpreter::record_slot_hash(slot, hash).await;
+                hyperstack::runtime::hyperstack_interpreter::record_slot_hash(slot, hash);
                 hyperstack::runtime::tracing::debug!(slot = slot, current_slot = current_slot, "[SLOT_SUB] Cached slot hash");
             }
             Ok(())
