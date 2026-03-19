@@ -970,8 +970,14 @@ pub fn generate_vm_handler(
                     // mapping later changes (same PDA, different seed) the cached
                     // data is returned for reprocessing with the corrected mapping.
                     if result.is_ok() {
+                        // Derive state_id from bytecode routing (same logic as process_event)
+                        let state_id = self.bytecode.event_routing.get(event_type)
+                            .and_then(|entities| entities.first())
+                            .and_then(|entity_name| self.bytecode.entities.get(entity_name))
+                            .map(|eb| eb.state_id)
+                            .unwrap_or(0);
                         vm.cache_last_account_data(
-                            0,
+                            state_id,
                             &account_address,
                             hyperstack::runtime::hyperstack_interpreter::PendingAccountUpdate {
                                 account_type: event_type.to_string(),
@@ -2025,8 +2031,14 @@ pub fn generate_account_handler_impl(
                         .map_err(|e| e.to_string());
 
                     if result.is_ok() {
+                        // Derive state_id from bytecode routing (same logic as process_event)
+                        let state_id = self.bytecode.event_routing.get(event_type)
+                            .and_then(|entities| entities.first())
+                            .and_then(|entity_name| self.bytecode.entities.get(entity_name))
+                            .map(|eb| eb.state_id)
+                            .unwrap_or(0);
                         vm.cache_last_account_data(
-                            0,
+                            state_id,
                             &account_address,
                             hyperstack::runtime::hyperstack_interpreter::PendingAccountUpdate {
                                 account_type: event_type.to_string(),

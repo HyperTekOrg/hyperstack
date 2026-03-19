@@ -797,6 +797,11 @@ impl SlotHashResolver {
         if bytes.len() == expected_len {
             Some(bytes)
         } else {
+            tracing::debug!(
+                got = bytes.len(),
+                expected = expected_len,
+                "json_array_to_bytes: length mismatch or out-of-range element"
+            );
             None
         }
     }
