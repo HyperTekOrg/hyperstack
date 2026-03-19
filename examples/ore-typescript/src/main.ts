@@ -9,13 +9,12 @@ import {
 } from 'hyperstack-stacks/ore';
 
 const OreRoundWithIdSchema = OreRoundSchema.extend({
-  id: OreRoundIdSchema.required(),
+  id: OreRoundIdSchema.partial(),
 });
 
 const OreTreasuryWithIdSchema = OreTreasurySchema.extend({
-  id: OreTreasuryIdSchema.required(),
+  id: OreTreasuryIdSchema.partial(),
 });
-
 type OreRoundWithId = z.infer<typeof OreRoundWithIdSchema>;
 type OreTreasuryWithId = z.infer<typeof OreTreasuryWithIdSchema>;
 
@@ -41,7 +40,7 @@ function printTreasury(treasury: OreTreasuryWithId) {
 }
 
 async function main() {
-  const hs = await HyperStack.connect(ORE_STREAM_STACK);
+  const hs = await HyperStack.connect(ORE_STREAM_STACK, { url: 'http://localhost:8878' });
 
   console.log('--- Streaming OreRound and OreTreasury updates ---\n');
 

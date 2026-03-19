@@ -632,7 +632,7 @@ pub fn process_nested_struct(
                         }
                     });
 
-                    let resolver = if let Some(ref _url_path) = qualified_url {
+                    let resolver = if let Some(ref url_path) = qualified_url {
                         let method = resolve_attr
                             .method
                             .as_deref()
@@ -644,16 +644,10 @@ pub fn process_nested_struct(
 
                         let url_source = if resolve_attr.url_is_template {
                             crate::ast::UrlSource::Template(super::entity::parse_url_template(
-                                resolve_attr.url.as_deref().unwrap(),
+                                url_path,
                             ))
                         } else {
-                            let url_path_raw = resolve_attr.url.as_deref().unwrap();
-                            let qualified = if url_path_raw.contains('.') {
-                                url_path_raw.to_string()
-                            } else {
-                                format!("{}.{}", section_name, url_path_raw)
-                            };
-                            crate::ast::UrlSource::FieldPath(qualified)
+                            crate::ast::UrlSource::FieldPath(url_path.clone())
                         };
 
                         crate::ast::ResolverType::Url(crate::ast::UrlResolverConfig {
@@ -677,14 +671,7 @@ pub fn process_nested_struct(
                     let from = if resolve_attr.url_is_template {
                         None
                     } else {
-                        let qualified_url = resolve_attr.url.as_deref().map(|url_path_raw| {
-                            if url_path_raw.contains('.') {
-                                url_path_raw.to_string()
-                            } else {
-                                format!("{}.{}", section_name, url_path_raw)
-                            }
-                        });
-                        qualified_url.or(resolve_attr.from)
+                        qualified_url.or(resolve_attr.from.clone())
                     };
 
                     resolve_specs.push(parse::ResolveSpec {

@@ -9,6 +9,7 @@ name = "ore-server"
 path = "src/main.rs"
 
 [workspace]
+resolver = "2"
 
 [dependencies]
 ore-stack = { path = "../../stacks/ore" }

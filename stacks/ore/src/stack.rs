@@ -96,6 +96,15 @@ pub mod ore_stream {
         #[map(ore_sdk::accounts::Round::slot_hash, strategy = LastWrite, transform = Base58Encode)]
         pub slot_hash: Option<String>,
 
+        // Raw bytes of slot_hash for RNG calculation (from Round account, not entropy)
+        #[map(ore_sdk::accounts::Round::slot_hash, strategy = LastWrite, emit = false)]
+        pub slot_hash_bytes: Option<Vec<u8>>,
+
+        // Computed field that fetches the slot hash at expires_at from our cache
+        // This is populated from the SlotHashes sysvar via gRPC subscription
+        #[computed(state.expires_at.slot_hash())]
+        pub expires_at_slot_hash: Option<Vec<u8>>,
+
         #[computed(
             let hash = entropy.entropy_value_bytes.to_bytes();
             if (hash.len() as u64) != 32 {
@@ -121,6 +130,14 @@ pub mod ore_stream {
 
         #[computed(results.rng.map(|r| r.reverse_bits() % 625 == 0))]
         pub did_hit_motherlode: Option<bool>,
+
+        // Pre-reveal RNG calculation using resolved seed from API
+        // keccak_rng resolver: keccak256(slot_hash || seed || samples_le_bytes) → XOR-folded u64
+        #[computed(results.expires_at_slot_hash.keccak_rng(entropy.resolved_seed, entropy.entropy_samples))]
+        pub pre_reveal_rng: Option<u64>,
+
+        #[computed(results.pre_reveal_rng.map(|r| r % 25))]
+        pub pre_reveal_winning_square: Option<u64>,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize, Stream)]

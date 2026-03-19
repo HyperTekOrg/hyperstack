@@ -12,7 +12,7 @@ export function StatsPanel({ round, treasuryMotherlode, isConnected }: StatsPane
   const [timeRemaining, setTimeRemaining] = useState<string>('00:00');
 
   useEffect(() => {
-    const expiresAtUnix = round?.state.estimated_expires_at_unix;
+    const expiresAtUnix = round?.state?.estimated_expires_at_unix;
     if (!expiresAtUnix) {
       setTimeRemaining('00:00');
       return;
@@ -35,7 +35,7 @@ export function StatsPanel({ round, treasuryMotherlode, isConnected }: StatsPane
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [round?.state.estimated_expires_at_unix]);
+  }, [round?.state?.estimated_expires_at_unix]);
 
   return (
     <div className="flex flex-col gap-6 h-full">
@@ -56,7 +56,7 @@ export function StatsPanel({ round, treasuryMotherlode, isConnected }: StatsPane
         <div className="bg-white dark:bg-stone-800 rounded-2xl p-6 shadow-sm dark:shadow-none dark:ring-1 dark:ring-stone-700">
           <div className="flex items-center gap-2 text-2xl font-semibold text-stone-800 dark:text-stone-100">
             <SolanaIcon size={20} />
-            <span>{round ? round.state.total_deployed.toFixed(4) : '0.0000'}</span>
+            <span>{round ? round.state?.total_deployed?.toFixed(4) : '0.0000'}</span>
           </div>
           <div className="text-base text-stone-500 dark:text-stone-400 mt-2">Total deployed</div>
         </div>
@@ -70,11 +70,11 @@ export function StatsPanel({ round, treasuryMotherlode, isConnected }: StatsPane
       </div>
 
       <div className="flex items-center gap-4 px-2 text-base text-stone-500 dark:text-stone-400 mt-auto">
-        <span>Round {round?.id.round_id ?? '–'}</span>
+        <span>Round {round?.id?.round_id ?? '–'}</span>
         {round && (
           <>
             <span className="text-stone-300 dark:text-stone-600">·</span>
-            <span>{round.state.total_miners} miners</span>
+            <span>{round.state?.total_miners} miners</span>
           </>
         )}
       </div>

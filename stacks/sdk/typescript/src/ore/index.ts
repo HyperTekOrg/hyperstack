@@ -23,8 +23,11 @@ export interface OreRoundMetrics {
 
 export interface OreRoundResults {
   did_hit_motherlode?: boolean | null;
+  expires_at_slot_hash?: SlotHashBytes | null;
+  pre_reveal_rng?: KeccakRngValue | null;
+  pre_reveal_winning_square?: number | null;
   rent_payer?: string | null;
-  rng?: number | null;
+  rng?: KeccakRngValue | null;
   slot_hash?: string | null;
   top_miner?: string | null;
   top_miner_reward?: number | null;
@@ -58,6 +61,13 @@ export interface OreRound {
   ore_metadata?: TokenMetadata | null;
 }
 
+export interface SlotHashBytes {
+  /** 32-byte slot hash as array of numbers (0-255) */
+  bytes: number[];
+}
+
+export type KeccakRngValue = string;
+
 export interface TokenMetadata {
   mint: string;
   name?: string | null;
@@ -65,6 +75,12 @@ export interface TokenMetadata {
   decimals?: number | null;
   logo_uri?: string | null;
 }
+
+export const SlotHashBytesSchema = z.object({
+  bytes: z.array(z.number().int().min(0).max(255)).length(32),
+});
+
+export const KeccakRngValueSchema = z.string();
 
 export const TokenMetadataSchema = z.object({
   mint: z.string(),
@@ -97,8 +113,11 @@ export const OreRoundMetricsSchema = z.object({
 
 export const OreRoundResultsSchema = z.object({
   did_hit_motherlode: z.boolean().nullable().optional(),
+  expires_at_slot_hash: SlotHashBytesSchema.nullable().optional(),
+  pre_reveal_rng: KeccakRngValueSchema.nullable().optional(),
+  pre_reveal_winning_square: z.number().nullable().optional(),
   rent_payer: z.string().nullable().optional(),
-  rng: z.number().nullable().optional(),
+  rng: KeccakRngValueSchema.nullable().optional(),
   slot_hash: z.string().nullable().optional(),
   top_miner: z.string().nullable().optional(),
   top_miner_reward: z.number().nullable().optional(),

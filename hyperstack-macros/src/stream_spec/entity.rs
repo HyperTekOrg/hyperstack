@@ -1005,7 +1005,13 @@ fn generate_computed_fields_hook(
         // Get dependencies for this section
         let deps = section_dependencies.get(section).cloned().unwrap_or_default();
 
-        let _section_str = section.as_str();
+        let section_str = section.as_str();
+        
+        // Collect all computed field names in this section for cache tracking
+        let computed_field_names: Vec<String> = fields.iter().map(|(field_name, _expression, _field_type)| {
+            field_name.clone()
+        }).collect();
+        
         let field_evaluations: Vec<_> = fields.iter().map(|(field_name, expression, field_type)| {
             let field_str = field_name.as_str();
             let field_ident = format_ident!("{}", field_name);
@@ -1016,16 +1022,19 @@ fn generate_computed_fields_hook(
             let parsed_expr = parse_computed_expression(expression);
             // Qualify the expression with the section prefix for unqualified field refs
             let qualified_expr = qualify_field_refs(parsed_expr, section);
-            let expr_code = crate::codegen::generate_computed_expr_code(&qualified_expr);
+            // Use cache-aware code generation for intra-section dependencies
+            let expr_code = crate::codegen::generate_computed_expr_code_with_cache(&qualified_expr, section_str, &computed_field_names);
 
             quote! {
                 // Evaluate: #field_name
                 let computed_value = {
-                    // state is the full entity JSON state
+                    // state is the full entity JSON state (for cross-section references)
                     let state = &section_parent_state;
                     #expr_code
                 };
                 let serialized_value = hyperstack::runtime::serde_json::to_value(&computed_value)?;
+                // Update cache so dependent fields can read this value
+                computed_cache.insert(#field_str.to_string(), serialized_value.clone());
                 section_obj.insert(#field_str.to_string(), serialized_value);
 
                 let #field_ident: #field_type = section_obj
@@ -1076,7 +1085,13 @@ fn generate_computed_fields_hook(
                 extract_field!(whale_trade_count, u64);
                 extract_field!(average_trade_size, f64);
 
-                // Evaluate computed fields
+                // Initialize cache with current section values for intra-section computed field dependencies
+                let mut computed_cache: std::collections::HashMap<String, hyperstack::runtime::serde_json::Value> = std::collections::HashMap::new();
+                for (key, value) in section_obj.iter() {
+                    computed_cache.insert(key.clone(), value.clone());
+                }
+
+                // Evaluate computed fields (they read from cache for intra-section dependencies)
                 #(#field_evaluations)*
 
                 Ok(())
@@ -1095,7 +1110,8 @@ fn generate_computed_fields_hook(
         // Generate pre-extraction of cross-section data
         // These return Option so we can gracefully skip evaluation if a dependency doesn't exist yet
         let dep_extractions: Vec<_> = deps.iter().map(|dep_section| {
-            let dep_section_ident = format_ident!("{}", dep_section);
+            // Use a unique variable name to avoid shadowing issues
+            let dep_section_ident = format_ident!("{}_section", dep_section);
             let dep_section_str = dep_section.as_str();
             let section_struct_ident = format_ident!("{}Section", dep_section);
             quote! {
@@ -1119,13 +1135,14 @@ fn generate_computed_fields_hook(
         } else {
             // Has cross-section dependencies - extract first, then compute
             // If ANY dependency is missing, skip evaluation (the computed fields will remain None)
-            let dep_param_names: Vec<_> = deps.iter().map(|dep| format_ident!("{}", dep)).collect();
+            let dep_param_names: Vec<_> = deps.iter().map(|dep| format_ident!("{}_section", dep)).collect();
             let dep_checks: Vec<_> = deps.iter().map(|dep| {
-                let dep_ident = format_ident!("{}", dep);
+                let dep_ident = format_ident!("{}_section", dep);
                 quote! { #dep_ident.is_some() }
             }).collect();
             let dep_unwraps: Vec<_> = deps.iter().map(|dep| {
-                let dep_ident = format_ident!("{}", dep);
+                // Use consistent variable naming
+                let dep_ident = format_ident!("{}_section", dep);
                 quote! { let #dep_ident = #dep_ident.unwrap(); }
             }).collect();
             quote! {

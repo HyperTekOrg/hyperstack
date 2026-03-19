@@ -61,9 +61,15 @@ fn generate_slot_scheduler_task() -> TokenStream {
                     "SlotScheduler: started (in-memory only, pending callbacks will not survive restarts)"
                 );
                 loop {
+                    // Wait for a slot advance notification, or fall back to polling
+                    // every 5s in case notifications are missed.
+                    hyperstack::runtime::tokio::select! {
+                        _ = slot_tracker.notified() => {},
+                        _ = hyperstack::runtime::tokio::time::sleep(std::time::Duration::from_secs(5)) => {},
+                    }
+
                     let current_slot = slot_tracker.get();
                     if current_slot == 0 {
-                        hyperstack::runtime::tokio::time::sleep(std::time::Duration::from_millis(400)).await;
                         continue;
                     }
 
@@ -76,6 +82,14 @@ fn generate_slot_scheduler_task() -> TokenStream {
                         };
 
                         const MAX_RETRIES: u32 = hyperstack::runtime::hyperstack_interpreter::scheduler::MAX_RETRIES;
+
+                        if !due.is_empty() {
+                            hyperstack::runtime::tracing::info!(
+                                current_slot = current_slot,
+                                due_count = due.len(),
+                                "[SCHEDULER] Processing due callbacks"
+                            );
+                        }
 
                         for mut callback in due {
                             let state = {
@@ -102,12 +116,17 @@ fn generate_slot_scheduler_task() -> TokenStream {
                             };
 
                             if let Some(ref condition) = callback.condition {
-                                if !hyperstack::runtime::hyperstack_interpreter::scheduler::evaluate_condition(condition, &state) {
-                                    hyperstack::runtime::tracing::debug!(
-                                        entity = %callback.entity_name,
-                                        key = ?callback.primary_key,
-                                        "SlotScheduler: condition no longer met, skipping callback"
-                                    );
+                                let condition_met = hyperstack::runtime::hyperstack_interpreter::scheduler::evaluate_condition(condition, &state);
+                                let field_val = hyperstack::runtime::hyperstack_interpreter::scheduler::get_value_at_path(&state, &condition.field_path);
+                                hyperstack::runtime::tracing::info!(
+                                    entity = %callback.entity_name,
+                                    key = ?callback.primary_key,
+                                    condition_field = %condition.field_path,
+                                    condition_met = condition_met,
+                                    field_value = ?field_val,
+                                    "[SCHEDULER] Re-evaluating condition at callback fire time"
+                                );
+                                if !condition_met {
                                     continue;
                                 }
                             }
@@ -117,11 +136,16 @@ fn generate_slot_scheduler_task() -> TokenStream {
                                 // Already-set fields are protected from overwrite by the
                                 // SetOnce guard in VmContext::set_value_at_path.
                                 let already_resolved = callback.extracts.iter().all(|ext| {
-                                    hyperstack::runtime::hyperstack_interpreter::scheduler::get_value_at_path(&state, &ext.target_path)
-                                        .map(|v| !v.is_null())
-                                        .unwrap_or(false)
+                                    let val = hyperstack::runtime::hyperstack_interpreter::scheduler::get_value_at_path(&state, &ext.target_path);
+                                    val.map(|v| !v.is_null()).unwrap_or(false)
                                 });
                                 if already_resolved {
+                                    hyperstack::runtime::tracing::info!(
+                                        entity = %callback.entity_name,
+                                        key = ?callback.primary_key,
+                                        targets = ?callback.extracts.iter().map(|e| &e.target_path).collect::<Vec<_>>(),
+                                        "[SCHEDULER] SetOnce guard: all targets already populated, skipping"
+                                    );
                                     continue;
                                 }
                             }
@@ -229,8 +253,184 @@ fn generate_slot_scheduler_task() -> TokenStream {
                             "SlotScheduler: tick panicked, continuing"
                         );
                     }
+                }
+            });
+        }
+    }
+}
 
-                    hyperstack::runtime::tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+/// Generate the `tokio::spawn` block for the gRPC slot subscription.
+///
+/// Opens a dedicated gRPC connection to stream slot updates, updating the
+/// `SlotTracker` on each new slot. This drives the scheduler to fire callbacks
+/// immediately when the target slot arrives, rather than waiting for the next
+/// account/instruction event.
+fn generate_slot_subscription_task() -> TokenStream {
+    quote! {
+        // Helper function to parse SlotHashes sysvar data
+        fn parse_and_cache_slot_hashes(current_slot: u64, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+            if data.len() < 8 {
+                return Err("Data too short".into());
+            }
+
+            let len = u64::from_le_bytes([
+                data[0], data[1], data[2], data[3],
+                data[4], data[5], data[6], data[7],
+            ]) as usize;
+
+            let entry_size: usize = 40;
+            let expected_size = 8_usize
+                .checked_add(len.checked_mul(entry_size).ok_or("len * entry_size overflow")?)
+                .ok_or("expected_size overflow")?;
+
+            if data.len() < expected_size {
+                return Err(format!("Data too short: expected {}, got {}", expected_size, data.len()).into());
+            }
+
+            for i in 0..len {
+                let offset = 8 + (i * entry_size);
+                let slot = u64::from_le_bytes([
+                    data[offset], data[offset + 1], data[offset + 2], data[offset + 3],
+                    data[offset + 4], data[offset + 5], data[offset + 6], data[offset + 7],
+                ]);
+                let hash_bytes = &data[offset + 8..offset + 40];
+                let hash = hyperstack::runtime::bs58::encode(hash_bytes).into_string();
+                hyperstack::runtime::hyperstack_interpreter::record_slot_hash(slot, hash);
+                hyperstack::runtime::tracing::debug!(slot = slot, current_slot = current_slot, "[SLOT_SUB] Cached slot hash");
+            }
+            Ok(())
+        }
+
+        {
+            let slot_tracker = slot_tracker.clone();
+            let endpoint = endpoint.clone();
+            let x_token = x_token.clone();
+
+            hyperstack::runtime::tokio::spawn(async move {
+                hyperstack::runtime::tracing::info!("[SLOT_SUB] Starting dedicated gRPC slot subscription");
+
+                loop {
+                    let result: Result<(), Box<dyn std::error::Error + Send + Sync>> = async {
+                        use hyperstack::runtime::yellowstone_grpc_proto::geyser::{
+                            SubscribeRequest, SubscribeRequestFilterSlots, SubscribeRequestFilterAccounts,
+                            subscribe_update::UpdateOneof,
+                        };
+                        use hyperstack::runtime::futures::StreamExt;
+
+                        let mut builder = hyperstack::runtime::yellowstone_grpc_client::GeyserGrpcClient
+                            ::build_from_shared(endpoint.clone())?
+                            .x_token(x_token.clone())?
+                            .max_decoding_message_size(usize::MAX)
+                            .accept_compressed(
+                                hyperstack::runtime::yellowstone_grpc_proto::tonic::codec::CompressionEncoding::Zstd
+                            )
+                            .connect_timeout(std::time::Duration::from_secs(30))
+                            .timeout(std::time::Duration::from_secs(60));
+
+                        if endpoint.starts_with("https://") || endpoint.starts_with("grpcs://") {
+                            builder = builder.tls_config(
+                                hyperstack::runtime::yellowstone_grpc_proto::tonic::transport::ClientTlsConfig::new()
+                                    .with_native_roots()
+                            )?;
+                        }
+
+                        let mut client = builder.connect().await?;
+
+                        // Solana SlotHashes sysvar address
+                        let slot_hashes_sysvar = "SysvarS1otHashes111111111111111111111111111".to_string();
+
+                        let subscribe_request = SubscribeRequest {
+                            slots: std::collections::HashMap::from([(
+                                "slot_sub".to_string(),
+                                SubscribeRequestFilterSlots {
+                                    filter_by_commitment: Some(true),
+                                    interslot_updates: None,
+                                },
+                            )]),
+                            // Subscribe to SlotHashes sysvar to capture slot hashes
+                            accounts: std::collections::HashMap::from([(
+                                "slot_hashes_sysvar".to_string(),
+                                SubscribeRequestFilterAccounts {
+                                    account: vec![slot_hashes_sysvar.clone()],
+                                    owner: vec![],
+                                    filters: vec![],
+                                    nonempty_txn_signature: None,
+                                },
+                            )]),
+                            transactions: std::collections::HashMap::new(),
+                            transactions_status: std::collections::HashMap::new(),
+                            blocks: std::collections::HashMap::new(),
+                            blocks_meta: std::collections::HashMap::new(),
+                            entry: std::collections::HashMap::new(),
+                            commitment: Some(
+                                hyperstack::runtime::yellowstone_grpc_proto::geyser::CommitmentLevel::Processed as i32
+                            ),
+                            accounts_data_slice: vec![],
+                            ping: None,
+                            from_slot: None,
+                        };
+
+                        let (sub_tx, mut stream) = client
+                            .subscribe_with_request(Some(subscribe_request))
+                            .await?;
+                        // Keep sender alive for the duration of the stream
+                        let _keep_alive = sub_tx;
+
+                        hyperstack::runtime::tracing::info!("[SLOT_SUB] Connected and subscribed to slot and SlotHashes updates");
+
+                        while let Some(msg) = stream.next().await {
+                            match msg {
+                                Ok(update) => {
+                                    match update.update_oneof {
+                                        Some(UpdateOneof::Slot(slot_update)) => {
+                                            slot_tracker.record(slot_update.slot);
+                                        }
+                                        Some(UpdateOneof::Account(account_update)) => {
+                                            // Process SlotHashes sysvar update
+                                            if let Some(account) = account_update.account {
+                                                if hyperstack::runtime::bs58::encode(&account.pubkey).into_string() == slot_hashes_sysvar {
+                                                    hyperstack::runtime::tracing::debug!(
+                                                        slot = account_update.slot,
+                                                        "[SLOT_SUB] Received SlotHashes sysvar update"
+                                                    );
+                                                    // Parse slot hashes from account data
+                                                    // The SlotHashes sysvar contains a vector of (slot, hash) pairs
+                                                    if let Err(e) = parse_and_cache_slot_hashes(
+                                                        account_update.slot,
+                                                        &account.data,
+                                                    ) {
+                                                        hyperstack::runtime::tracing::warn!(
+                                                            error = %e,
+                                                            "[SLOT_SUB] Failed to parse SlotHashes"
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                Err(e) => {
+                                    hyperstack::runtime::tracing::warn!(
+                                        error = %e,
+                                        "[SLOT_SUB] Stream error, will reconnect"
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+
+                        Ok(())
+                    }.await;
+
+                    if let Err(e) = result {
+                        hyperstack::runtime::tracing::warn!(
+                            error = %e,
+                            "[SLOT_SUB] Connection failed, reconnecting in 2s"
+                        );
+                    }
+
+                    hyperstack::runtime::tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                 }
             });
         }
@@ -714,6 +914,13 @@ pub fn generate_vm_handler(
 
                 match resolver_result {
                     hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::Found(resolved_key) => {
+                        hyperstack::runtime::tracing::info!(
+                            event_type = %event_type,
+                            account = %account_address,
+                            resolved_key = %resolved_key,
+                            slot = slot,
+                            "[PDA] Account key resolution: Found"
+                        );
                         if !resolved_key.is_empty() {
                             if let Some(obj) = event_value.as_object_mut() {
                                 obj.insert("__resolved_primary_key".to_string(), hyperstack::runtime::serde_json::json!(resolved_key));
@@ -722,7 +929,7 @@ pub fn generate_vm_handler(
                     }
                     hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::QueueUntil(_discriminators) => {
                         let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                        tracing::info!(
+                        hyperstack::runtime::tracing::info!(
                             event_type = %event_type,
                             pda = %account_address,
                             slot = slot,
@@ -752,8 +959,42 @@ pub fn generate_vm_handler(
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
 
+                    // Clone event data before process_event so we can cache it
+                    // for reprocessing when a PDA mapping changes at round boundaries.
+                    let event_value_for_cache = event_value.clone();
+
                     let result = vm.process_event(&self.bytecode, event_value, event_type, Some(&context), Some(&mut log))
                         .map_err(|e| e.to_string());
+
+                    // Cache the last account data per PDA address.  When a PDA
+                    // mapping later changes (same PDA, different seed) the cached
+                    // data is returned for reprocessing with the corrected mapping.
+                    if result.is_ok() {
+                        // Cache under every state_id that routes this event_type so that
+                        // register_pda_reverse_lookup finds data for all participating entities.
+                        let state_ids: std::collections::HashSet<u32> = self.bytecode.event_routing
+                            .get(event_type)
+                            .map(|entities| entities.iter()
+                                .filter_map(|name| self.bytecode.entities.get(name).map(|eb| eb.state_id))
+                                .collect())
+                            .unwrap_or_default();
+                        let pending = hyperstack::runtime::hyperstack_interpreter::PendingAccountUpdate {
+                            account_type: event_type.to_string(),
+                            pda_address: account_address.clone(),
+                            account_data: event_value_for_cache,
+                            slot,
+                            write_version,
+                            signature: signature.clone(),
+                            queued_at: std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs() as i64,
+                            is_stale_reprocess: false,
+                        };
+                        for state_id in state_ids {
+                            vm.cache_last_account_data(state_id, &account_address, pending.clone());
+                        }
+                    }
 
                     let requests = if result.is_ok() {
                         vm.take_resolver_requests()
@@ -904,44 +1145,73 @@ pub fn generate_vm_handler(
 
                             // Process pending account updates from instruction hooks
                             if !pending_updates.is_empty() {
-                                tracing::info!(
+                                hyperstack::runtime::tracing::info!(
                                     count = pending_updates.len(),
                                     event_type = %event_type,
-                                    "Flushing pending account updates from instruction hooks"
+                                    "[PDA] Flushing pending account updates from instruction hooks"
                                 );
                                 for update in pending_updates {
-                                    let resolved_key = vm.try_pda_reverse_lookup(0, "default_pda_lookup", &update.pda_address);
+                                    hyperstack::runtime::tracing::info!(
+                                        account_type = %update.account_type,
+                                        pda = %update.pda_address,
+                                        update_slot = update.slot,
+                                        current_instruction_slot = slot,
+                                        "[PDA] Reprocessing flushed update"
+                                    );
+                                    let resolved_key = vm.try_chained_pda_lookup(0, "default_pda_lookup", &update.pda_address);
 
                                     let mut account_data = update.account_data;
-                                    if let Some(key) = resolved_key {
+                                    if let Some(ref key) = resolved_key {
+                                        hyperstack::runtime::tracing::info!(
+                                            pda = %update.pda_address,
+                                            resolved_key = %key,
+                                            "[PDA] Chained PDA lookup resolved for reprocessed update"
+                                        );
                                         if let Some(obj) = account_data.as_object_mut() {
                                             obj.insert("__resolved_primary_key".to_string(), hyperstack::runtime::serde_json::json!(key));
                                         }
+                                    } else {
+                                        hyperstack::runtime::tracing::warn!(
+                                            pda = %update.pda_address,
+                                            "[PDA] Chained PDA lookup returned None for reprocessed update"
+                                        );
                                     }
 
-                                    let update_context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(
-                                        update.slot,
-                                        update.signature.clone(),
-                                        update.write_version,
-                                    );
+                                    let update_context = if update.is_stale_reprocess {
+                                        hyperstack::runtime::tracing::info!(
+                                            pda = %update.pda_address,
+                                            "[PDA] Using reprocessed context (empty sig, skip resolvers)"
+                                        );
+                                        hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_reprocessed(
+                                            update.slot,
+                                            update.write_version,
+                                        )
+                                    } else {
+                                        hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(
+                                            update.slot,
+                                            update.signature.clone(),
+                                            update.write_version,
+                                        )
+                                    };
 
                                     match vm.process_event(&bytecode, account_data, &update.account_type, Some(&update_context), None) {
                                         Ok(pending_mutations) => {
-                                            tracing::info!(
+                                            hyperstack::runtime::tracing::info!(
                                                 account_type = %update.account_type,
                                                 pda = %update.pda_address,
                                                 mutations = pending_mutations.len(),
-                                                "Reprocessed flushed account update"
+                                                is_stale = update.is_stale_reprocess,
+                                                "[PDA] Reprocessed flushed account update"
                                             );
                                             if let Ok(ref mut mutations) = result {
                                                 mutations.extend(pending_mutations);
                                             }
                                         }
                                         Err(e) => {
-                                            tracing::warn!(
+                                            hyperstack::runtime::tracing::warn!(
                                                 account_type = %update.account_type,
                                                 error = %e,
-                                                "Failed to reprocess flushed account update"
+                                                "[PDA] Failed to reprocess flushed account update"
                                             );
                                         }
                                     }
@@ -1063,6 +1333,7 @@ pub fn generate_spec_function(
     };
 
     let slot_scheduler_task = generate_slot_scheduler_task();
+    let slot_subscription_task = generate_slot_subscription_task();
 
     quote! {
         pub fn spec() -> hyperstack::runtime::hyperstack_server::Spec {
@@ -1142,6 +1413,9 @@ pub fn generate_spec_function(
 
             // Spawn slot scheduler background task
             #slot_scheduler_task
+
+            // Spawn dedicated gRPC slot subscription to drive the scheduler in real-time
+            #slot_subscription_task
 
             loop {
                 let from_slot = {
@@ -1714,6 +1988,13 @@ pub fn generate_account_handler_impl(
 
                 match resolver_result {
                     hyperstack::runtime::hyperstack_interpreter::resolvers::KeyResolution::Found(resolved_key) => {
+                        hyperstack::runtime::tracing::info!(
+                            event_type = %event_type,
+                            account = %account_address,
+                            resolved_key = %resolved_key,
+                            slot = slot,
+                            "[PDA] Account key resolution: Found"
+                        );
                         if !resolved_key.is_empty() {
                             if let Some(obj) = event_value.as_object_mut() {
                                 obj.insert("__resolved_primary_key".to_string(), hyperstack::runtime::serde_json::json!(resolved_key));
@@ -1745,8 +2026,37 @@ pub fn generate_account_handler_impl(
 
                     let context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(slot, signature.clone(), write_version);
 
+                    let event_value_for_cache = event_value.clone();
+
                     let result = vm.process_event(&self.bytecode, event_value, event_type, Some(&context), Some(&mut log))
                         .map_err(|e| e.to_string());
+
+                    if result.is_ok() {
+                        // Cache under every state_id that routes this event_type so that
+                        // register_pda_reverse_lookup finds data for all participating entities.
+                        let state_ids: std::collections::HashSet<u32> = self.bytecode.event_routing
+                            .get(event_type)
+                            .map(|entities| entities.iter()
+                                .filter_map(|name| self.bytecode.entities.get(name).map(|eb| eb.state_id))
+                                .collect())
+                            .unwrap_or_default();
+                        let pending = hyperstack::runtime::hyperstack_interpreter::PendingAccountUpdate {
+                            account_type: event_type.to_string(),
+                            pda_address: account_address.clone(),
+                            account_data: event_value_for_cache,
+                            slot,
+                            write_version,
+                            signature: signature.clone(),
+                            queued_at: std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs() as i64,
+                            is_stale_reprocess: false,
+                        };
+                        for state_id in state_ids {
+                            vm.cache_last_account_data(state_id, &account_address, pending.clone());
+                        }
+                    }
 
                     let requests = if result.is_ok() {
                         vm.take_resolver_requests()
@@ -1900,24 +2210,64 @@ pub fn generate_instruction_handler_impl(
                             drop(ctx);
 
                             if !pending_updates.is_empty() {
+                                hyperstack::runtime::tracing::info!(
+                                    count = pending_updates.len(),
+                                    event_type = %event_type,
+                                    "[PDA] Flushing pending account updates from instruction hooks"
+                                );
                                 for update in pending_updates {
-                                    let resolved_key = vm.try_pda_reverse_lookup(0, "default_pda_lookup", &update.pda_address);
+                                    hyperstack::runtime::tracing::info!(
+                                        account_type = %update.account_type,
+                                        pda = %update.pda_address,
+                                        update_slot = update.slot,
+                                        current_instruction_slot = slot,
+                                        "[PDA] Reprocessing flushed update"
+                                    );
+                                    let resolved_key = vm.try_chained_pda_lookup(0, "default_pda_lookup", &update.pda_address);
 
                                     let mut account_data = update.account_data;
-                                    if let Some(key) = resolved_key {
+                                    if let Some(ref key) = resolved_key {
+                                        hyperstack::runtime::tracing::info!(
+                                            pda = %update.pda_address,
+                                            resolved_key = %key,
+                                            "[PDA] Chained PDA lookup resolved for reprocessed update"
+                                        );
                                         if let Some(obj) = account_data.as_object_mut() {
                                             obj.insert("__resolved_primary_key".to_string(), hyperstack::runtime::serde_json::json!(key));
                                         }
+                                    } else {
+                                        hyperstack::runtime::tracing::warn!(
+                                            pda = %update.pda_address,
+                                            "[PDA] Chained PDA lookup returned None for reprocessed update"
+                                        );
                                     }
 
-                                    let update_context = hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(
-                                        update.slot,
-                                        update.signature.clone(),
-                                        update.write_version,
-                                    );
+                                    let update_context = if update.is_stale_reprocess {
+                                        hyperstack::runtime::tracing::info!(
+                                            pda = %update.pda_address,
+                                            "[PDA] Using reprocessed context (empty sig, skip resolvers)"
+                                        );
+                                        hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_reprocessed(
+                                            update.slot,
+                                            update.write_version,
+                                        )
+                                    } else {
+                                        hyperstack::runtime::hyperstack_interpreter::UpdateContext::new_account(
+                                            update.slot,
+                                            update.signature.clone(),
+                                            update.write_version,
+                                        )
+                                    };
 
                                     match vm.process_event(&bytecode, account_data, &update.account_type, Some(&update_context), None) {
                                         Ok(pending_mutations) => {
+                                            hyperstack::runtime::tracing::info!(
+                                                account_type = %update.account_type,
+                                                pda = %update.pda_address,
+                                                mutations = pending_mutations.len(),
+                                                is_stale = update.is_stale_reprocess,
+                                                "[PDA] Reprocessed flushed account update"
+                                            );
                                             if let Ok(ref mut mutations) = result {
                                                 mutations.extend(pending_mutations);
                                             }
@@ -1926,7 +2276,7 @@ pub fn generate_instruction_handler_impl(
                                             hyperstack::runtime::tracing::warn!(
                                                 account_type = %update.account_type,
                                                 error = %e,
-                                                "Flushed account reprocessing failed"
+                                                "[PDA] Flushed account reprocessing failed"
                                             );
                                         }
                                     }
@@ -2103,6 +2453,7 @@ pub fn generate_multi_pipeline_spec_function(
     }).collect();
 
     let slot_scheduler_task = generate_slot_scheduler_task();
+    let slot_subscription_task = generate_slot_subscription_task();
 
     quote! {
         pub fn spec() -> hyperstack::runtime::hyperstack_server::Spec {
@@ -2181,6 +2532,9 @@ pub fn generate_multi_pipeline_spec_function(
 
             // Spawn slot scheduler background task
             #slot_scheduler_task
+
+            // Spawn dedicated gRPC slot subscription to drive the scheduler in real-time
+            #slot_subscription_task
 
             loop {
                 let from_slot = {

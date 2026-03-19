@@ -332,6 +332,12 @@ pub enum ComputedExpr {
     ContextSlot,
     /// Access the unix timestamp from the current update context
     ContextTimestamp,
+
+    /// Keccak256 hash function for computing Ethereum-compatible hashes
+    /// Takes a byte array expression and returns the 32-byte hash as a Vec<u8>
+    Keccak256 {
+        expr: Box<ComputedExpr>,
+    },
 }
 
 /// Binary operators for computed expressions
@@ -733,6 +739,12 @@ pub enum SourceSpec {
         type_name: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         serialization: Option<IdlSerializationSnapshot>,
+        /// True when this handler listens to an account-state event (not an
+        /// instruction or custom event).  Set at code-generation time from
+        /// the structural source kind so the compiler does not need to rely
+        /// on naming-convention heuristics.
+        #[serde(default)]
+        is_account: bool,
     },
 }
 

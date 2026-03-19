@@ -289,9 +289,27 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
                         .any(|f| f.name == field_info.field_name);
 
                     if !already_exists {
+                        // For computed fields, check field_mappings for resolver type info
+                        let field_path = format!("{}.{}", section.name, field_info.field_name);
+                        let effective_field_info =
+                            if let Some(mapping) = self.spec.field_mappings.get(&field_path) {
+                                // Use mapping's inner_type if it's a resolver output type
+                                if mapping
+                                    .inner_type
+                                    .as_ref()
+                                    .is_some_and(|t| is_builtin_resolver_type(t))
+                                {
+                                    mapping
+                                } else {
+                                    field_info
+                                }
+                            } else {
+                                field_info
+                            };
+
                         section_fields.push(TypeScriptField {
                             name: field_info.field_name.clone(),
-                            ts_type: self.field_type_info_to_typescript(field_info),
+                            ts_type: self.field_type_info_to_typescript(effective_field_info),
                             optional: field_info.is_optional,
                             description: None,
                         });
@@ -540,8 +558,35 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
         let registry = crate::resolvers::builtin_resolver_registry();
 
         for resolver in registry.definitions() {
-            if self.uses_builtin_type(resolver.output_type())
-                && !self.already_emitted_types.contains(resolver.output_type())
+            let output_type = resolver.output_type();
+            let should_emit = self.uses_builtin_type(output_type)
+                && !self.already_emitted_types.contains(output_type);
+
+            // Also check if any types from the resolver's typescript_schema are used
+            let extra_types_used = if let Some(ts_schema) = resolver.typescript_schema() {
+                // Extract type names from export statements (simple string parsing)
+                ts_schema.definition.lines().any(|line| {
+                    let line = line.trim();
+                    // Match "export const TypeNameSchema"
+                    if let Some(rest) = line.strip_prefix("export const ") {
+                        let parts: Vec<&str> = rest.split_whitespace().collect();
+                        if parts.len() >= 2 && parts[1] == "=" {
+                            // Extract the base type name from "TypeNameSchema"
+                            let schema_name = parts[0];
+                            if let Some(type_name) = schema_name.strip_suffix("Schema") {
+                                return self.uses_builtin_type(type_name)
+                                    && !self.already_emitted_types.contains(type_name);
+                            }
+                        }
+                    }
+                    false
+                })
+            } else {
+                false
+            };
+
+            if (should_emit || extra_types_used)
+                && !self.already_emitted_types.contains(output_type)
             {
                 if let Some(schema) = resolver.typescript_schema() {
                     schemas.push((schema.name.to_string(), schema.definition.to_string()));
@@ -553,11 +598,18 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
     }
 
     fn uses_builtin_type(&self, type_name: &str) -> bool {
+        // Check section fields
         for section in &self.spec.sections {
             for field in &section.fields {
                 if field.inner_type.as_deref() == Some(type_name) {
                     return true;
                 }
+            }
+        }
+        // Check field_mappings for computed fields (they may have resolver types not in sections)
+        for field_info in self.spec.field_mappings.values() {
+            if field_info.inner_type.as_deref() == Some(type_name) {
+                return true;
             }
         }
         false
@@ -568,9 +620,34 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
         let registry = crate::resolvers::builtin_resolver_registry();
 
         for resolver in registry.definitions() {
-            if self.uses_builtin_type(resolver.output_type())
-                && !self.already_emitted_types.contains(resolver.output_type())
-            {
+            let output_type = resolver.output_type();
+            let should_emit = self.uses_builtin_type(output_type)
+                && !self.already_emitted_types.contains(output_type);
+
+            // Also check if any types from the resolver's typescript_interface are used
+            let extra_types_used = if let Some(ts_interface) = resolver.typescript_interface() {
+                // Extract type names from export statements (simple string parsing)
+                ts_interface.lines().any(|line| {
+                    let line = line.trim();
+                    // Match "export type TypeName" or "export interface TypeName"
+                    if let Some(rest) = line.strip_prefix("export type ") {
+                        if let Some(type_name) = rest.split_whitespace().next() {
+                            return self.uses_builtin_type(type_name)
+                                && !self.already_emitted_types.contains(type_name);
+                        }
+                    } else if let Some(rest) = line.strip_prefix("export interface ") {
+                        if let Some(type_name) = rest.split_whitespace().next() {
+                            return self.uses_builtin_type(type_name)
+                                && !self.already_emitted_types.contains(type_name);
+                        }
+                    }
+                    false
+                })
+            } else {
+                false
+            };
+
+            if should_emit || extra_types_used {
                 if let Some(interface) = resolver.typescript_interface() {
                     interfaces.push(interface.to_string());
                 }
@@ -949,9 +1026,14 @@ function listView<T>(view: string): ViewDef<T, 'list'> {
         } else {
             let schema_entries: Vec<String> = unique_schemas
                 .iter()
+                .filter(|name| name.ends_with("Schema"))
                 .map(|name| format!("    {}: {},", name.trim_end_matches("Schema"), name))
                 .collect();
-            format!("\n  schemas: {{\n{}\n  }},", schema_entries.join("\n"))
+            if schema_entries.is_empty() {
+                String::new()
+            } else {
+                format!("\n  schemas: {{\n{}\n  }},", schema_entries.join("\n"))
+            }
         };
 
         // Generate URL line - either actual URL or placeholder comment
@@ -2067,9 +2149,14 @@ fn generate_stack_definition_multi(
     } else {
         let schema_entries: Vec<String> = unique_schemas
             .iter()
+            .filter(|name| name.ends_with("Schema"))
             .map(|name| format!("    {}: {},", name.trim_end_matches("Schema"), name))
             .collect();
-        format!("\n  schemas: {{\n{}\n  }},", schema_entries.join("\n"))
+        if schema_entries.is_empty() {
+            String::new()
+        } else {
+            format!("\n  schemas: {{\n{}\n  }},", schema_entries.join("\n"))
+        }
     };
 
     let entity_types: Vec<String> = entity_names.iter().map(|n| to_pascal_case(n)).collect();

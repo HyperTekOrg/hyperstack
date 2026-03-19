@@ -37,8 +37,11 @@ bytemuck = { version = "1.21", features = ["derive", "min_const_generics"], opti
 yellowstone-vixen = { workspace = true, optional = true }
 yellowstone-vixen-core = { workspace = true, optional = true }
 yellowstone-vixen-yellowstone-grpc-source = { workspace = true, optional = true }
+yellowstone-grpc-client = { workspace = true, optional = true }
+yellowstone-grpc-proto = { workspace = true, optional = true }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"], optional = true }
 futures = { version = "0.3", optional = true }
+sha3 = { version = "0.10", optional = true }
 
 [features]
 default = ["interpreter", "macros", "server"]
@@ -60,6 +63,9 @@ runtime = [
     "dep:yellowstone-vixen",
     "dep:yellowstone-vixen-core",
     "dep:yellowstone-vixen-yellowstone-grpc-source",
+    "dep:yellowstone-grpc-client",
+    "dep:yellowstone-grpc-proto",
     "dep:reqwest",
     "dep:futures",
+    "dep:sha3",
 ]

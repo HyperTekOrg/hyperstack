@@ -92,6 +92,7 @@ fn build_source_spec_code(source: &SourceSpec) -> TokenStream {
             discriminator,
             type_name,
             serialization,
+            is_account,
         } => {
             let program_id_code = match program_id {
                 Some(id) => quote! { Some(#id.to_string()) },
@@ -125,6 +126,7 @@ fn build_source_spec_code(source: &SourceSpec) -> TokenStream {
                     discriminator: #discriminator_code,
                     type_name: #type_name.to_string(),
                     serialization: #serialization_code,
+                    is_account: #is_account,
                 }
             }
         }

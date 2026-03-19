@@ -11,6 +11,16 @@ fn stop_field_path(target_path: &str) -> String {
 
 #[derive(Debug, Clone)]
 pub enum OpCode {
+    /// Abort the handler with empty mutations when the key register is null
+    /// and the event is an account-state update (not IxState / CpiEvent).
+    /// Placed immediately after key resolution so that downstream opcodes
+    /// (index updates, field mappings, resolvers, emit) never execute with
+    /// a garbage key. The null-key event is then eligible for queueing by
+    /// process_event's miss-handling logic.
+    AbortIfNullKey {
+        key: Register,
+        is_account_event: bool,
+    },
     LoadEventField {
         path: FieldPath,
         dest: Register,
@@ -664,6 +674,23 @@ impl<S> TypedCompiler<S> {
 
         ops.extend(self.compile_key_loading(&spec.key_resolution, key_reg, &spec.mappings));
 
+        // Guard: if key resolved to null on an account-state event, abort
+        // early with empty mutations so process_event can queue the update
+        // for later reprocessing.  Without this, downstream opcodes would
+        // create a phantom entity keyed by null and produce non-empty
+        // mutations that prevent queueing.
+        let is_account_event = matches!(
+            spec.source,
+            SourceSpec::Source {
+                is_account: true,
+                ..
+            }
+        );
+        ops.push(OpCode::AbortIfNullKey {
+            key: key_reg,
+            is_account_event,
+        });
+
         ops.push(OpCode::ReadOrInitState {
             state_id: self.state_id,
             key: key_reg,
@@ -1196,7 +1223,11 @@ impl<S> TypedCompiler<S> {
                 let lookup_reg = 15;
                 let result_reg = 17;
 
-                // Prefer resolver-provided key as lookup input
+                // Prefer resolver-provided key as lookup input.
+                // When __resolved_primary_key is set (e.g. round_address from
+                // PDA reverse lookup), use it directly — this gives a one-hop
+                // lookup (round_address → round_id) instead of a two-hop chain
+                // (Var address → PDA → round_address → round_id).
                 ops.push(OpCode::CopyRegister {
                     source: resolved_key_reg,
                     dest: lookup_reg,
@@ -1223,6 +1254,16 @@ impl<S> TypedCompiler<S> {
                     lookup_value: lookup_reg,
                     dest: result_reg,
                 });
+                // CRITICAL: For Lookup resolution, we ONLY use the lookup result.
+                // If the lookup fails (result_reg is null), the mutation will be skipped.
+                // We do NOT fall back to __resolved_primary_key or the raw lookup value,
+                // because that would create a separate entity with the wrong key.
+                // The resolver-provided key (e.g., PDA address) is only used as the lookup input,
+                // NOT as the entity key. The entity key must come from the lookup index.
+                ops.push(OpCode::CopyRegister {
+                    source: result_reg,
+                    dest: key_reg,
+                });
                 // NOTE: We intentionally do NOT fall back to lookup_reg when LookupIndex returns null.
                 // If the lookup fails (because the RoundState account hasn't been processed yet),
                 // the result_reg will remain null, and the mutation will be skipped.
@@ -1230,18 +1271,14 @@ impl<S> TypedCompiler<S> {
                 // which caused the PDA address to be used as the key instead of the round_id.
                 // This resulted in mutations with key = PDA address instead of key = primary_key.
 
-                // First, set key_reg to __resolved_primary_key (may be null).
-                // When the flush path provides a resolved key via PDA reverse lookup,
-                // this gives it priority over the LookupIndex result.
-                // This matches the pattern used by Embedded and Computed strategies.
+                // Use LookupIndex result as the primary key. Do NOT fall back to
+                // resolved_key_reg (__resolved_primary_key) because for Lookup handlers
+                // it contains the PDA reverse-lookup result (e.g. round_address), which
+                // is an intermediate value, not the actual primary key (e.g. round_id).
+                // If the LookupIndex chain returns null (round not yet indexed), key
+                // stays null so the update is queued and reprocessed once the lookup
+                // index is populated—matching the pre-23503ac behaviour.
                 ops.push(OpCode::CopyRegister {
-                    source: resolved_key_reg,
-                    dest: key_reg,
-                });
-                // If key_reg is still null (no resolved key from flush), use the LookupIndex result.
-                // This preserves the original behavior for first-arrival events where
-                // __resolved_primary_key is not yet set.
-                ops.push(OpCode::CopyRegisterIfNull {
                     source: result_reg,
                     dest: key_reg,
                 });

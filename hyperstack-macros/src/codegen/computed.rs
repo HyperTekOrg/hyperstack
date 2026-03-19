@@ -93,6 +93,9 @@ fn extract_deps_recursive(expr: &ComputedExpr, section: &str, deps: &mut HashSet
             extract_deps_recursive(expr, section, deps);
         }
         ComputedExpr::ContextSlot | ComputedExpr::ContextTimestamp => {}
+        ComputedExpr::Keccak256 { expr } => {
+            extract_deps_recursive(expr, section, deps);
+        }
     }
 }
 
@@ -115,6 +118,7 @@ fn contains_resolver_computed(expr: &ComputedExpr) -> bool {
         | ComputedExpr::U64FromLeBytes { bytes: expr }
         | ComputedExpr::U64FromBeBytes { bytes: expr }
         | ComputedExpr::JsonToBytes { expr }
+        | ComputedExpr::Keccak256 { expr }
         | ComputedExpr::Unary { expr, .. } => contains_resolver_computed(expr),
         ComputedExpr::Binary { left, right, .. } => {
             contains_resolver_computed(left) || contains_resolver_computed(right)
@@ -447,13 +451,16 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
                     let param_ident = format_ident!("{}", param);
 
                     if contains_resolver_computed(body) {
+                        // For closures with resolver calls, pass the element as JSON value
+                        // and let the resolver extract what it needs
                         let body_code = generate_option_safe_expr_code(body);
                         return quote! {
                             #inner.as_ref().and_then(|v| {
                                 v.as_array().map(|arr| {
                                     arr.iter()
                                         .filter_map(|elem| {
-                                            let #param_ident = elem.as_f64()?;
+                                            // Pass element as serde_json::Value for resolvers
+                                            let #param_ident = elem;
                                             #body_code
                                         })
                                         .collect::<Vec<_>>()
@@ -492,20 +499,23 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
             let method_name = method.as_str();
             let arg_codes: Vec<TokenStream> =
                 args.iter().map(generate_computed_expr_code).collect();
+            // Wrap in an immediately-invoked closure returning Option so that
+            // .ok()? works regardless of whether the surrounding context returns
+            // Result or Option.
             quote! {
-                {
-                    let resolver_args = vec![#(hyperstack::runtime::serde_json::to_value(#arg_codes)?),*];
+                (|| -> Option<hyperstack::runtime::serde_json::Value> {
+                    let resolver_args = vec![#(hyperstack::runtime::serde_json::to_value(#arg_codes).ok()?),*];
                     let resolver_value = hyperstack::runtime::hyperstack_interpreter::resolvers::evaluate_resolver_computed(
                         #resolver_name,
                         #method_name,
                         &resolver_args,
-                    )?;
+                    ).ok()?;
                     if resolver_value.is_null() {
                         None
                     } else {
                         Some(resolver_value)
                     }
-                }
+                })()
             }
         }
         ComputedExpr::Literal { value } => {
@@ -646,5 +656,419 @@ pub fn generate_computed_expr_code(expr: &ComputedExpr) -> TokenStream {
             // __context_timestamp is i64, use directly
             quote! { __context_timestamp }
         }
+        ComputedExpr::Keccak256 { expr } => {
+            let inner = generate_computed_expr_code(expr);
+            quote! {
+                {
+                    use hyperstack::runtime::sha3::{Digest, Keccak256};
+                    let bytes = #inner;
+                    let hash = Keccak256::digest(&bytes);
+                    hash.to_vec()
+                }
+            }
+        }
+    }
+}
+
+/// Generate code for a computed expression that uses a local cache for intra-section field references.
+/// This ensures dependent computed fields see the newly computed values within the same evaluation cycle.
+pub fn generate_computed_expr_code_with_cache(
+    expr: &ComputedExpr,
+    section: &str,
+    computed_field_names: &[String],
+) -> TokenStream {
+    match expr {
+        ComputedExpr::FieldRef { path } => {
+            let parts: Vec<&str> = path.split('.').collect();
+            if parts.len() >= 2 && parts[0] == section {
+                // This is a field reference within the same section
+                let field_name = parts[1];
+                if computed_field_names.contains(&field_name.to_string()) {
+                    // It's a computed field - read from cache to get the latest value
+                    let remaining_path: Vec<&str> = parts[2..].to_vec();
+                    if remaining_path.is_empty() {
+                        return quote! {
+                            computed_cache.get(#field_name).cloned()
+                        };
+                    } else {
+                        let path_tokens: Vec<_> = remaining_path
+                            .iter()
+                            .map(|p| quote! { .and_then(|v| v.get(#p)) })
+                            .collect();
+                        return quote! {
+                            computed_cache.get(#field_name).cloned()#(#path_tokens)*
+                        };
+                    }
+                }
+            }
+            // Not a computed field in this section - delegate to original implementation
+            generate_computed_expr_code(expr)
+        }
+        ComputedExpr::Binary { op, left, right } => {
+            let left_code =
+                generate_computed_expr_code_with_cache(left, section, computed_field_names);
+            let right_code =
+                generate_computed_expr_code_with_cache(right, section, computed_field_names);
+            let op_code = match op {
+                BinaryOp::Add => quote! { + },
+                BinaryOp::Sub => quote! { - },
+                BinaryOp::Mul => quote! { * },
+                BinaryOp::Div => quote! { / },
+                BinaryOp::Mod => quote! { % },
+                BinaryOp::Gt => quote! { > },
+                BinaryOp::Lt => quote! { < },
+                BinaryOp::Gte => quote! { >= },
+                BinaryOp::Lte => quote! { <= },
+                BinaryOp::Eq => quote! { == },
+                BinaryOp::Ne => quote! { != },
+                BinaryOp::And => quote! { && },
+                BinaryOp::Or => quote! { || },
+                BinaryOp::Xor => quote! { ^ },
+                BinaryOp::BitAnd => quote! { & },
+                BinaryOp::BitOr => quote! { | },
+                BinaryOp::Shl => quote! { << },
+                BinaryOp::Shr => quote! { >> },
+            };
+            quote! { (#left_code #op_code #right_code) }
+        }
+        ComputedExpr::MethodCall {
+            expr: inner,
+            method,
+            args,
+        } => {
+            let inner_code =
+                generate_computed_expr_code_with_cache(inner, section, computed_field_names);
+            let method_ident = format_ident!("{}", method);
+
+            // Special handling for .map() with closures - check if closure body references computed fields
+            if method == "map" && args.len() == 1 {
+                if let ComputedExpr::Closure { param, body } = &args[0] {
+                    let param_ident = format_ident!("{}", param);
+                    // Check if the closure body references any computed fields in this section
+                    let body_deps = extract_field_dependencies(body, section);
+                    let has_computed_deps: std::collections::HashSet<String> = body_deps
+                        .intersection(&computed_field_names.iter().cloned().collect())
+                        .cloned()
+                        .collect();
+
+                    // Closures in .map() return Option, so use option-safe code generation
+                    let body_code = if has_computed_deps.is_empty() {
+                        generate_option_safe_expr_code(body)
+                    } else {
+                        generate_computed_expr_code_with_cache_option_safe(
+                            body,
+                            section,
+                            computed_field_names,
+                        )
+                    };
+
+                    return quote! {
+                        {
+                            let inner_result = #inner_code;
+                            // Handle both arrays (Vec<u64>) and single values (u64)
+                            let map_result: Option<hyperstack::runtime::serde_json::Value> = inner_result.and_then(|v| {
+                                if let Some(arr) = v.as_array() {
+                                    // Handle array: map over each element
+                                    let mapped: Vec<_> = arr
+                                        .iter()
+                                        .filter_map(|elem| {
+                                            elem.as_u64().and_then(|#param_ident| {
+                                                let result = #body_code;
+                                                hyperstack::runtime::serde_json::to_value(result).ok()
+                                            })
+                                        })
+                                        .collect();
+                                    hyperstack::runtime::serde_json::to_value(mapped).ok()
+                                } else {
+                                    // Handle single value
+                                    v.as_u64().and_then(|#param_ident| {
+                                        let result = #body_code;
+                                        hyperstack::runtime::serde_json::to_value(result).ok()
+                                    })
+                                }
+                            });
+                            map_result
+                        }
+                    };
+                }
+            }
+
+            let arg_codes: Vec<TokenStream> = args
+                .iter()
+                .map(|arg| {
+                    generate_computed_expr_code_with_cache(arg, section, computed_field_names)
+                })
+                .collect();
+
+            quote! { #inner_code.#method_ident(#(#arg_codes),*) }
+        }
+        ComputedExpr::Cast {
+            expr: inner,
+            to_type,
+        } => {
+            let inner_code =
+                generate_computed_expr_code_with_cache(inner, section, computed_field_names);
+            let type_ident = format_ident!("{}", to_type);
+            quote! { (#inner_code as #type_ident) }
+        }
+        ComputedExpr::Paren { expr: inner } => {
+            let inner_code =
+                generate_computed_expr_code_with_cache(inner, section, computed_field_names);
+            quote! { (#inner_code) }
+        }
+        ComputedExpr::UnwrapOr {
+            expr: inner,
+            default,
+        } => {
+            let inner_code =
+                generate_computed_expr_code_with_cache(inner, section, computed_field_names);
+            let default_num = match default {
+                serde_json::Value::Number(n) => {
+                    if let Some(i) = n.as_i64() {
+                        quote! { #i }
+                    } else if let Some(u) = n.as_u64() {
+                        quote! { #u }
+                    } else {
+                        let f = n.as_f64().unwrap_or(0.0);
+                        quote! { #f }
+                    }
+                }
+                serde_json::Value::Bool(b) => {
+                    if *b {
+                        quote! { 1i64 }
+                    } else {
+                        quote! { 0i64 }
+                    }
+                }
+                _ => quote! { 0i64 },
+            };
+            quote! {
+                #inner_code.and_then(|v| v.as_i64().or_else(|| v.as_u64().map(|u| u as i64))).unwrap_or(#default_num)
+            }
+        }
+        ComputedExpr::Some { value } => {
+            let inner =
+                generate_computed_expr_code_with_cache(value, section, computed_field_names);
+            quote! { Some(#inner) }
+        }
+        ComputedExpr::None => {
+            quote! { None }
+        }
+        ComputedExpr::Unary { op, expr: inner } => {
+            let inner_code =
+                generate_computed_expr_code_with_cache(inner, section, computed_field_names);
+            match op {
+                UnaryOp::Not => quote! { !#inner_code },
+                UnaryOp::ReverseBits => quote! { #inner_code.reverse_bits() },
+            }
+        }
+        ComputedExpr::Keccak256 { expr: inner } => {
+            let inner_code =
+                generate_computed_expr_code_with_cache(inner, section, computed_field_names);
+            quote! {
+                {
+                    use hyperstack::runtime::sha3::{Digest, Keccak256};
+                    let bytes = #inner_code;
+                    let hash = Keccak256::digest(&bytes);
+                    hash.to_vec()
+                }
+            }
+        }
+        ComputedExpr::U64FromLeBytes { bytes } => {
+            let bytes_code =
+                generate_computed_expr_code_with_cache(bytes, section, computed_field_names);
+            quote! {
+                {
+                    let slice = #bytes_code;
+                    let arr: [u8; 8] = slice.try_into().unwrap_or([0u8; 8]);
+                    u64::from_le_bytes(arr)
+                }
+            }
+        }
+        ComputedExpr::ByteArray { bytes } => {
+            let byte_literals: Vec<proc_macro2::TokenStream> = bytes
+                .iter()
+                .map(|b| {
+                    let byte_val = *b;
+                    quote! { #byte_val }
+                })
+                .collect();
+            quote! { vec![#(#byte_literals),*] }
+        }
+        ComputedExpr::Var { name } => {
+            let name_ident = format_ident!("{}", name);
+            quote! { #name_ident }
+        }
+        ComputedExpr::Literal { value } => match value {
+            serde_json::Value::Number(n) => {
+                if let Some(u) = n.as_u64() {
+                    quote! { #u }
+                } else if let Some(i) = n.as_i64() {
+                    quote! { #i }
+                } else {
+                    let num = n.as_f64().unwrap_or(0.0);
+                    quote! { #num }
+                }
+            }
+            serde_json::Value::Bool(b) => {
+                quote! { #b }
+            }
+            serde_json::Value::Null => {
+                quote! { () }
+            }
+            _ => quote! { 0.0_f64 },
+        },
+        ComputedExpr::ResolverComputed {
+            resolver,
+            method,
+            args,
+        } => {
+            let resolver_name = resolver.as_str();
+            let method_name = method.as_str();
+            // Use cache-aware codegen for args so that intra-section computed
+            // field references (e.g. results.expires_at_slot_hash) read from
+            // computed_cache instead of the stale section_parent_state snapshot.
+            let arg_codes: Vec<TokenStream> = args
+                .iter()
+                .map(|arg| {
+                    generate_computed_expr_code_with_cache(arg, section, computed_field_names)
+                })
+                .collect();
+            quote! {
+                (|| -> Option<hyperstack::runtime::serde_json::Value> {
+                    let resolver_args = vec![#(hyperstack::runtime::serde_json::to_value(#arg_codes).ok()?),*];
+                    let resolver_value = hyperstack::runtime::hyperstack_interpreter::resolvers::evaluate_resolver_computed(
+                        #resolver_name,
+                        #method_name,
+                        &resolver_args,
+                    ).ok()?;
+                    if resolver_value.is_null() {
+                        None
+                    } else {
+                        Some(resolver_value)
+                    }
+                })()
+            }
+        }
+        ComputedExpr::Closure { param, body } => {
+            let param_ident = format_ident!("{}", param);
+            let body_code =
+                generate_computed_expr_code_with_cache(body, section, computed_field_names);
+            quote! { |#param_ident| #body_code }
+        }
+        // Fallback for any unhandled expressions
+        _ => generate_computed_expr_code(expr),
+    }
+}
+
+/// Option-safe version of generate_computed_expr_code_with_cache.
+/// Use this when the generated code will be used inside a closure that returns Option.
+fn generate_computed_expr_code_with_cache_option_safe(
+    expr: &ComputedExpr,
+    section: &str,
+    computed_field_names: &[String],
+) -> TokenStream {
+    match expr {
+        ComputedExpr::FieldRef { path } => {
+            let parts: Vec<&str> = path.split('.').collect();
+            if parts.len() >= 2 && parts[0] == section {
+                let field_name = parts[1];
+                if computed_field_names.contains(&field_name.to_string()) {
+                    let remaining_path: Vec<&str> = parts[2..].to_vec();
+                    if remaining_path.is_empty() {
+                        return quote! {
+                            computed_cache.get(#field_name).cloned()
+                        };
+                    } else {
+                        let path_tokens: Vec<_> = remaining_path
+                            .iter()
+                            .map(|p| quote! { .and_then(|v| v.get(#p)) })
+                            .collect();
+                        return quote! {
+                            computed_cache.get(#field_name).cloned()#(#path_tokens)*
+                        };
+                    }
+                }
+            }
+            generate_option_safe_expr_code(expr)
+        }
+        ComputedExpr::Binary { op, left, right } => {
+            let left_code = generate_computed_expr_code_with_cache_option_safe(
+                left,
+                section,
+                computed_field_names,
+            );
+            let right_code = generate_computed_expr_code_with_cache_option_safe(
+                right,
+                section,
+                computed_field_names,
+            );
+            let op_code = match op {
+                BinaryOp::Add => quote! { + },
+                BinaryOp::Sub => quote! { - },
+                BinaryOp::Mul => quote! { * },
+                BinaryOp::Div => quote! { / },
+                BinaryOp::Mod => quote! { % },
+                BinaryOp::Gt => quote! { > },
+                BinaryOp::Lt => quote! { < },
+                BinaryOp::Gte => quote! { >= },
+                BinaryOp::Lte => quote! { <= },
+                BinaryOp::Eq => quote! { == },
+                BinaryOp::Ne => quote! { != },
+                BinaryOp::And => quote! { && },
+                BinaryOp::Or => quote! { || },
+                BinaryOp::Xor => quote! { ^ },
+                BinaryOp::BitAnd => quote! { & },
+                BinaryOp::BitOr => quote! { | },
+                BinaryOp::Shl => quote! { << },
+                BinaryOp::Shr => quote! { >> },
+            };
+            quote! { (#left_code #op_code #right_code) }
+        }
+        ComputedExpr::ResolverComputed {
+            resolver,
+            method,
+            args,
+        } => {
+            let resolver_name = resolver.as_str();
+            let method_name = method.as_str();
+            let arg_codes: Vec<TokenStream> =
+                args.iter().map(generate_option_safe_expr_code).collect();
+            quote! {
+                {
+                    let resolver_args = vec![#(hyperstack::runtime::serde_json::to_value(#arg_codes).ok()?),*];
+                    let resolver_value = hyperstack::runtime::hyperstack_interpreter::resolvers::evaluate_resolver_computed(
+                        #resolver_name,
+                        #method_name,
+                        &resolver_args,
+                    ).ok()?;
+                    if resolver_value.is_null() {
+                        None
+                    } else {
+                        Some(resolver_value)
+                    }
+                }
+            }
+        }
+        ComputedExpr::Var { name } => {
+            let name_ident = format_ident!("{}", name);
+            quote! { #name_ident }
+        }
+        ComputedExpr::Literal { value } => match value {
+            serde_json::Value::Number(n) => {
+                if let Some(u) = n.as_u64() {
+                    quote! { #u }
+                } else if let Some(i) = n.as_i64() {
+                    quote! { #i }
+                } else {
+                    let num = n.as_f64().unwrap_or(0.0);
+                    quote! { #num }
+                }
+            }
+            serde_json::Value::Bool(b) => quote! { #b },
+            serde_json::Value::Null => quote! { () },
+            _ => quote! { 0.0_f64 },
+        },
+        _ => generate_option_safe_expr_code(expr),
     }
 }

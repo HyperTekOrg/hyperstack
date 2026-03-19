@@ -34,6 +34,74 @@ pub fn parse_computed_expression(tokens: &proc_macro2::TokenStream) -> ComputedE
 fn resolver_for_method(method: &str) -> Option<&'static str> {
     match method {
         "ui_amount" | "raw_amount" => Some("TokenMetadata"),
+        "slot_hash" | "keccak_rng" => Some("SlotHash"),
+        _ => None,
+    }
+}
+
+/// Get the output type name for a resolver method.
+/// This maps resolver method names to their TypeScript output type names.
+pub fn resolver_output_type(method: &str) -> Option<&'static str> {
+    match method {
+        "slot_hash" => Some("SlotHashBytes"),
+        "keccak_rng" => Some("KeccakRngValue"),
+        "ui_amount" => Some("TokenUiAmount"),
+        "raw_amount" => Some("TokenRawAmount"),
+        _ => None,
+    }
+}
+
+/// Returns true if the expression tree contains any U64FromLeBytes or U64FromBeBytes node.
+/// Used to detect full-range u64 computations that must be serialized as strings in TypeScript.
+pub fn expr_contains_u64_from_bytes(expr: &crate::ast::ComputedExpr) -> bool {
+    use crate::ast::ComputedExpr;
+    match expr {
+        ComputedExpr::U64FromLeBytes { .. } | ComputedExpr::U64FromBeBytes { .. } => true,
+        ComputedExpr::Some { value } => expr_contains_u64_from_bytes(value),
+        ComputedExpr::Paren { expr } => expr_contains_u64_from_bytes(expr),
+        ComputedExpr::Binary { left, right, .. } => {
+            expr_contains_u64_from_bytes(left) || expr_contains_u64_from_bytes(right)
+        }
+        ComputedExpr::Unary { expr, .. } => expr_contains_u64_from_bytes(expr),
+        ComputedExpr::MethodCall { expr, args, .. } => {
+            expr_contains_u64_from_bytes(expr) || args.iter().any(expr_contains_u64_from_bytes)
+        }
+        ComputedExpr::Cast { expr, .. } => expr_contains_u64_from_bytes(expr),
+        ComputedExpr::UnwrapOr { expr, .. } => expr_contains_u64_from_bytes(expr),
+        ComputedExpr::Slice { expr, .. } => expr_contains_u64_from_bytes(expr),
+        ComputedExpr::Index { expr, .. } => expr_contains_u64_from_bytes(expr),
+        ComputedExpr::Let { value, body, .. } => {
+            expr_contains_u64_from_bytes(value) || expr_contains_u64_from_bytes(body)
+        }
+        ComputedExpr::If {
+            condition: _,
+            then_branch,
+            else_branch,
+        } => expr_contains_u64_from_bytes(then_branch) || expr_contains_u64_from_bytes(else_branch),
+        ComputedExpr::Keccak256 { expr } => expr_contains_u64_from_bytes(expr),
+        ComputedExpr::JsonToBytes { expr } => expr_contains_u64_from_bytes(expr),
+        ComputedExpr::Closure { body, .. } => expr_contains_u64_from_bytes(body),
+        ComputedExpr::ResolverComputed { .. }
+        | ComputedExpr::FieldRef { .. }
+        | ComputedExpr::Var { .. }
+        | ComputedExpr::Literal { .. }
+        | ComputedExpr::ByteArray { .. }
+        | ComputedExpr::None
+        | ComputedExpr::ContextSlot
+        | ComputedExpr::ContextTimestamp => false,
+    }
+}
+
+/// Extract the resolver output type from a computed expression.
+/// Returns the type name if the expression is a ResolverComputed call.
+pub fn extract_resolver_type_from_computed_expr(
+    expr: &crate::ast::ComputedExpr,
+) -> Option<&'static str> {
+    use crate::ast::ComputedExpr;
+    match expr {
+        ComputedExpr::ResolverComputed { method, .. } => resolver_output_type(method),
+        ComputedExpr::Some { value } => extract_resolver_type_from_computed_expr(value),
+        ComputedExpr::Paren { expr } => extract_resolver_type_from_computed_expr(expr),
         _ => None,
     }
 }
@@ -141,6 +209,9 @@ pub fn qualify_field_refs(expr: ComputedExpr, section: &str) -> ComputedExpr {
         },
         ComputedExpr::ContextSlot => ComputedExpr::ContextSlot,
         ComputedExpr::ContextTimestamp => ComputedExpr::ContextTimestamp,
+        ComputedExpr::Keccak256 { expr } => ComputedExpr::Keccak256 {
+            expr: Box::new(qualify_field_refs(*expr, section)),
+        },
     }
 }
 
@@ -378,6 +449,9 @@ fn resolve_bindings_in_expr(expr: ComputedExpr, bindings: &HashSet<String>) -> C
             bytes: Box::new(resolve_bindings_in_expr(*bytes, bindings)),
         },
         ComputedExpr::JsonToBytes { expr } => ComputedExpr::JsonToBytes {
+            expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
+        },
+        ComputedExpr::Keccak256 { expr } => ComputedExpr::Keccak256 {
             expr: Box::new(resolve_bindings_in_expr(*expr, bindings)),
         },
         ComputedExpr::Closure { param, body } => {

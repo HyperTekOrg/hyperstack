@@ -69,9 +69,12 @@ pub mod runtime {
     pub use reqwest;
     pub use serde;
     pub use serde_json;
+    pub use sha3;
     pub use smallvec;
     pub use tokio;
     pub use tracing;
+    pub use yellowstone_grpc_client;
+    pub use yellowstone_grpc_proto;
     pub use yellowstone_vixen;
     pub use yellowstone_vixen_core;
     pub use yellowstone_vixen_yellowstone_grpc_source;

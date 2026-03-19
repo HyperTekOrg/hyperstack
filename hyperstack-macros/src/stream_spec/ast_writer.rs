@@ -13,8 +13,8 @@ use crate::ast::writer::{
     convert_idl_to_snapshot, parse_population_strategy, parse_transformation,
 };
 use crate::ast::{
-    ComparisonOp, ComputedFieldSpec, ConditionExpr, EntitySection, FieldPath, HookAction,
-    IdentitySpec, IdlSerializationSnapshot, InstructionHook, KeyResolutionStrategy,
+    ComparisonOp, ComputedFieldSpec, ConditionExpr, EntitySection, FieldPath, FieldTypeInfo,
+    HookAction, IdentitySpec, IdlSerializationSnapshot, InstructionHook, KeyResolutionStrategy,
     LookupIndexSpec, MappingSource, ResolveStrategy, ResolverCondition, ResolverExtractSpec,
     ResolverHook, ResolverSpec, ResolverStrategy, ResolverType, SerializableFieldMapping,
     SerializableHandlerSpec, SerializableStreamSpec, SourceSpec,
@@ -25,7 +25,10 @@ use crate::parse::conditions as condition_parser;
 use crate::parse::idl as idl_parser;
 use crate::utils::path_to_string;
 
-use super::computed::{parse_computed_expression, qualify_field_refs};
+use super::computed::{
+    expr_contains_u64_from_bytes, extract_resolver_type_from_computed_expr,
+    parse_computed_expression, qualify_field_refs,
+};
 use super::handlers::{find_field_in_instruction, get_join_on_field};
 
 // ============================================================================
@@ -146,6 +149,54 @@ pub fn build_ast(
                 format!("{}.{}", section.name, field_info.field_name)
             };
             field_mappings.insert(field_path, field_info.clone());
+        }
+    }
+
+    // Add computed fields to field_mappings with resolver type information
+    // This ensures computed fields that use resolvers get proper TypeScript schema generation
+    for computed_spec in &computed_field_specs {
+        // Determine the TypeScript type override for this computed field.
+        // Priority 1: explicit resolver method (e.g. .keccak_rng(...)) → its declared output type.
+        // Priority 2: expression assembles a u64 from raw bytes → "KeccakRngValue" (string),
+        //             because values span [0, 2^64-1] and exceed Number.MAX_SAFE_INTEGER.
+        let resolver_type: Option<&'static str> =
+            extract_resolver_type_from_computed_expr(&computed_spec.expression).or_else(|| {
+                let result_type = &computed_spec.result_type;
+                let is_u64 = result_type == "u64"
+                    || result_type == "Option < u64 >"
+                    || result_type == "Option<u64>";
+                if is_u64 && expr_contains_u64_from_bytes(&computed_spec.expression) {
+                    Some("KeccakRngValue")
+                } else {
+                    None
+                }
+            });
+
+        if let Some(resolver_type) = resolver_type {
+            // Parse the result type to determine if it's optional and if it's an array
+            let result_type = &computed_spec.result_type;
+            let is_optional =
+                result_type.starts_with("Option <") || result_type.starts_with("Option<");
+            let is_array = result_type.contains("Vec <")
+                || result_type.contains("Vec<")
+                || result_type.contains("[");
+
+            let field_info = FieldTypeInfo {
+                field_name: computed_spec.target_path.clone(),
+                rust_type_name: computed_spec.result_type.clone(),
+                base_type: if is_array {
+                    crate::ast::BaseType::Array
+                } else {
+                    crate::ast::BaseType::Any
+                },
+                is_optional,
+                is_array,
+                inner_type: Some(resolver_type.to_string()),
+                source_path: None,
+                resolved_type: None,
+                emit: true,
+            };
+            field_mappings.insert(computed_spec.target_path.clone(), field_info);
         }
     }
 
@@ -714,6 +765,7 @@ fn build_source_handler(
             discriminator: None,
             type_name,
             serialization,
+            is_account: !is_instruction && !is_cpi_event,
         },
         key_resolution,
         mappings: serializable_mappings,
@@ -938,6 +990,7 @@ fn build_event_handler(
             discriminator: None,
             type_name,
             serialization: None,
+            is_account: false,
         },
         key_resolution,
         mappings: serializable_mappings,

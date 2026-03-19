@@ -1,11 +1,13 @@
 //! Snapshot type definitions
 
-use serde::{de::Error, Deserialize, Deserializer, Serialize};
+use serde::{de::Error as DeError, Deserialize, Deserializer, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+use crate::types::SteelDiscriminant;
+
+#[derive(Debug, Clone, Serialize)]
 pub struct IdlSnapshot {
     pub name: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "address")]
     pub program_id: Option<String>,
     pub version: String,
     pub accounts: Vec<IdlAccountSnapshot>,
@@ -16,32 +18,178 @@ pub struct IdlSnapshot {
     pub events: Vec<IdlEventSnapshot>,
     #[serde(default)]
     pub errors: Vec<IdlErrorSnapshot>,
-    #[serde(default = "default_discriminant_size")]
     pub discriminant_size: usize,
 }
 
-fn default_discriminant_size() -> usize {
-    8
+impl<'de> Deserialize<'de> for IdlSnapshot {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // First deserialize to a generic Value to inspect instructions
+        let value = serde_json::Value::deserialize(deserializer)?;
+
+        // Check if any instruction has discriminant (Steel-style) vs discriminator (Anchor-style)
+        let discriminant_size = value
+            .get("instructions")
+            .and_then(|instrs| instrs.as_array())
+            .map(|instrs| {
+                if instrs.is_empty() {
+                    return false;
+                }
+                instrs.iter().all(|ix| {
+                    // Steel-style: has discriminant field, no discriminator or empty discriminator
+                    let has_discriminant = ix.get("discriminant").is_some();
+                    let discriminator = ix.get("discriminator");
+                    let has_discriminator = discriminator
+                        .map(|d| {
+                            !d.is_null() && d.as_array().map(|a| !a.is_empty()).unwrap_or(true)
+                        })
+                        .unwrap_or(false);
+                    has_discriminant && !has_discriminator
+                })
+            })
+            .map(|is_steel| if is_steel { 1 } else { 8 })
+            .unwrap_or(8); // Default to 8 if no instructions
+
+        // Now deserialize the full struct
+        let mut intermediate: IdlSnapshotIntermediate = serde_json::from_value(value)
+            .map_err(|e| DeError::custom(format!("Failed to deserialize IDL: {}", e)))?;
+        intermediate.discriminant_size = discriminant_size;
+
+        Ok(IdlSnapshot {
+            name: intermediate.name,
+            program_id: intermediate.program_id,
+            version: intermediate.version,
+            accounts: intermediate.accounts,
+            instructions: intermediate.instructions,
+            types: intermediate.types,
+            events: intermediate.events,
+            errors: intermediate.errors,
+            discriminant_size: intermediate.discriminant_size,
+        })
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// Intermediate struct for deserialization
+#[derive(Debug, Clone, Deserialize)]
+struct IdlSnapshotIntermediate {
+    pub name: String,
+    #[serde(default, alias = "address")]
+    pub program_id: Option<String>,
+    pub version: String,
+    pub accounts: Vec<IdlAccountSnapshot>,
+    pub instructions: Vec<IdlInstructionSnapshot>,
+    #[serde(default)]
+    pub types: Vec<IdlTypeDefSnapshot>,
+    #[serde(default)]
+    pub events: Vec<IdlEventSnapshot>,
+    #[serde(default)]
+    pub errors: Vec<IdlErrorSnapshot>,
+    #[serde(default)]
+    pub discriminant_size: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct IdlAccountSnapshot {
+    pub name: String,
+    pub discriminator: Vec<u8>,
+    pub docs: Vec<String>,
+    pub serialization: Option<IdlSerializationSnapshot>,
+    /// Account fields - populated from inline type definition
+    pub fields: Vec<IdlFieldSnapshot>,
+    /// Inline type definition (for Steel format with type.fields structure)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub type_def: Option<IdlInlineTypeDef>,
+}
+
+// Intermediate struct for deserialization
+#[derive(Deserialize)]
+struct IdlAccountSnapshotIntermediate {
     pub name: String,
     pub discriminator: Vec<u8>,
     #[serde(default)]
     pub docs: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub serialization: Option<IdlSerializationSnapshot>,
+    #[serde(default)]
+    pub fields: Vec<IdlFieldSnapshot>,
+    #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
+    pub type_def: Option<IdlInlineTypeDef>,
+}
+
+impl<'de> Deserialize<'de> for IdlAccountSnapshot {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let intermediate = IdlAccountSnapshotIntermediate::deserialize(deserializer)?;
+
+        // Normalize fields: if empty but type_def has fields, use those
+        let fields = if intermediate.fields.is_empty() {
+            if let Some(type_def) = intermediate.type_def.as_ref() {
+                type_def.fields.clone()
+            } else {
+                intermediate.fields
+            }
+        } else {
+            intermediate.fields
+        };
+
+        Ok(IdlAccountSnapshot {
+            name: intermediate.name,
+            discriminator: intermediate.discriminator,
+            docs: intermediate.docs,
+            serialization: intermediate.serialization,
+            fields,
+            type_def: intermediate.type_def,
+        })
+    }
+}
+
+/// Inline type definition for account fields (Steel format)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IdlInlineTypeDef {
+    pub kind: String,
+    pub fields: Vec<IdlFieldSnapshot>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IdlInstructionSnapshot {
     pub name: String,
+    #[serde(default)]
     pub discriminator: Vec<u8>,
+    #[serde(default)]
+    pub discriminant: Option<SteelDiscriminant>,
     #[serde(default)]
     pub docs: Vec<String>,
     pub accounts: Vec<IdlInstructionAccountSnapshot>,
     pub args: Vec<IdlFieldSnapshot>,
+}
+
+impl IdlInstructionSnapshot {
+    /// Get the computed 8-byte discriminator.
+    /// Returns the explicit discriminator if present, otherwise computes from discriminant.
+    pub fn get_discriminator(&self) -> Vec<u8> {
+        if !self.discriminator.is_empty() {
+            return self.discriminator.clone();
+        }
+
+        if let Some(disc) = &self.discriminant {
+            match u8::try_from(disc.value) {
+                Ok(value) => return vec![value],
+                Err(_) => {
+                    tracing::warn!(
+                        instruction = %self.name,
+                        value = disc.value,
+                        "Steel discriminant exceeds u8::MAX; falling back to Anchor hash"
+                    );
+                }
+            }
+        }
+
+        crate::discriminator::anchor_discriminator(&format!("global:{}", self.name))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,6 +237,7 @@ fn deserialize_hash_map<'de, D>(
 where
     D: Deserializer<'de>,
 {
+    use serde::de::Error;
     let values: Vec<IdlTypeSnapshot> = Vec::deserialize(deserializer)?;
     if values.len() != 2 {
         return Err(D::Error::custom("hashMap must have exactly 2 elements"));
@@ -208,10 +357,13 @@ mod tests {
                 discriminator: vec![1, 2, 3, 4, 5, 6, 7, 8],
                 docs: vec!["Example account".to_string()],
                 serialization: Some(IdlSerializationSnapshot::Borsh),
+                fields: vec![],
+                type_def: None,
             }],
             instructions: vec![IdlInstructionSnapshot {
                 name: "example_instruction".to_string(),
                 discriminator: vec![8, 7, 6, 5, 4, 3, 2, 1],
+                discriminant: None,
                 docs: vec!["Example instruction".to_string()],
                 accounts: vec![IdlInstructionAccountSnapshot {
                     name: "payer".to_string(),
@@ -253,7 +405,7 @@ mod tests {
                 name: "ExampleError".to_string(),
                 msg: Some("example".to_string()),
             }],
-            discriminant_size: default_discriminant_size(),
+            discriminant_size: 8,
         };
 
         let serialized = serde_json::to_value(&snapshot).expect("serialize snapshot");

@@ -29,6 +29,10 @@ pub struct UpdateContext {
     /// Transaction index for instruction updates (orders transactions within a slot)
     /// Used for staleness detection to reject out-of-order updates
     pub txn_index: Option<u64>,
+    /// When true, QueueResolver opcodes are skipped during handler execution.
+    /// Set for reprocessed cached data from PDA mapping changes to prevent
+    /// stale data from triggering resolvers or locking in wrong values via SetOnce.
+    pub skip_resolvers: bool,
     /// Additional custom metadata that can be added without breaking changes
     pub metadata: HashMap<String, Value>,
 }
@@ -42,6 +46,7 @@ impl UpdateContext {
             timestamp: None,
             write_version: None,
             txn_index: None,
+            skip_resolvers: false,
             metadata: HashMap::new(),
         }
     }
@@ -54,6 +59,7 @@ impl UpdateContext {
             timestamp: Some(timestamp),
             write_version: None,
             txn_index: None,
+            skip_resolvers: false,
             metadata: HashMap::new(),
         }
     }
@@ -66,6 +72,7 @@ impl UpdateContext {
             timestamp: None,
             write_version: Some(write_version),
             txn_index: None,
+            skip_resolvers: false,
             metadata: HashMap::new(),
         }
     }
@@ -78,6 +85,22 @@ impl UpdateContext {
             timestamp: None,
             write_version: None,
             txn_index: Some(txn_index),
+            skip_resolvers: false,
+            metadata: HashMap::new(),
+        }
+    }
+
+    /// Create context for reprocessed cached account data from PDA mapping changes.
+    /// Uses empty signature to prevent `when` guards from matching stale instructions,
+    /// and sets skip_resolvers to prevent stale scheduling/SetOnce lock-in.
+    pub fn new_reprocessed(slot: u64, write_version: u64) -> Self {
+        Self {
+            slot: Some(slot),
+            signature: None,
+            timestamp: None,
+            write_version: Some(write_version),
+            txn_index: None,
+            skip_resolvers: true,
             metadata: HashMap::new(),
         }
     }
@@ -352,6 +375,13 @@ impl LookupIndex {
         self.index.lock().unwrap().put(key, primary_key);
     }
 
+    /// Remove an entry by lookup value.  Used when a PDA mapping changes to
+    /// clear stale entries that would otherwise shadow the updated PDA mapping.
+    pub fn remove(&self, lookup_value: &Value) {
+        let key = value_to_cache_key(lookup_value);
+        self.index.lock().unwrap().pop(&key);
+    }
+
     pub fn len(&self) -> usize {
         self.index.lock().unwrap().len()
     }
@@ -562,6 +592,12 @@ pub struct PendingAccountUpdate {
     pub write_version: u64,
     pub signature: String,
     pub queued_at: i64,
+    /// When true, this update was pulled from the `last_account_data` cache
+    /// during a PDA mapping change. It carries stale data from a previous
+    /// entity mapping and should use `UpdateContext::new_reprocessed` to
+    /// prevent `when` guards from matching stale instruction signatures
+    /// and to skip resolver scheduling.
+    pub is_stale_reprocess: bool,
 }
 
 /// Input for queueing an instruction event when PDA lookup fails.
@@ -769,6 +805,10 @@ pub struct StateTable {
     pub pda_reverse_lookups: HashMap<String, PdaReverseLookup>,
     pub pending_updates: DashMap<String, Vec<PendingAccountUpdate>>,
     pub pending_instruction_events: DashMap<String, Vec<PendingInstructionEvent>>,
+    /// Cache of the most recent account data per PDA address.  When a PDA
+    /// mapping changes (same PDA, different seed) the cached data is returned
+    /// for reprocessing so cross-account Lookup handlers resolve to the new key.
+    pub last_account_data: DashMap<String, PendingAccountUpdate>,
     version_tracker: VersionTracker,
     instruction_dedup_cache: VersionTracker,
     config: StateTableConfig,
@@ -946,19 +986,50 @@ impl VmContext {
                 pda_reverse_lookups: HashMap::new(),
                 pending_updates: DashMap::new(),
                 pending_instruction_events: DashMap::new(),
+                last_account_data: DashMap::new(),
                 version_tracker: VersionTracker::new(),
                 instruction_dedup_cache: VersionTracker::with_capacity(
                     DEFAULT_MAX_INSTRUCTION_DEDUP_ENTRIES,
                 ),
                 config: StateTableConfig::default(),
-                entity_name: "default".to_string(),
+                entity_name: String::new(),
                 recent_tx_instructions: std::sync::Mutex::new(LruCache::new(
                     NonZeroUsize::new(1000).unwrap(),
                 )),
                 deferred_when_ops: DashMap::new(),
             },
         );
+
         vm
+    }
+
+    /// Create a new VmContext specifically for multi-entity operation.
+    pub fn new_multi_entity() -> Self {
+        VmContext {
+            registers: vec![Value::Null; 256],
+            states: HashMap::new(),
+            instructions_executed: 0,
+            cache_hits: 0,
+            path_cache: HashMap::new(),
+            pda_cache_hits: 0,
+            pda_cache_misses: 0,
+            pending_queue_size: 0,
+            resolver_requests: VecDeque::new(),
+            resolver_pending: HashMap::new(),
+            resolver_cache: LruCache::new(
+                NonZeroUsize::new(DEFAULT_MAX_RESOLVER_CACHE_ENTRIES)
+                    .expect("capacity must be > 0"),
+            ),
+            resolver_cache_hits: 0,
+            resolver_cache_misses: 0,
+            current_context: None,
+            warnings: Vec::new(),
+            last_pda_lookup_miss: None,
+            last_lookup_index_miss: None,
+            last_pda_registered: None,
+            last_lookup_index_keys: Vec::new(),
+            scheduled_callbacks: Vec::new(),
+        }
     }
 
     pub fn new_with_config(state_config: StateTableConfig) -> Self {
@@ -997,6 +1068,7 @@ impl VmContext {
                 pda_reverse_lookups: HashMap::new(),
                 pending_updates: DashMap::new(),
                 pending_instruction_events: DashMap::new(),
+                last_account_data: DashMap::new(),
                 version_tracker: VersionTracker::new(),
                 instruction_dedup_cache: VersionTracker::with_capacity(
                     DEFAULT_MAX_INSTRUCTION_DEDUP_ENTRIES,
@@ -1097,13 +1169,19 @@ impl VmContext {
                             .as_secs() as i64
                     });
                 let eval_result = evaluator(&mut entity_state, context_slot, context_timestamp);
+
                 if eval_result.is_ok() {
+                    let mut changed_fields = Vec::new();
                     for (path, old_value) in
                         entity_bytecode.computed_paths.iter().zip(old_values.iter())
                     {
                         let new_value = Self::get_value_at_path(&entity_state, path);
-                        if new_value != *old_value && should_emit(path) {
+                        let changed = new_value != *old_value;
+                        let will_emit = should_emit(path);
+
+                        if changed && will_emit {
                             dirty_tracker.mark_replaced(path);
+                            changed_fields.push(path.clone());
                         }
                     }
                 }
@@ -1484,7 +1562,24 @@ impl VmContext {
                                     "flushing deferred when-ops"
                                 );
                                 for op in deferred_ops {
-                                    match self.apply_deferred_when_op(state_id, &op) {
+                                    // Look up the entity bytecode to get the computed fields evaluator
+                                    let (evaluator, computed_paths) = bytecode
+                                        .entities
+                                        .get(&op.entity_name)
+                                        .map(|eb| {
+                                            (
+                                                eb.computed_fields_evaluator.as_ref(),
+                                                eb.computed_paths.as_slice(),
+                                            )
+                                        })
+                                        .unwrap_or((None, &[]));
+
+                                    match self.apply_deferred_when_op(
+                                        state_id,
+                                        &op,
+                                        evaluator,
+                                        Some(computed_paths),
+                                    ) {
                                         Ok(mutations) => all_mutations.extend(mutations),
                                         Err(e) => tracing::warn!(
                                             "Failed to apply deferred when-op: {}",
@@ -1647,6 +1742,10 @@ impl VmContext {
                                                 match self.apply_deferred_when_op(
                                                     entity_bytecode.state_id,
                                                     &op,
+                                                    entity_bytecode
+                                                        .computed_fields_evaluator
+                                                        .as_ref(),
+                                                    Some(&entity_bytecode.computed_paths),
                                                 ) {
                                                     Ok(mutations) => {
                                                         all_mutations.extend(mutations)
@@ -1889,6 +1988,22 @@ impl VmContext {
                     self.registers[*dest] = value;
                     pc += 1;
                 }
+                OpCode::AbortIfNullKey {
+                    key,
+                    is_account_event,
+                } => {
+                    let key_value = &self.registers[*key];
+                    if key_value.is_null() && *is_account_event {
+                        tracing::debug!(
+                            event_type = %event_type,
+                            "AbortIfNullKey: key is null for account state event, \
+                             returning empty mutations for queueing"
+                        );
+                        return Ok(Vec::new());
+                    }
+
+                    pc += 1;
+                }
                 OpCode::ReadOrInitState {
                     state_id: _,
                     key,
@@ -1907,6 +2022,7 @@ impl VmContext {
                             pda_reverse_lookups: HashMap::new(),
                             pending_updates: DashMap::new(),
                             pending_instruction_events: DashMap::new(),
+                            last_account_data: DashMap::new(),
                             version_tracker: VersionTracker::new(),
                             instruction_dedup_cache: VersionTracker::with_capacity(
                                 DEFAULT_MAX_INSTRUCTION_DEDUP_ENTRIES,
@@ -1940,19 +2056,28 @@ impl VmContext {
                     if !key_value.is_null() {
                         if let Some(ctx) = &self.current_context {
                             // Account updates: use recency check to discard stale updates
+                            // IMPORTANT: Use account address (PDA) as the key, not entity key,
+                            // because multiple accounts can update the same entity and each
+                            // has its own independent write_version
                             if ctx.is_account_update() {
                                 if let (Some(slot), Some(write_version)) =
                                     (ctx.slot, ctx.write_version)
                                 {
+                                    // Get account address from event_value for proper tracking
+                                    let account_address = event_value
+                                        .get("__account_address")
+                                        .cloned()
+                                        .unwrap_or_else(|| key_value.clone());
+
                                     if !state.is_fresh_update(
-                                        &key_value,
+                                        &account_address,
                                         event_type,
                                         slot,
                                         write_version,
                                     ) {
                                         self.add_warning(format!(
-                                            "Stale account update skipped: slot={}, write_version={}",
-                                            slot, write_version
+                                            "Stale account update skipped: slot={}, write_version={}, account={}",
+                                            slot, write_version, account_address
                                         ));
                                         return Ok(Vec::new());
                                     }
@@ -2642,12 +2767,28 @@ impl VmContext {
                 } => {
                     let actual_state_id = override_state_id;
 
+                    // Skip resolvers for reprocessed cached data from PDA mapping changes.
+                    // Stale data can carry wrong field values (e.g. old entropy_value) and
+                    // wrong schedule_at slots that would lock in incorrect results via SetOnce.
+                    if self
+                        .current_context
+                        .as_ref()
+                        .map(|c| c.skip_resolvers)
+                        .unwrap_or(false)
+                    {
+                        pc += 1;
+                        continue;
+                    }
+
                     // Evaluate condition if present
                     if let Some(cond) = condition {
                         let field_val =
                             Self::get_value_at_path(&self.registers[*state], &cond.field_path)
                                 .unwrap_or(Value::Null);
-                        if !self.evaluate_comparison(&field_val, &cond.op, &cond.value)? {
+                        let condition_met =
+                            self.evaluate_comparison(&field_val, &cond.op, &cond.value)?;
+
+                        if !condition_met {
                             pc += 1;
                             continue;
                         }
@@ -2694,12 +2835,6 @@ impl VmContext {
                                 // schedule_at path is missing or value is not a u64 —
                                 // skip resolver entirely rather than executing immediately,
                                 // since the state likely hasn't been fully populated yet.
-                                tracing::warn!(
-                                    schedule_at_path = %schedule_path,
-                                    entity = %entity_name,
-                                    "schedule_at field path is missing or not a valid u64 in state; \
-                                     skipping resolver (state may not be fully populated yet)"
-                                );
                                 pc += 1;
                                 continue;
                             }
@@ -2722,16 +2857,6 @@ impl VmContext {
                         let key_value = &self.registers[*key];
 
                         if input.is_null() || key_value.is_null() {
-                            tracing::warn!(
-                                entity = %entity_name,
-                                resolver = ?resolver,
-                                input_path = %input_path.as_deref().unwrap_or("<literal>"),
-                                input_is_null = input.is_null(),
-                                key_is_null = key_value.is_null(),
-                                input = ?input,
-                                key = ?key_value,
-                                "Resolver skipped: null input or key"
-                            );
                             pc += 1;
                             continue;
                         }
@@ -2782,14 +2907,6 @@ impl VmContext {
                                 target,
                             );
                         }
-                    } else {
-                        tracing::warn!(
-                            entity = %entity_name,
-                            resolver = ?resolver,
-                            input_path = %input_path.as_deref().unwrap_or("<literal>"),
-                            state = ?self.registers[*state],
-                            "Resolver skipped: input path not found in state"
-                        );
                     }
 
                     pc += 1;
@@ -3441,10 +3558,15 @@ impl VmContext {
         false
     }
 
+    #[allow(clippy::type_complexity)]
     fn apply_deferred_when_op(
         &mut self,
         state_id: u32,
         op: &DeferredWhenOperation,
+        entity_evaluator: Option<
+            &Box<dyn Fn(&mut Value, Option<u64>, i64) -> Result<()> + Send + Sync>,
+        >,
+        computed_paths: Option<&[String]>,
     ) -> Result<Vec<Mutation>> {
         let state = self.states.get(&state_id).ok_or("State not found")?;
 
@@ -3456,9 +3578,50 @@ impl VmContext {
             .get_and_touch(&op.primary_key)
             .unwrap_or_else(|| json!({}));
 
+        // Track old values of computed fields before setting the new value
+        let old_computed_values: Vec<_> = computed_paths
+            .map(|paths| {
+                paths
+                    .iter()
+                    .map(|path| Self::get_value_at_path(&entity_state, path))
+                    .collect()
+            })
+            .unwrap_or_default();
+
         Self::set_nested_field_value(&mut entity_state, &op.field_path, op.field_value.clone())?;
 
-        state.insert_with_eviction(op.primary_key.clone(), entity_state);
+        // Re-evaluate computed fields if an evaluator is provided
+        if let Some(evaluator) = entity_evaluator {
+            let context_slot = self.current_context.as_ref().and_then(|c| c.slot);
+            let context_timestamp = self
+                .current_context
+                .as_ref()
+                .map(|c| c.timestamp())
+                .unwrap_or_else(|| {
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs() as i64
+                });
+
+            tracing::debug!(
+                entity_name = %op.entity_name,
+                primary_key = %op.primary_key,
+                field_path = %op.field_path,
+                "Re-evaluating computed fields after deferred when-op"
+            );
+
+            if let Err(e) = evaluator(&mut entity_state, context_slot, context_timestamp) {
+                tracing::warn!(
+                    entity_name = %op.entity_name,
+                    primary_key = %op.primary_key,
+                    error = %e,
+                    "Failed to evaluate computed fields after deferred when-op"
+                );
+            }
+        }
+
+        state.insert_with_eviction(op.primary_key.clone(), entity_state.clone());
 
         if !op.emit {
             return Ok(vec![]);
@@ -3466,6 +3629,38 @@ impl VmContext {
 
         let mut patch = json!({});
         Self::set_nested_field_value(&mut patch, &op.field_path, op.field_value.clone())?;
+
+        // Add computed field changes to the patch
+        if let Some(paths) = computed_paths {
+            tracing::debug!(
+                entity_name = %op.entity_name,
+                primary_key = %op.primary_key,
+                computed_paths_count = paths.len(),
+                "Checking computed fields for changes after deferred when-op"
+            );
+            for (path, old_value) in paths.iter().zip(old_computed_values.iter()) {
+                let new_value = Self::get_value_at_path(&entity_state, path);
+                tracing::debug!(
+                    entity_name = %op.entity_name,
+                    primary_key = %op.primary_key,
+                    field_path = %path,
+                    old_value = ?old_value,
+                    new_value = ?new_value,
+                    "Comparing computed field values"
+                );
+                if let Some(ref new_val) = new_value {
+                    if Some(new_val) != old_value.as_ref() {
+                        Self::set_nested_field_value(&mut patch, path, new_val.clone())?;
+                        tracing::info!(
+                            entity_name = %op.entity_name,
+                            primary_key = %op.primary_key,
+                            field_path = %path,
+                            "Computed field changed after deferred when-op, including in mutation"
+                        );
+                    }
+                }
+            }
+        }
 
         Ok(vec![Mutation {
             export: op.entity_name.clone(),
@@ -3555,7 +3750,30 @@ impl VmContext {
             .entry(lookup_name.to_string())
             .or_insert_with(|| PdaReverseLookup::new(DEFAULT_MAX_PDA_REVERSE_LOOKUP_ENTRIES));
 
-        let evicted_pda = lookup.insert(pda_address.clone(), seed_value);
+        // Detect if the PDA mapping is CHANGING (same PDA, different seed).
+        // This happens at round boundaries when e.g. entropyVar is remapped
+        // from old_round to new_round by a Reset instruction.
+        let old_seed = lookup.index.peek(&pda_address).cloned();
+        let mapping_changed = old_seed
+            .as_ref()
+            .map(|old| old != &seed_value)
+            .unwrap_or(false);
+
+        if !mapping_changed && old_seed.is_none() {
+            tracing::info!(
+                pda = %pda_address,
+                seed = %seed_value,
+                "[PDA] First-time PDA reverse lookup established"
+            );
+        } else if !mapping_changed {
+            tracing::debug!(
+                pda = %pda_address,
+                seed = %seed_value,
+                "[PDA] PDA reverse lookup re-registered (same mapping)"
+            );
+        }
+
+        let evicted_pda = lookup.insert(pda_address.clone(), seed_value.clone());
 
         if let Some(ref evicted) = evicted_pda {
             if let Some((_, evicted_updates)) = state.pending_updates.remove(evicted) {
@@ -3564,8 +3782,38 @@ impl VmContext {
             }
         }
 
-        // Flush and return pending updates for this PDA
-        self.flush_pending_updates(state_id, &pda_address)
+        // Flush pending updates from QueueUntil for this PDA
+        let mut pending = self.flush_pending_updates(state_id, &pda_address)?;
+
+        // When the mapping changed, the last account update for this PDA was
+        // processed with the OLD seed (wrong key).  We need to:
+        // 1. Remove stale lookup-index entries that map this PDA address to the
+        //    old primary key — otherwise LookupIndex resolves the stale entry
+        //    before PDA reverse lookup is even tried.
+        // 2. Pull the cached account data and return it for reprocessing with
+        //    the new mapping.
+        if mapping_changed {
+            if let Some(state) = self.states.get(&state_id) {
+                // Clear stale lookup-index entries for this PDA address
+                for index in state.lookup_indexes.values() {
+                    index.remove(&Value::String(pda_address.clone()));
+                }
+
+                if let Some((_, mut cached)) = state.last_account_data.remove(&pda_address) {
+                    tracing::info!(
+                        pda = %pda_address,
+                        old_seed = ?old_seed,
+                        new_seed = %seed_value,
+                        account_type = %cached.account_type,
+                        "PDA mapping changed — clearing stale indexes and reprocessing cached data"
+                    );
+                    cached.is_stale_reprocess = true;
+                    pending.push(cached);
+                }
+            }
+        }
+
+        Ok(pending)
     }
 
     /// Clean up expired pending updates that are older than the TTL
@@ -3682,6 +3930,7 @@ impl VmContext {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs() as i64,
+            is_stale_reprocess: false,
         };
 
         let pda_address = pending.pda_address.clone();
@@ -3980,6 +4229,24 @@ impl VmContext {
         }
     }
 
+    /// Cache the most recent account data for a PDA address.
+    /// Called by the vixen runtime after a Lookup-handler account update is
+    /// successfully processed.  When a PDA mapping later changes (e.g. at a
+    /// round boundary), the cached data is returned for reprocessing with the
+    /// new mapping.
+    pub fn cache_last_account_data(
+        &mut self,
+        state_id: u32,
+        pda_address: &str,
+        update: PendingAccountUpdate,
+    ) {
+        if let Some(state) = self.states.get(&state_id) {
+            state
+                .last_account_data
+                .insert(pda_address.to_string(), update);
+        }
+    }
+
     /// Try to resolve a primary key via PDA reverse lookup
     pub fn try_pda_reverse_lookup(
         &mut self,
@@ -3998,6 +4265,44 @@ impl VmContext {
 
         self.pda_cache_misses += 1;
         None
+    }
+
+    /// Try to resolve a value through lookup indexes.
+    /// This attempts to resolve the value using any lookup index in the state.
+    pub fn try_lookup_index_resolution(&self, state_id: u32, value: &Value) -> Option<Value> {
+        let state = self.states.get(&state_id)?;
+
+        for index in state.lookup_indexes.values() {
+            if let Some(resolved) = index.lookup(value) {
+                return Some(resolved);
+            }
+        }
+
+        None
+    }
+
+    /// Try to resolve a primary key via chained PDA + lookup index resolution.
+    /// First tries PDA reverse lookup, then tries to resolve the result through lookup indexes.
+    /// This is useful when the PDA maps to an intermediate value (e.g., round address)
+    /// that needs to be resolved to the actual primary key (e.g., round_id).
+    pub fn try_chained_pda_lookup(
+        &mut self,
+        state_id: u32,
+        lookup_name: &str,
+        pda_address: &str,
+    ) -> Option<String> {
+        // First, try PDA reverse lookup
+        let pda_result = self.try_pda_reverse_lookup(state_id, lookup_name, pda_address)?;
+
+        // Try to resolve the PDA result through lookup indexes
+        // (e.g., round address -> round_id)
+        let pda_value = Value::String(pda_result.clone());
+        if let Some(resolved) = self.try_lookup_index_resolution(state_id, &pda_value) {
+            resolved.as_str().map(|s| s.to_string())
+        } else {
+            // Return the PDA result if we can't resolve further
+            pda_value.as_str().map(|s| s.to_string())
+        }
     }
 
     // ============================================================================
@@ -4081,7 +4386,7 @@ impl VmContext {
                 let arr: [u8; 8] = byte_vec[..8]
                     .try_into()
                     .map_err(|_| "Failed to convert to [u8; 8]")?;
-                Ok(json!(u64::from_le_bytes(arr)))
+                Ok(Value::String(u64::from_le_bytes(arr).to_string()))
             }
 
             ComputedExpr::U64FromBeBytes { bytes } => {
@@ -4097,7 +4402,7 @@ impl VmContext {
                 let arr: [u8; 8] = byte_vec[..8]
                     .try_into()
                     .map_err(|_| "Failed to convert to [u8; 8]")?;
-                Ok(json!(u64::from_be_bytes(arr)))
+                Ok(Value::String(u64::from_be_bytes(arr).to_string()))
             }
 
             ComputedExpr::ByteArray { bytes } => {
@@ -4209,6 +4514,16 @@ impl VmContext {
                 .as_ref()
                 .map(|ctx| json!(ctx.timestamp()))
                 .unwrap_or(Value::Null)),
+
+            ComputedExpr::Keccak256 { expr } => {
+                let val = self.evaluate_computed_expr_with_env(expr, state, env)?;
+                let bytes = self.value_to_bytes(&val)?;
+                use sha3::{Digest, Keccak256};
+                let hash = Keccak256::digest(&bytes);
+                Ok(Value::Array(
+                    hash.to_vec().iter().map(|b| json!(*b)).collect(),
+                ))
+            }
         }
     }
 
@@ -4626,9 +4941,18 @@ impl VmContext {
         crate::resolvers::validate_resolver_computed_specs(computed_field_specs)?;
 
         for spec in computed_field_specs {
-            if let Ok(result) = self.evaluate_computed_expr(&spec.expression, state) {
-                self.set_field_in_state(state, &spec.target_path, result)?;
-                updated_paths.push(spec.target_path.clone());
+            match self.evaluate_computed_expr(&spec.expression, state) {
+                Ok(result) => {
+                    self.set_field_in_state(state, &spec.target_path, result)?;
+                    updated_paths.push(spec.target_path.clone());
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        target_path = %spec.target_path,
+                        error = %e,
+                        "Failed to evaluate computed field"
+                    );
+                }
             }
         }
 
@@ -5043,7 +5367,7 @@ mod tests {
 
         let deferred = state.deferred_when_ops.remove(&key).unwrap().1;
         for op in deferred {
-            vm.apply_deferred_when_op(0, &op).unwrap();
+            vm.apply_deferred_when_op(0, &op, None, None).unwrap();
         }
 
         let state = vm.states.get(&0).unwrap();
@@ -5082,6 +5406,145 @@ mod tests {
         assert!(
             vm.states.get(&0).unwrap().deferred_when_ops.is_empty(),
             "Deferred ops should be empty after cleanup"
+        );
+    }
+
+    #[test]
+    fn test_deferred_when_op_recomputes_dependent_fields() {
+        use crate::ast::{BinaryOp, ComputedExpr, ComputedFieldSpec};
+
+        let mut vm = VmContext::new();
+
+        // Create computed field specs similar to the ore stack:
+        // pre_reveal_rng depends on base_value
+        // pre_reveal_winning_square depends on pre_reveal_rng
+        let computed_specs = vec![
+            ComputedFieldSpec {
+                target_path: "results.pre_reveal_rng".to_string(),
+                result_type: "Option<u64>".to_string(),
+                expression: ComputedExpr::FieldRef {
+                    path: "entropy.base_value".to_string(),
+                },
+            },
+            ComputedFieldSpec {
+                target_path: "results.pre_reveal_winning_square".to_string(),
+                result_type: "Option<u64>".to_string(),
+                expression: ComputedExpr::MethodCall {
+                    expr: Box::new(ComputedExpr::FieldRef {
+                        path: "results.pre_reveal_rng".to_string(),
+                    }),
+                    method: "map".to_string(),
+                    args: vec![ComputedExpr::Closure {
+                        param: "r".to_string(),
+                        body: Box::new(ComputedExpr::Binary {
+                            op: BinaryOp::Mod,
+                            left: Box::new(ComputedExpr::Var {
+                                name: "r".to_string(),
+                            }),
+                            right: Box::new(ComputedExpr::Literal {
+                                value: serde_json::json!(25),
+                            }),
+                        }),
+                    }],
+                },
+            },
+        ];
+
+        let evaluator: Box<dyn Fn(&mut Value, Option<u64>, i64) -> Result<()> + Send + Sync> =
+            Box::new(VmContext::create_evaluator_from_specs(computed_specs));
+
+        // Test that when we set entropy.base_value via deferred when-op,
+        // both computed fields are updated
+        let primary_key = json!("test_pk");
+        let op = DeferredWhenOperation {
+            entity_name: "TestEntity".to_string(),
+            primary_key: primary_key.clone(),
+            field_path: "entropy.base_value".to_string(),
+            field_value: json!(100),
+            when_instruction: "TestIxState".to_string(),
+            signature: "test_sig".to_string(),
+            slot: 100,
+            deferred_at: 0,
+            emit: true,
+        };
+
+        // Store the entity in state first
+        let initial_state = json!({
+            "results": {}
+        });
+        vm.states
+            .get(&0)
+            .unwrap()
+            .insert_with_eviction(primary_key.clone(), initial_state);
+
+        // Apply the deferred when-op with the evaluator
+        let mutations = vm
+            .apply_deferred_when_op(
+                0,
+                &op,
+                Some(&evaluator),
+                Some(&[
+                    "results.pre_reveal_rng".to_string(),
+                    "results.pre_reveal_winning_square".to_string(),
+                ]),
+            )
+            .unwrap();
+
+        // Check the entity state
+        let state = vm.states.get(&0).unwrap();
+        let entity = state.data.get(&primary_key).unwrap();
+
+        println!(
+            "Entity state: {}",
+            serde_json::to_string_pretty(&*entity).unwrap()
+        );
+
+        // Verify base value was set
+        assert_eq!(
+            entity.get("entropy").and_then(|e| e.get("base_value")),
+            Some(&json!(100)),
+            "Base value should be set"
+        );
+
+        // Verify computed fields were calculated
+        let pre_reveal_rng = entity
+            .get("results")
+            .and_then(|r| r.get("pre_reveal_rng"))
+            .cloned();
+        let pre_reveal_winning_square = entity
+            .get("results")
+            .and_then(|r| r.get("pre_reveal_winning_square"))
+            .cloned();
+
+        assert_eq!(
+            pre_reveal_rng,
+            Some(json!(100)),
+            "pre_reveal_rng should be computed"
+        );
+        assert_eq!(
+            pre_reveal_winning_square,
+            Some(json!(0)),
+            "pre_reveal_winning_square should be 100 % 25 = 0"
+        );
+
+        // Verify mutations include computed fields
+        assert!(!mutations.is_empty(), "Should have mutations");
+        let mutation = &mutations[0];
+        let patch = &mutation.patch;
+
+        assert!(
+            patch
+                .get("results")
+                .and_then(|r| r.get("pre_reveal_rng"))
+                .is_some(),
+            "Mutation should include pre_reveal_rng"
+        );
+        assert!(
+            patch
+                .get("results")
+                .and_then(|r| r.get("pre_reveal_winning_square"))
+                .is_some(),
+            "Mutation should include pre_reveal_winning_square"
         );
     }
 }

@@ -177,14 +177,8 @@ mod tests {
         }"#;
         let idl = parse_idl_content(json).unwrap();
 
-        assert_eq!(
-            idl.instructions[0].get_discriminator(),
-            vec![0, 0, 0, 0, 0, 0, 0, 0]
-        );
-        assert_eq!(
-            idl.instructions[1].get_discriminator(),
-            vec![1, 0, 0, 0, 0, 0, 0, 0]
-        );
+        assert_eq!(idl.instructions[0].get_discriminator(), vec![0]);
+        assert_eq!(idl.instructions[1].get_discriminator(), vec![1]);
     }
 
     #[test]
