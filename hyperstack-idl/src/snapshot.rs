@@ -34,7 +34,7 @@ impl<'de> Deserialize<'de> for IdlSnapshot {
             .get("instructions")
             .and_then(|instrs| instrs.as_array())
             .map(|instrs| {
-                instrs.iter().any(|ix| {
+                instrs.iter().all(|ix| {
                     // Steel-style: has discriminant field, no discriminator or empty discriminator
                     let has_discriminant = ix.get("discriminant").is_some();
                     let discriminator = ix.get("discriminator");
@@ -87,20 +87,57 @@ struct IdlSnapshotIntermediate {
     pub discriminant_size: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct IdlAccountSnapshot {
+    pub name: String,
+    pub discriminator: Vec<u8>,
+    pub docs: Vec<String>,
+    pub serialization: Option<IdlSerializationSnapshot>,
+    /// Account fields - populated from inline type definition
+    pub fields: Vec<IdlFieldSnapshot>,
+    /// Inline type definition (for Steel format with type.fields structure)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub type_def: Option<IdlInlineTypeDef>,
+}
+
+// Intermediate struct for deserialization
+#[derive(Deserialize)]
+struct IdlAccountSnapshotIntermediate {
     pub name: String,
     pub discriminator: Vec<u8>,
     #[serde(default)]
     pub docs: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub serialization: Option<IdlSerializationSnapshot>,
-    /// Account fields - populated from inline type definition
     #[serde(default)]
     pub fields: Vec<IdlFieldSnapshot>,
-    /// Inline type definition (for Steel format with type.fields structure)
     #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
     pub type_def: Option<IdlInlineTypeDef>,
+}
+
+impl<'de> Deserialize<'de> for IdlAccountSnapshot {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let intermediate = IdlAccountSnapshotIntermediate::deserialize(deserializer)?;
+
+        // Normalize fields: if empty but type_def has fields, use those
+        let fields = if intermediate.fields.is_empty() && intermediate.type_def.is_some() {
+            intermediate.type_def.as_ref().unwrap().fields.clone()
+        } else {
+            intermediate.fields
+        };
+
+        Ok(IdlAccountSnapshot {
+            name: intermediate.name,
+            discriminator: intermediate.discriminator,
+            docs: intermediate.docs,
+            serialization: intermediate.serialization,
+            fields,
+            type_def: intermediate.type_def,
+        })
+    }
 }
 
 /// Inline type definition for account fields (Steel format)
