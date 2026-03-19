@@ -784,7 +784,7 @@ impl SlotHashResolver {
         let r4 = u64::from_le_bytes(hash[24..32].try_into()?);
         let rng = r1 ^ r2 ^ r3 ^ r4;
 
-        Ok(Value::Number(rng.into()))
+        Ok(Value::String(rng.to_string()))
     }
 
     /// Extract a byte array of expected length from a JSON array value.
@@ -874,7 +874,7 @@ impl ResolverDefinition for SlotHashResolver {
   bytes: number[];
 }
 
-export type KeccakRngValue = number;"#,
+export type KeccakRngValue = string;"#,
         )
     }
 
@@ -885,7 +885,7 @@ export type KeccakRngValue = number;"#,
   bytes: z.array(z.number().int().min(0).max(255)).length(32),
 });
 
-export const KeccakRngValueSchema = z.number().int().min(0);"#,
+export const KeccakRngValueSchema = z.string();"#,
         })
     }
 }
