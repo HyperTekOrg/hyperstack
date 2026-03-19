@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.5.6](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.5.5...hyperstack-server-v0.5.6) (2026-03-19)
+
+
+### Features
+
+* add Yellowstone gRPC dependencies and update Ore examples ([2f23205](https://github.com/HyperTekOrg/hyperstack/commit/2f23205577c814572e57e5628bee9225d4631f4b))
+
+
+### Bug Fixes
+
+* Core interpreter and server improvements ([b05ae9b](https://github.com/HyperTekOrg/hyperstack/commit/b05ae9bd169f48c2cfd1222d8fa4adc882d96adc))
+* resolve clippy warnings across workspace ([c19d1ec](https://github.com/HyperTekOrg/hyperstack/commit/c19d1ec5926ee9099c6ab4254bde30b2c794e27f))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.5.5 to 0.5.6
+
 ## [0.5.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-server-v0.5.4...hyperstack-server-v0.5.5) (2026-03-14)
 
 

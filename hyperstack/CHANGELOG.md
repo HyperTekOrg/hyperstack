@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.6](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.5.5...hyperstack-v0.5.6) (2026-03-19)
+
+
+### Features
+
+* add Keccak256 hashing and slot hash caching ([768c407](https://github.com/HyperTekOrg/hyperstack/commit/768c407adce786003c30c634432279456baa5102))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * hyperstack-interpreter bumped from 0.5.5 to 0.5.6
+    * hyperstack-macros bumped from 0.5.5 to 0.5.6
+    * hyperstack-server bumped from 0.5.5 to 0.5.6
+    * hyperstack-sdk bumped from 0.5.5 to 0.5.6
+
 ## [0.5.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-v0.5.4...hyperstack-v0.5.5) (2026-03-14)
 
 
