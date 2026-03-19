@@ -176,9 +176,16 @@ impl IdlInstructionSnapshot {
         }
 
         if let Some(disc) = &self.discriminant {
-            let value =
-                u8::try_from(disc.value).expect("Steel discriminant value exceeds u8::MAX (255)");
-            return vec![value];
+            match u8::try_from(disc.value) {
+                Ok(value) => return vec![value],
+                Err(_) => {
+                    tracing::warn!(
+                        instruction = %self.name,
+                        value = disc.value,
+                        "Steel discriminant exceeds u8::MAX; falling back to Anchor hash"
+                    );
+                }
+            }
         }
 
         crate::discriminator::anchor_discriminator(&format!("global:{}", self.name))
