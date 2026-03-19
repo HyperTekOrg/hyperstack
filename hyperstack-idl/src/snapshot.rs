@@ -176,7 +176,8 @@ impl IdlInstructionSnapshot {
         }
 
         if let Some(disc) = &self.discriminant {
-            let value = disc.value as u8;
+            let value =
+                u8::try_from(disc.value).expect("Steel discriminant value exceeds u8::MAX (255)");
             return vec![value];
         }
 
