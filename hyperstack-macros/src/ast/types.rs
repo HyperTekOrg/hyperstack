@@ -379,6 +379,9 @@ pub enum SourceSpec {
         type_name: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         serialization: Option<IdlSerializationSnapshot>,
+        /// True when this handler listens to an account-state event.
+        #[serde(default)]
+        is_account: bool,
     },
 }
 

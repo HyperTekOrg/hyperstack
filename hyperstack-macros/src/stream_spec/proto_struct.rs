@@ -368,6 +368,7 @@ pub fn process_struct_with_context(
         };
 
         let type_suffix = if is_instruction { "IxState" } else { "State" };
+        let is_account_source = !is_instruction;
         handler_fns.push(quote! {
             fn #handler_name() -> hyperstack::runtime::hyperstack_interpreter::ast::TypedHandlerSpec<#state_name> {
                 hyperstack::runtime::hyperstack_interpreter::ast::TypedHandlerSpec::new(
@@ -376,6 +377,7 @@ pub fn process_struct_with_context(
                         discriminator: None,
                         type_name: format!("{}{}", #account_type, #type_suffix),
                         serialization: None,
+                        is_account: #is_account_source,
                     },
                     #key_resolution,
                     vec![

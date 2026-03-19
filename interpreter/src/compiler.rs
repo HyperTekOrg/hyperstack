@@ -679,8 +679,13 @@ impl<S> TypedCompiler<S> {
         // for later reprocessing.  Without this, downstream opcodes would
         // create a phantom entity keyed by null and produce non-empty
         // mutations that prevent queueing.
-        let event_type = self.get_event_type(&spec.source);
-        let is_account_event = event_type.ends_with("State") && !event_type.ends_with("IxState");
+        let is_account_event = matches!(
+            spec.source,
+            SourceSpec::Source {
+                is_account: true,
+                ..
+            }
+        );
         ops.push(OpCode::AbortIfNullKey {
             key: key_reg,
             is_account_event,

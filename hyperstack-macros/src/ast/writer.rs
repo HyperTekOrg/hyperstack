@@ -618,6 +618,7 @@ pub fn build_handlers_from_sources(
                 discriminator: None,
                 type_name,
                 serialization,
+                is_account: !is_instruction && !is_cpi_event,
             },
             key_resolution,
             mappings: serializable_mappings,
