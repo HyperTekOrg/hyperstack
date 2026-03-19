@@ -846,9 +846,11 @@ impl SlotHashResolver {
                 // The slot hash is a 32-byte value base58 encoded
                 match bs58::decode(&hash).into_vec() {
                     Ok(bytes) if bytes.len() == 32 => {
-                        // Return as JSON array of bytes
+                        // Return as { bytes: [...] } to match the SlotHashBytes TypeScript interface
                         let json_bytes: Vec<Value> = bytes.into_iter().map(|b| Value::Number(b.into())).collect();
-                        Ok(Value::Array(json_bytes))
+                        let mut obj = serde_json::Map::new();
+                        obj.insert("bytes".to_string(), Value::Array(json_bytes));
+                        Ok(Value::Object(obj))
                     }
                     _ => {
                         tracing::warn!(slot = slot, hash = hash, "Failed to decode slot hash");
