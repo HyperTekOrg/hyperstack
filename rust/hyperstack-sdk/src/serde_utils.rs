@@ -59,7 +59,11 @@ impl<'de> Visitor<'de> for I64OrStringVisitor {
     }
 
     fn visit_f64<E: de::Error>(self, v: f64) -> Result<i64, E> {
-        Ok(v as i64)
+        if v >= i64::MIN as f64 && v <= i64::MAX as f64 {
+            Ok(v as i64)
+        } else {
+            Err(E::custom(format!("f64 {v} out of i64 range")))
+        }
     }
 
     fn visit_str<E: de::Error>(self, v: &str) -> Result<i64, E> {
@@ -159,7 +163,7 @@ pub fn deserialize_option_option_u64<'de, D: Deserializer<'de>>(
                 .map_err(|_| E::custom(format!("negative value {v} cannot be u64")))
         }
         fn visit_f64<E: de::Error>(self, v: f64) -> Result<Option<Option<u64>>, E> {
-            if v >= 0.0 && v <= u64::MAX as f64 {
+            if v >= 0.0 && v < (u64::MAX as f64) {
                 Ok(Some(Some(v as u64)))
             } else {
                 Err(E::custom(format!("f64 {v} out of u64 range")))
@@ -298,6 +302,94 @@ pub fn deserialize_option_option_vec_u64<'de, D: Deserializer<'de>>(
     d.deserialize_any(V)
 }
 
+/// Deserialize `Option<Vec<i64>>` where each element may be a number or string.
+pub fn deserialize_option_vec_i64<'de, D: Deserializer<'de>>(
+    d: D,
+) -> Result<Option<Vec<i64>>, D::Error> {
+    struct V;
+    impl<'de> Visitor<'de> for V {
+        type Value = Option<Vec<i64>>;
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("null or array of i64/string-encoded i64")
+        }
+        fn visit_unit<E: de::Error>(self) -> Result<Option<Vec<i64>>, E> {
+            Ok(None)
+        }
+        fn visit_none<E: de::Error>(self) -> Result<Option<Vec<i64>>, E> {
+            Ok(None)
+        }
+        fn visit_some<D2: Deserializer<'de>>(self, d: D2) -> Result<Option<Vec<i64>>, D2::Error> {
+            struct SeqV;
+            impl<'de> Visitor<'de> for SeqV {
+                type Value = Vec<i64>;
+                fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    f.write_str("array of i64/string-encoded i64")
+                }
+                fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Vec<i64>, A::Error> {
+                    let mut vec = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+                    while let Some(elem) = seq.next_element::<serde_json::Value>()? {
+                        let n = match &elem {
+                            serde_json::Value::Number(n) => n.as_i64().ok_or_else(|| {
+                                de::Error::custom(format!("cannot convert {n} to i64"))
+                            })?,
+                            serde_json::Value::String(s) => {
+                                s.parse::<i64>().map_err(de::Error::custom)?
+                            }
+                            other => {
+                                return Err(de::Error::custom(format!(
+                                    "expected number or string in array, got {other}"
+                                )));
+                            }
+                        };
+                        vec.push(n);
+                    }
+                    Ok(vec)
+                }
+            }
+            d.deserialize_seq(SeqV).map(Some)
+        }
+    }
+    d.deserialize_option(V)
+}
+
+/// Deserialize `Option<Option<Vec<i64>>>` for optional array fields (patch semantics).
+pub fn deserialize_option_option_vec_i64<'de, D: Deserializer<'de>>(
+    d: D,
+) -> Result<Option<Option<Vec<i64>>>, D::Error> {
+    struct V;
+    impl<'de> Visitor<'de> for V {
+        type Value = Option<Option<Vec<i64>>>;
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("null or array of i64/string-encoded i64")
+        }
+        fn visit_unit<E: de::Error>(self) -> Result<Option<Option<Vec<i64>>>, E> {
+            Ok(Some(None))
+        }
+        fn visit_seq<A: SeqAccess<'de>>(
+            self,
+            mut seq: A,
+        ) -> Result<Option<Option<Vec<i64>>>, A::Error> {
+            let mut vec = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+            while let Some(elem) = seq.next_element::<serde_json::Value>()? {
+                let n = match &elem {
+                    serde_json::Value::Number(n) => n
+                        .as_i64()
+                        .ok_or_else(|| de::Error::custom(format!("cannot convert {n} to i64")))?,
+                    serde_json::Value::String(s) => s.parse::<i64>().map_err(de::Error::custom)?,
+                    other => {
+                        return Err(de::Error::custom(format!(
+                            "expected number or string in array, got {other}"
+                        )));
+                    }
+                };
+                vec.push(n);
+            }
+            Ok(Some(Some(vec)))
+        }
+    }
+    d.deserialize_any(V)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -337,6 +429,18 @@ mod tests {
     struct TestOptionOptionVec {
         #[serde(default, deserialize_with = "deserialize_option_option_vec_u64")]
         values: Option<Option<Vec<u64>>>,
+    }
+
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct TestVecI64 {
+        #[serde(default, deserialize_with = "deserialize_option_vec_i64")]
+        values: Option<Vec<i64>>,
+    }
+
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct TestOptionOptionVecI64 {
+        #[serde(default, deserialize_with = "deserialize_option_option_vec_i64")]
+        values: Option<Option<Vec<i64>>>,
     }
 
     // ── Bare types ──
@@ -458,6 +562,46 @@ mod tests {
     #[test]
     fn option_option_vec_missing() {
         let v: TestOptionOptionVec = serde_json::from_str(r#"{}"#).unwrap();
+        assert_eq!(v.values, None);
+    }
+
+    // ── Vec<i64> variants ──
+
+    #[test]
+    fn vec_i64_mixed_numbers_and_strings() {
+        let v: TestVecI64 =
+            serde_json::from_str(r#"{"values": [-1, "9007199254740992", 3]}"#).unwrap();
+        assert_eq!(v.values, Some(vec![-1, 9007199254740992, 3]));
+    }
+
+    #[test]
+    fn vec_i64_null() {
+        let v: TestVecI64 = serde_json::from_str(r#"{"values": null}"#).unwrap();
+        assert_eq!(v.values, None);
+    }
+
+    #[test]
+    fn vec_i64_missing() {
+        let v: TestVecI64 = serde_json::from_str(r#"{}"#).unwrap();
+        assert_eq!(v.values, None);
+    }
+
+    #[test]
+    fn option_option_vec_i64_from_array() {
+        let v: TestOptionOptionVecI64 =
+            serde_json::from_str(r#"{"values": [-1, "9007199254740992"]}"#).unwrap();
+        assert_eq!(v.values, Some(Some(vec![-1, 9007199254740992])));
+    }
+
+    #[test]
+    fn option_option_vec_i64_null() {
+        let v: TestOptionOptionVecI64 = serde_json::from_str(r#"{"values": null}"#).unwrap();
+        assert_eq!(v.values, Some(None));
+    }
+
+    #[test]
+    fn option_option_vec_i64_missing() {
+        let v: TestOptionOptionVecI64 = serde_json::from_str(r#"{}"#).unwrap();
         assert_eq!(v.values, None);
     }
 
