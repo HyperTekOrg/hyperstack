@@ -87,11 +87,13 @@ pub fn load_stack_spec(json: &str) -> Result<SerializableStackSpec, VersionedLoa
 
     // Route to appropriate deserializer based on version
     match version {
-        "0.0.1" => {
+        v if v == CURRENT_AST_VERSION => {
             // Current version - deserialize directly
             serde_json::from_value::<SerializableStackSpec>(raw)
                 .map_err(|e| VersionedLoadError::InvalidStructure(e.to_string()))
         }
+        // Add migration arms for old versions here, e.g.:
+        // "0.0.1" => { migrate_v1_to_latest(raw) }
         _ => {
             // Unknown version
             Err(VersionedLoadError::UnsupportedVersion(version.to_string()))
@@ -123,11 +125,13 @@ pub fn load_stream_spec(json: &str) -> Result<SerializableStreamSpec, VersionedL
 
     // Route to appropriate deserializer based on version
     match version {
-        "0.0.1" => {
+        v if v == CURRENT_AST_VERSION => {
             // Current version - deserialize directly
             serde_json::from_value::<SerializableStreamSpec>(raw)
                 .map_err(|e| VersionedLoadError::InvalidStructure(e.to_string()))
         }
+        // Add migration arms for old versions here, e.g.:
+        // "0.0.1" => { migrate_v1_to_latest(raw) }
         _ => {
             // Unknown version
             Err(VersionedLoadError::UnsupportedVersion(version.to_string()))
