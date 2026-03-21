@@ -651,11 +651,20 @@ async fn attach_client_to_bus(
 
             if should_send_snapshot {
                 // Determine which entities to send based on cursor
-                let snapshots = if let Some(ref cursor) = subscription.after {
+                let mut snapshots = if let Some(ref cursor) = subscription.after {
                     ctx.entity_cache.get_after(view_id, cursor, None).await
                 } else {
                     ctx.entity_cache.get_all(view_id).await
                 };
+
+                // Sort by _seq descending when snapshot_limit is set to ensure deterministic results
+                if subscription.snapshot_limit.is_some() {
+                    snapshots.sort_by(|a, b| {
+                        let sa = a.1.get("_seq").and_then(|s| s.as_str()).unwrap_or("");
+                        let sb = b.1.get("_seq").and_then(|s| s.as_str()).unwrap_or("");
+                        sb.cmp(sa) // descending: most-recent N
+                    });
+                }
 
                 let snapshot_entities: Vec<SnapshotEntity> = snapshots
                     .into_iter()
@@ -1048,11 +1057,20 @@ async fn attach_client_to_bus(
 
             if should_send_snapshot {
                 // Determine which entities to send based on cursor
-                let snapshots = if let Some(ref cursor) = subscription.after {
+                let mut snapshots = if let Some(ref cursor) = subscription.after {
                     ctx.entity_cache.get_after(view_id, cursor, None).await
                 } else {
                     ctx.entity_cache.get_all(view_id).await
                 };
+
+                // Sort by _seq descending when snapshot_limit is set to ensure deterministic results
+                if subscription.snapshot_limit.is_some() {
+                    snapshots.sort_by(|a, b| {
+                        let sa = a.1.get("_seq").and_then(|s| s.as_str()).unwrap_or("");
+                        let sb = b.1.get("_seq").and_then(|s| s.as_str()).unwrap_or("");
+                        sb.cmp(sa) // descending: most-recent N
+                    });
+                }
 
                 let snapshot_entities: Vec<SnapshotEntity> = snapshots
                     .into_iter()
