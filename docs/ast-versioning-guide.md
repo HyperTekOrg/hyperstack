@@ -124,19 +124,19 @@ pub fn load_stream_spec(json: &str) -> Result<SerializableStreamSpec, VersionedL
         .unwrap_or("0.0.1");
     
     match version {
-        "2.0.0" => {
+        v if v == CURRENT_AST_VERSION => {
             // Current version - deserialize directly
             serde_json::from_value::<SerializableStreamSpec>(raw)
                 .map_err(|e| VersionedLoadError::InvalidStructure(e.to_string()))
         }
         "1.0.0" => {
-            // OLD: Load v1 and migrate to v2
+            // OLD: Load v1 and migrate to current
             let v1: SerializableStreamSpecV1 = serde_json::from_value(raw)
                 .map_err(|e| VersionedLoadError::InvalidStructure(e.to_string()))?;
             Ok(migrate_stream_v1_to_v2(v1))
         }
         "0.0.1" => {
-            // OLD: Load v0.0.1 and migrate to v2
+            // OLD: Load v0.0.1 and migrate to current
             let v0: SerializableStreamSpecV0 = serde_json::from_value(raw)
                 .map_err(|e| VersionedLoadError::InvalidStructure(e.to_string()))?;
             Ok(migrate_v0_to_v2(v0))
@@ -327,14 +327,16 @@ pub fn load_stream_spec(json: &str) -> Result<SerializableStreamSpec, VersionedL
     let version = raw.get("ast_version").and_then(|v| v.as_str()).unwrap_or("0.0.1");
     
     match version {
+        v if v == CURRENT_AST_VERSION => {
+            // Current version - deserialize directly
+            serde_json::from_value::<SerializableStreamSpec>(raw)
+                .map_err(|e| VersionedLoadError::InvalidStructure(e.to_string()))
+        }
         "0.0.1" => {
+            // OLD: Load v0.0.1 and migrate to current
             let v1: SerializableStreamSpecV1 = serde_json::from_value(raw)
                 .map_err(|e| VersionedLoadError::InvalidStructure(e.to_string()))?;
             Ok(migrate_stream_v1_to_v2(v1))
-        }
-        "2.0.0" => {
-            serde_json::from_value::<SerializableStreamSpec>(raw)
-                .map_err(|e| VersionedLoadError::InvalidStructure(e.to_string()))
         }
         _ => Err(VersionedLoadError::UnsupportedVersion(version.to_string())),
     }
