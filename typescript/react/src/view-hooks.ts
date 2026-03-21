@@ -73,7 +73,10 @@ export function useStateView<T>(
         after,
         snapshotLimit
       });
-      setIsLoading(true);
+      const shouldLoad = withSnapshot ?? true;
+      if (shouldLoad) {
+        setIsLoading(true);
+      }
 
       setTimeout(() => {
         try {
@@ -197,7 +200,10 @@ export function useListView<T>(
         after,
         snapshotLimit
       });
-      setIsLoading(true);
+      const shouldLoad = withSnapshot ?? true;
+      if (shouldLoad) {
+        setIsLoading(true);
+      }
 
       setTimeout(() => {
         try {
