@@ -49,6 +49,7 @@
 
 mod reader;
 mod types;
+pub mod versioned;
 pub(crate) mod writer;
 
 // Re-export all types for easy access

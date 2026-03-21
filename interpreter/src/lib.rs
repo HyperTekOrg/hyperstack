@@ -36,6 +36,7 @@ pub mod scheduler;
 pub mod slot_hash_cache;
 pub mod spec_trait;
 pub mod typescript;
+pub mod versioned;
 pub mod vm;
 pub mod vm_metrics;
 

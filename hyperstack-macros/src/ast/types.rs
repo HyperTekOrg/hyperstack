@@ -304,8 +304,20 @@ pub enum UnaryOp {
 // Stream Specification Types
 // ============================================================================
 
+/// Current AST version for SerializableStreamSpec and SerializableStackSpec
+///
+/// ⚠️ IMPORTANT: This constant is duplicated in interpreter/src/ast.rs due to
+/// circular dependency between proc-macro crates and their output crates.
+/// When bumping this version, you MUST also update the constant in the
+/// interpreter crate. A test in versioned.rs verifies they stay in sync.
+pub const CURRENT_AST_VERSION: &str = "0.0.1";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerializableStreamSpec {
+    /// AST schema version for backward compatibility
+    /// Uses semver format (e.g., "0.0.1")
+    #[serde(default = "default_ast_version")]
+    pub ast_version: String,
     pub state_name: String,
     #[serde(default)]
     pub program_id: Option<String>,
@@ -329,6 +341,10 @@ pub struct SerializableStreamSpec {
     pub content_hash: Option<String>,
     #[serde(default)]
     pub views: Vec<ViewDef>,
+}
+
+fn default_ast_version() -> String {
+    CURRENT_AST_VERSION.to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -872,6 +888,10 @@ pub struct InstructionDef {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerializableStackSpec {
+    /// AST schema version for backward compatibility
+    /// Uses semver format (e.g., "0.0.1")
+    #[serde(default = "default_ast_version")]
+    pub ast_version: String,
     pub stack_name: String,
     #[serde(default)]
     pub program_ids: Vec<String>,

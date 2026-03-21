@@ -5,6 +5,18 @@ use std::marker::PhantomData;
 
 pub use hyperstack_idl::snapshot::*;
 
+/// Current AST version for SerializableStreamSpec and SerializableStackSpec
+///
+/// ⚠️ IMPORTANT: This constant is duplicated in hyperstack-macros/src/ast/types.rs due to
+/// circular dependency between proc-macro crates and their output crates.
+/// When bumping this version, you MUST also update the constant in the
+/// hyperstack-macros crate. A test in versioned.rs verifies they stay in sync.
+pub const CURRENT_AST_VERSION: &str = "0.0.1";
+
+fn default_ast_version() -> String {
+    CURRENT_AST_VERSION.to_string()
+}
+
 pub fn idl_type_snapshot_to_rust_string(ty: &IdlTypeSnapshot) -> String {
     match ty {
         IdlTypeSnapshot::Simple(s) => map_simple_idl_type(s),
@@ -377,6 +389,10 @@ pub enum UnaryOp {
 /// Serializable version of StreamSpec without phantom types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerializableStreamSpec {
+    /// AST schema version for backward compatibility
+    /// Uses semver format (e.g., "0.0.1")
+    #[serde(default = "default_ast_version")]
+    pub ast_version: String,
     pub state_name: String,
     /// Program ID (Solana address) - extracted from IDL
     #[serde(default)]
@@ -489,6 +505,7 @@ impl<S> TypedStreamSpec<S> {
     /// Convert to serializable format
     pub fn to_serializable(&self) -> SerializableStreamSpec {
         let mut spec = SerializableStreamSpec {
+            ast_version: CURRENT_AST_VERSION.to_string(),
             state_name: self.state_name.clone(),
             program_id: None,
             idl: None,
@@ -1314,6 +1331,10 @@ pub struct InstructionDef {
 /// Written to `.hyperstack/{StackName}.stack.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerializableStackSpec {
+    /// AST schema version for backward compatibility
+    /// Uses semver format (e.g., "0.0.1")
+    #[serde(default = "default_ast_version")]
+    pub ast_version: String,
     /// Stack name (PascalCase, derived from module ident)
     pub stack_name: String,
     /// Program IDs (one per IDL, in order)

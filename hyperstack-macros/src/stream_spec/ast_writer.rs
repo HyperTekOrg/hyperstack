@@ -201,6 +201,7 @@ pub fn build_ast(
     }
 
     let mut spec = SerializableStreamSpec {
+        ast_version: crate::ast::CURRENT_AST_VERSION.to_string(),
         state_name: entity_name.to_string(),
         program_id,
         idl: idl_snapshot,
