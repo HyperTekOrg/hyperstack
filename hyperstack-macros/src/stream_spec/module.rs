@@ -130,6 +130,7 @@ pub fn process_module(mut module: ItemMod, attr: TokenStream) -> TokenStream {
                 .collect();
 
             let stack_spec = SerializableStackSpec {
+                ast_version: crate::ast::CURRENT_AST_VERSION.to_string(),
                 stack_name: stack_name.clone(),
                 program_ids: vec![],
                 idls: vec![],

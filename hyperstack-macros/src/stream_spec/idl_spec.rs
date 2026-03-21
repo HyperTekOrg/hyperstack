@@ -456,6 +456,7 @@ pub fn process_idl_spec(mut module: ItemMod, idl_paths: &[String]) -> TokenStrea
             }
 
             let stack_spec = SerializableStackSpec {
+                ast_version: crate::ast::CURRENT_AST_VERSION.to_string(),
                 stack_name: stack_name.clone(),
                 program_ids: all_program_ids,
                 idls: all_idl_snapshots,

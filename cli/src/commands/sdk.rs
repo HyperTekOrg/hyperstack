@@ -246,10 +246,11 @@ fn load_stack_spec(
     let ast_json = fs::read_to_string(&ast.path)
         .with_context(|| format!("Failed to read stack file: {}", ast.path.display()))?;
 
-    let stack_spec: hyperstack_interpreter::ast::SerializableStackSpec =
-        serde_json::from_str(&ast_json).with_context(|| {
+    // Use versioned loader for automatic version detection and migration
+    let stack_spec =
+        hyperstack_interpreter::versioned::load_stack_spec(&ast_json).with_context(|| {
             format!(
-                "Failed to deserialize stack AST from {}",
+                "Failed to load stack AST from {} (version detection failed)",
                 ast.path.display()
             )
         })?;

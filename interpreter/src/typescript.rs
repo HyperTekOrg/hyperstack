@@ -2340,6 +2340,7 @@ mod tests {
     #[test]
     fn test_derived_view_codegen() {
         let spec = SerializableStreamSpec {
+            ast_version: CURRENT_AST_VERSION.to_string(),
             state_name: "OreRound".to_string(),
             program_id: None,
             idl: None,
