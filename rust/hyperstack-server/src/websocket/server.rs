@@ -654,7 +654,7 @@ async fn attach_client_to_bus(
                 let snapshots = if let Some(ref cursor) = subscription.after {
                     ctx.entity_cache.get_after(view_id, cursor, subscription.snapshot_limit).await
                 } else {
-                    ctx.entity_cache.get_all(view_id).await
+                    ctx.entity_cache.get_all(view_id, subscription.snapshot_limit).await
                 };
 
                 let snapshot_entities: Vec<SnapshotEntity> = snapshots
@@ -1050,7 +1050,7 @@ async fn attach_client_to_bus(
                 let snapshots = if let Some(ref cursor) = subscription.after {
                     ctx.entity_cache.get_after(view_id, cursor, subscription.snapshot_limit).await
                 } else {
-                    ctx.entity_cache.get_all(view_id).await
+                    ctx.entity_cache.get_all(view_id, subscription.snapshot_limit).await
                 };
 
                 let snapshot_entities: Vec<SnapshotEntity> = snapshots

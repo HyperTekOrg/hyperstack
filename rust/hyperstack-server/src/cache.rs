@@ -100,13 +100,20 @@ impl EntityCache {
     ///
     /// Returns a vector of (key, entity) pairs for sending as snapshots
     /// to new subscribers.
-    pub async fn get_all(&self, view_id: &str) -> Vec<(String, Value)> {
+    pub async fn get_all(&self, view_id: &str, limit: Option<usize>) -> Vec<(String, Value)> {
         let caches = self.caches.read().await;
 
-        caches
+        let mut results: Vec<(String, Value)> = caches
             .get(view_id)
             .map(|cache| cache.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
-            .unwrap_or_default()
+            .unwrap_or_default();
+
+        // Apply limit if provided
+        if let Some(limit) = limit {
+            results.truncate(limit);
+        }
+
+        results
     }
 
     /// Get entities with _seq greater than the provided cursor.
@@ -499,7 +506,7 @@ mod tests {
         cache.upsert("tokens/list", "key1", json!({"id": 1})).await;
         cache.upsert("tokens/list", "key2", json!({"id": 2})).await;
 
-        let all = cache.get_all("tokens/list").await;
+        let all = cache.get_all("tokens/list", None).await;
         assert_eq!(all.len(), 2);
     }
 
