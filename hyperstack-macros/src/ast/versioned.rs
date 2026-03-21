@@ -18,7 +18,6 @@
 // While not all items are currently used within this crate, they are
 // part of the public API available for external use and future features
 // like the `#[ast_spec]` macro or CLI tooling.
-#![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -27,6 +26,8 @@ use std::fmt;
 use super::types::{SerializableStackSpec, SerializableStreamSpec, CURRENT_AST_VERSION};
 
 /// Error type for versioned AST loading failures.
+// Not yet used within this crate, but part of public API for future use
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum VersionedLoadError {
     /// The JSON could not be parsed
@@ -80,6 +81,8 @@ impl std::error::Error for VersionedLoadError {}
 /// let json = std::fs::read_to_string("MyStack.stack.json")?;
 /// let spec = load_stack_spec(&json)?;
 /// ```
+// Not yet used within this crate, but part of public API for future use
+#[allow(dead_code)]
 pub fn load_stack_spec(json: &str) -> Result<SerializableStackSpec, VersionedLoadError> {
     // Parse raw JSON to detect version
     let raw: Value =
@@ -118,6 +121,8 @@ pub fn load_stack_spec(json: &str) -> Result<SerializableStackSpec, VersionedLoa
 /// # Returns
 ///
 /// The deserialized and migrated `SerializableStreamSpec`
+// Not yet used within this crate, but part of public API for future use
+#[allow(dead_code)]
 pub fn load_stream_spec(json: &str) -> Result<SerializableStreamSpec, VersionedLoadError> {
     // Parse raw JSON to detect version
     let raw: Value =
@@ -149,6 +154,8 @@ pub fn load_stream_spec(json: &str) -> Result<SerializableStreamSpec, VersionedL
 ///
 /// This enum allows deserializing multiple AST versions and then
 /// converting them to the latest format via `into_latest()`.
+// Not yet used within this crate, but part of public API for future use
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "ast_version")]
 pub enum VersionedStackSpec {
@@ -158,6 +165,8 @@ pub enum VersionedStackSpec {
 
 impl VersionedStackSpec {
     /// Convert the versioned spec to the latest format.
+    // Not yet used within this crate, but part of public API for future use
+    #[allow(dead_code)]
     pub fn into_latest(self) -> SerializableStackSpec {
         match self {
             VersionedStackSpec::V1(spec) => spec,
@@ -169,6 +178,8 @@ impl VersionedStackSpec {
 ///
 /// This enum allows deserializing multiple AST versions and then
 /// converting them to the latest format via `into_latest()`.
+// Not yet used within this crate, but part of public API for future use
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "ast_version")]
 pub enum VersionedStreamSpec {
@@ -178,6 +189,8 @@ pub enum VersionedStreamSpec {
 
 impl VersionedStreamSpec {
     /// Convert the versioned spec to the latest format.
+    // Not yet used within this crate, but part of public API for future use
+    #[allow(dead_code)]
     pub fn into_latest(self) -> SerializableStreamSpec {
         match self {
             VersionedStreamSpec::V1(spec) => spec,
@@ -203,6 +216,8 @@ impl VersionedStreamSpec {
 /// let version = detect_ast_version(&json)?;
 /// println!("AST version: {}", version);
 /// ```
+// Not yet used within this crate, but part of public API for future use
+#[allow(dead_code)]
 pub fn detect_ast_version(json: &str) -> Result<String, VersionedLoadError> {
     let raw: Value =
         serde_json::from_str(json).map_err(|e| VersionedLoadError::InvalidJson(e.to_string()))?;
@@ -275,6 +290,85 @@ mod tests {
         "#;
 
         let result = load_stack_spec(json);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            VersionedLoadError::UnsupportedVersion(v) => assert_eq!(v, "99.0.0"),
+            _ => panic!("Expected UnsupportedVersion error"),
+        }
+    }
+
+    #[test]
+    fn test_load_stream_spec_v1() {
+        let json = r#"
+        {
+            "ast_version": "0.0.1",
+            "state_name": "TestEntity",
+            "identity": {"primary_keys": ["id"], "lookup_indexes": []},
+            "handlers": [],
+            "sections": [],
+            "field_mappings": {},
+            "resolver_hooks": [],
+            "instruction_hooks": [],
+            "resolver_specs": [],
+            "computed_fields": [],
+            "computed_field_specs": [],
+            "views": []
+        }
+        "#;
+
+        let result = load_stream_spec(json);
+        assert!(result.is_ok());
+        let spec = result.unwrap();
+        assert_eq!(spec.state_name, "TestEntity");
+        assert_eq!(spec.ast_version, "0.0.1");
+    }
+
+    #[test]
+    fn test_load_stream_spec_no_version_defaults_to_v1() {
+        // Test backwards compatibility - no ast_version field should default to 0.0.1
+        let json = r#"
+        {
+            "state_name": "TestEntity",
+            "identity": {"primary_keys": ["id"], "lookup_indexes": []},
+            "handlers": [],
+            "sections": [],
+            "field_mappings": {},
+            "resolver_hooks": [],
+            "instruction_hooks": [],
+            "resolver_specs": [],
+            "computed_fields": [],
+            "computed_field_specs": [],
+            "views": []
+        }
+        "#;
+
+        let result = load_stream_spec(json);
+        assert!(result.is_ok());
+        let spec = result.unwrap();
+        assert_eq!(spec.state_name, "TestEntity");
+        assert_eq!(spec.ast_version, "0.0.1");
+    }
+
+    #[test]
+    fn test_load_stream_spec_unsupported_version() {
+        let json = r#"
+        {
+            "ast_version": "99.0.0",
+            "state_name": "TestEntity",
+            "identity": {"primary_keys": ["id"], "lookup_indexes": []},
+            "handlers": [],
+            "sections": [],
+            "field_mappings": {},
+            "resolver_hooks": [],
+            "instruction_hooks": [],
+            "resolver_specs": [],
+            "computed_fields": [],
+            "computed_field_specs": [],
+            "views": []
+        }
+        "#;
+
+        let result = load_stream_spec(json);
         assert!(result.is_err());
         match result.unwrap_err() {
             VersionedLoadError::UnsupportedVersion(v) => assert_eq!(v, "99.0.0"),

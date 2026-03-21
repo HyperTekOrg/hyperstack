@@ -392,10 +392,10 @@ Before releasing a new AST version:
 
 **Q: Can I skip versions? (e.g., 0.0.1 → 3.0.0)**
 
-A: Yes, but you must support all intermediate versions. If someone has v0.0.1 and you skip to v3.0.0, you need:
-- 0.0.1 → 1.0.0 migration
-- 1.0.0 → 2.0.0 migration
-- 2.0.0 → 3.0.0 migration
+A: Yes. You only need migration arms for versions that were actually released, not every intermediate version number. If someone has v0.0.1 and you jump to v3.0.0, you only need:
+- 0.0.1 → 3.0.0 migration
+
+The numeric distance doesn't matter—only which versions actually exist in the wild.
 
 **Q: What if I need to rollback?**
 

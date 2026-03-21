@@ -277,6 +277,85 @@ mod tests {
     }
 
     #[test]
+    fn test_load_stream_spec_v1() {
+        let json = r#"
+        {
+            "ast_version": "0.0.1",
+            "state_name": "TestEntity",
+            "identity": {"primary_keys": ["id"], "lookup_indexes": []},
+            "handlers": [],
+            "sections": [],
+            "field_mappings": {},
+            "resolver_hooks": [],
+            "instruction_hooks": [],
+            "resolver_specs": [],
+            "computed_fields": [],
+            "computed_field_specs": [],
+            "views": []
+        }
+        "#;
+
+        let result = load_stream_spec(json);
+        assert!(result.is_ok());
+        let spec = result.unwrap();
+        assert_eq!(spec.state_name, "TestEntity");
+        assert_eq!(spec.ast_version, "0.0.1");
+    }
+
+    #[test]
+    fn test_load_stream_spec_no_version_defaults_to_v1() {
+        // Test backwards compatibility - no ast_version field should default to 0.0.1
+        let json = r#"
+        {
+            "state_name": "TestEntity",
+            "identity": {"primary_keys": ["id"], "lookup_indexes": []},
+            "handlers": [],
+            "sections": [],
+            "field_mappings": {},
+            "resolver_hooks": [],
+            "instruction_hooks": [],
+            "resolver_specs": [],
+            "computed_fields": [],
+            "computed_field_specs": [],
+            "views": []
+        }
+        "#;
+
+        let result = load_stream_spec(json);
+        assert!(result.is_ok());
+        let spec = result.unwrap();
+        assert_eq!(spec.state_name, "TestEntity");
+        assert_eq!(spec.ast_version, "0.0.1");
+    }
+
+    #[test]
+    fn test_load_stream_spec_unsupported_version() {
+        let json = r#"
+        {
+            "ast_version": "99.0.0",
+            "state_name": "TestEntity",
+            "identity": {"primary_keys": ["id"], "lookup_indexes": []},
+            "handlers": [],
+            "sections": [],
+            "field_mappings": {},
+            "resolver_hooks": [],
+            "instruction_hooks": [],
+            "resolver_specs": [],
+            "computed_fields": [],
+            "computed_field_specs": [],
+            "views": []
+        }
+        "#;
+
+        let result = load_stream_spec(json);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            VersionedLoadError::UnsupportedVersion(v) => assert_eq!(v, "99.0.0"),
+            _ => panic!("Expected UnsupportedVersion error"),
+        }
+    }
+
+    #[test]
     fn test_detect_ast_version() {
         let json = r#"{"ast_version": "0.0.1", "stack_name": "Test"}"#;
         assert_eq!(detect_ast_version(json).unwrap(), "0.0.1");
