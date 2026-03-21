@@ -14,6 +14,7 @@ pub enum ClientMessage {
 
 /// Client subscription to a specific view
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Subscription {
     pub view: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -266,7 +267,7 @@ mod tests {
         let json = json!({
             "type": "subscribe",
             "view": "SettlementGame/list",
-            "with_snapshot": false
+            "withSnapshot": false
         });
 
         let msg: ClientMessage = serde_json::from_value(json).unwrap();
@@ -303,7 +304,7 @@ mod tests {
             "type": "subscribe",
             "view": "SettlementGame/list",
             "after": "123456789:000000000042",
-            "snapshot_limit": 100
+            "snapshotLimit": 100
         });
 
         let msg: ClientMessage = serde_json::from_value(json).unwrap();
