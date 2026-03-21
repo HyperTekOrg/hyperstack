@@ -14,11 +14,11 @@ HyperStack uses **semantic versioning** for AST schemas (major.minor.patch):
 
 | Change Type | Version Bump | Migration Required? |
 |------------|--------------|-------------------|
-| Add new optional field | Minor (0.0.1 → 1.1.0) | No |
-| Rename field | Major (0.0.1 → 2.0.0) | Yes |
-| Remove field | Major (0.0.1 → 2.0.0) | Yes |
-| Change field type | Major (0.0.1 → 2.0.0) | Yes |
-| Restructure enum | Major (0.0.1 → 2.0.0) | Yes |
+| Add new optional field | Minor (0.0.1 → 0.1.0) | No |
+| Rename field | Major (0.0.1 → 1.0.0) | Yes |
+| Remove field | Major (0.0.1 → 1.0.0) | Yes |
+| Change field type | Major (0.0.1 → 1.0.0) | Yes |
+| Restructure enum | Major (0.0.1 → 1.0.0) | Yes |
 
 ## Step-by-Step: Adding a Breaking Change
 
@@ -34,16 +34,16 @@ The AST types are duplicated between `hyperstack-macros` (for compile-time code 
 pub const CURRENT_AST_VERSION: &str = "0.0.1";
 
 // To this (for a minor bump)
-pub const CURRENT_AST_VERSION: &str = "1.1.0";
+pub const CURRENT_AST_VERSION: &str = "0.1.0";
 
 // Or this (for a major bump)
-pub const CURRENT_AST_VERSION: &str = "2.0.0";
+pub const CURRENT_AST_VERSION: &str = "1.0.0";
 ```
 
 **`interpreter/src/ast.rs`**
 ```rust
 // Mirror the EXACT same change here
-pub const CURRENT_AST_VERSION: &str = "2.0.0";
+pub const CURRENT_AST_VERSION: &str = "1.0.0";
 ```
 
 **Why two places?** The AST types exist in both crates:
@@ -52,7 +52,7 @@ pub const CURRENT_AST_VERSION: &str = "2.0.0";
 
 **Don't worry about forgetting:** There's a test (`test_ast_version_sync_*`) in both crates that will fail if the constants get out of sync. You'll see an error like:
 ```
-AST version mismatch! hyperstack-macros has '0.0.1', interpreter has '2.0.0'.
+AST version mismatch! hyperstack-macros has '0.0.1', interpreter has '1.0.0'.
 Both crates must have the same CURRENT_AST_VERSION.
 Update both files when bumping the version.
 ```
@@ -73,7 +73,7 @@ pub struct SerializableStreamSpec {
     pub state_name: String,
     // ... existing fields ...
     
-    // NEW in v1.1.0
+    // NEW in v0.1.0
     #[serde(default)]
     pub new_field: Option<String>,
 }
@@ -393,7 +393,8 @@ Before releasing a new AST version:
 **Q: Can I skip versions? (e.g., 0.0.1 → 3.0.0)**
 
 A: Yes, but you must support all intermediate versions. If someone has v0.0.1 and you skip to v3.0.0, you need:
-- 0.0.1 → 2.0.0 migration
+- 0.0.1 → 1.0.0 migration
+- 1.0.0 → 2.0.0 migration
 - 2.0.0 → 3.0.0 migration
 
 **Q: What if I need to rollback?**
