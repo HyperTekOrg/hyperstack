@@ -18,7 +18,7 @@ export function useStateView<T>(
   key?: Record<string, string>,
   options?: ViewHookOptions
 ): ViewHookResult<T> {
-  const [isLoading, setIsLoading] = useState(!options?.initialData);
+  const [isLoading, setIsLoading] = useState(!options?.initialData && options?.withSnapshot !== false);
   const [error, setError] = useState<Error | undefined>();
   const clientRef = useRef(client);
   clientRef.current = client;
@@ -134,7 +134,7 @@ export function useListView<T>(
   params?: ListParams,
   options?: ViewHookOptions
 ): ViewHookResult<T[]> {
-  const [isLoading, setIsLoading] = useState(!options?.initialData);
+  const [isLoading, setIsLoading] = useState(!options?.initialData && params?.withSnapshot !== false);
   const [error, setError] = useState<Error | undefined>();
   const clientRef = useRef(client);
   clientRef.current = client;
