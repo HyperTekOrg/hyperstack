@@ -581,28 +581,35 @@ async fn attach_client_to_bus(
 
             let mut rx = ctx.bus_manager.get_or_create_state_bus(view_id, key).await;
 
-            if let Some(mut cached_entity) = ctx.entity_cache.get(view_id, key).await {
-                transform_large_u64_to_strings(&mut cached_entity);
-                let snapshot_entities = vec![SnapshotEntity {
-                    key: key.to_string(),
-                    data: cached_entity,
-                }];
-                let batch_config = ctx.entity_cache.snapshot_config();
-                let _ = send_snapshot_batches(
-                    ctx.client_id,
-                    &snapshot_entities,
-                    view_spec.mode,
-                    view_id,
-                    ctx.client_manager,
-                    &batch_config,
-                    #[cfg(feature = "otel")]
-                    ctx.metrics.as_ref(),
-                )
-                .await;
-                rx.borrow_and_update();
-            } else if !rx.borrow().is_empty() {
-                let data = rx.borrow_and_update().clone();
-                let _ = ctx.client_manager.send_to_client(ctx.client_id, data);
+            // Check if we should send snapshot (defaults to true for backward compatibility)
+            let should_send_snapshot = subscription.with_snapshot.unwrap_or(true);
+
+            if should_send_snapshot {
+                if let Some(mut cached_entity) = ctx.entity_cache.get(view_id, key).await {
+                    transform_large_u64_to_strings(&mut cached_entity);
+                    let snapshot_entities = vec![SnapshotEntity {
+                        key: key.to_string(),
+                        data: cached_entity,
+                    }];
+                    let batch_config = ctx.entity_cache.snapshot_config();
+                    let _ = send_snapshot_batches(
+                        ctx.client_id,
+                        &snapshot_entities,
+                        view_spec.mode,
+                        view_id,
+                        ctx.client_manager,
+                        &batch_config,
+                        #[cfg(feature = "otel")]
+                        ctx.metrics.as_ref(),
+                    )
+                    .await;
+                    rx.borrow_and_update();
+                } else if !rx.borrow().is_empty() {
+                    let data = rx.borrow_and_update().clone();
+                    let _ = ctx.client_manager.send_to_client(ctx.client_id, data);
+                }
+            } else {
+                info!("Client {} subscribed to {} without snapshot", ctx.client_id, view_id);
             }
 
             let client_id = ctx.client_id;
@@ -639,33 +646,46 @@ async fn attach_client_to_bus(
         Mode::List | Mode::Append => {
             let mut rx = ctx.bus_manager.get_or_create_list_bus(view_id).await;
 
-            let snapshots = ctx.entity_cache.get_all(view_id).await;
-            let snapshot_entities: Vec<SnapshotEntity> = snapshots
-                .into_iter()
-                .filter(|(key, _)| subscription.matches_key(key))
-                .map(|(key, mut data)| {
-                    transform_large_u64_to_strings(&mut data);
-                    SnapshotEntity { key, data }
-                })
-                .collect();
+            // Check if we should send snapshot (defaults to true for backward compatibility)
+            let should_send_snapshot = subscription.with_snapshot.unwrap_or(true);
 
-            if !snapshot_entities.is_empty() {
-                let batch_config = ctx.entity_cache.snapshot_config();
-                if send_snapshot_batches(
-                    ctx.client_id,
-                    &snapshot_entities,
-                    view_spec.mode,
-                    view_id,
-                    ctx.client_manager,
-                    &batch_config,
-                    #[cfg(feature = "otel")]
-                    ctx.metrics.as_ref(),
-                )
-                .await
-                .is_err()
-                {
-                    return;
+            if should_send_snapshot {
+                // Determine which entities to send based on cursor
+                let snapshots = if let Some(ref cursor) = subscription.after {
+                    ctx.entity_cache.get_after(view_id, cursor, subscription.snapshot_limit).await
+                } else {
+                    ctx.entity_cache.get_all(view_id).await
+                };
+
+                let snapshot_entities: Vec<SnapshotEntity> = snapshots
+                    .into_iter()
+                    .filter(|(key, _)| subscription.matches_key(key))
+                    .map(|(key, mut data)| {
+                        transform_large_u64_to_strings(&mut data);
+                        SnapshotEntity { key, data }
+                    })
+                    .collect();
+
+                if !snapshot_entities.is_empty() {
+                    let batch_config = ctx.entity_cache.snapshot_config();
+                    if send_snapshot_batches(
+                        ctx.client_id,
+                        &snapshot_entities,
+                        view_spec.mode,
+                        view_id,
+                        ctx.client_manager,
+                        &batch_config,
+                        #[cfg(feature = "otel")]
+                        ctx.metrics.as_ref(),
+                    )
+                    .await
+                    .is_err()
+                    {
+                        return;
+                    }
                 }
+            } else {
+                info!("Client {} subscribed to {} without snapshot", ctx.client_id, view_id);
             }
 
             let client_id = ctx.client_id;
@@ -820,6 +840,7 @@ async fn attach_derived_view_subscription_otel(
                                     if let Some((new_key, data)) = new_window.first() {
                                         for old_key in current_window_keys.difference(&new_keys) {
                                             let delete_frame = Frame {
+                                            seq: None,
                                                 mode: frame_mode,
                                                 export: view_id_clone.clone(),
                                                 op: "delete",
@@ -841,6 +862,7 @@ async fn attach_derived_view_subscription_otel(
                                         let mut transformed_data = data.clone();
                                         transform_large_u64_to_strings(&mut transformed_data);
                                         let frame = Frame {
+                                            seq: None,
                                             mode: frame_mode,
                                             export: view_id_clone.clone(),
                                             op: "upsert",
@@ -862,6 +884,7 @@ async fn attach_derived_view_subscription_otel(
                                 } else {
                                     for key in current_window_keys.difference(&new_keys) {
                                         let delete_frame = Frame {
+                                            seq: None,
                                             mode: frame_mode,
                                             export: view_id_clone.clone(),
                                             op: "delete",
@@ -884,6 +907,7 @@ async fn attach_derived_view_subscription_otel(
                                         let mut transformed_data = data.clone();
                                         transform_large_u64_to_strings(&mut transformed_data);
                                         let frame = Frame {
+                                            seq: None,
                                             mode: frame_mode,
                                             export: view_id_clone.clone(),
                                             op: "upsert",
@@ -959,26 +983,33 @@ async fn attach_client_to_bus(
 
             let mut rx = ctx.bus_manager.get_or_create_state_bus(view_id, key).await;
 
-            if let Some(mut cached_entity) = ctx.entity_cache.get(view_id, key).await {
-                transform_large_u64_to_strings(&mut cached_entity);
-                let snapshot_entities = vec![SnapshotEntity {
-                    key: key.to_string(),
-                    data: cached_entity,
-                }];
-                let batch_config = ctx.entity_cache.snapshot_config();
-                let _ = send_snapshot_batches(
-                    ctx.client_id,
-                    &snapshot_entities,
-                    view_spec.mode,
-                    view_id,
-                    ctx.client_manager,
-                    &batch_config,
-                )
-                .await;
-                rx.borrow_and_update();
-            } else if !rx.borrow().is_empty() {
-                let data = rx.borrow_and_update().clone();
-                let _ = ctx.client_manager.send_to_client(ctx.client_id, data);
+            // Check if we should send snapshot (defaults to true for backward compatibility)
+            let should_send_snapshot = subscription.with_snapshot.unwrap_or(true);
+
+            if should_send_snapshot {
+                if let Some(mut cached_entity) = ctx.entity_cache.get(view_id, key).await {
+                    transform_large_u64_to_strings(&mut cached_entity);
+                    let snapshot_entities = vec![SnapshotEntity {
+                        key: key.to_string(),
+                        data: cached_entity,
+                    }];
+                    let batch_config = ctx.entity_cache.snapshot_config();
+                    let _ = send_snapshot_batches(
+                        ctx.client_id,
+                        &snapshot_entities,
+                        view_spec.mode,
+                        view_id,
+                        ctx.client_manager,
+                        &batch_config,
+                    )
+                    .await;
+                    rx.borrow_and_update();
+                } else if !rx.borrow().is_empty() {
+                    let data = rx.borrow_and_update().clone();
+                    let _ = ctx.client_manager.send_to_client(ctx.client_id, data);
+                }
+            } else {
+                info!("Client {} subscribed to {} without snapshot", ctx.client_id, view_id);
             }
 
             let client_id = ctx.client_id;
@@ -1011,31 +1042,44 @@ async fn attach_client_to_bus(
         Mode::List | Mode::Append => {
             let mut rx = ctx.bus_manager.get_or_create_list_bus(view_id).await;
 
-            let snapshots = ctx.entity_cache.get_all(view_id).await;
-            let snapshot_entities: Vec<SnapshotEntity> = snapshots
-                .into_iter()
-                .filter(|(key, _)| subscription.matches_key(key))
-                .map(|(key, mut data)| {
-                    transform_large_u64_to_strings(&mut data);
-                    SnapshotEntity { key, data }
-                })
-                .collect();
+            // Check if we should send snapshot (defaults to true for backward compatibility)
+            let should_send_snapshot = subscription.with_snapshot.unwrap_or(true);
 
-            if !snapshot_entities.is_empty() {
-                let batch_config = ctx.entity_cache.snapshot_config();
-                if send_snapshot_batches(
-                    ctx.client_id,
-                    &snapshot_entities,
-                    view_spec.mode,
-                    view_id,
-                    ctx.client_manager,
-                    &batch_config,
-                )
-                .await
-                .is_err()
-                {
-                    return;
+            if should_send_snapshot {
+                // Determine which entities to send based on cursor
+                let snapshots = if let Some(ref cursor) = subscription.after {
+                    ctx.entity_cache.get_after(view_id, cursor, subscription.snapshot_limit).await
+                } else {
+                    ctx.entity_cache.get_all(view_id).await
+                };
+
+                let snapshot_entities: Vec<SnapshotEntity> = snapshots
+                    .into_iter()
+                    .filter(|(key, _)| subscription.matches_key(key))
+                    .map(|(key, mut data)| {
+                        transform_large_u64_to_strings(&mut data);
+                        SnapshotEntity { key, data }
+                    })
+                    .collect();
+
+                if !snapshot_entities.is_empty() {
+                    let batch_config = ctx.entity_cache.snapshot_config();
+                    if send_snapshot_batches(
+                        ctx.client_id,
+                        &snapshot_entities,
+                        view_spec.mode,
+                        view_id,
+                        ctx.client_manager,
+                        &batch_config,
+                    )
+                    .await
+                    .is_err()
+                    {
+                        return;
+                    }
                 }
+            } else {
+                info!("Client {} subscribed to {} without snapshot", ctx.client_id, view_id);
             }
 
             let client_id = ctx.client_id;
@@ -1183,6 +1227,7 @@ async fn attach_derived_view_subscription(
                                     if let Some((new_key, data)) = new_window.first() {
                                         for old_key in current_window_keys.difference(&new_keys) {
                                             let delete_frame = Frame {
+                                            seq: None,
                                                 mode: frame_mode,
                                                 export: view_id_clone.clone(),
                                                 op: "delete",
@@ -1201,6 +1246,7 @@ async fn attach_derived_view_subscription(
                                         let mut transformed_data = data.clone();
                                         transform_large_u64_to_strings(&mut transformed_data);
                                         let frame = Frame {
+                                            seq: None,
                                             mode: frame_mode,
                                             export: view_id_clone.clone(),
                                             op: "upsert",
@@ -1218,6 +1264,7 @@ async fn attach_derived_view_subscription(
                                 } else {
                                     for key in current_window_keys.difference(&new_keys) {
                                         let delete_frame = Frame {
+                                            seq: None,
                                             mode: frame_mode,
                                             export: view_id_clone.clone(),
                                             op: "delete",
@@ -1237,6 +1284,7 @@ async fn attach_derived_view_subscription(
                                         let mut transformed_data = data.clone();
                                         transform_large_u64_to_strings(&mut transformed_data);
                                         let frame = Frame {
+                                            seq: None,
                                             mode: frame_mode,
                                             export: view_id_clone.clone(),
                                             op: "upsert",

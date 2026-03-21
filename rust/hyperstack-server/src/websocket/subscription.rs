@@ -26,6 +26,15 @@ pub struct Subscription {
     /// Number of items to skip (for windowed subscriptions)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub skip: Option<usize>,
+    /// Whether to include initial snapshot (defaults to true for backward compatibility)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub with_snapshot: Option<bool>,
+    /// Cursor for resuming from a specific point (_seq value)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+    /// Maximum number of entities to include in snapshot (pagination hint)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot_limit: Option<usize>,
 }
 
 /// Client unsubscription request
@@ -103,6 +112,9 @@ mod tests {
             partition: None,
             take: None,
             skip: None,
+            with_snapshot: None,
+            after: None,
+            snapshot_limit: None,
         };
 
         assert!(sub.matches("SettlementGame/list", "835"));
@@ -118,6 +130,9 @@ mod tests {
             partition: None,
             take: None,
             skip: None,
+            with_snapshot: None,
+            after: None,
+            snapshot_limit: None,
         };
 
         assert!(sub.matches("SettlementGame/list", "835"));
@@ -189,6 +204,9 @@ mod tests {
             partition: None,
             take: None,
             skip: None,
+            with_snapshot: None,
+            after: None,
+            snapshot_limit: None,
         };
         assert_eq!(sub.sub_key(), "SettlementGame/list:835");
     }
@@ -201,6 +219,9 @@ mod tests {
             partition: None,
             take: None,
             skip: None,
+            with_snapshot: None,
+            after: None,
+            snapshot_limit: None,
         };
         assert_eq!(sub.sub_key(), "SettlementGame/list:*");
     }
@@ -238,5 +259,73 @@ mod tests {
             }
             _ => panic!("Expected Subscribe"),
         }
+    }
+
+    #[test]
+    fn test_subscription_with_optional_snapshot() {
+        let json = json!({
+            "type": "subscribe",
+            "view": "SettlementGame/list",
+            "with_snapshot": false
+        });
+
+        let msg: ClientMessage = serde_json::from_value(json).unwrap();
+        match msg {
+            ClientMessage::Subscribe(sub) => {
+                assert_eq!(sub.view, "SettlementGame/list");
+                assert_eq!(sub.with_snapshot, Some(false));
+            }
+            _ => panic!("Expected Subscribe"),
+        }
+    }
+
+    #[test]
+    fn test_subscription_with_after_cursor() {
+        let json = json!({
+            "type": "subscribe",
+            "view": "SettlementGame/list",
+            "after": "123456789:000000000042"
+        });
+
+        let msg: ClientMessage = serde_json::from_value(json).unwrap();
+        match msg {
+            ClientMessage::Subscribe(sub) => {
+                assert_eq!(sub.view, "SettlementGame/list");
+                assert_eq!(sub.after, Some("123456789:000000000042".to_string()));
+            }
+            _ => panic!("Expected Subscribe"),
+        }
+    }
+
+    #[test]
+    fn test_subscription_with_snapshot_limit() {
+        let json = json!({
+            "type": "subscribe",
+            "view": "SettlementGame/list",
+            "after": "123456789:000000000042",
+            "snapshot_limit": 100
+        });
+
+        let msg: ClientMessage = serde_json::from_value(json).unwrap();
+        match msg {
+            ClientMessage::Subscribe(sub) => {
+                assert_eq!(sub.view, "SettlementGame/list");
+                assert_eq!(sub.after, Some("123456789:000000000042".to_string()));
+                assert_eq!(sub.snapshot_limit, Some(100));
+            }
+            _ => panic!("Expected Subscribe"),
+        }
+    }
+
+    #[test]
+    fn test_subscription_defaults_with_snapshot_to_true() {
+        let json = json!({
+            "view": "SettlementGame/list"
+        });
+
+        let sub: Subscription = serde_json::from_value(json).unwrap();
+        assert_eq!(sub.with_snapshot, None);
+        // When None, server should default to true
+        assert!(sub.with_snapshot.unwrap_or(true));
     }
 }
