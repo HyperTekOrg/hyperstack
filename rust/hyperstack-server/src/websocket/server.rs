@@ -652,14 +652,15 @@ async fn attach_client_to_bus(
             if should_send_snapshot {
                 // Determine which entities to send based on cursor
                 let snapshots = if let Some(ref cursor) = subscription.after {
-                    ctx.entity_cache.get_after(view_id, cursor, subscription.snapshot_limit).await
+                    ctx.entity_cache.get_after(view_id, cursor, None).await
                 } else {
-                    ctx.entity_cache.get_all(view_id, subscription.snapshot_limit).await
+                    ctx.entity_cache.get_all(view_id, None).await
                 };
 
                 let snapshot_entities: Vec<SnapshotEntity> = snapshots
                     .into_iter()
                     .filter(|(key, _)| subscription.matches_key(key))
+                    .take(subscription.snapshot_limit.unwrap_or(usize::MAX))
                     .map(|(key, mut data)| {
                         transform_large_u64_to_strings(&mut data);
                         SnapshotEntity { key, data }
@@ -1048,14 +1049,15 @@ async fn attach_client_to_bus(
             if should_send_snapshot {
                 // Determine which entities to send based on cursor
                 let snapshots = if let Some(ref cursor) = subscription.after {
-                    ctx.entity_cache.get_after(view_id, cursor, subscription.snapshot_limit).await
+                    ctx.entity_cache.get_after(view_id, cursor, None).await
                 } else {
-                    ctx.entity_cache.get_all(view_id, subscription.snapshot_limit).await
+                    ctx.entity_cache.get_all(view_id, None).await
                 };
 
                 let snapshot_entities: Vec<SnapshotEntity> = snapshots
                     .into_iter()
                     .filter(|(key, _)| subscription.matches_key(key))
+                    .take(subscription.snapshot_limit.unwrap_or(usize::MAX))
                     .map(|(key, mut data)| {
                         transform_large_u64_to_strings(&mut data);
                         SnapshotEntity { key, data }
