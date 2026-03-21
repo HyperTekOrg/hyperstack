@@ -30,10 +30,12 @@ pub struct Subscription {
     /// Whether to include initial snapshot (defaults to true for backward compatibility)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub with_snapshot: Option<bool>,
-    /// Cursor for resuming from a specific point (_seq value)
+    /// Cursor for resuming from a specific point (_seq value).
+    /// Note: Ignored for State mode subscriptions (single entity, no pagination).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
-    /// Maximum number of entities to include in snapshot (pagination hint)
+    /// Maximum number of entities to include in snapshot (pagination hint).
+    /// Note: Ignored for State mode subscriptions (single entity).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snapshot_limit: Option<usize>,
 }
