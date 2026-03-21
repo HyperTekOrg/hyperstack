@@ -108,6 +108,15 @@ impl EntityCache {
             .map(|cache| cache.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
             .unwrap_or_default();
 
+        // Sort by _seq descending to return the most recent entities when limit is applied
+        if limit.is_some() {
+            results.sort_by(|a, b| {
+                let seq_a = a.1.get("_seq").and_then(|s| s.as_str()).unwrap_or("");
+                let seq_b = b.1.get("_seq").and_then(|s| s.as_str()).unwrap_or("");
+                seq_b.cmp(seq_a)
+            });
+        }
+
         // Apply limit if provided
         if let Some(limit) = limit {
             results.truncate(limit);
