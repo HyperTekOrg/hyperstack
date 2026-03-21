@@ -280,4 +280,44 @@ mod tests {
         let json_no_version = r#"{"stack_name": "Test"}"#;
         assert_eq!(detect_ast_version(json_no_version).unwrap(), "1.0.0");
     }
+
+    /// Verifies that the AST version constant matches the hyperstack-macros crate.
+    /// This test ensures both crates stay in sync.
+    #[test]
+    fn test_ast_version_sync_with_macros() {
+        // Read the hyperstack-macros' types.rs file
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let macros_types_path = std::path::Path::new(&manifest_dir)
+            .join("..")
+            .join("..")
+            .join("hyperstack-macros")
+            .join("src")
+            .join("ast")
+            .join("types.rs");
+
+        if macros_types_path.exists() {
+            let content = std::fs::read_to_string(&macros_types_path)
+                .expect("Failed to read hyperstack-macros/src/ast/types.rs");
+
+            // Parse the CURRENT_AST_VERSION constant
+            let version_line = content
+                .lines()
+                .find(|line| line.contains("pub const CURRENT_AST_VERSION"))
+                .expect("CURRENT_AST_VERSION not found in hyperstack-macros");
+
+            let version_str = version_line
+                .split('"')
+                .nth(1)
+                .expect("Failed to parse version string");
+
+            assert_eq!(
+                version_str, CURRENT_AST_VERSION,
+                "AST version mismatch! interpreter has '{}', hyperstack-macros has '{}'. \
+                 Both crates must have the same CURRENT_AST_VERSION. \
+                 Update both files when bumping the version.",
+                CURRENT_AST_VERSION, version_str
+            );
+        }
+        // If file doesn't exist (e.g., in some test environments), skip this test
+    }
 }

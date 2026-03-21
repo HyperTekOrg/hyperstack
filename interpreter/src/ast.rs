@@ -6,6 +6,11 @@ use std::marker::PhantomData;
 pub use hyperstack_idl::snapshot::*;
 
 /// Current AST version for SerializableStreamSpec and SerializableStackSpec
+///
+/// ⚠️ IMPORTANT: This constant is duplicated in hyperstack-macros/src/ast/types.rs due to
+/// circular dependency between proc-macro crates and their output crates.
+/// When bumping this version, you MUST also update the constant in the
+/// hyperstack-macros crate. A test in versioned.rs verifies they stay in sync.
 pub const CURRENT_AST_VERSION: &str = "1.0.0";
 
 fn default_ast_version() -> String {

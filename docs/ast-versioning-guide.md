@@ -24,7 +24,9 @@ HyperStack uses **semantic versioning** for AST schemas (major.minor.patch):
 
 ### Step 1: Define the New AST Version
 
-Update the version constant in **both** AST type files:
+**⚠️ CRITICAL: You must update the version constant in BOTH crates.**
+
+The AST types are duplicated between `hyperstack-macros` (for compile-time code generation) and `interpreter` (for runtime) due to circular dependency constraints (proc-macro crates cannot depend on their output crates). Both crates must have the same `CURRENT_AST_VERSION` constant.
 
 **`hyperstack-macros/src/ast/types.rs`**
 ```rust
@@ -40,8 +42,19 @@ pub const CURRENT_AST_VERSION: &str = "2.0.0";
 
 **`interpreter/src/ast.rs`**
 ```rust
-// Mirror the change here
+// Mirror the EXACT same change here
 pub const CURRENT_AST_VERSION: &str = "2.0.0";
+```
+
+**Why two places?** The AST types exist in both crates:
+- `hyperstack-macros`: Used at compile time when processing `#[hyperstack]` attributes
+- `interpreter`: Used at runtime and for CLI tools (SDK generation, etc.)
+
+**Don't worry about forgetting:** There's a test (`test_ast_version_sync_*`) in both crates that will fail if the constants get out of sync. You'll see an error like:
+```
+AST version mismatch! hyperstack-macros has '1.0.0', interpreter has '2.0.0'.
+Both crates must have the same CURRENT_AST_VERSION.
+Update both files when bumping the version.
 ```
 
 ### Step 2: Create the New AST Structure

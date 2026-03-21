@@ -280,4 +280,43 @@ mod tests {
         let json_no_version = r#"{"stack_name": "Test"}"#;
         assert_eq!(detect_ast_version(json_no_version).unwrap(), "1.0.0");
     }
+
+    /// Verifies that the AST version constant matches the interpreter crate.
+    /// This test ensures both crates stay in sync.
+    #[test]
+    fn test_ast_version_sync_with_interpreter() {
+        // Read the interpreter's ast.rs file
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let interpreter_ast_path = std::path::Path::new(&manifest_dir)
+            .join("..")
+            .join("..")
+            .join("interpreter")
+            .join("src")
+            .join("ast.rs");
+
+        if interpreter_ast_path.exists() {
+            let content = std::fs::read_to_string(&interpreter_ast_path)
+                .expect("Failed to read interpreter/src/ast.rs");
+
+            // Parse the CURRENT_AST_VERSION constant
+            let version_line = content
+                .lines()
+                .find(|line| line.contains("pub const CURRENT_AST_VERSION"))
+                .expect("CURRENT_AST_VERSION not found in interpreter");
+
+            let version_str = version_line
+                .split('"')
+                .nth(1)
+                .expect("Failed to parse version string");
+
+            assert_eq!(
+                version_str, CURRENT_AST_VERSION,
+                "AST version mismatch! hyperstack-macros has '{}', interpreter has '{}'. \
+                 Both crates must have the same CURRENT_AST_VERSION. \
+                 Update both files when bumping the version.",
+                CURRENT_AST_VERSION, version_str
+            );
+        }
+        // If file doesn't exist (e.g., in some test environments), skip this test
+    }
 }

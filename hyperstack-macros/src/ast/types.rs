@@ -305,6 +305,11 @@ pub enum UnaryOp {
 // ============================================================================
 
 /// Current AST version for SerializableStreamSpec and SerializableStackSpec
+///
+/// ⚠️ IMPORTANT: This constant is duplicated in interpreter/src/ast.rs due to
+/// circular dependency between proc-macro crates and their output crates.
+/// When bumping this version, you MUST also update the constant in the
+/// interpreter crate. A test in versioned.rs verifies they stay in sync.
 pub const CURRENT_AST_VERSION: &str = "1.0.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
