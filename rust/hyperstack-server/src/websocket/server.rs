@@ -652,13 +652,13 @@ async fn attach_client_to_bus(
             if should_send_snapshot {
                 // Determine which entities to send based on cursor
                 let mut snapshots = if let Some(ref cursor) = subscription.after {
-                    ctx.entity_cache.get_after(view_id, cursor, None).await
+                    ctx.entity_cache.get_after(view_id, cursor, subscription.snapshot_limit).await
                 } else {
                     ctx.entity_cache.get_all(view_id).await
                 };
 
-                // Sort by _seq descending when snapshot_limit is set to ensure deterministic results
-                if subscription.snapshot_limit.is_some() {
+                // Sort by _seq descending only when there is no cursor (to get most-recent N from full cache)
+                if subscription.snapshot_limit.is_some() && subscription.after.is_none() {
                     snapshots.sort_by(|a, b| {
                         let sa = a.1.get("_seq").and_then(|s| s.as_str()).unwrap_or("");
                         let sb = b.1.get("_seq").and_then(|s| s.as_str()).unwrap_or("");
@@ -669,7 +669,6 @@ async fn attach_client_to_bus(
                 let snapshot_entities: Vec<SnapshotEntity> = snapshots
                     .into_iter()
                     .filter(|(key, _)| subscription.matches_key(key))
-                    .take(subscription.snapshot_limit.unwrap_or(usize::MAX))
                     .map(|(key, mut data)| {
                         transform_large_u64_to_strings(&mut data);
                         SnapshotEntity { key, data }
@@ -1058,13 +1057,13 @@ async fn attach_client_to_bus(
             if should_send_snapshot {
                 // Determine which entities to send based on cursor
                 let mut snapshots = if let Some(ref cursor) = subscription.after {
-                    ctx.entity_cache.get_after(view_id, cursor, None).await
+                    ctx.entity_cache.get_after(view_id, cursor, subscription.snapshot_limit).await
                 } else {
                     ctx.entity_cache.get_all(view_id).await
                 };
 
-                // Sort by _seq descending when snapshot_limit is set to ensure deterministic results
-                if subscription.snapshot_limit.is_some() {
+                // Sort by _seq descending only when there is no cursor (to get most-recent N from full cache)
+                if subscription.snapshot_limit.is_some() && subscription.after.is_none() {
                     snapshots.sort_by(|a, b| {
                         let sa = a.1.get("_seq").and_then(|s| s.as_str()).unwrap_or("");
                         let sb = b.1.get("_seq").and_then(|s| s.as_str()).unwrap_or("");
@@ -1075,7 +1074,6 @@ async fn attach_client_to_bus(
                 let snapshot_entities: Vec<SnapshotEntity> = snapshots
                     .into_iter()
                     .filter(|(key, _)| subscription.matches_key(key))
-                    .take(subscription.snapshot_limit.unwrap_or(usize::MAX))
                     .map(|(key, mut data)| {
                         transform_large_u64_to_strings(&mut data);
                         SnapshotEntity { key, data }
