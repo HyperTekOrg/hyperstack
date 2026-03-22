@@ -25,9 +25,12 @@ pub struct ComputedFieldValidation {
 
 pub struct ValidationInput<'a> {
     pub entity_name: &'a str,
+    pub primary_keys: &'a [String],
+    pub lookup_indexes: &'a [(String, Option<String>)],
     pub sources_by_type: &'a HashMap<String, Vec<parse::MapAttribute>>,
     pub events_by_instruction: &'a HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
     pub derive_from_mappings: &'a HashMap<String, Vec<parse::DeriveFromAttribute>>,
+    pub resolver_hooks: &'a [parse::ResolveKeyAttribute],
     pub computed_fields: &'a [ComputedFieldValidation],
     pub resolve_specs: &'a [parse::ResolveSpec],
     pub section_specs: &'a [EntitySection],
@@ -35,11 +38,37 @@ pub struct ValidationInput<'a> {
     pub idls: IdlLookup<'a>,
 }
 
+pub struct KeyResolutionValidationInput<'a> {
+    pub entity_name: &'a str,
+    pub primary_keys: &'a [String],
+    pub lookup_indexes: &'a [(String, Option<String>)],
+    pub sources_by_type: &'a HashMap<String, Vec<parse::MapAttribute>>,
+    pub events_by_instruction: &'a HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
+    pub derive_from_mappings: &'a HashMap<String, Vec<parse::DeriveFromAttribute>>,
+    pub resolver_hooks: &'a [parse::ResolveKeyAttribute],
+}
+
+type GroupedEventMappings =
+    HashMap<(String, Option<String>), Vec<(String, parse::EventAttribute, syn::Type)>>;
+
 pub fn validate_semantics(input: ValidationInput<'_>) -> syn::Result<()> {
     let known_fields = collect_known_field_paths(input.section_specs, input.computed_fields);
     let available_fields = sorted_field_paths(&known_fields);
 
     let mut errors = ErrorCollector::default();
+
+    validate_key_resolution_paths(
+        KeyResolutionValidationInput {
+            entity_name: input.entity_name,
+            primary_keys: input.primary_keys,
+            lookup_indexes: input.lookup_indexes,
+            sources_by_type: input.sources_by_type,
+            events_by_instruction: input.events_by_instruction,
+            derive_from_mappings: input.derive_from_mappings,
+            resolver_hooks: input.resolver_hooks,
+        },
+        &mut errors,
+    );
 
     validate_mapping_references(
         input.entity_name,
@@ -81,6 +110,38 @@ pub fn validate_semantics(input: ValidationInput<'_>) -> syn::Result<()> {
     );
 
     errors.finish()
+}
+
+pub fn validate_key_resolution_paths(
+    input: KeyResolutionValidationInput<'_>,
+    errors: &mut ErrorCollector,
+) {
+    let primary_key_leafs = primary_key_leafs(input.primary_keys);
+    let lookup_index_leafs = lookup_index_leafs(input.lookup_indexes);
+
+    validate_source_handler_keys(
+        input.entity_name,
+        &primary_key_leafs,
+        &lookup_index_leafs,
+        input.lookup_indexes,
+        input.sources_by_type,
+        input.resolver_hooks,
+        errors,
+    );
+    validate_event_handler_keys(
+        input.entity_name,
+        &primary_key_leafs,
+        &lookup_index_leafs,
+        input.events_by_instruction,
+        errors,
+    );
+    validate_instruction_hook_keys(
+        input.entity_name,
+        &primary_key_leafs,
+        &lookup_index_leafs,
+        input.derive_from_mappings,
+        errors,
+    );
 }
 
 pub fn validate_pda_blocks(
@@ -150,6 +211,308 @@ fn entity_field_error(
     }
 
     syn::Error::new(span, message)
+}
+
+fn primary_key_leafs(primary_keys: &[String]) -> HashSet<String> {
+    primary_keys
+        .iter()
+        .map(|key| key.split('.').next_back().unwrap_or(key).to_string())
+        .collect()
+}
+
+fn lookup_index_leafs(lookup_indexes: &[(String, Option<String>)]) -> HashSet<String> {
+    let mut values = HashSet::new();
+
+    for (field, _) in lookup_indexes {
+        let leaf = field.split('.').next_back().unwrap_or(field).to_string();
+        values.insert(leaf.clone());
+        if let Some(stripped) = leaf.strip_suffix("_address") {
+            values.insert(stripped.to_string());
+        }
+    }
+
+    values
+}
+
+fn has_explicit_key_resolver(
+    source_type: &str,
+    resolver_hooks: &[parse::ResolveKeyAttribute],
+) -> bool {
+    resolver_hooks
+        .iter()
+        .any(|hook| crate::utils::path_to_string(&hook.account_path) == source_type)
+}
+
+fn source_field_can_resolve_key(
+    field_name: &str,
+    primary_key_leafs: &HashSet<String>,
+    lookup_index_leafs: &HashSet<String>,
+) -> bool {
+    primary_key_leafs.contains(field_name) || lookup_index_leafs.contains(field_name)
+}
+
+fn source_exposes_field(mappings: &[parse::MapAttribute], field_name: &str) -> bool {
+    mappings
+        .iter()
+        .any(|mapping| mapping.source_field_name == field_name)
+}
+
+fn has_account_address_lookup_path(
+    mappings: &[parse::MapAttribute],
+    lookup_indexes: &[(String, Option<String>)],
+) -> bool {
+    mappings.iter().any(|mapping| {
+        mapping.source_field_name == "__account_address"
+            && lookup_indexes
+                .iter()
+                .any(|(field_name, _)| field_name == &mapping.target_field_name)
+    })
+}
+
+fn key_resolution_error(
+    span: proc_macro2::Span,
+    source_kind: &str,
+    source_name: &str,
+    entity_name: &str,
+    detail: &str,
+) -> syn::Error {
+    syn::Error::new(
+        span,
+        format!(
+            "{} '{}' cannot resolve the primary key for entity '{}'. {}",
+            source_kind, source_name, entity_name, detail
+        ),
+    )
+}
+
+fn validate_source_handler_keys(
+    entity_name: &str,
+    primary_key_leafs: &HashSet<String>,
+    lookup_index_leafs: &HashSet<String>,
+    lookup_indexes: &[(String, Option<String>)],
+    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    resolver_hooks: &[parse::ResolveKeyAttribute],
+    errors: &mut ErrorCollector,
+) {
+    let mut grouped: HashMap<(String, Option<String>), Vec<parse::MapAttribute>> = HashMap::new();
+    for (source_type, mappings) in sources_by_type {
+        for mapping in mappings {
+            grouped
+                .entry((source_type.clone(), mapping.join_on.clone()))
+                .or_default()
+                .push(mapping.clone());
+        }
+    }
+
+    for ((source_type, join_key), mappings) in grouped {
+        let Some(first_mapping) = mappings.first() else {
+            continue;
+        };
+
+        if mappings.iter().any(|mapping| mapping.is_primary_key) {
+            continue;
+        }
+
+        let is_instruction = mappings.iter().any(|mapping| mapping.is_instruction);
+        let is_cpi_event =
+            source_type.contains("::events::") || source_type.contains("::cpi_events::");
+
+        if mappings.iter().all(|mapping| mapping.is_event_source) {
+            continue;
+        }
+
+        if !is_instruction
+            && !is_cpi_event
+            && has_explicit_key_resolver(&source_type, resolver_hooks)
+        {
+            continue;
+        }
+
+        if mappings.iter().any(|mapping| {
+            source_field_can_resolve_key(
+                &mapping.source_field_name,
+                primary_key_leafs,
+                lookup_index_leafs,
+            )
+        }) {
+            continue;
+        }
+
+        if !is_instruction
+            && !is_cpi_event
+            && has_account_address_lookup_path(&mappings, lookup_indexes)
+        {
+            continue;
+        }
+
+        if let Some(lookup_by) = mappings
+            .iter()
+            .find_map(|mapping| mapping.lookup_by.as_ref())
+        {
+            let field_name = lookup_by.ident.to_string();
+            if source_field_can_resolve_key(&field_name, primary_key_leafs, lookup_index_leafs) {
+                continue;
+            }
+
+            errors.push(key_resolution_error(
+                lookup_by.ident.span(),
+                if is_instruction { "instruction source" } else { "account source" },
+                &source_type,
+                entity_name,
+                &format!(
+                    "The `lookup_by` field '{}' is neither a primary-key field nor a lookup-index-backed field.",
+                    field_name
+                ),
+            ));
+            continue;
+        }
+
+        if let Some(join_field) = join_key {
+            if source_exposes_field(&mappings, &join_field)
+                && source_field_can_resolve_key(&join_field, primary_key_leafs, lookup_index_leafs)
+            {
+                continue;
+            }
+
+            errors.push(key_resolution_error(
+                first_mapping.attr_span,
+                if is_instruction { "instruction source" } else { "account source" },
+                &source_type,
+                entity_name,
+                &format!(
+                    "The `join_on` field '{}' does not provide a provable path back to the entity primary key. Use `primary_key`, `lookup_by`, a lookup-index-backed source field, or an explicit `#[resolve_key(...)]` hook.",
+                    join_field
+                ),
+            ));
+            continue;
+        }
+
+        errors.push(key_resolution_error(
+            first_mapping.attr_span,
+            if is_instruction { "instruction source" } else { "account source" },
+            &source_type,
+            entity_name,
+            if is_instruction {
+                "Add a `primary_key` mapping or `lookup_by = ...` that points to the primary key or to a lookup index field."
+            } else {
+                "Add a `primary_key` mapping, a lookup-index-backed field (commonly via `__account_address`), or an explicit `#[resolve_key(...)]` hook."
+            },
+        ));
+    }
+}
+
+fn validate_event_handler_keys(
+    entity_name: &str,
+    primary_key_leafs: &HashSet<String>,
+    lookup_index_leafs: &HashSet<String>,
+    events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
+    errors: &mut ErrorCollector,
+) {
+    let mut grouped: GroupedEventMappings = HashMap::new();
+    for (instruction, event_mappings) in events_by_instruction {
+        for event_mapping in event_mappings {
+            let join_key = event_mapping
+                .1
+                .join_on
+                .as_ref()
+                .map(|field_spec| field_spec.ident.to_string());
+            grouped
+                .entry((instruction.clone(), join_key))
+                .or_default()
+                .push(event_mapping.clone());
+        }
+    }
+
+    for ((instruction, _join_key), mappings) in grouped {
+        let Some((_, first_attr, _)) = mappings.first() else {
+            continue;
+        };
+
+        if let Some(lookup_by) = &first_attr.lookup_by {
+            let field_name = lookup_by.ident.to_string();
+            if source_field_can_resolve_key(&field_name, primary_key_leafs, lookup_index_leafs) {
+                continue;
+            }
+
+            errors.push(key_resolution_error(
+                lookup_by.ident.span(),
+                "event source",
+                &instruction,
+                entity_name,
+                &format!(
+                    "The `lookup_by` field '{}' is neither a primary-key field nor a lookup-index-backed field.",
+                    field_name
+                ),
+            ));
+            continue;
+        }
+
+        if let Some(join_on) = &first_attr.join_on {
+            let field_name = join_on.ident.to_string();
+            if source_field_can_resolve_key(&field_name, primary_key_leafs, lookup_index_leafs) {
+                continue;
+            }
+
+            errors.push(key_resolution_error(
+                join_on.ident.span(),
+                "event source",
+                &instruction,
+                entity_name,
+                &format!(
+                    "The `join_on` field '{}' is neither a primary-key field nor a lookup-index-backed field.",
+                    field_name
+                ),
+            ));
+            continue;
+        }
+
+        errors.push(key_resolution_error(
+            first_attr.attr_span,
+            "event source",
+            &instruction,
+            entity_name,
+            "Add `lookup_by = ...` or `join_on = ...` that points to the primary key or to a lookup index field.",
+        ));
+    }
+}
+
+fn validate_instruction_hook_keys(
+    entity_name: &str,
+    primary_key_leafs: &HashSet<String>,
+    lookup_index_leafs: &HashSet<String>,
+    derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
+    errors: &mut ErrorCollector,
+) {
+    for (instruction_type, derive_attrs) in derive_from_mappings {
+        for derive_attr in derive_attrs {
+            if let Some(lookup_by) = &derive_attr.lookup_by {
+                let field_name = lookup_by.ident.to_string();
+                if source_field_can_resolve_key(&field_name, primary_key_leafs, lookup_index_leafs)
+                {
+                    continue;
+                }
+
+                errors.push(key_resolution_error(
+                    lookup_by.ident.span(),
+                    "instruction hook",
+                    instruction_type,
+                    entity_name,
+                    &format!(
+                        "The `lookup_by` field '{}' is neither a primary-key field nor a lookup-index-backed field.",
+                        field_name
+                    ),
+                ));
+            } else {
+                errors.push(key_resolution_error(
+                    derive_attr.attr_span,
+                    "instruction hook",
+                    instruction_type,
+                    entity_name,
+                    "Add `lookup_by = ...` that points to the primary key or to a lookup index field.",
+                ));
+            }
+        }
+    }
 }
 
 fn validate_mapping_references(

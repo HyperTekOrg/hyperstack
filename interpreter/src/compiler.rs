@@ -1524,7 +1524,13 @@ impl<S> TypedCompiler<S> {
                 .split('.')
                 .next_back()
                 .unwrap_or(&lookup_index.field_name);
-            if index_field_name == lookup_field_name {
+            let matches_directly = index_field_name == lookup_field_name;
+            let matches_address_alias = index_field_name
+                .strip_suffix("_address")
+                .map(|base| base == lookup_field_name)
+                .unwrap_or(false);
+
+            if matches_directly || matches_address_alias {
                 return Some(format!("{}_lookup_index", index_field_name));
             }
         }

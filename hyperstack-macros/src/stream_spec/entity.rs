@@ -323,6 +323,7 @@ pub fn process_entity_struct_with_idl(
                                 attr_span: snapshot_attr.attr_span,
                                 source_type_span: acct_path.span(),
                                 source_field_span,
+                                is_event_source: false,
                                 source_type_path: acct_path,
                                 source_field_name,
                                 target_field_name: snapshot_attr.target_field_name.clone(),
@@ -381,6 +382,7 @@ pub fn process_entity_struct_with_idl(
                                 attr_span: aggr_attr.attr_span,
                                 source_type_span: instr_path.span(),
                                 source_field_span,
+                                is_event_source: false,
                                 source_type_path: instr_path.clone(),
                                 source_field_name,
                                 target_field_name: aggr_attr.target_field_name.clone(),
@@ -575,9 +577,12 @@ pub fn process_entity_struct_with_idl(
     }
     validate_semantics(ValidationInput {
         entity_name: &entity_name,
+        primary_keys: &primary_keys,
+        lookup_indexes: &lookup_indexes,
         sources_by_type: &sources_by_type,
         events_by_instruction: &events_by_instruction,
         derive_from_mappings: &derive_from_mappings,
+        resolver_hooks: &resolver_hooks,
         computed_fields: &computed_field_validations,
         resolve_specs: &resolve_specs,
         section_specs: &section_specs,

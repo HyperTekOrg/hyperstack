@@ -11,6 +11,7 @@ use syn::{Fields, ItemStruct, Type};
 
 use crate::parse;
 use crate::utils::{path_to_string, to_snake_case};
+use crate::validation::{validate_key_resolution_paths, KeyResolutionValidationInput};
 
 use super::entity::{infer_resolver_type, parse_resolver_type_name, process_map_attribute};
 use super::handlers::{convert_event_to_map_attributes, determine_event_instruction};
@@ -230,6 +231,21 @@ pub fn process_struct_with_context(
             }
         }
     }
+
+    let mut key_resolution_errors = crate::diagnostic::ErrorCollector::default();
+    validate_key_resolution_paths(
+        KeyResolutionValidationInput {
+            entity_name: &name.to_string(),
+            primary_keys: &primary_keys,
+            lookup_indexes: &lookup_indexes,
+            sources_by_type: &sources_by_type,
+            events_by_instruction: &events_by_instruction,
+            derive_from_mappings: &derive_from_mappings,
+            resolver_hooks: &[],
+        },
+        &mut key_resolution_errors,
+    );
+    key_resolution_errors.finish()?;
 
     let mut sources_by_type_and_join: HashMap<(String, Option<String>), Vec<parse::MapAttribute>> =
         HashMap::new();
