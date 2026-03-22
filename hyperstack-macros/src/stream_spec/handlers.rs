@@ -7,12 +7,16 @@
 //! - Processing event fields for mapping
 
 use quote::{format_ident, quote};
+use syn::spanned::Spanned;
 use syn::{Path, Type};
 
 use crate::ast::{ResolverHook, ResolverStrategy};
+use crate::diagnostic::idl_error_to_syn;
 use crate::parse;
 use crate::parse::idl as idl_parser;
 use crate::utils::{path_to_string, to_snake_case};
+use hyperstack_idl::error::IdlSearchError;
+use hyperstack_idl::search::{lookup_instruction_field, InstructionFieldKind};
 
 // ============================================================================
 // Type Extraction Helpers
@@ -143,7 +147,7 @@ pub fn find_field_in_instruction(
     instruction_path: &Path,
     field_name: &str,
     idl: Option<&idl_parser::IdlSpec>,
-) -> Result<parse::FieldLocation, String> {
+) -> Result<parse::FieldLocation, IdlSearchError> {
     let idl = match idl {
         Some(idl) => idl,
         None => return Ok(parse::FieldLocation::InstructionArg), // Default to arg if no IDL
@@ -154,44 +158,13 @@ pub fn find_field_in_instruction(
         .segments
         .last()
         .map(|s| s.ident.to_string())
-        .ok_or_else(|| "Invalid instruction path".to_string())?;
+        .ok_or_else(|| IdlSearchError::InvalidPath {
+            path: path_to_string(instruction_path),
+        })?;
 
-    // Check IDL
-    if let Some(prefix) = idl.get_instruction_field_prefix(&instruction_name, field_name) {
-        match prefix {
-            "accounts" => Ok(parse::FieldLocation::Account),
-            "data" => Ok(parse::FieldLocation::InstructionArg),
-            _ => Ok(parse::FieldLocation::InstructionArg),
-        }
-    } else {
-        // Field not found - collect available fields for error message
-        let mut available_fields = Vec::new();
-
-        for instruction in &idl.instructions {
-            if instruction.name.eq_ignore_ascii_case(&instruction_name) {
-                for account in &instruction.accounts {
-                    available_fields.push(format!("accounts::{}", account.name));
-                }
-                for arg in &instruction.args {
-                    available_fields.push(format!("args::{}", arg.name));
-                }
-                break;
-            }
-        }
-
-        if available_fields.is_empty() {
-            Err(format!(
-                "Instruction '{}' not found in IDL",
-                instruction_name
-            ))
-        } else {
-            Err(format!(
-                "Field '{}' not found in instruction '{}'. Available fields: {}",
-                field_name,
-                instruction_name,
-                available_fields.join(", ")
-            ))
-        }
+    match lookup_instruction_field(idl, &instruction_name, field_name)?.kind {
+        InstructionFieldKind::Account => Ok(parse::FieldLocation::Account),
+        InstructionFieldKind::Arg => Ok(parse::FieldLocation::InstructionArg),
     }
 }
 
@@ -294,6 +267,9 @@ pub fn convert_event_to_map_attributes(
     if !has_fields {
         // Whole instruction capture - create a single mapping for the whole source
         map_attrs.push(parse::MapAttribute {
+            attr_span: event_attr.attr_span,
+            source_type_span: instruction_path.span(),
+            source_field_span: event_attr.attr_span,
             source_type_path: instruction_path.clone(),
             source_field_name: String::new(),
             target_field_name: target_field.to_string(),
@@ -326,6 +302,9 @@ pub fn convert_event_to_map_attributes(
             .map(|t| t.to_string());
 
         map_attrs.push(parse::MapAttribute {
+            attr_span: event_attr.attr_span,
+            source_type_span: instruction_path.span(),
+            source_field_span: field_spec.ident.span(),
             source_type_path: instruction_path.clone(),
             source_field_name: field_name.clone(),
             target_field_name: format!("{}.{}", target_field, field_name),
@@ -356,6 +335,9 @@ pub fn convert_event_to_map_attributes(
             .map(|t| t.to_string());
 
         map_attrs.push(parse::MapAttribute {
+            attr_span: event_attr.attr_span,
+            source_type_span: instruction_path.span(),
+            source_field_span: event_attr.attr_span,
             source_type_path: instruction_path.clone(),
             source_field_name: field_name.clone(),
             target_field_name: format!("{}.{}", target_field, field_name),
@@ -614,7 +596,7 @@ pub fn validate_event_fields(
             match find_field_in_instruction(instruction_path, &field_name, idl) {
                 Ok(loc) => loc,
                 Err(err_msg) => {
-                    return Err(syn::Error::new(field_spec.ident.span(), err_msg));
+                    return Err(idl_error_to_syn(field_spec.ident.span(), err_msg));
                 }
             }
         };

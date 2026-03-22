@@ -1,4 +1,4 @@
-use crate::ast::{ComparisonOp, FieldPath, LogicalOp, ParsedCondition};
+use crate::ast::{ComparisonOp, FieldPath, LogicalOp, ParsedCondition, ResolverCondition};
 
 /// Parse a condition expression string into a ParsedCondition AST
 ///
@@ -7,20 +7,28 @@ use crate::ast::{ComparisonOp, FieldPath, LogicalOp, ParsedCondition};
 /// - Logical ops: "amount > 100 && user != \"excluded\"", "a < 10 || a > 1000"
 /// - Field refs: "amount", "data.field", "accounts.user"
 ///
-/// Returns None if parsing fails (will emit compile error)
+#[allow(dead_code)]
 pub fn parse_condition_expression(expr: &str) -> Option<ParsedCondition> {
+    parse_condition_expression_strict(expr).ok()
+}
+
+pub fn parse_condition_expression_strict(expr: &str) -> Result<ParsedCondition, String> {
     let expr = expr.trim();
 
+    if expr.is_empty() {
+        return Err("Condition expression cannot be empty".to_string());
+    }
+
     // Try to parse as logical expression first (contains && or ||)
-    if let Some(parsed) = try_parse_logical(expr) {
-        return Some(parsed);
+    if let Some(parsed) = try_parse_logical(expr)? {
+        return Ok(parsed);
     }
 
     // Parse as comparison
     try_parse_comparison(expr)
 }
 
-fn try_parse_logical(expr: &str) -> Option<ParsedCondition> {
+fn try_parse_logical(expr: &str) -> Result<Option<ParsedCondition>, String> {
     // Split on && or || (respecting precedence: && before ||)
     // For simplicity, we can use a basic tokenizer
 
@@ -29,13 +37,13 @@ fn try_parse_logical(expr: &str) -> Option<ParsedCondition> {
         let left = expr[..pos].trim();
         let right = expr[pos + 2..].trim();
 
-        return Some(ParsedCondition::Logical {
+        return Ok(Some(ParsedCondition::Logical {
             op: LogicalOp::Or,
             conditions: vec![
-                parse_condition_expression(left)?,
-                parse_condition_expression(right)?,
+                parse_condition_expression_strict(left)?,
+                parse_condition_expression_strict(right)?,
             ],
-        });
+        }));
     }
 
     // Find top-level && (higher precedence)
@@ -43,19 +51,19 @@ fn try_parse_logical(expr: &str) -> Option<ParsedCondition> {
         let left = expr[..pos].trim();
         let right = expr[pos + 2..].trim();
 
-        return Some(ParsedCondition::Logical {
+        return Ok(Some(ParsedCondition::Logical {
             op: LogicalOp::And,
             conditions: vec![
-                parse_condition_expression(left)?,
-                parse_condition_expression(right)?,
+                parse_condition_expression_strict(left)?,
+                parse_condition_expression_strict(right)?,
             ],
-        });
+        }));
     }
 
-    None
+    Ok(None)
 }
 
-fn try_parse_comparison(expr: &str) -> Option<ParsedCondition> {
+fn try_parse_comparison(expr: &str) -> Result<ParsedCondition, String> {
     // Try each comparison operator in order (longer ones first to avoid conflicts)
     let operators = [
         (">=", ComparisonOp::GreaterThanOrEqual),
@@ -71,6 +79,30 @@ fn try_parse_comparison(expr: &str) -> Option<ParsedCondition> {
             let field = expr[..pos].trim();
             let value = expr[pos + op_str.len()..].trim();
 
+            if field.is_empty() {
+                return Err(format!(
+                    "Invalid condition expression '{}': missing field before operator",
+                    expr
+                ));
+            }
+
+            if value.is_empty() {
+                return Err(format!(
+                    "Invalid condition expression '{}': missing value after operator",
+                    expr
+                ));
+            }
+
+            if operators
+                .iter()
+                .any(|(other_op, _)| value.starts_with(other_op))
+            {
+                return Err(format!(
+                    "Invalid condition expression '{}': unexpected operator sequence near '{}'",
+                    expr, value
+                ));
+            }
+
             // Parse field path
             let field_segments: Vec<&str> = field.split('.').collect();
             let field_path = FieldPath::new(&field_segments);
@@ -78,7 +110,7 @@ fn try_parse_comparison(expr: &str) -> Option<ParsedCondition> {
             // Parse value (number, string, or bool)
             let value_json = parse_value(value)?;
 
-            return Some(ParsedCondition::Comparison {
+            return Ok(ParsedCondition::Comparison {
                 field: field_path,
                 op: op.clone(),
                 value: value_json,
@@ -86,7 +118,10 @@ fn try_parse_comparison(expr: &str) -> Option<ParsedCondition> {
         }
     }
 
-    None
+    Err(format!(
+        "Invalid condition expression '{}'. Expected a comparison like 'field > 100' or a logical expression using && / ||",
+        expr
+    ))
 }
 
 fn find_top_level_operator(expr: &str, op: &str) -> Option<usize> {
@@ -94,11 +129,9 @@ fn find_top_level_operator(expr: &str, op: &str) -> Option<usize> {
     let mut depth = 0;
     let mut in_quotes = false;
     let mut quote_char = '\0';
+    let mut previous_char = None;
 
-    let chars: Vec<char> = expr.chars().collect();
-    for i in 0..chars.len() {
-        let c = chars[i];
-
+    for (byte_idx, c) in expr.char_indices() {
         if !in_quotes {
             if c == '"' || c == '\'' {
                 in_quotes = true;
@@ -107,26 +140,28 @@ fn find_top_level_operator(expr: &str, op: &str) -> Option<usize> {
                 depth += 1;
             } else if c == ')' {
                 depth -= 1;
-            } else if depth == 0 && expr[i..].starts_with(op) {
-                return Some(i);
+            } else if depth == 0 && expr[byte_idx..].starts_with(op) {
+                return Some(byte_idx);
             }
-        } else if c == quote_char && (i == 0 || chars[i - 1] != '\\') {
+        } else if c == quote_char && previous_char != Some('\\') {
             in_quotes = false;
         }
+
+        previous_char = Some(c);
     }
 
     None
 }
 
-fn parse_value(value: &str) -> Option<serde_json::Value> {
+fn parse_value(value: &str) -> Result<serde_json::Value, String> {
     use serde_json::Value;
 
     let value_trimmed = value.trim();
     if value_trimmed == "ZERO_32" {
-        return Some(Value::Array(vec![Value::Number(0.into()); 32]));
+        return Ok(Value::Array(vec![Value::Number(0.into()); 32]));
     }
     if value_trimmed == "ZERO_64" {
-        return Some(Value::Array(vec![Value::Number(0.into()); 64]));
+        return Ok(Value::Array(vec![Value::Number(0.into()); 64]));
     }
 
     // Remove underscores from numeric literals (Rust style: 1_000_000)
@@ -134,21 +169,86 @@ fn parse_value(value: &str) -> Option<serde_json::Value> {
 
     // Try parsing as different types
     if value_clean == "true" {
-        Some(Value::Bool(true))
+        Ok(Value::Bool(true))
     } else if value_clean == "false" {
-        Some(Value::Bool(false))
+        Ok(Value::Bool(false))
     } else if let Ok(num) = value_clean.parse::<i64>() {
-        Some(Value::Number(num.into()))
+        Ok(Value::Number(num.into()))
     } else if let Ok(num) = value_clean.parse::<f64>() {
-        serde_json::Number::from_f64(num).map(Value::Number)
+        serde_json::Number::from_f64(num)
+            .map(Value::Number)
+            .ok_or_else(|| format!("Invalid numeric value '{}'.", value))
     } else if (value.starts_with('"') && value.ends_with('"'))
         || (value.starts_with('\'') && value.ends_with('\''))
     {
-        Some(Value::String(value[1..value.len() - 1].to_string()))
+        Ok(Value::String(value[1..value.len() - 1].to_string()))
     } else {
         // Could be a field reference - for now, treat as string
-        Some(Value::String(value.to_string()))
+        Ok(Value::String(value.to_string()))
     }
+}
+
+pub fn parse_resolver_condition_expression(expr: &str) -> Result<ResolverCondition, String> {
+    let operators = ["==", "!=", ">=", "<=", ">", "<"];
+    for op_str in &operators {
+        if let Some(pos) = expr.find(op_str) {
+            let field_path = expr[..pos].trim().to_string();
+            let raw_value = expr[pos + op_str.len()..].trim();
+
+            if field_path.is_empty() {
+                return Err(format!(
+                    "Invalid condition expression: '{}'. Missing field before operator.",
+                    expr
+                ));
+            }
+
+            if raw_value.is_empty() {
+                return Err(format!(
+                    "Invalid condition expression: '{}'. Missing value after operator.",
+                    expr
+                ));
+            }
+
+            if operators
+                .iter()
+                .any(|other_op| raw_value.starts_with(other_op))
+            {
+                return Err(format!(
+                    "Invalid condition expression: '{}'. Unexpected operator sequence near '{}'.",
+                    expr, raw_value
+                ));
+            }
+
+            let op = match *op_str {
+                "==" => ComparisonOp::Equal,
+                "!=" => ComparisonOp::NotEqual,
+                ">=" => ComparisonOp::GreaterThanOrEqual,
+                "<=" => ComparisonOp::LessThanOrEqual,
+                ">" => ComparisonOp::GreaterThan,
+                "<" => ComparisonOp::LessThan,
+                _ => unreachable!(),
+            };
+
+            let value = match raw_value {
+                "null" => serde_json::Value::Null,
+                "true" => serde_json::Value::Bool(true),
+                "false" => serde_json::Value::Bool(false),
+                s if s.parse::<f64>().is_ok() => serde_json::json!(s.parse::<f64>().unwrap()),
+                s => serde_json::Value::String(s.trim_matches('"').to_string()),
+            };
+
+            return Ok(ResolverCondition {
+                field_path,
+                op,
+                value,
+            });
+        }
+    }
+
+    Err(format!(
+        "Invalid condition expression: '{}'. Expected format: 'field.path <op> value' (supported operators: ==, !=, >, >=, <, <=)",
+        expr
+    ))
 }
 
 #[cfg(test)]

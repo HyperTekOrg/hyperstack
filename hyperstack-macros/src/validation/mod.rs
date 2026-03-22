@@ -1,0 +1,605 @@
+use std::collections::{HashMap, HashSet};
+
+use crate::ast::{ComputedExpr, EntitySection, FieldPath, ViewTransform};
+use crate::diagnostic::{preview_values, suggestion_or_available_suffix, ErrorCollector};
+use crate::event_type_helpers::IdlLookup;
+use crate::parse;
+use crate::parse::idl as idl_parser;
+use crate::parse::pda_validation::PdaValidationContext;
+use crate::parse::pdas::PdasBlock;
+use crate::validation::idl_refs::{
+    resolve_instruction_lookup, resolve_instruction_lookup_from_path,
+    validate_instruction_field_spec, validate_mapping_source,
+};
+
+use crate::diagnostic::idl_error_to_syn;
+use crate::stream_spec::computed::{parse_computed_expression, qualify_field_refs};
+
+pub mod idl_refs;
+
+pub struct ComputedFieldValidation {
+    pub target_path: String,
+    pub expression: proc_macro2::TokenStream,
+    pub span: proc_macro2::Span,
+}
+
+pub struct ValidationInput<'a> {
+    pub entity_name: &'a str,
+    pub sources_by_type: &'a HashMap<String, Vec<parse::MapAttribute>>,
+    pub events_by_instruction: &'a HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
+    pub derive_from_mappings: &'a HashMap<String, Vec<parse::DeriveFromAttribute>>,
+    pub computed_fields: &'a [ComputedFieldValidation],
+    pub resolve_specs: &'a [parse::ResolveSpec],
+    pub section_specs: &'a [EntitySection],
+    pub view_specs: &'a [parse::ViewAttributeSpec],
+    pub idls: IdlLookup<'a>,
+}
+
+pub fn validate_semantics(input: ValidationInput<'_>) -> syn::Result<()> {
+    let known_fields = collect_known_field_paths(input.section_specs, input.computed_fields);
+    let available_fields = sorted_field_paths(&known_fields);
+
+    let mut errors = ErrorCollector::default();
+
+    validate_mapping_references(
+        input.entity_name,
+        input.sources_by_type,
+        &known_fields,
+        &available_fields,
+        input.idls,
+        &mut errors,
+    );
+    validate_event_references(
+        input.entity_name,
+        input.events_by_instruction,
+        &known_fields,
+        &available_fields,
+        input.idls,
+        &mut errors,
+    );
+    validate_derive_from_references(input.derive_from_mappings, input.idls, &mut errors);
+    validate_resolve_specs(
+        input.entity_name,
+        input.resolve_specs,
+        &known_fields,
+        &available_fields,
+        &mut errors,
+    );
+    validate_views(
+        input.entity_name,
+        input.view_specs,
+        &known_fields,
+        &available_fields,
+        &mut errors,
+    );
+    validate_computed_fields(
+        input.entity_name,
+        input.computed_fields,
+        &known_fields,
+        &available_fields,
+        &mut errors,
+    );
+
+    errors.finish()
+}
+
+pub fn validate_pda_blocks(
+    idls: &HashMap<String, idl_parser::IdlSpec>,
+    blocks: &[PdasBlock],
+) -> syn::Result<()> {
+    let ctx = PdaValidationContext::new(idls);
+    let mut errors = ErrorCollector::default();
+
+    for block in blocks {
+        if let Err(error) = ctx.validate(block) {
+            errors.push(error);
+        }
+    }
+
+    errors.finish()
+}
+
+fn collect_known_field_paths(
+    section_specs: &[EntitySection],
+    computed_fields: &[ComputedFieldValidation],
+) -> HashSet<String> {
+    let mut known = HashSet::new();
+
+    for section in section_specs {
+        for field in &section.fields {
+            if section.name == "root" {
+                known.insert(field.field_name.clone());
+            } else {
+                known.insert(format!("{}.{}", section.name, field.field_name));
+            }
+        }
+    }
+
+    for computed in computed_fields {
+        known.insert(computed.target_path.clone());
+    }
+
+    known
+}
+
+fn sorted_field_paths(known_fields: &HashSet<String>) -> Vec<String> {
+    let mut values: Vec<String> = known_fields.iter().cloned().collect();
+    values.sort();
+    values
+}
+
+fn entity_field_error(
+    entity_name: &str,
+    reference: &str,
+    context: &str,
+    span: proc_macro2::Span,
+    available_fields: &[String],
+) -> syn::Error {
+    let mut message = format!(
+        "unknown {} '{}' on entity '{}'",
+        context, reference, entity_name
+    );
+    let suffix = suggestion_or_available_suffix(reference, available_fields, "Available fields");
+    if suffix.is_empty() && !available_fields.is_empty() {
+        message.push_str(&format!(
+            ". Available fields: {}",
+            preview_values(available_fields, 6)
+        ));
+    } else {
+        message.push_str(&suffix);
+    }
+
+    syn::Error::new(span, message)
+}
+
+fn validate_mapping_references(
+    entity_name: &str,
+    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    known_fields: &HashSet<String>,
+    available_fields: &[String],
+    idls: IdlLookup,
+    errors: &mut ErrorCollector,
+) {
+    for (source_type, mappings) in sources_by_type {
+        for mapping in mappings {
+            if let Err(error) = validate_mapping_source(source_type, mapping, idls) {
+                let span = match &error {
+                    hyperstack_idl::error::IdlSearchError::NotFound { section, .. }
+                        if section == "instructions"
+                            || section == "accounts"
+                            || section == "types" =>
+                    {
+                        mapping.source_type_span
+                    }
+                    hyperstack_idl::error::IdlSearchError::NotFound { section, .. }
+                        if section.starts_with("instruction fields")
+                            || section.starts_with("account fields") =>
+                    {
+                        mapping.source_field_span
+                    }
+                    _ => mapping.attr_span,
+                };
+                errors.push(idl_error_to_syn(span, error));
+            }
+
+            if let Some(join_on) = &mapping.join_on {
+                if !known_fields.contains(join_on) {
+                    errors.push(entity_field_error(
+                        entity_name,
+                        join_on,
+                        "join_on field",
+                        mapping.attr_span,
+                        available_fields,
+                    ));
+                }
+            }
+
+            if let Some(lookup_by) = &mapping.lookup_by {
+                if source_type.contains("::instructions::") || mapping.is_instruction {
+                    match syn::parse_str::<syn::Path>(source_type)
+                        .map_err(|_| hyperstack_idl::error::IdlSearchError::InvalidPath {
+                            path: source_type.clone(),
+                        })
+                        .and_then(|path| resolve_instruction_lookup_from_path(&path, idls))
+                    {
+                        Ok((idl, instruction_name)) => {
+                            if let Err(error) =
+                                validate_instruction_field_spec(idl, &instruction_name, lookup_by)
+                            {
+                                errors.push(idl_error_to_syn(lookup_by.ident.span(), error));
+                            }
+                        }
+                        Err(error) => errors.push(idl_error_to_syn(mapping.attr_span, error)),
+                    }
+                }
+            }
+
+            if let Some(stop_lookup_by) = &mapping.stop_lookup_by {
+                if source_type.contains("::instructions::") || mapping.is_instruction {
+                    match syn::parse_str::<syn::Path>(source_type)
+                        .map_err(|_| hyperstack_idl::error::IdlSearchError::InvalidPath {
+                            path: source_type.clone(),
+                        })
+                        .and_then(|path| resolve_instruction_lookup_from_path(&path, idls))
+                    {
+                        Ok((idl, instruction_name)) => {
+                            if let Err(error) = validate_instruction_field_spec(
+                                idl,
+                                &instruction_name,
+                                stop_lookup_by,
+                            ) {
+                                errors.push(idl_error_to_syn(stop_lookup_by.ident.span(), error));
+                            }
+                        }
+                        Err(error) => errors.push(idl_error_to_syn(mapping.attr_span, error)),
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn validate_event_references(
+    entity_name: &str,
+    events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
+    known_fields: &HashSet<String>,
+    available_fields: &[String],
+    idls: IdlLookup,
+    errors: &mut ErrorCollector,
+) {
+    for (instruction_key, event_mappings) in events_by_instruction {
+        for (_target_field, event_attr, _field_type) in event_mappings {
+            let instruction_lookup = resolve_instruction_lookup(event_attr, instruction_key, idls);
+
+            let (idl, instruction_name) = match instruction_lookup {
+                Ok(value) => value,
+                Err(error) => {
+                    errors.push(idl_error_to_syn(
+                        event_attr.instruction_span.unwrap_or(event_attr.attr_span),
+                        error,
+                    ));
+                    continue;
+                }
+            };
+
+            for field_spec in &event_attr.capture_fields {
+                if let Err(error) =
+                    validate_instruction_field_spec(idl, &instruction_name, field_spec)
+                {
+                    errors.push(idl_error_to_syn(field_spec.ident.span(), error));
+                }
+            }
+
+            if let Some(field_spec) = &event_attr.lookup_by {
+                if let Err(error) =
+                    validate_instruction_field_spec(idl, &instruction_name, field_spec)
+                {
+                    errors.push(idl_error_to_syn(field_spec.ident.span(), error));
+                }
+            }
+
+            if let Some(join_on) = &event_attr.join_on {
+                let reference = join_on.ident.to_string();
+                if !known_fields.contains(&reference) {
+                    errors.push(entity_field_error(
+                        entity_name,
+                        &reference,
+                        "join_on field",
+                        join_on.ident.span(),
+                        available_fields,
+                    ));
+                }
+            }
+        }
+    }
+}
+
+fn validate_derive_from_references(
+    derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
+    idls: IdlLookup,
+    errors: &mut ErrorCollector,
+) {
+    for (instruction_type, derive_attrs) in derive_from_mappings {
+        let path = match syn::parse_str::<syn::Path>(instruction_type) {
+            Ok(path) => path,
+            Err(_) => continue,
+        };
+
+        let instruction_lookup = idl_refs::resolve_instruction_lookup_from_path(&path, idls);
+        let (idl, instruction_name) = match instruction_lookup {
+            Ok(value) => value,
+            Err(error) => {
+                for derive_attr in derive_attrs {
+                    errors.push(idl_error_to_syn(derive_attr.attr_span, error.clone()));
+                }
+                continue;
+            }
+        };
+
+        for derive_attr in derive_attrs {
+            if !derive_attr.field.ident.to_string().starts_with("__") {
+                if let Err(error) =
+                    validate_instruction_field_spec(idl, &instruction_name, &derive_attr.field)
+                {
+                    errors.push(idl_error_to_syn(derive_attr.field.ident.span(), error));
+                }
+            }
+
+            if let Some(lookup_by) = &derive_attr.lookup_by {
+                if let Err(error) =
+                    validate_instruction_field_spec(idl, &instruction_name, lookup_by)
+                {
+                    errors.push(idl_error_to_syn(lookup_by.ident.span(), error));
+                }
+            }
+        }
+    }
+}
+
+fn validate_resolve_specs(
+    entity_name: &str,
+    resolve_specs: &[parse::ResolveSpec],
+    known_fields: &HashSet<String>,
+    available_fields: &[String],
+    errors: &mut ErrorCollector,
+) {
+    for spec in resolve_specs {
+        if let Some(from) = &spec.from {
+            if !known_fields.contains(from) {
+                errors.push(entity_field_error(
+                    entity_name,
+                    from,
+                    "resolver input field",
+                    spec.from_span.unwrap_or(spec.attr_span),
+                    available_fields,
+                ));
+            }
+        }
+
+        if let Some(schedule_at) = &spec.schedule_at {
+            if !known_fields.contains(&schedule_at.raw) {
+                errors.push(entity_field_error(
+                    entity_name,
+                    &schedule_at.raw,
+                    "resolver schedule_at field",
+                    schedule_at.span,
+                    available_fields,
+                ));
+            }
+        }
+    }
+}
+
+fn validate_views(
+    entity_name: &str,
+    view_specs: &[parse::ViewAttributeSpec],
+    known_fields: &HashSet<String>,
+    available_fields: &[String],
+    errors: &mut ErrorCollector,
+) {
+    let mut seen_ids = HashSet::new();
+
+    for view_spec in view_specs {
+        if !seen_ids.insert(view_spec.view.id.clone()) {
+            errors.push(syn::Error::new(
+                view_spec.attr_span,
+                format!(
+                    "duplicate view id '{}' on entity '{}'",
+                    view_spec.view.id, entity_name
+                ),
+            ));
+        }
+
+        for transform in &view_spec.view.pipeline {
+            let maybe_field = match transform {
+                ViewTransform::Sort { key, .. }
+                | ViewTransform::MaxBy { key }
+                | ViewTransform::MinBy { key } => Some(key),
+                _ => None,
+            };
+
+            if let Some(field) = maybe_field {
+                let raw = field_path_to_string(field);
+                if !known_fields.contains(&raw) {
+                    errors.push(entity_field_error(
+                        entity_name,
+                        &raw,
+                        "view field",
+                        view_spec.sort_key_span.unwrap_or(view_spec.attr_span),
+                        available_fields,
+                    ));
+                }
+            }
+        }
+    }
+}
+
+fn validate_computed_fields(
+    entity_name: &str,
+    computed_fields: &[ComputedFieldValidation],
+    known_fields: &HashSet<String>,
+    available_fields: &[String],
+    errors: &mut ErrorCollector,
+) {
+    let computed_targets: HashSet<String> = computed_fields
+        .iter()
+        .map(|field| field.target_path.clone())
+        .collect();
+    let mut dependencies: HashMap<String, HashSet<String>> = HashMap::new();
+    let mut spans = HashMap::new();
+
+    for computed in computed_fields {
+        spans.insert(computed.target_path.clone(), computed.span);
+
+        let parsed = parse_computed_expression(&computed.expression);
+        let section = computed.target_path.split('.').next().unwrap_or("");
+        let parsed = if computed.target_path.contains('.') {
+            qualify_field_refs(parsed, section)
+        } else {
+            parsed
+        };
+
+        let refs = collect_field_refs(&parsed);
+        for reference in &refs {
+            if !known_fields.contains(reference) {
+                errors.push(entity_field_error(
+                    entity_name,
+                    reference,
+                    "computed field reference",
+                    computed.span,
+                    available_fields,
+                ));
+            }
+        }
+
+        dependencies.insert(
+            computed.target_path.clone(),
+            refs.into_iter()
+                .filter(|reference| computed_targets.contains(reference))
+                .collect(),
+        );
+    }
+
+    for cycle in detect_cycles(&dependencies) {
+        if let Some(first) = cycle.first() {
+            errors.push(syn::Error::new(
+                spans
+                    .get(first)
+                    .copied()
+                    .unwrap_or(proc_macro2::Span::call_site()),
+                format!(
+                    "computed fields contain a dependency cycle: {}",
+                    cycle.join(" -> ")
+                ),
+            ));
+        }
+    }
+}
+
+fn field_path_to_string(path: &FieldPath) -> String {
+    path.segments.join(".")
+}
+
+fn collect_field_refs(expr: &ComputedExpr) -> HashSet<String> {
+    let mut refs = HashSet::new();
+    collect_field_refs_recursive(expr, &mut refs);
+    refs
+}
+
+fn collect_field_refs_recursive(expr: &ComputedExpr, refs: &mut HashSet<String>) {
+    match expr {
+        ComputedExpr::FieldRef { path } => {
+            refs.insert(path.clone());
+        }
+        ComputedExpr::Binary { left, right, .. } => {
+            collect_field_refs_recursive(left, refs);
+            collect_field_refs_recursive(right, refs);
+        }
+        ComputedExpr::Unary { expr, .. }
+        | ComputedExpr::Paren { expr }
+        | ComputedExpr::Cast { expr, .. }
+        | ComputedExpr::UnwrapOr { expr, .. }
+        | ComputedExpr::Slice { expr, .. }
+        | ComputedExpr::Index { expr, .. }
+        | ComputedExpr::Keccak256 { expr }
+        | ComputedExpr::JsonToBytes { expr }
+        | ComputedExpr::U64FromLeBytes { bytes: expr }
+        | ComputedExpr::U64FromBeBytes { bytes: expr } => {
+            collect_field_refs_recursive(expr, refs);
+        }
+        ComputedExpr::MethodCall { expr, args, .. } => {
+            collect_field_refs_recursive(expr, refs);
+            for arg in args {
+                collect_field_refs_recursive(arg, refs);
+            }
+        }
+        ComputedExpr::ResolverComputed { args, .. } => {
+            for arg in args {
+                collect_field_refs_recursive(arg, refs);
+            }
+        }
+        ComputedExpr::Let { value, body, .. } => {
+            collect_field_refs_recursive(value, refs);
+            collect_field_refs_recursive(body, refs);
+        }
+        ComputedExpr::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            collect_field_refs_recursive(condition, refs);
+            collect_field_refs_recursive(then_branch, refs);
+            collect_field_refs_recursive(else_branch, refs);
+        }
+        ComputedExpr::Some { value } => collect_field_refs_recursive(value, refs),
+        ComputedExpr::Closure { body, .. } => collect_field_refs_recursive(body, refs),
+        ComputedExpr::Var { .. }
+        | ComputedExpr::Literal { .. }
+        | ComputedExpr::ByteArray { .. }
+        | ComputedExpr::None
+        | ComputedExpr::ContextSlot
+        | ComputedExpr::ContextTimestamp => {}
+    }
+}
+
+fn detect_cycles(graph: &HashMap<String, HashSet<String>>) -> Vec<Vec<String>> {
+    let mut visited = HashSet::new();
+    let mut stack = Vec::new();
+    let mut active = HashSet::new();
+    let mut cycles = Vec::new();
+
+    let mut nodes: Vec<&String> = graph.keys().collect();
+    nodes.sort();
+
+    for node in nodes {
+        detect_cycles_from(
+            node,
+            graph,
+            &mut visited,
+            &mut active,
+            &mut stack,
+            &mut cycles,
+        );
+    }
+
+    cycles
+}
+
+fn detect_cycles_from(
+    node: &str,
+    graph: &HashMap<String, HashSet<String>>,
+    visited: &mut HashSet<String>,
+    active: &mut HashSet<String>,
+    stack: &mut Vec<String>,
+    cycles: &mut Vec<Vec<String>>,
+) {
+    if active.contains(node) {
+        if let Some(index) = stack.iter().position(|entry| entry == node) {
+            let mut cycle = stack[index..].to_vec();
+            cycle.push(node.to_string());
+            if !cycles.iter().any(|existing| existing == &cycle) {
+                cycles.push(cycle);
+            }
+        }
+        return;
+    }
+
+    if !visited.insert(node.to_string()) {
+        return;
+    }
+
+    active.insert(node.to_string());
+    stack.push(node.to_string());
+
+    if let Some(edges) = graph.get(node) {
+        let mut sorted_edges: Vec<&String> = edges.iter().collect();
+        sorted_edges.sort();
+
+        for edge in sorted_edges {
+            detect_cycles_from(edge, graph, visited, active, stack, cycles);
+        }
+    }
+
+    stack.pop();
+    active.remove(node);
+}

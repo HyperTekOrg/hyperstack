@@ -753,24 +753,26 @@ impl SerializableStreamSpec {
     /// The hash is computed over the entire spec except the content_hash field itself,
     /// ensuring the same AST always produces the same hash regardless of when it was
     /// generated or by whom.
-    pub fn compute_content_hash(&self) -> String {
+    #[allow(dead_code)]
+    pub fn try_compute_content_hash(&self) -> Result<String, serde_json::Error> {
         use sha2::{Digest, Sha256};
 
-        // Clone and clear the hash field for computation
         let mut spec_for_hash = self.clone();
         spec_for_hash.content_hash = None;
 
-        // Serialize to JSON (serde_json produces consistent output for the same struct)
-        let json =
-            serde_json::to_string(&spec_for_hash).expect("Failed to serialize spec for hashing");
+        let json = serde_json::to_string(&spec_for_hash)?;
 
-        // Compute SHA256 hash
         let mut hasher = Sha256::new();
         hasher.update(json.as_bytes());
         let result = hasher.finalize();
 
-        // Return hex-encoded hash
-        hex::encode(result)
+        Ok(hex::encode(result))
+    }
+
+    #[allow(dead_code)]
+    pub fn compute_content_hash(&self) -> String {
+        self.try_compute_content_hash()
+            .expect("Failed to serialize spec for hashing")
     }
 
     /// Verify that the content_hash matches the computed hash.
@@ -778,15 +780,21 @@ impl SerializableStreamSpec {
     #[allow(dead_code)]
     pub fn verify_content_hash(&self) -> bool {
         match &self.content_hash {
-            Some(hash) => {
-                let computed = self.compute_content_hash();
-                hash == &computed
-            }
+            Some(hash) => self
+                .try_compute_content_hash()
+                .map(|computed| hash == &computed)
+                .unwrap_or(false),
             None => true, // No hash to verify
         }
     }
 
     /// Set the content_hash field to the computed hash.
+    #[allow(dead_code)]
+    pub fn try_with_content_hash(mut self) -> Result<Self, serde_json::Error> {
+        self.content_hash = Some(self.try_compute_content_hash()?);
+        Ok(self)
+    }
+
     #[allow(dead_code)]
     pub fn with_content_hash(mut self) -> Self {
         self.content_hash = Some(self.compute_content_hash());
@@ -909,17 +917,31 @@ pub struct SerializableStackSpec {
 
 impl SerializableStackSpec {
     /// Compute deterministic content hash (SHA256 of canonical JSON).
-    pub fn compute_content_hash(&self) -> String {
+    #[allow(dead_code)]
+    pub fn try_compute_content_hash(&self) -> Result<String, serde_json::Error> {
         use sha2::{Digest, Sha256};
+
         let mut spec_for_hash = self.clone();
         spec_for_hash.content_hash = None;
-        let json = serde_json::to_string(&spec_for_hash)
-            .expect("Failed to serialize stack spec for hashing");
+        let json = serde_json::to_string(&spec_for_hash)?;
         let mut hasher = Sha256::new();
         hasher.update(json.as_bytes());
-        hex::encode(hasher.finalize())
+        Ok(hex::encode(hasher.finalize()))
     }
 
+    #[allow(dead_code)]
+    pub fn compute_content_hash(&self) -> String {
+        self.try_compute_content_hash()
+            .expect("Failed to serialize stack spec for hashing")
+    }
+
+    #[allow(dead_code)]
+    pub fn try_with_content_hash(mut self) -> Result<Self, serde_json::Error> {
+        self.content_hash = Some(self.try_compute_content_hash()?);
+        Ok(self)
+    }
+
+    #[allow(dead_code)]
     pub fn with_content_hash(mut self) -> Self {
         self.content_hash = Some(self.compute_content_hash());
         self

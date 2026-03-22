@@ -1,0 +1,5 @@
+error: Failed to parse proto file missing.proto (full path: "$WORKSPACE/target/tests/trybuild/hyperstack-macros/missing.proto"): Failed to read proto file "$WORKSPACE/target/tests/trybuild/hyperstack-macros/missing.proto": No such file or directory (os error 2)
+ --> tests/ui/validation_errors/missing_proto_file.rs:4:5
+  |
+4 | mod broken {}
+  |     ^^^^^^
