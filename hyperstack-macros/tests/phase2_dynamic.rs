@@ -207,6 +207,35 @@ fn main() {{}}
 }
 
 #[test]
+fn unknown_legacy_event_program_reports_invalid_path() {
+    let source = format!(
+        r#"use hyperstack_macros::hyperstack;
+
+#[hyperstack(idl = "{}")]
+mod broken {{
+    #[entity(name = "Thing")]
+    struct Thing {{
+        #[map(pump_sdk::accounts::BondingCurve::complete, primary_key, strategy = SetOnce)]
+        id: String,
+
+        #[event(instruction = "unknown_program::Transfer", capture = [user], lookup_by = id)]
+        trades: String,
+    }}
+}}
+
+fn main() {{}}
+"#,
+        pump_idl_path()
+    );
+
+    run_compile_failure(
+        "unknown_legacy_event_program_reports_invalid_path",
+        &source,
+        &["Invalid path 'unknown_program::Transfer'"],
+    );
+}
+
+#[test]
 fn missing_account_type_gets_suggestion() {
     let source = format!(
         r#"use hyperstack_macros::hyperstack;

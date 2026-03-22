@@ -227,6 +227,13 @@ pub fn parse_proto_files_from_attr(
 ) -> syn::Result<ParsedProtoAttrs> {
     let hyperstack_attr = parse::parse_stream_spec_attribute(attr)?;
 
+    parse_proto_files_from_parsed_attr(hyperstack_attr, span)
+}
+
+fn parse_proto_files_from_parsed_attr(
+    hyperstack_attr: parse::StreamSpecAttribute,
+    span: proc_macro2::Span,
+) -> syn::Result<ParsedProtoAttrs> {
     let idl_files = hyperstack_attr.idl_files.clone();
 
     if hyperstack_attr.proto_files.is_empty() {
@@ -245,16 +252,36 @@ pub fn parse_proto_files_from_attr(
                 analyses.push((proto_path.clone(), analysis));
             }
             Err(e) => {
-                return Err(syn::Error::new(
-                    span,
-                    format!(
-                        "Failed to parse proto file {} (full path: {:?}): {}",
-                        proto_path, full_path, e
-                    ),
-                ));
+                let _ = span;
+                eprintln!(
+                    "Warning: Failed to parse proto file {} (full path: {:?}): {}",
+                    proto_path, full_path, e
+                );
             }
         }
     }
 
     Ok((analyses, hyperstack_attr.skip_decoders, idl_files))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_proto_file_is_non_fatal() {
+        let (analyses, skip_decoders, idl_files) = parse_proto_files_from_parsed_attr(
+            parse::StreamSpecAttribute {
+                proto_files: vec!["missing.proto".to_string()],
+                idl_files: Vec::new(),
+                skip_decoders: false,
+            },
+            proc_macro2::Span::call_site(),
+        )
+        .expect("missing proto files should remain non-fatal");
+
+        assert!(analyses.is_empty());
+        assert!(!skip_decoders);
+        assert!(idl_files.is_empty());
+    }
 }

@@ -8,6 +8,7 @@ use crate::parse;
 use crate::parse::idl as idl_parser;
 use crate::parse::pda_validation::PdaValidationContext;
 use crate::parse::pdas::PdasBlock;
+use crate::utils::path_to_string;
 use crate::validation::idl_refs::{
     resolve_instruction_lookup, resolve_instruction_lookup_from_path,
     validate_instruction_field_spec, validate_mapping_source,
@@ -220,15 +221,90 @@ fn field_spec_sort_key(field_spec: Option<&parse::FieldSpec>) -> Option<(u8, Str
     })
 }
 
+fn field_specs_sort_key(field_specs: &[parse::FieldSpec]) -> Vec<(u8, String)> {
+    field_specs
+        .iter()
+        .map(|field_spec| field_spec_sort_key(Some(field_spec)).expect("field spec key"))
+        .collect()
+}
+
+fn path_sort_key(path: Option<&syn::Path>) -> Option<String> {
+    path.map(path_to_string)
+}
+
+fn register_from_sort_key(
+    register_from: &[parse::RegisterFromSpec],
+) -> Vec<(String, (u8, String), (u8, String))> {
+    register_from
+        .iter()
+        .map(|spec| {
+            (
+                path_to_string(&spec.instruction_path),
+                field_spec_sort_key(Some(&spec.pda_field)).expect("pda field key"),
+                field_spec_sort_key(Some(&spec.primary_key_field)).expect("primary key field key"),
+            )
+        })
+        .collect()
+}
+
+fn condition_sort_key(condition: &Option<crate::ast::ConditionExpr>) -> Option<String> {
+    condition.as_ref().map(|condition| format!("{condition:?}"))
+}
+
+fn resolver_transform_sort_key(
+    transform: &Option<parse::ResolverTransformSpec>,
+) -> Option<(String, String)> {
+    transform
+        .as_ref()
+        .map(|transform| (transform.method.clone(), transform.args.to_string()))
+}
+
+fn event_transforms_sort_key<K, V>(transforms: &HashMap<K, V>) -> Vec<(String, String)>
+where
+    K: ToString,
+    V: ToString,
+{
+    let mut entries = transforms
+        .iter()
+        .map(|(field, transform)| (field.to_string(), transform.to_string()))
+        .collect::<Vec<_>>();
+    entries.sort();
+    entries
+}
+
 fn stable_map_attribute_cmp(a: &parse::MapAttribute, b: &parse::MapAttribute) -> Ordering {
     a.target_field_name
         .cmp(&b.target_field_name)
         .then_with(|| a.source_field_name.cmp(&b.source_field_name))
+        .then_with(|| path_to_string(&a.source_type_path).cmp(&path_to_string(&b.source_type_path)))
+        .then_with(|| a.strategy.cmp(&b.strategy))
         .then_with(|| a.join_on.cmp(&b.join_on))
         .then_with(|| {
             field_spec_sort_key(a.lookup_by.as_ref())
                 .cmp(&field_spec_sort_key(b.lookup_by.as_ref()))
         })
+        .then_with(|| a.transform.cmp(&b.transform))
+        .then_with(|| {
+            resolver_transform_sort_key(&a.resolver_transform)
+                .cmp(&resolver_transform_sort_key(&b.resolver_transform))
+        })
+        .then_with(|| {
+            register_from_sort_key(&a.register_from).cmp(&register_from_sort_key(&b.register_from))
+        })
+        .then_with(|| a.temporal_field.cmp(&b.temporal_field))
+        .then_with(|| condition_sort_key(&a.condition).cmp(&condition_sort_key(&b.condition)))
+        .then_with(|| path_sort_key(a.when.as_ref()).cmp(&path_sort_key(b.when.as_ref())))
+        .then_with(|| path_sort_key(a.stop.as_ref()).cmp(&path_sort_key(b.stop.as_ref())))
+        .then_with(|| {
+            field_spec_sort_key(a.stop_lookup_by.as_ref())
+                .cmp(&field_spec_sort_key(b.stop_lookup_by.as_ref()))
+        })
+        .then_with(|| a.is_primary_key.cmp(&b.is_primary_key))
+        .then_with(|| a.is_lookup_index.cmp(&b.is_lookup_index))
+        .then_with(|| a.is_instruction.cmp(&b.is_instruction))
+        .then_with(|| a.is_event_source.cmp(&b.is_event_source))
+        .then_with(|| a.is_whole_source.cmp(&b.is_whole_source))
+        .then_with(|| a.emit.cmp(&b.emit))
 }
 
 fn stable_event_mapping_cmp(
@@ -236,6 +312,30 @@ fn stable_event_mapping_cmp(
     b: &(String, parse::EventAttribute, syn::Type),
 ) -> Ordering {
     a.0.cmp(&b.0)
+        .then_with(|| a.1.target_field_name.cmp(&b.1.target_field_name))
+        .then_with(|| a.1.strategy.cmp(&b.1.strategy))
+        .then_with(|| {
+            path_sort_key(a.1.from_instruction.as_ref())
+                .cmp(&path_sort_key(b.1.from_instruction.as_ref()))
+        })
+        .then_with(|| {
+            path_sort_key(a.1.inferred_instruction.as_ref())
+                .cmp(&path_sort_key(b.1.inferred_instruction.as_ref()))
+        })
+        .then_with(|| a.1.instruction.cmp(&b.1.instruction))
+        .then_with(|| {
+            field_specs_sort_key(&a.1.capture_fields)
+                .cmp(&field_specs_sort_key(&b.1.capture_fields))
+        })
+        .then_with(|| a.1.capture_fields_legacy.cmp(&b.1.capture_fields_legacy))
+        .then_with(|| {
+            event_transforms_sort_key(&a.1.field_transforms)
+                .cmp(&event_transforms_sort_key(&b.1.field_transforms))
+        })
+        .then_with(|| {
+            event_transforms_sort_key(&a.1.field_transforms_legacy)
+                .cmp(&event_transforms_sort_key(&b.1.field_transforms_legacy))
+        })
         .then_with(|| {
             field_spec_sort_key(a.1.lookup_by.as_ref())
                 .cmp(&field_spec_sort_key(b.1.lookup_by.as_ref()))

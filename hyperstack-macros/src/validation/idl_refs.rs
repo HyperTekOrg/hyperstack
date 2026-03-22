@@ -85,11 +85,11 @@ pub fn resolve_instruction_lookup_from_string<'a>(
                 path: instruction.to_string(),
             })?;
 
-    let idl = find_idl_for_program_name(program_name, idls)
-        .or_else(|| idls.first().map(|(_, idl)| *idl))
-        .ok_or_else(|| IdlSearchError::InvalidPath {
+    let idl = find_idl_for_program_name(program_name, idls).ok_or_else(|| {
+        IdlSearchError::InvalidPath {
             path: instruction.to_string(),
-        })?;
+        }
+    })?;
 
     lookup_instruction(idl, instruction_name)?;
     Ok((idl, instruction_name.to_string()))
