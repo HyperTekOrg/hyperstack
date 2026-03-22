@@ -293,7 +293,9 @@ fn stable_map_attribute_cmp(a: &parse::MapAttribute, b: &parse::MapAttribute) ->
         .then_with(|| a.source_field_name.cmp(&b.source_field_name))
         .then_with(|| path_to_string(&a.source_type_path).cmp(&path_to_string(&b.source_type_path)))
         .then_with(|| a.strategy.cmp(&b.strategy))
-        .then_with(|| a.join_on.cmp(&b.join_on))
+        .then_with(|| {
+            field_spec_sort_key(a.join_on.as_ref()).cmp(&field_spec_sort_key(b.join_on.as_ref()))
+        })
         .then_with(|| {
             field_spec_sort_key(a.lookup_by.as_ref())
                 .cmp(&field_spec_sort_key(b.lookup_by.as_ref()))
@@ -485,7 +487,13 @@ fn validate_source_handler_keys(
     for (source_type, mappings) in sources_by_type {
         for mapping in mappings {
             grouped
-                .entry((source_type.clone(), mapping.join_on.clone()))
+                .entry((
+                    source_type.clone(),
+                    mapping
+                        .join_on
+                        .as_ref()
+                        .map(|field_spec| field_spec.ident.to_string()),
+                ))
                 .or_default()
                 .push(mapping.clone());
         }
@@ -822,12 +830,13 @@ fn validate_mapping_references(
             }
 
             if let Some(join_on) = &mapping.join_on {
-                if !known_fields.contains(join_on) {
+                let reference = join_on.ident.to_string();
+                if !known_fields.contains(&reference) {
                     errors.push(entity_field_error(
                         entity_name,
-                        join_on,
+                        &reference,
                         "join_on field",
-                        mapping.attr_span,
+                        join_on.ident.span(),
                         available_fields,
                     ));
                 }
@@ -879,6 +888,21 @@ fn validate_event_references(
         let mut event_mappings = events_by_instruction[instruction_key].clone();
         event_mappings.sort_by(stable_event_mapping_cmp);
 
+        for (_target_field, event_attr, _field_type) in &event_mappings {
+            if let Some(join_on) = &event_attr.join_on {
+                let reference = join_on.ident.to_string();
+                if !known_fields.contains(&reference) {
+                    errors.push(entity_field_error(
+                        entity_name,
+                        &reference,
+                        "join_on field",
+                        join_on.ident.span(),
+                        available_fields,
+                    ));
+                }
+            }
+        }
+
         let Some((_, first_attr, _)) = event_mappings.first() else {
             continue;
         };
@@ -896,19 +920,6 @@ fn validate_event_references(
             };
 
         for (_target_field, event_attr, _field_type) in &event_mappings {
-            if let Some(join_on) = &event_attr.join_on {
-                let reference = join_on.ident.to_string();
-                if !known_fields.contains(&reference) {
-                    errors.push(entity_field_error(
-                        entity_name,
-                        &reference,
-                        "join_on field",
-                        join_on.ident.span(),
-                        available_fields,
-                    ));
-                }
-            }
-
             for field_spec in &event_attr.capture_fields {
                 if let Err(error) =
                     validate_instruction_field_spec(idl, &instruction_name, field_spec)

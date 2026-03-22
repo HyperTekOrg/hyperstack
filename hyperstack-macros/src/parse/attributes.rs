@@ -36,7 +36,7 @@ pub struct MapAttribute {
     pub register_from: Vec<RegisterFromSpec>,
     pub temporal_field: Option<String>,
     pub strategy: String,
-    pub join_on: Option<String>,
+    pub join_on: Option<FieldSpec>,
     pub transform: Option<String>,
     /// Resolver transform: a parameterized transform like `ui_amount(ore_metadata.decimals)`
     /// that expands into a hidden raw field + synthesized computed field.
@@ -217,7 +217,7 @@ struct MapAttributeArgs {
     temporal_field: Option<String>,
     strategy: Option<String>,
     rename: Option<String>,
-    join_on: Option<String>,
+    join_on: Option<FieldSpec>,
     transform: Option<String>,
     resolver_transform: Option<ResolverTransformSpec>,
     condition: Option<syn::LitStr>,
@@ -293,8 +293,15 @@ impl Parse for MapAttributeArgs {
                     rename = Some(rename_lit.value());
                 } else if ident_str == "join_on" {
                     input.parse::<Token![=]>()?;
-                    let join_on_lit: syn::LitStr = input.parse()?;
-                    join_on = Some(join_on_lit.value());
+                    if input.peek(syn::LitStr) {
+                        let join_on_lit: syn::LitStr = input.parse()?;
+                        join_on = Some(FieldSpec {
+                            ident: syn::Ident::new(&join_on_lit.value(), join_on_lit.span()),
+                            explicit_location: None,
+                        });
+                    } else {
+                        join_on = Some(parse_field_spec(input)?);
+                    }
                 } else if ident_str == "transform" {
                     input.parse::<Token![=]>()?;
                     let transform_ident: syn::Ident = input.parse()?;

@@ -338,10 +338,7 @@ pub fn process_entity_struct_with_idl(
                                 register_from: Vec::new(),
                                 temporal_field: None,
                                 strategy: snapshot_attr.strategy.clone(),
-                                join_on: snapshot_attr
-                                    .join_on
-                                    .as_ref()
-                                    .map(|fs| fs.ident.to_string()),
+                                join_on: snapshot_attr.join_on.clone(),
                                 transform: None,
                                 resolver_transform: None,
                                 is_instruction: false,
@@ -397,7 +394,7 @@ pub fn process_entity_struct_with_idl(
                                 register_from: Vec::new(),
                                 temporal_field: None,
                                 strategy: aggr_attr.strategy.clone(),
-                                join_on: aggr_attr.join_on.as_ref().map(|fs| fs.ident.to_string()),
+                                join_on: aggr_attr.join_on.clone(),
                                 transform: aggr_attr.transform.as_ref().map(|t| t.to_string()),
                                 resolver_transform: None,
                                 is_instruction: true,

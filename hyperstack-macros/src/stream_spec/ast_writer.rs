@@ -397,7 +397,13 @@ fn build_handlers(
         BTreeMap::new();
     for (source_type, mappings) in sources_by_type {
         for mapping in mappings {
-            let key = (source_type.clone(), mapping.join_on.clone());
+            let key = (
+                source_type.clone(),
+                mapping
+                    .join_on
+                    .as_ref()
+                    .map(|field_spec| field_spec.ident.to_string()),
+            );
             sources_by_type_and_join
                 .entry(key)
                 .or_default()
