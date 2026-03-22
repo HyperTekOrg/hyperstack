@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::{ComputedExpr, EntitySection, FieldPath, ViewTransform};
-use crate::diagnostic::{preview_values, suggestion_or_available_suffix, ErrorCollector};
+use crate::diagnostic::{suggestion_or_available_suffix, ErrorCollector};
 use crate::event_type_helpers::IdlLookup;
 use crate::parse;
 use crate::parse::idl as idl_parser;
@@ -203,11 +203,6 @@ fn entity_field_error(
     let suffix = suggestion_or_available_suffix(reference, available_fields, "Available fields");
     if !suffix.is_empty() {
         message.push_str(&suffix);
-    } else if !available_fields.is_empty() {
-        message.push_str(&format!(
-            ". Available fields: {}",
-            preview_values(available_fields, 6)
-        ));
     }
 
     syn::Error::new(span, message)
@@ -425,17 +420,31 @@ fn validate_event_handler_keys(
         }
     }
 
-    for ((instruction, _join_key), mappings) in grouped {
+    for ((instruction, join_key), mappings) in grouped {
         let Some((_, first_attr, _)) = mappings.first() else {
             continue;
         };
 
-        if let Some(lookup_by) = &first_attr.lookup_by {
-            let field_name = lookup_by.ident.to_string();
-            if source_field_can_resolve_key(&field_name, primary_key_leafs, lookup_index_leafs) {
-                continue;
-            }
+        let lookup_by = mappings
+            .iter()
+            .filter_map(|(_, attr, _)| attr.lookup_by.as_ref())
+            .find(|lookup_by| {
+                source_field_can_resolve_key(
+                    &lookup_by.ident.to_string(),
+                    primary_key_leafs,
+                    lookup_index_leafs,
+                )
+            });
+        if lookup_by.is_some() {
+            continue;
+        }
 
+        if let Some(lookup_by) = mappings
+            .iter()
+            .filter_map(|(_, attr, _)| attr.lookup_by.as_ref())
+            .next()
+        {
+            let field_name = lookup_by.ident.to_string();
             errors.push(key_resolution_error(
                 lookup_by.ident.span(),
                 "event source",
@@ -449,8 +458,14 @@ fn validate_event_handler_keys(
             continue;
         }
 
-        if let Some(join_on) = &first_attr.join_on {
-            let field_name = join_on.ident.to_string();
+        if let Some(join_field) = join_key {
+            let Some(join_on) = mappings
+                .iter()
+                .find_map(|(_, attr, _)| attr.join_on.as_ref())
+            else {
+                continue;
+            };
+            let field_name = join_field;
             if source_field_can_resolve_key(&field_name, primary_key_leafs, lookup_index_leafs) {
                 continue;
             }
@@ -945,7 +960,12 @@ fn detect_cycles_from(
     cycles: &mut Vec<Vec<String>>,
 ) {
     if active.contains(node) {
-        if let Some(index) = stack.iter().position(|entry| entry == node) {
+        let index = stack.iter().position(|entry| entry == node);
+        debug_assert!(
+            index.is_some(),
+            "node in active set but missing from stack: {node}"
+        );
+        if let Some(index) = index {
             let mut cycle = stack[index..].to_vec();
             cycle.push(node.to_string());
             if !cycles.iter().any(|existing| existing == &cycle) {

@@ -276,3 +276,34 @@ fn main() {}
         &[("fixture/minimal.json", minimal_idl())],
     );
 }
+
+#[test]
+fn event_group_accepts_any_valid_lookup_by_regardless_of_field_order() {
+    let source = r#"use hyperstack_macros::hyperstack;
+
+#[hyperstack(idl = "fixture/minimal.json")]
+mod valid {
+    #[entity(name = "Thing")]
+    struct Thing {
+        #[map(fake_sdk::accounts::Thing::id, primary_key, strategy = SetOnce)]
+        id: String,
+
+        #[event(from = fake_sdk::instructions::Trade, fields = [user])]
+        raw_trades: Vec<fake_sdk::instructions::Trade>,
+
+        #[event(from = fake_sdk::instructions::Trade, fields = [user], lookup_by = id)]
+        keyed_trades: Vec<fake_sdk::instructions::Trade>,
+    }
+}
+
+fn main() {}
+"#;
+
+    let stderr = compile_failure_stderr_with_files(
+        "event_group_accepts_any_valid_lookup_by_regardless_of_field_order",
+        source,
+        &[("fixture/minimal.json", minimal_idl())],
+    );
+
+    assert!(!stderr.contains("cannot resolve the primary key"));
+}

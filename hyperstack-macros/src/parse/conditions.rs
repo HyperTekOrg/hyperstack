@@ -234,7 +234,9 @@ pub fn parse_resolver_condition_expression(expr: &str) -> Result<ResolverConditi
                 "true" => serde_json::Value::Bool(true),
                 "false" => serde_json::Value::Bool(false),
                 s => {
-                    if let Ok(number) = s.parse::<f64>() {
+                    if let Ok(number) = s.parse::<i64>() {
+                        serde_json::Value::Number(number.into())
+                    } else if let Ok(number) = s.parse::<f64>() {
                         match serde_json::Number::from_f64(number) {
                             Some(number) => serde_json::Value::Number(number),
                             None => {
@@ -361,5 +363,14 @@ mod tests {
         let error = parse_resolver_condition_expression("score == NaN").unwrap_err();
 
         assert!(error.contains("non-finite floats are not supported"));
+    }
+
+    #[test]
+    fn test_resolver_condition_preserves_large_integer_values() {
+        let parsed =
+            parse_resolver_condition_expression("lamport_balance == 9999999999999999").unwrap();
+
+        assert_eq!(parsed.field_path, "lamport_balance");
+        assert_eq!(parsed.value, serde_json::json!(9999999999999999i64));
     }
 }
