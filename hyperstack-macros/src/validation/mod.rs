@@ -201,13 +201,13 @@ fn entity_field_error(
         context, reference, entity_name
     );
     let suffix = suggestion_or_available_suffix(reference, available_fields, "Available fields");
-    if suffix.is_empty() && !available_fields.is_empty() {
+    if !suffix.is_empty() {
+        message.push_str(&suffix);
+    } else if !available_fields.is_empty() {
         message.push_str(&format!(
             ". Available fields: {}",
             preview_values(available_fields, 6)
         ));
-    } else {
-        message.push_str(&suffix);
     }
 
     syn::Error::new(span, message)
@@ -505,6 +505,12 @@ fn validate_instruction_hook_keys(
                     ),
                 ));
             } else {
+                let field_name = derive_attr.field.ident.to_string();
+                if source_field_can_resolve_key(&field_name, primary_key_leafs, lookup_index_leafs)
+                {
+                    continue;
+                }
+
                 errors.push(key_resolution_error(
                     derive_attr.attr_span,
                     "instruction hook",

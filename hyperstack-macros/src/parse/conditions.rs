@@ -233,8 +233,21 @@ pub fn parse_resolver_condition_expression(expr: &str) -> Result<ResolverConditi
                 "null" => serde_json::Value::Null,
                 "true" => serde_json::Value::Bool(true),
                 "false" => serde_json::Value::Bool(false),
-                s if s.parse::<f64>().is_ok() => serde_json::json!(s.parse::<f64>().unwrap()),
-                s => serde_json::Value::String(s.trim_matches('"').to_string()),
+                s => {
+                    if let Ok(number) = s.parse::<f64>() {
+                        match serde_json::Number::from_f64(number) {
+                            Some(number) => serde_json::Value::Number(number),
+                            None => {
+                                return Err(format!(
+                                    "Invalid numeric value '{}' in condition expression '{}': non-finite floats are not supported.",
+                                    s, expr
+                                ))
+                            }
+                        }
+                    } else {
+                        serde_json::Value::String(s.trim_matches('"').to_string())
+                    }
+                }
             };
 
             return Ok(ResolverCondition {
@@ -341,5 +354,12 @@ mod tests {
         assert_eq!(parsed.field_path, "status");
         assert!(matches!(parsed.op, ComparisonOp::Equal));
         assert_eq!(parsed.value, serde_json::json!("pending >= review"));
+    }
+
+    #[test]
+    fn test_resolver_condition_rejects_non_finite_float_values() {
+        let error = parse_resolver_condition_expression("score == NaN").unwrap_err();
+
+        assert!(error.contains("non-finite floats are not supported"));
     }
 }
