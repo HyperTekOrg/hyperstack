@@ -75,6 +75,12 @@ pub fn parse_url_template(s: &str, span: proc_macro2::Span) -> syn::Result<Vec<U
             .ok_or_else(|| syn::Error::new(span, format!("Unclosed '{{' in URL template: {s}")))?
             + open;
         let field_ref = rest[open + 1..close].trim().to_string();
+        if field_ref.is_empty() {
+            return Err(syn::Error::new(
+                span,
+                format!("Empty field reference '{{}}' in URL template: {s}"),
+            ));
+        }
         parts.push(UrlTemplatePart::FieldRef(field_ref));
         rest = &rest[close + 1..];
     }

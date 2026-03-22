@@ -172,14 +172,17 @@ fn field_path_to_string(path: &FieldPath) -> String {
 fn parse_validated_field_path(input: ParseStream) -> syn::Result<ValidatedFieldPath> {
     let mut segments = Vec::new();
     let first: syn::Ident = input.parse()?;
-    let span = first.span();
+    let mut last_span = first.span();
     segments.push(first.to_string());
 
     while input.peek(Token![.]) {
         input.parse::<Token![.]>()?;
         let next: syn::Ident = input.parse()?;
+        last_span = next.span();
         segments.push(next.to_string());
     }
+
+    let span = first.span().join(last_span).unwrap_or(first.span());
 
     let refs: Vec<&str> = segments.iter().map(String::as_str).collect();
     let parsed = FieldPath::new(&refs);

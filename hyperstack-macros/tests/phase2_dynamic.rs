@@ -176,6 +176,37 @@ fn main() {{}}
 }
 
 #[test]
+fn event_join_on_field_is_validated_even_when_instruction_lookup_fails() {
+    let source = format!(
+        r#"use hyperstack_macros::hyperstack;
+
+#[hyperstack(idl = "{}")]
+mod broken {{
+    #[entity(name = "Thing")]
+    struct Thing {{
+        id: String,
+
+        #[event(from = pump_sdk::instructions::Initialise, fields = [user], join_on = ghost)]
+        trades: Vec<pump_sdk::instructions::Buy>,
+    }}
+}}
+
+fn main() {{}}
+"#,
+        pump_idl_path()
+    );
+
+    run_compile_failure(
+        "event_join_on_field_is_validated_even_when_instruction_lookup_fails",
+        &source,
+        &[
+            "Not found: 'Initialise' in instructions",
+            "unknown join_on field 'ghost' on entity 'Thing'",
+        ],
+    );
+}
+
+#[test]
 fn missing_account_type_gets_suggestion() {
     let source = format!(
         r#"use hyperstack_macros::hyperstack;

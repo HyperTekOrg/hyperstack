@@ -135,3 +135,23 @@ fn main() {{}}
     assert!(stderr.contains("unknown program 'pum' in pdas! block"));
     assert!(stderr.contains("Did you mean: pump?"));
 }
+
+#[test]
+fn empty_url_template_field_is_rejected() {
+    let source = r#"use hyperstack_macros::hyperstack;
+
+#[hyperstack]
+mod broken {
+    #[entity(name = "Thing")]
+    struct Thing {
+        #[resolve(url = "https://example.com/{   }/metadata", extract = "name")]
+        metadata: String,
+    }
+}
+
+fn main() {}
+"#;
+
+    let stderr = compile_failure_stderr("empty_url_template_field_is_rejected", source);
+    assert!(stderr.contains("Empty field reference '{}' in URL template"));
+}

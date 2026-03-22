@@ -667,6 +667,19 @@ fn validate_event_references(
 ) {
     for (instruction_key, event_mappings) in events_by_instruction {
         for (_target_field, event_attr, _field_type) in event_mappings {
+            if let Some(join_on) = &event_attr.join_on {
+                let reference = join_on.ident.to_string();
+                if !known_fields.contains(&reference) {
+                    errors.push(entity_field_error(
+                        entity_name,
+                        &reference,
+                        "join_on field",
+                        join_on.ident.span(),
+                        available_fields,
+                    ));
+                }
+            }
+
             let instruction_lookup = resolve_instruction_lookup(event_attr, instruction_key, idls);
 
             let (idl, instruction_name) = match instruction_lookup {
@@ -693,19 +706,6 @@ fn validate_event_references(
                     validate_instruction_field_spec(idl, &instruction_name, field_spec)
                 {
                     errors.push(idl_error_to_syn(field_spec.ident.span(), error));
-                }
-            }
-
-            if let Some(join_on) = &event_attr.join_on {
-                let reference = join_on.ident.to_string();
-                if !known_fields.contains(&reference) {
-                    errors.push(entity_field_error(
-                        entity_name,
-                        &reference,
-                        "join_on field",
-                        join_on.ident.span(),
-                        available_fields,
-                    ));
                 }
             }
         }
