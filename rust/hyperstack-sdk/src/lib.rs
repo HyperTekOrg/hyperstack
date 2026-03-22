@@ -40,4 +40,6 @@ pub use stream::{
     RichUpdate, Update, UseStream,
 };
 pub use subscription::Subscription;
-pub use view::{RichWatchBuilder, StateView, UseBuilder, ViewBuilder, ViewHandle, Views, WatchBuilder};
+pub use view::{
+    RichWatchBuilder, StateView, UseBuilder, ViewBuilder, ViewHandle, Views, WatchBuilder,
+};
