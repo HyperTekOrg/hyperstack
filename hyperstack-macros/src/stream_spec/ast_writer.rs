@@ -845,6 +845,16 @@ fn build_event_handler(
     let instruction_type = parts[1];
     let instruction_type_pascal = idl_parser::to_pascal_case(instruction_type);
 
+    let field_resolves_key = |field_name: &str| {
+        primary_keys
+            .iter()
+            .any(|pk| pk.split('.').next_back().unwrap_or(pk) == field_name)
+            || lookup_indexes.iter().any(|(field, _)| {
+                let leaf = field.split('.').next_back().unwrap_or(field);
+                leaf == field_name || leaf.strip_suffix("_address") == Some(field_name)
+            })
+    };
+
     let mut serializable_mappings = Vec::new();
 
     for (target_field, event_attr, _field_type) in event_mappings {
@@ -946,7 +956,50 @@ fn build_event_handler(
             join_field_name.clone(),
             parse::FieldLocation::InstructionArg,
         )
-    } else if let Some((_, first_event_attr, _)) = event_mappings.first() {
+    } else if let Some((_, first_event_attr, _)) =
+        event_mappings.iter().find(|(_, event_attr, _)| {
+            event_attr
+                .lookup_by
+                .as_ref()
+                .is_some_and(|field_spec| field_resolves_key(&field_spec.ident.to_string()))
+        })
+    {
+        if let Some(ref lookup_by_field_spec) = first_event_attr.lookup_by {
+            let field_name = lookup_by_field_spec.ident.to_string();
+
+            let field_location = if let Some(explicit_loc) = &lookup_by_field_spec.explicit_location
+            {
+                explicit_loc.clone()
+            } else {
+                let instruction_path = first_event_attr
+                    .from_instruction
+                    .as_ref()
+                    .or(first_event_attr.inferred_instruction.as_ref());
+
+                if let Some(instr_path) = instruction_path {
+                    find_field_in_instruction(instr_path, &field_name, idl).map_err(|error| {
+                        idl_error_to_syn(
+                            span_for_event_lookup_error(
+                                first_event_attr,
+                                lookup_by_field_spec,
+                                &error,
+                            ),
+                            error,
+                        )
+                    })?
+                } else {
+                    parse::FieldLocation::InstructionArg
+                }
+            };
+
+            (field_name, field_location)
+        } else {
+            (String::new(), parse::FieldLocation::InstructionArg)
+        }
+    } else if let Some((_, first_event_attr, _)) = event_mappings
+        .iter()
+        .find(|(_, event_attr, _)| event_attr.lookup_by.is_some())
+    {
         if let Some(ref lookup_by_field_spec) = first_event_attr.lookup_by {
             let field_name = lookup_by_field_spec.ident.to_string();
 

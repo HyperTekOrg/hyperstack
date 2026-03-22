@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::{ComputedExpr, EntitySection, FieldPath, ViewTransform};
@@ -208,6 +209,43 @@ fn entity_field_error(
     syn::Error::new(span, message)
 }
 
+fn field_spec_sort_key(field_spec: Option<&parse::FieldSpec>) -> Option<(u8, String)> {
+    field_spec.map(|field_spec| {
+        let location = match field_spec.explicit_location {
+            Some(parse::FieldLocation::Account) => 0,
+            Some(parse::FieldLocation::InstructionArg) => 1,
+            None => 2,
+        };
+        (location, field_spec.ident.to_string())
+    })
+}
+
+fn stable_map_attribute_cmp(a: &parse::MapAttribute, b: &parse::MapAttribute) -> Ordering {
+    a.target_field_name
+        .cmp(&b.target_field_name)
+        .then_with(|| a.source_field_name.cmp(&b.source_field_name))
+        .then_with(|| a.join_on.cmp(&b.join_on))
+        .then_with(|| {
+            field_spec_sort_key(a.lookup_by.as_ref())
+                .cmp(&field_spec_sort_key(b.lookup_by.as_ref()))
+        })
+}
+
+fn stable_event_mapping_cmp(
+    a: &(String, parse::EventAttribute, syn::Type),
+    b: &(String, parse::EventAttribute, syn::Type),
+) -> Ordering {
+    a.0.cmp(&b.0)
+        .then_with(|| {
+            field_spec_sort_key(a.1.lookup_by.as_ref())
+                .cmp(&field_spec_sort_key(b.1.lookup_by.as_ref()))
+        })
+        .then_with(|| {
+            field_spec_sort_key(a.1.join_on.as_ref())
+                .cmp(&field_spec_sort_key(b.1.join_on.as_ref()))
+        })
+}
+
 fn primary_key_leafs(primary_keys: &[String]) -> HashSet<String> {
     primary_keys
         .iter()
@@ -299,7 +337,8 @@ fn validate_source_handler_keys(
         }
     }
 
-    for ((source_type, join_key), mappings) in grouped {
+    for ((source_type, join_key), mut mappings) in grouped {
+        mappings.sort_by(stable_map_attribute_cmp);
         let Some(first_mapping) = mappings.first() else {
             continue;
         };
@@ -309,8 +348,6 @@ fn validate_source_handler_keys(
         }
 
         let is_instruction = mappings.iter().any(|mapping| mapping.is_instruction);
-        let is_cpi_event =
-            source_type.contains("::events::") || source_type.contains("::cpi_events::");
 
         // Event-only mappings are validated in validate_event_handler_keys before
         // #[event(...)] handlers are merged into sources_by_type for codegen.
@@ -318,10 +355,7 @@ fn validate_source_handler_keys(
             continue;
         }
 
-        if !is_instruction
-            && !is_cpi_event
-            && has_explicit_key_resolver(&source_type, resolver_hooks)
-        {
+        if !is_instruction && has_explicit_key_resolver(&source_type, resolver_hooks) {
             continue;
         }
 
@@ -335,10 +369,7 @@ fn validate_source_handler_keys(
             continue;
         }
 
-        if !is_instruction
-            && !is_cpi_event
-            && has_account_address_lookup_path(&mappings, lookup_indexes)
-        {
+        if !is_instruction && has_account_address_lookup_path(&mappings, lookup_indexes) {
             continue;
         }
 
@@ -420,7 +451,8 @@ fn validate_event_handler_keys(
         }
     }
 
-    for ((instruction, join_key), mappings) in grouped {
+    for ((instruction, join_key), mut mappings) in grouped {
+        mappings.sort_by(stable_event_mapping_cmp);
         let Some((_, first_attr, _)) = mappings.first() else {
             continue;
         };
