@@ -45,8 +45,7 @@ pub fn process_module(
     let mut entity_structs = Vec::new();
     let mut has_game_event = false;
 
-    let (proto_analyses, skip_decoders, idl_files) =
-        parse_proto_files_from_attr(attr.clone(), module.ident.span())?;
+    let (proto_analyses, skip_decoders, idl_files) = parse_proto_files_from_attr(attr.clone())?;
 
     if !idl_files.is_empty() {
         return super::idl_spec::process_idl_spec(module, &idl_files);
@@ -221,18 +220,14 @@ pub fn process_module(
 // Attribute Parsing
 // ============================================================================
 
-pub fn parse_proto_files_from_attr(
-    attr: TokenStream,
-    span: proc_macro2::Span,
-) -> syn::Result<ParsedProtoAttrs> {
+pub fn parse_proto_files_from_attr(attr: TokenStream) -> syn::Result<ParsedProtoAttrs> {
     let hyperstack_attr = parse::parse_stream_spec_attribute(attr)?;
 
-    parse_proto_files_from_parsed_attr(hyperstack_attr, span)
+    parse_proto_files_from_parsed_attr(hyperstack_attr)
 }
 
 fn parse_proto_files_from_parsed_attr(
     hyperstack_attr: parse::StreamSpecAttribute,
-    span: proc_macro2::Span,
 ) -> syn::Result<ParsedProtoAttrs> {
     let idl_files = hyperstack_attr.idl_files.clone();
 
@@ -252,7 +247,6 @@ fn parse_proto_files_from_parsed_attr(
                 analyses.push((proto_path.clone(), analysis));
             }
             Err(e) => {
-                let _ = span;
                 eprintln!(
                     "Warning: Failed to parse proto file {} (full path: {:?}): {}",
                     proto_path, full_path, e
@@ -270,15 +264,13 @@ mod tests {
 
     #[test]
     fn missing_proto_file_is_non_fatal() {
-        let (analyses, skip_decoders, idl_files) = parse_proto_files_from_parsed_attr(
-            parse::StreamSpecAttribute {
+        let (analyses, skip_decoders, idl_files) =
+            parse_proto_files_from_parsed_attr(parse::StreamSpecAttribute {
                 proto_files: vec!["missing.proto".to_string()],
                 idl_files: Vec::new(),
                 skip_decoders: false,
-            },
-            proc_macro2::Span::call_site(),
-        )
-        .expect("missing proto files should remain non-fatal");
+            })
+            .expect("missing proto files should remain non-fatal");
 
         assert!(analyses.is_empty());
         assert!(!skip_decoders);

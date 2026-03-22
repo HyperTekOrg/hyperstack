@@ -153,11 +153,7 @@ pub fn validate_account_field(
     field_name: &str,
 ) -> Result<(), IdlSearchError> {
     let fields = account_fields(idl, account_name)?;
-    if fields.is_empty()
-        || fields
-            .iter()
-            .any(|field| field.eq_ignore_ascii_case(field_name))
-    {
+    if fields.is_empty() || fields.iter().any(|field| field == field_name) {
         return Ok(());
     }
 

@@ -591,10 +591,14 @@ fn validate_event_handler_keys(
         }
 
         if let Some(join_field) = join_key {
-            let Some(join_on) = mappings
+            let join_on = mappings
                 .iter()
-                .find_map(|(_, attr, _)| attr.join_on.as_ref())
-            else {
+                .find_map(|(_, attr, _)| attr.join_on.as_ref());
+            debug_assert!(
+                join_on.is_some(),
+                "group key has a join field but no mapping carries join_on"
+            );
+            let Some(join_on) = join_on else {
                 continue;
             };
             let field_name = join_field;
@@ -881,6 +885,19 @@ fn validate_resolve_specs(
                     &schedule_at.raw,
                     "resolver schedule_at field",
                     schedule_at.span,
+                    available_fields,
+                ));
+            }
+        }
+
+        if let Some(condition) = &spec.condition {
+            let field_path = &condition.parsed.field_path;
+            if !field_path.is_empty() && !known_fields.contains(field_path) {
+                errors.push(entity_field_error(
+                    entity_name,
+                    field_path,
+                    "resolver condition field",
+                    spec.attr_span,
                     available_fields,
                 ));
             }

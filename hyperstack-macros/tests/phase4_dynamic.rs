@@ -89,6 +89,29 @@ fn main() {{}}
 }
 
 #[test]
+fn account_field_validation_is_case_sensitive() {
+    let source = format!(
+        r#"use hyperstack_macros::hyperstack;
+
+#[hyperstack(idl = "{}")]
+mod broken {{
+    #[entity(name = "Thing")]
+    struct Thing {{
+        #[map(pump_sdk::accounts::BondingCurve::Complete, strategy = LastWrite)]
+        value: bool,
+    }}
+}}
+
+fn main() {{}}
+"#,
+        pump_idl_path()
+    );
+
+    let stderr = compile_failure_stderr("account_field_validation_is_case_sensitive", &source);
+    assert!(stderr.contains("Not found: 'Complete' in account fields for 'BondingCurve'"));
+}
+
+#[test]
 fn missing_computed_section_reference_is_rejected() {
     let source = r#"use hyperstack_macros::hyperstack;
 
@@ -128,6 +151,27 @@ fn main() {}
 
     let stderr = compile_failure_stderr("invalid_resolver_input_field_is_rejected", source);
     assert!(stderr.contains("unknown resolver input field 'ghost.value' on entity 'Thing'"));
+}
+
+#[test]
+fn invalid_resolver_condition_field_is_rejected() {
+    let source = r#"use hyperstack_macros::hyperstack;
+
+#[hyperstack]
+mod broken {
+    #[entity(name = "Thing")]
+    struct Thing {
+        existing: String,
+        #[resolve(from = "existing", resolver = Token, condition = "ghost.value == pending")]
+        metadata: String,
+    }
+}
+
+fn main() {}
+"#;
+
+    let stderr = compile_failure_stderr("invalid_resolver_condition_field_is_rejected", source);
+    assert!(stderr.contains("unknown resolver condition field 'ghost.value' on entity 'Thing'"));
 }
 
 #[test]
