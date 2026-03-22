@@ -210,7 +210,10 @@ fn entity_field_error(
     syn::Error::new(span, message)
 }
 
-fn field_spec_sort_key(field_spec: Option<&parse::FieldSpec>) -> Option<(u8, String)> {
+type FieldSpecSortKey = (u8, String);
+type RegisterFromSortKey = (String, FieldSpecSortKey, FieldSpecSortKey);
+
+fn field_spec_sort_key(field_spec: Option<&parse::FieldSpec>) -> Option<FieldSpecSortKey> {
     field_spec.map(|field_spec| {
         let location = match field_spec.explicit_location {
             Some(parse::FieldLocation::Account) => 0,
@@ -221,7 +224,7 @@ fn field_spec_sort_key(field_spec: Option<&parse::FieldSpec>) -> Option<(u8, Str
     })
 }
 
-fn field_specs_sort_key(field_specs: &[parse::FieldSpec]) -> Vec<(u8, String)> {
+fn field_specs_sort_key(field_specs: &[parse::FieldSpec]) -> Vec<FieldSpecSortKey> {
     field_specs
         .iter()
         .map(|field_spec| field_spec_sort_key(Some(field_spec)).expect("field spec key"))
@@ -232,9 +235,7 @@ fn path_sort_key(path: Option<&syn::Path>) -> Option<String> {
     path.map(path_to_string)
 }
 
-fn register_from_sort_key(
-    register_from: &[parse::RegisterFromSpec],
-) -> Vec<(String, (u8, String), (u8, String))> {
+fn register_from_sort_key(register_from: &[parse::RegisterFromSpec]) -> Vec<RegisterFromSortKey> {
     register_from
         .iter()
         .map(|spec| {
