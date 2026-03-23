@@ -132,34 +132,38 @@ async fn run_loop(
         // Poll for terminal events with timeout
         if event::poll(tick_rate)? {
             if let Event::Key(key) = event::read()? {
-                let action = match key.code {
-                    KeyCode::Char('q') => TuiAction::Quit,
-                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        TuiAction::Quit
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => TuiAction::NextEntity,
-                    KeyCode::Up | KeyCode::Char('k') => TuiAction::PrevEntity,
-                    KeyCode::Enter => TuiAction::FocusDetail,
-                    KeyCode::Esc => TuiAction::BackToList,
-                    KeyCode::Right | KeyCode::Char('l') => TuiAction::HistoryForward,
-                    KeyCode::Left | KeyCode::Char('h') => TuiAction::HistoryBack,
-                    KeyCode::Home => TuiAction::HistoryOldest,
-                    KeyCode::End => TuiAction::HistoryNewest,
-                    KeyCode::Char('d') => TuiAction::ToggleDiff,
-                    KeyCode::Char('r') => TuiAction::ToggleRaw,
-                    KeyCode::Char('p') => TuiAction::TogglePause,
-                    KeyCode::Char('/') => TuiAction::StartFilter,
-                    KeyCode::Char('s') => TuiAction::SaveSnapshot,
-                    _ => {
-                        if app.filter_input_active {
-                            match key.code {
-                                KeyCode::Char(c) => TuiAction::FilterChar(c),
-                                KeyCode::Backspace => TuiAction::FilterBackspace,
-                                _ => continue,
-                            }
-                        } else {
-                            continue;
+                // When filter input is active, capture all keys for typing
+                let action = if app.filter_input_active {
+                    match key.code {
+                        KeyCode::Esc => TuiAction::BackToList,
+                        KeyCode::Enter => TuiAction::BackToList,
+                        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            TuiAction::Quit
                         }
+                        KeyCode::Char(c) => TuiAction::FilterChar(c),
+                        KeyCode::Backspace => TuiAction::FilterBackspace,
+                        _ => continue,
+                    }
+                } else {
+                    match key.code {
+                        KeyCode::Char('q') => TuiAction::Quit,
+                        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            TuiAction::Quit
+                        }
+                        KeyCode::Down | KeyCode::Char('j') => TuiAction::NextEntity,
+                        KeyCode::Up | KeyCode::Char('k') => TuiAction::PrevEntity,
+                        KeyCode::Enter => TuiAction::FocusDetail,
+                        KeyCode::Esc => TuiAction::BackToList,
+                        KeyCode::Right | KeyCode::Char('l') => TuiAction::HistoryForward,
+                        KeyCode::Left | KeyCode::Char('h') => TuiAction::HistoryBack,
+                        KeyCode::Home => TuiAction::HistoryOldest,
+                        KeyCode::End => TuiAction::HistoryNewest,
+                        KeyCode::Char('d') => TuiAction::ToggleDiff,
+                        KeyCode::Char('r') => TuiAction::ToggleRaw,
+                        KeyCode::Char('p') => TuiAction::TogglePause,
+                        KeyCode::Char('/') => TuiAction::StartFilter,
+                        KeyCode::Char('s') => TuiAction::SaveSnapshot,
+                        _ => continue,
                     }
                 };
 
