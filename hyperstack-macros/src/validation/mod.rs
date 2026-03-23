@@ -749,32 +749,32 @@ fn validate_instruction_hook_keys(
             continue;
         }
 
-        for derive_attr in derive_attrs {
-            if let Some(lookup_by) = &derive_attr.lookup_by {
-                let field_name = lookup_by.ident.to_string();
-                errors.push(key_resolution_error(
-                    lookup_by.ident.span(),
-                    "instruction hook",
-                    instruction_type,
-                    entity_name,
-                    &format!(
-                        "The `lookup_by` field '{}' is neither a primary-key field nor a lookup-index-backed field.",
-                        field_name
-                    ),
-                ));
-            } else {
-                let field_name = derive_attr.field.ident.to_string();
-                errors.push(key_resolution_error(
-                    derive_attr.field.ident.span(),
-                    "instruction hook",
-                    instruction_type,
-                    entity_name,
-                    &format!(
-                        "The mapped field '{}' does not provide a provable path back to the entity primary key. Add `lookup_by = ...` that points to the primary key or to a lookup index field.",
-                        field_name
-                    ),
-                ));
-            }
+        let Some(first_attr) = derive_attrs.first() else {
+            continue;
+        };
+
+        if let Some(lookup_by) = derive_attrs
+            .iter()
+            .find_map(|derive_attr| derive_attr.lookup_by.as_ref())
+        {
+            errors.push(key_resolution_error(
+                lookup_by.ident.span(),
+                "instruction hook",
+                instruction_type,
+                entity_name,
+                &format!(
+                    "The `lookup_by` field '{}' is neither a primary-key field nor a lookup-index-backed field.",
+                    lookup_by.ident
+                ),
+            ));
+        } else {
+            errors.push(key_resolution_error(
+                first_attr.attr_span,
+                "instruction hook",
+                instruction_type,
+                entity_name,
+                "Add `lookup_by = ...` that points to the primary key or to a lookup index field.",
+            ));
         }
     }
 }
@@ -935,9 +935,26 @@ fn validate_event_references(
             };
 
         for (_target_field, event_attr, _field_type) in &event_mappings {
+            let (event_idl, event_instruction_name) = if event_attr.from_instruction.is_some()
+                || event_attr.inferred_instruction.is_some()
+            {
+                match resolve_instruction_lookup(event_attr, instruction_key, idls) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        errors.push(idl_error_to_syn(
+                            event_attr.instruction_span.unwrap_or(event_attr.attr_span),
+                            error,
+                        ));
+                        continue;
+                    }
+                }
+            } else {
+                (idl, instruction_name.clone())
+            };
+
             for field_spec in &event_attr.capture_fields {
                 if let Err(error) =
-                    validate_instruction_field_spec(idl, &instruction_name, field_spec)
+                    validate_instruction_field_spec(event_idl, &event_instruction_name, field_spec)
                 {
                     errors.push(idl_error_to_syn(field_spec.ident.span(), error));
                 }
@@ -945,7 +962,7 @@ fn validate_event_references(
 
             if let Some(field_spec) = &event_attr.lookup_by {
                 if let Err(error) =
-                    validate_instruction_field_spec(idl, &instruction_name, field_spec)
+                    validate_instruction_field_spec(event_idl, &event_instruction_name, field_spec)
                 {
                     errors.push(idl_error_to_syn(field_spec.ident.span(), error));
                 }

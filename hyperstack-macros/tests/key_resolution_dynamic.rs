@@ -246,7 +246,7 @@ fn main() {}
 }
 
 #[test]
-fn derive_from_group_reports_each_non_resolving_path() {
+fn derive_from_group_emits_single_error_on_failure() {
     let source = r#"use hyperstack_macros::hyperstack;
 
 #[hyperstack(idl = "fixture/minimal.json")]
@@ -268,15 +268,18 @@ fn main() {}
 "#;
 
     let stderr = compile_failure_stderr_with_files(
-        "derive_from_group_reports_each_non_resolving_path",
+        "derive_from_group_emits_single_error_on_failure",
         source,
         &[("fixture/minimal.json", minimal_idl())],
     );
 
-    assert!(stderr.contains(
-        "The mapped field 'user' does not provide a provable path back to the entity primary key"
-    ));
+    // Group emits one error (the first bad lookup_by), not one per attribute
     assert!(stderr.contains("The `lookup_by` field 'user' is neither a primary-key field nor a lookup-index-backed field."));
+    assert_eq!(
+        stderr.matches("cannot resolve the primary key").count(),
+        1,
+        "expected single group error, stderr was:\n{stderr}"
+    );
 }
 
 #[test]

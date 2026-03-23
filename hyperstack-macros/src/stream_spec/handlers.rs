@@ -161,8 +161,6 @@ pub fn find_field_in_instruction(
         .ok_or_else(|| IdlSearchError::InvalidPath {
             path: path_to_string(instruction_path),
         })?;
-    let instruction_name = crate::utils::to_snake_case(&instruction_name);
-
     match lookup_instruction_field(idl, &instruction_name, field_name)?.kind {
         InstructionFieldKind::Account => Ok(parse::FieldLocation::Account),
         InstructionFieldKind::Arg => Ok(parse::FieldLocation::InstructionArg),

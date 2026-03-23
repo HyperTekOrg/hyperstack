@@ -67,10 +67,12 @@ pub fn lookup_instruction<'a>(
     idl: &'a IdlSpec,
     instruction_name: &str,
 ) -> Result<&'a IdlInstruction, IdlSearchError> {
+    // Anchor IDLs use snake_case instruction names while Rust SDK paths use
+    // PascalCase; case-insensitive matching bridges the two conventions.
     let available: Vec<String> = idl.instructions.iter().map(|ix| ix.name.clone()).collect();
     idl.instructions
         .iter()
-        .find(|ix| ix.name == instruction_name)
+        .find(|ix| ix.name.eq_ignore_ascii_case(instruction_name))
         .ok_or_else(|| {
             build_not_found_error(instruction_name, "instructions".to_string(), available)
         })
@@ -80,6 +82,8 @@ pub fn lookup_account<'a>(
     idl: &'a IdlSpec,
     account_name: &str,
 ) -> Result<&'a IdlAccount, IdlSearchError> {
+    // Account names are PascalCase in both Rust and IDLs, so case-insensitive
+    // matching bridges minor casing differences across IDL versions.
     let available: Vec<String> = idl
         .accounts
         .iter()
@@ -87,7 +91,7 @@ pub fn lookup_account<'a>(
         .collect();
     idl.accounts
         .iter()
-        .find(|account| account.name == account_name)
+        .find(|account| account.name.eq_ignore_ascii_case(account_name))
         .ok_or_else(|| build_not_found_error(account_name, "accounts".to_string(), available))
 }
 
@@ -98,7 +102,7 @@ pub fn lookup_type<'a>(
     let available: Vec<String> = idl.types.iter().map(|ty| ty.name.clone()).collect();
     idl.types
         .iter()
-        .find(|ty| ty.name == type_name)
+        .find(|ty| ty.name.eq_ignore_ascii_case(type_name))
         .ok_or_else(|| build_not_found_error(type_name, "types".to_string(), available))
 }
 
@@ -344,36 +348,28 @@ mod tests {
     }
 
     #[test]
-    fn test_lookup_instruction_case_mismatch_gets_suggestion() {
+    fn test_lookup_instruction_case_insensitive() {
         use crate::parse::parse_idl_file;
         use std::path::PathBuf;
 
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/pump.json");
         let idl = parse_idl_file(&path).expect("should parse");
 
-        let error = lookup_instruction(&idl, "Buy").expect_err("lookup should fail");
-        match error {
-            IdlSearchError::NotFound { suggestions, .. } => {
-                assert_eq!(suggestions[0].candidate, "buy");
-            }
-            other => panic!("expected NotFound, got {other:?}"),
-        }
+        // PascalCase SDK name matches snake_case IDL name
+        let instruction = lookup_instruction(&idl, "Buy").expect("should match case-insensitively");
+        assert_eq!(instruction.name, "buy");
     }
 
     #[test]
-    fn test_lookup_account_case_mismatch_gets_suggestion() {
+    fn test_lookup_account_case_insensitive() {
         use crate::parse::parse_idl_file;
         use std::path::PathBuf;
 
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/pump.json");
         let idl = parse_idl_file(&path).expect("should parse");
 
-        let error = lookup_account(&idl, "bondingCurve").expect_err("lookup should fail");
-        match error {
-            IdlSearchError::NotFound { suggestions, .. } => {
-                assert_eq!(suggestions[0].candidate, "BondingCurve");
-            }
-            other => panic!("expected NotFound, got {other:?}"),
-        }
+        let account =
+            lookup_account(&idl, "bondingCurve").expect("should match case-insensitively");
+        assert_eq!(account.name, "BondingCurve");
     }
 }
