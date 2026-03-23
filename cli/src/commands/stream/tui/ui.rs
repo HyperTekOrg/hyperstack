@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
     Frame,
 };
 
@@ -88,18 +88,25 @@ fn draw_entity_list(f: &mut Frame, app: &App, area: Rect) {
 
     let title = if app.filter_input_active {
         format!("Entities [/{}]", app.filter_text)
+    } else if !app.filter_text.is_empty() {
+        format!("Entities ({}/{}) [/{}]", keys.len(), app.entity_keys.len(), app.filter_text)
     } else {
         format!("Entities ({})", keys.len())
     };
 
-    let list = List::new(items).block(
-        Block::default()
-            .title(title)
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::DarkGray)),
-    );
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .title(title)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::DarkGray)),
+        )
+        .highlight_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
 
-    f.render_widget(list, area);
+    let mut list_state = ListState::default();
+    list_state.select(Some(app.selected_index));
+
+    f.render_stateful_widget(list, area, &mut list_state);
 }
 
 fn draw_entity_detail(f: &mut Frame, app: &App, area: Rect) {
