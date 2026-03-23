@@ -107,14 +107,14 @@ pub async fn run_tui(url: String, view: &str, args: &StreamArgs) -> Result<()> {
     let tick_rate = std::time::Duration::from_millis(50);
     let result = run_loop(&mut terminal, &mut app, &mut frame_rx, tick_rate).await;
 
-    // Restore terminal
-    disable_raw_mode()?;
-    execute!(
+    // Restore terminal (always attempt all steps)
+    let _ = disable_raw_mode();
+    let _ = execute!(
         terminal.backend_mut(),
         LeaveAlternateScreen,
         DisableMouseCapture,
-    )?;
-    terminal.show_cursor()?;
+    );
+    let _ = terminal.show_cursor();
 
     // Signal graceful shutdown, then wait briefly for the task to close
     let _ = shutdown_tx.send(());
