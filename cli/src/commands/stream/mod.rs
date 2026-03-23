@@ -168,6 +168,12 @@ pub fn build_subscription(view: &str, args: &StreamArgs) -> Subscription {
 fn resolve_url(args: &StreamArgs, config_path: &str, view: &str) -> Result<String> {
     // 1. Explicit --url
     if let Some(url) = &args.url {
+        if !url.starts_with("ws://") && !url.starts_with("wss://") {
+            bail!(
+                "Invalid URL scheme. Expected ws:// or wss://, got: {}",
+                url
+            );
+        }
         return Ok(url.clone());
     }
 
