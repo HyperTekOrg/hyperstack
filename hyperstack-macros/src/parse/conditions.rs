@@ -129,7 +129,7 @@ fn find_top_level_operator(expr: &str, op: &str) -> Option<usize> {
     let mut depth = 0;
     let mut in_quotes = false;
     let mut quote_char = '\0';
-    let mut previous_char = None;
+    let mut backslash_count = 0;
 
     for (byte_idx, c) in expr.char_indices() {
         if !in_quotes {
@@ -143,11 +143,15 @@ fn find_top_level_operator(expr: &str, op: &str) -> Option<usize> {
             } else if depth == 0 && expr[byte_idx..].starts_with(op) {
                 return Some(byte_idx);
             }
-        } else if c == quote_char && previous_char != Some('\\') {
+        } else if c == quote_char && backslash_count % 2 == 0 {
             in_quotes = false;
         }
 
-        previous_char = Some(c);
+        if c == '\\' {
+            backslash_count += 1;
+        } else {
+            backslash_count = 0;
+        }
     }
 
     None
@@ -236,6 +240,12 @@ pub fn parse_resolver_condition_expression(expr: &str) -> Result<ResolverConditi
                 "null" => serde_json::Value::Null,
                 "true" => serde_json::Value::Bool(true),
                 "false" => serde_json::Value::Bool(false),
+                "ZERO_32" => {
+                    serde_json::Value::Array(vec![serde_json::Value::Number(0.into()); 32])
+                }
+                "ZERO_64" => {
+                    serde_json::Value::Array(vec![serde_json::Value::Number(0.into()); 64])
+                }
                 s => {
                     if let Ok(number) = s.parse::<i64>() {
                         serde_json::Value::Number(number.into())
