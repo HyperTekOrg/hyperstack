@@ -915,18 +915,16 @@ fn validate_mapping_references(
             }
 
             if let Some(condition) = &mapping.condition {
-                if let Some(crate::ast::ParsedCondition::Comparison { field, .. }) =
-                    &condition.parsed
-                {
-                    let field_str = field.segments.join(".");
-                    if !field_str.is_empty() {
-                        if let ResolvedMappingSource::Instruction {
-                            idl,
-                            instruction_name,
-                        } = &resolved_source
-                        {
+                if let Some(parsed) = &condition.parsed {
+                    let field_leaves = collect_condition_field_leaves(parsed);
+                    if let ResolvedMappingSource::Instruction {
+                        idl,
+                        instruction_name,
+                    } = &resolved_source
+                    {
+                        for leaf in &field_leaves {
                             let temp_field = parse::FieldSpec {
-                                ident: syn::Ident::new(&field_str, mapping.attr_span),
+                                ident: syn::Ident::new(leaf, mapping.attr_span),
                                 explicit_location: None,
                             };
                             if let Err(error) =
@@ -949,24 +947,24 @@ fn validate_aggregate_conditions(
     idls: IdlLookup,
     errors: &mut ErrorCollector,
 ) {
-    let mut field_paths: Vec<(&String, &str)> = Vec::new();
+    let mut field_paths: Vec<(&String, Vec<String>)> = Vec::new();
 
     for (target_field, condition) in aggregate_conditions {
-        if let Some(crate::ast::ParsedCondition::Comparison { field, .. }) = &condition.parsed {
-            let field_str = field.segments.join(".");
-            if !field_str.is_empty() {
-                field_paths.push((target_field, Box::leak(field_str.into_boxed_str())));
+        if let Some(parsed) = &condition.parsed {
+            let leaves = collect_condition_field_leaves(parsed);
+            if !leaves.is_empty() {
+                field_paths.push((target_field, leaves));
             }
         }
     }
-    field_paths.sort();
+    field_paths.sort_by_key(|(target, _)| *target);
 
-    for (target_field, field_str) in field_paths {
+    for (target_field, leaves) in &field_paths {
         // Find the source mapping for this aggregate's target field to get the IDL context
         let source_mapping = sources_by_type
             .values()
             .flatten()
-            .find(|mapping| mapping.target_field_name == *target_field && mapping.is_instruction);
+            .find(|mapping| mapping.target_field_name == **target_field && mapping.is_instruction);
 
         if let Some(mapping) = source_mapping {
             let source_type = mapping.source_type_string();
@@ -975,15 +973,49 @@ fn validate_aggregate_conditions(
                 instruction_name,
             }) = resolve_mapping_source_once(&source_type, std::slice::from_ref(mapping), idls)
             {
-                let temp_field = parse::FieldSpec {
-                    ident: syn::Ident::new(field_str, mapping.attr_span),
-                    explicit_location: None,
-                };
-                if let Err(error) =
-                    validate_instruction_field_spec(idl, &instruction_name, &temp_field)
-                {
-                    errors.push(idl_error_to_syn(mapping.attr_span, error));
+                for leaf in leaves {
+                    let temp_field = parse::FieldSpec {
+                        ident: syn::Ident::new(leaf, mapping.attr_span),
+                        explicit_location: None,
+                    };
+                    if let Err(error) =
+                        validate_instruction_field_spec(idl, &instruction_name, &temp_field)
+                    {
+                        errors.push(idl_error_to_syn(mapping.attr_span, error));
+                    }
                 }
+            }
+        }
+    }
+}
+
+/// Recursively collect the leaf (last) segment of every field path referenced
+/// in a parsed condition tree. Only leaf segments are collected because IDL
+/// instruction fields are flat identifiers — dotted paths like `data.amount`
+/// use the final segment `amount` for validation.
+fn collect_condition_field_leaves(condition: &crate::ast::ParsedCondition) -> Vec<String> {
+    let mut leaves = Vec::new();
+    collect_condition_field_leaves_recursive(condition, &mut leaves);
+    leaves.sort();
+    leaves.dedup();
+    leaves
+}
+
+fn collect_condition_field_leaves_recursive(
+    condition: &crate::ast::ParsedCondition,
+    leaves: &mut Vec<String>,
+) {
+    match condition {
+        crate::ast::ParsedCondition::Comparison { field, .. } => {
+            if let Some(leaf) = field.segments.last() {
+                if !leaf.is_empty() {
+                    leaves.push(leaf.clone());
+                }
+            }
+        }
+        crate::ast::ParsedCondition::Logical { conditions, .. } => {
+            for sub in conditions {
+                collect_condition_field_leaves_recursive(sub, leaves);
             }
         }
     }
