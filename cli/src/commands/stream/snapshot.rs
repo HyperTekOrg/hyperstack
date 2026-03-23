@@ -46,6 +46,13 @@ impl SnapshotRecorder {
         });
     }
 
+    pub fn record_with_ts(&mut self, frame: &Frame, ts_ms: u64) {
+        self.frames.push(SnapshotFrame {
+            ts: ts_ms,
+            frame: frame.clone(),
+        });
+    }
+
     pub fn save(&self, path: &str) -> Result<()> {
         let duration_ms = self.start_time.elapsed().as_millis() as u64;
         let header = SnapshotHeader {

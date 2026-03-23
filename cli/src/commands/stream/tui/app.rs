@@ -62,7 +62,8 @@ pub struct App {
     pub pending_g: bool,
     pub list_state: ListState,
     store: EntityStore,
-    raw_frames: Vec<Frame>,
+    raw_frames: Vec<(std::time::Instant, Frame)>,
+    stream_start: std::time::Instant,
 }
 
 impl App {
@@ -90,6 +91,7 @@ impl App {
             list_state: ListState::default().with_selected(Some(0)),
             store: EntityStore::new(),
             raw_frames: Vec::new(),
+            stream_start: std::time::Instant::now(),
         }
     }
 
@@ -143,7 +145,7 @@ impl App {
             }
         }
 
-        self.raw_frames.push(raw_frame);
+        self.raw_frames.push((std::time::Instant::now(), raw_frame));
         if self.raw_frames.len() > 1000 {
             self.raw_frames.drain(0..500);
         }
@@ -239,8 +241,9 @@ impl App {
             }
             TuiAction::SaveSnapshot => {
                 let mut recorder = SnapshotRecorder::new(&self.view, &self.url);
-                for frame in &self.raw_frames {
-                    recorder.record(frame);
+                for (arrival_time, frame) in &self.raw_frames {
+                    let ts_ms = arrival_time.duration_since(self.stream_start).as_millis() as u64;
+                    recorder.record_with_ts(frame, ts_ms);
                 }
                 let filename = format!("hs-stream-{}.json", chrono::Utc::now().format("%Y%m%d-%H%M%S"));
                 match recorder.save(&filename) {
@@ -325,10 +328,21 @@ impl App {
     pub fn selected_entity_data(&self) -> Option<String> {
         let key = self.selected_key()?;
 
-        // Raw mode: show the most recent raw frame for this entity key
+        // Raw mode: show the most recent raw frame for this entity key.
+        // Snapshot frames have key="" (entities are in data array), so fall back
+        // to showing the merged state with a note for snapshot-only entities.
         if self.show_raw {
-            let raw = self.raw_frames.iter().rev().find(|f| f.key == key)?;
-            return Some(serde_json::to_string_pretty(raw).unwrap_or_default());
+            if let Some((_, raw)) = self.raw_frames.iter().rev().find(|(_, f)| f.key == key) {
+                return Some(serde_json::to_string_pretty(raw).unwrap_or_default());
+            }
+            // Entity was ingested via snapshot batch — no individual raw frame exists
+            let record = self.store.get(&key)?;
+            let fallback = serde_json::json!({
+                "_note": "Received via snapshot batch (no individual raw frame)",
+                "key": key,
+                "data": record.current,
+            });
+            return Some(serde_json::to_string_pretty(&fallback).unwrap_or_default());
         }
 
         if self.show_diff {
