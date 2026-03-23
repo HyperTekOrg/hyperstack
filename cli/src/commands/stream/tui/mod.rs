@@ -120,6 +120,10 @@ async fn run_loop(
     tick_rate: std::time::Duration,
 ) -> Result<()> {
     loop {
+        // Update visible rows from terminal size (minus header/timeline/status/borders)
+        let term_size = terminal.size()?;
+        app.visible_rows = term_size.height.saturating_sub(6) as usize;
+
         terminal.draw(|f| ui::draw(f, app))?;
 
         // Drain available frames (non-blocking)
@@ -145,6 +149,18 @@ async fn run_loop(
                         _ => continue,
                     }
                 } else {
+                    // Number prefix accumulation (vim count)
+                    if let KeyCode::Char(c @ '0'..='9') = key.code {
+                        // Don't treat '0' as count start (could be "go to beginning" in future)
+                        if c != '0' || app.pending_count.is_some() {
+                            let digit = c as usize - '0' as usize;
+                            let current = app.pending_count.unwrap_or(0);
+                            app.pending_count = Some(current * 10 + digit);
+                            app.pending_g = false;
+                            continue;
+                        }
+                    }
+
                     match key.code {
                         KeyCode::Char('q') => TuiAction::Quit,
                         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -152,10 +168,37 @@ async fn run_loop(
                         }
                         KeyCode::Down | KeyCode::Char('j') => TuiAction::NextEntity,
                         KeyCode::Up | KeyCode::Char('k') => TuiAction::PrevEntity,
+                        KeyCode::Char('G') => TuiAction::GotoBottom,
+                        KeyCode::Char('g') => {
+                            if app.pending_g {
+                                // gg = go to top
+                                TuiAction::GotoTop
+                            } else {
+                                app.pending_g = true;
+                                continue;
+                            }
+                        }
+                        KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            TuiAction::HalfPageDown
+                        }
+                        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            TuiAction::HalfPageUp
+                        }
+                        KeyCode::Char('n') => TuiAction::NextMatch,
                         KeyCode::Enter => TuiAction::FocusDetail,
-                        KeyCode::Esc => TuiAction::BackToList,
+                        KeyCode::Esc => {
+                            app.pending_count = None;
+                            app.pending_g = false;
+                            TuiAction::BackToList
+                        }
                         KeyCode::Right | KeyCode::Char('l') => TuiAction::HistoryForward,
-                        KeyCode::Left | KeyCode::Char('h') => TuiAction::HistoryBack,
+                        KeyCode::Left | KeyCode::Char('h') => {
+                            if app.pending_g {
+                                app.pending_g = false;
+                                continue;
+                            }
+                            TuiAction::HistoryBack
+                        }
                         KeyCode::Home => TuiAction::HistoryOldest,
                         KeyCode::End => TuiAction::HistoryNewest,
                         KeyCode::Char('d') => TuiAction::ToggleDiff,
@@ -163,7 +206,11 @@ async fn run_loop(
                         KeyCode::Char('p') => TuiAction::TogglePause,
                         KeyCode::Char('/') => TuiAction::StartFilter,
                         KeyCode::Char('s') => TuiAction::SaveSnapshot,
-                        _ => continue,
+                        _ => {
+                            app.pending_count = None;
+                            app.pending_g = false;
+                            continue;
+                        }
                     }
                 };
 

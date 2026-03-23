@@ -23,6 +23,12 @@ pub enum TuiAction {
     SaveSnapshot,
     FilterChar(char),
     FilterBackspace,
+    // Vim motions
+    GotoTop,
+    GotoBottom,
+    HalfPageDown,
+    HalfPageUp,
+    NextMatch,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -48,6 +54,9 @@ pub struct App {
     pub status_time: std::time::Instant,
     pub update_count: u64,
     pub scroll_offset: u16,
+    pub visible_rows: usize,
+    pub pending_count: Option<usize>,
+    pub pending_g: bool,
     store: EntityStore,
     raw_frames: Vec<Frame>,
     recorder: Option<SnapshotRecorder>,
@@ -71,6 +80,9 @@ impl App {
             status_time: std::time::Instant::now(),
             update_count: 0,
             scroll_offset: 0,
+            visible_rows: 30,
+            pending_count: None,
+            pending_g: false,
             store: EntityStore::new(),
             raw_frames: Vec::new(),
             recorder: Some(SnapshotRecorder::new(&view, &url)),
@@ -138,19 +150,35 @@ impl App {
         }
     }
 
+    /// Take and reset the pending count prefix (e.g. "10j" → 10). Returns 1 if no count.
+    fn take_count(&mut self) -> usize {
+        let n = self.pending_count.unwrap_or(1);
+        self.pending_count = None;
+        self.pending_g = false;
+        n
+    }
+
     pub fn handle_action(&mut self, action: TuiAction) {
+        // Reset pending_g for any action that isn't GotoTop (gg handled in mod.rs)
+        match &action {
+            TuiAction::GotoTop => {}
+            _ => { self.pending_g = false; }
+        }
+
         match action {
             TuiAction::Quit => {}
             TuiAction::NextEntity => {
+                let n = self.take_count();
                 let count = self.filtered_keys().len();
                 if count > 0 {
-                    self.selected_index = (self.selected_index + 1).min(count - 1);
+                    self.selected_index = (self.selected_index + n).min(count - 1);
                     self.history_position = 0;
                     self.scroll_offset = 0;
                 }
             }
             TuiAction::PrevEntity => {
-                self.selected_index = self.selected_index.saturating_sub(1);
+                let n = self.take_count();
+                self.selected_index = self.selected_index.saturating_sub(n);
                 self.history_position = 0;
                 self.scroll_offset = 0;
             }
@@ -226,6 +254,51 @@ impl App {
             TuiAction::FilterBackspace => {
                 self.filter_text.pop();
                 self.clamp_selection();
+            }
+            TuiAction::GotoTop => {
+                self.pending_count = None;
+                self.selected_index = 0;
+                self.history_position = 0;
+                self.scroll_offset = 0;
+            }
+            TuiAction::GotoBottom => {
+                self.pending_count = None;
+                let count = self.filtered_keys().len();
+                if count > 0 {
+                    self.selected_index = count - 1;
+                }
+                self.history_position = 0;
+                self.scroll_offset = 0;
+            }
+            TuiAction::HalfPageDown => {
+                let n = self.take_count();
+                let half = self.visible_rows / 2;
+                let count = self.filtered_keys().len();
+                if count > 0 {
+                    self.selected_index = (self.selected_index + half * n).min(count - 1);
+                }
+                self.history_position = 0;
+                self.scroll_offset = 0;
+            }
+            TuiAction::HalfPageUp => {
+                let n = self.take_count();
+                let half = self.visible_rows / 2;
+                self.selected_index = self.selected_index.saturating_sub(half * n);
+                self.history_position = 0;
+                self.scroll_offset = 0;
+            }
+            TuiAction::NextMatch => {
+                if self.filter_text.is_empty() {
+                    return;
+                }
+                let n = self.take_count();
+                let keys = self.filtered_keys();
+                let count = keys.len();
+                if count > 0 {
+                    self.selected_index = (self.selected_index + n) % count;
+                }
+                self.history_position = 0;
+                self.scroll_offset = 0;
             }
         }
     }
