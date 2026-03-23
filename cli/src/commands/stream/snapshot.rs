@@ -116,7 +116,10 @@ impl SnapshotPlayer {
         let frames: Vec<SnapshotFrame> = match value.get("frames") {
             Some(v) => serde_json::from_value(v.clone())
                 .with_context(|| format!("Failed to deserialize frames in {}", path))?,
-            None => Vec::new(),
+            None => {
+                eprintln!("Warning: snapshot file {} has no 'frames' key — replaying 0 frames.", path);
+                Vec::new()
+            }
         };
 
         eprintln!(
