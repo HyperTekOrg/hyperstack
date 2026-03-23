@@ -695,9 +695,6 @@ fn validate_event_handler_keys(
                 continue;
             };
             let field_name = join_field;
-            if source_field_can_resolve_key(&field_name, primary_key_leafs, lookup_index_leafs) {
-                continue;
-            }
 
             errors.push(key_resolution_error(
                 join_on.ident.span(),
