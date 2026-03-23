@@ -533,6 +533,14 @@ fn validate_source_handler_keys(
 
         let is_instruction = mappings.iter().any(|mapping| mapping.is_instruction);
 
+        // Event-derived MapAttribute values are produced in handlers.rs via
+        // convert_event_to_map_attributes(...), which sets is_event_source = true.
+        // Those groups are validated in validate_event_handler_keys before they
+        // are merged into sources_by_type for codegen.
+        if mappings.iter().all(|mapping| mapping.is_event_source) {
+            continue;
+        }
+
         if !is_instruction && has_explicit_key_resolver(&source_type, resolver_hooks) {
             continue;
         }
