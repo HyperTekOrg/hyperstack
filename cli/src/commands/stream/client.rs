@@ -332,15 +332,20 @@ fn process_frame(
     let op = frame.operation();
     let op_str = &frame.op;
 
-    // Filter by operation type (snapshot ops are checked as "snapshot")
-    if let Some(allowed) = &state.allowed_ops {
-        let effective_op = if op == Operation::Snapshot { "snapshot" } else { &op_str.to_lowercase() };
-        if !allowed.contains(effective_op) {
-            return Ok(false);
+    // Check if this op type is allowed by --ops (but always process snapshots
+    // for entity state — just suppress their output)
+    let ops_allowed = match &state.allowed_ops {
+        Some(allowed) => {
+            let effective_op = if op == Operation::Snapshot { "snapshot" } else { &op_str.to_lowercase() };
+            allowed.contains(effective_op)
         }
-    }
+        None => true,
+    };
 
     if let OutputMode::Raw = state.output_mode {
+        if !ops_allowed {
+            return Ok(false);
+        }
         if !state.filter.is_empty() && !state.filter.matches(&frame.data) {
             return Ok(false);
         }
@@ -357,13 +362,16 @@ fn process_frame(
         Operation::Snapshot => {
             let snapshot_entities = parse_snapshot_entities(&frame.data);
             for entity in snapshot_entities {
+                // Always populate entity state (needed for correct patch merging)
                 state.entities.insert(entity.key.clone(), entity.data.clone());
                 if let Some(store) = &mut state.store {
                     store.upsert(&entity.key, entity.data.clone(), "snapshot", None);
                 }
                 state.entity_count = state.entities.len() as u64;
-                if emit_entity(state, view, &entity.key, "snapshot", &entity.data)? {
-                    return Ok(true);
+                if ops_allowed {
+                    if emit_entity(state, view, &entity.key, "snapshot", &entity.data)? {
+                        return Ok(true);
+                    }
                 }
             }
         }
@@ -373,8 +381,10 @@ fn process_frame(
                 store.upsert(&frame.key, frame.data.clone(), op_str, frame.seq.clone());
             }
             state.entity_count = state.entities.len() as u64;
-            if emit_entity(state, view, &frame.key, op_str, &frame.data)? {
-                return Ok(true);
+            if ops_allowed {
+                if emit_entity(state, view, &frame.key, op_str, &frame.data)? {
+                    return Ok(true);
+                }
             }
         }
         Operation::Patch => {
@@ -387,18 +397,22 @@ fn process_frame(
             deep_merge_with_append(entry, &frame.data, &frame.append, "");
             let merged = entry.clone();
             state.entity_count = state.entities.len() as u64;
-            if emit_entity(state, view, &frame.key, "patch", &merged)? {
-                return Ok(true);
+            if ops_allowed {
+                if emit_entity(state, view, &frame.key, "patch", &merged)? {
+                    return Ok(true);
+                }
             }
         }
         Operation::Delete => {
-            // Filter against last-known state before removing
             let last_state = state.entities.remove(&frame.key).unwrap_or(serde_json::json!(null));
             if let Some(store) = &mut state.store {
                 store.delete(&frame.key);
             }
             state.entity_count = state.entities.len() as u64;
 
+            if !ops_allowed {
+                return Ok(false);
+            }
             if !state.filter.is_empty() && !state.filter.matches(&last_state) {
                 return Ok(false);
             }
