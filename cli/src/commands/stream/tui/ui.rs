@@ -155,33 +155,37 @@ fn draw_detail_view(f: &mut Frame, app: &App, area: Rect) {
 fn draw_timeline(f: &mut Frame, app: &App, area: Rect) {
     let history_len = app.selected_history_len();
     let pos = app.history_position;
+    let list_len = app.filtered_keys().len();
+    let list_pos = if list_len > 0 { app.selected_index + 1 } else { 0 };
 
-    let timeline = if history_len == 0 {
-        Line::from(vec![
-            Span::styled(" History: ", Style::default().fg(Color::DarkGray)),
-            Span::styled("no data", Style::default().fg(Color::DarkGray)),
-        ])
+    let mut spans = vec![
+        Span::styled(
+            format!(" Row {}/{}", list_pos, list_len),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
+    ];
+
+    if history_len == 0 {
+        spans.push(Span::styled("Entity history: no data", Style::default().fg(Color::DarkGray)));
     } else {
-        Line::from(vec![
-            Span::styled(" History: ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[|<] ", Style::default().fg(if pos < history_len - 1 { Color::White } else { Color::DarkGray })),
-            Span::styled("[<] ", Style::default().fg(if pos < history_len - 1 { Color::White } else { Color::DarkGray })),
-            Span::styled(
-                format!("update {}/{} ", history_len - pos, history_len),
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("[>] ", Style::default().fg(if pos > 0 { Color::White } else { Color::DarkGray })),
-            Span::styled("[>|]", Style::default().fg(if pos > 0 { Color::White } else { Color::DarkGray })),
-            Span::raw("  "),
-            if app.show_diff {
-                Span::styled("[d]iff ON", Style::default().fg(Color::Green))
-            } else {
-                Span::styled("[d]iff", Style::default().fg(Color::DarkGray))
-            },
-        ])
-    };
+        spans.push(Span::styled("[|<] ", Style::default().fg(if pos < history_len - 1 { Color::White } else { Color::DarkGray })));
+        spans.push(Span::styled("[<] ", Style::default().fg(if pos < history_len - 1 { Color::White } else { Color::DarkGray })));
+        spans.push(Span::styled(
+            format!("version {}/{} ", history_len - pos, history_len),
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        ));
+        spans.push(Span::styled("[>] ", Style::default().fg(if pos > 0 { Color::White } else { Color::DarkGray })));
+        spans.push(Span::styled("[>|]", Style::default().fg(if pos > 0 { Color::White } else { Color::DarkGray })));
+        spans.push(Span::raw("  "));
+        spans.push(if app.show_diff {
+            Span::styled("[d]iff ON", Style::default().fg(Color::Green))
+        } else {
+            Span::styled("[d]iff", Style::default().fg(Color::DarkGray))
+        });
+    }
 
-    f.render_widget(Paragraph::new(timeline), area);
+    f.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
 fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
