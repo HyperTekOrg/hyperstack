@@ -1003,6 +1003,29 @@ fn validate_aggregate_conditions(
                 }
             }
         }
+
+        // Also validate against account-source mappings for the same target
+        let mut account_mappings: Vec<&parse::MapAttribute> = sources_by_type
+            .values()
+            .flatten()
+            .filter(|m| m.target_field_name == **target_field && m.is_account_source)
+            .collect();
+        account_mappings.sort_by(|a, b| {
+            path_to_string(&a.source_type_path).cmp(&path_to_string(&b.source_type_path))
+        });
+
+        for mapping in account_mappings {
+            let source_type = mapping.source_type_string();
+            if let Ok(ResolvedMappingSource::Account { idl, account_name }) =
+                resolve_mapping_source_once(&source_type, std::slice::from_ref(mapping), idls)
+            {
+                for leaf in leaves {
+                    if let Err(error) = validate_account_field(idl, &account_name, leaf) {
+                        errors.push(idl_error_to_syn(mapping.attr_span, error));
+                    }
+                }
+            }
+        }
     }
 }
 

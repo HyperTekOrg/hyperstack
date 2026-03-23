@@ -210,6 +210,23 @@ impl MapAttribute {
     }
 }
 
+fn parse_join_on_literal(literal: &syn::LitStr) -> syn::Result<FieldSpec> {
+    let value = literal.value();
+    let ident = syn::parse_str::<syn::Ident>(&value).map_err(|_| {
+        syn::Error::new(
+            literal.span(),
+            format!(
+                "`join_on` value '{}' is not a valid identifier. Use a bare identifier (e.g. `join_on = mint`).",
+                value
+            ),
+        )
+    })?;
+    Ok(FieldSpec {
+        ident,
+        explicit_location: None,
+    })
+}
+
 fn classify_source_type_path(path: &Path) -> (bool, bool) {
     // We assume Anchor-style SDK paths expose explicit `instructions` / `accounts`
     // segments. Re-exports or custom module layouts fall back to `Other`, which
@@ -312,10 +329,7 @@ impl Parse for MapAttributeArgs {
                     input.parse::<Token![=]>()?;
                     if input.peek(syn::LitStr) {
                         let join_on_lit: syn::LitStr = input.parse()?;
-                        join_on = Some(FieldSpec {
-                            ident: syn::Ident::new(&join_on_lit.value(), join_on_lit.span()),
-                            explicit_location: None,
-                        });
+                        join_on = Some(parse_join_on_literal(&join_on_lit)?);
                     } else {
                         join_on = Some(parse_field_spec(input)?);
                     }
@@ -699,14 +713,9 @@ impl Parse for EventAttributeArgs {
                 let rename_lit: syn::LitStr = input.parse()?;
                 rename = Some(rename_lit.value());
             } else if ident_str == "join_on" {
-                // Try identifier first, fall back to string
                 if input.peek(syn::LitStr) {
                     let join_on_lit: syn::LitStr = input.parse()?;
-                    let ident = syn::Ident::new(&join_on_lit.value(), join_on_lit.span());
-                    join_on = Some(FieldSpec {
-                        ident,
-                        explicit_location: None,
-                    });
+                    join_on = Some(parse_join_on_literal(&join_on_lit)?);
                 } else {
                     join_on = Some(parse_field_spec(input)?);
                 }
@@ -890,11 +899,7 @@ impl Parse for SnapshotAttributeArgs {
             } else if ident_str == "join_on" {
                 if input.peek(syn::LitStr) {
                     let join_on_lit: syn::LitStr = input.parse()?;
-                    let ident = syn::Ident::new(&join_on_lit.value(), join_on_lit.span());
-                    join_on = Some(FieldSpec {
-                        ident,
-                        explicit_location: None,
-                    });
+                    join_on = Some(parse_join_on_literal(&join_on_lit)?);
                 } else {
                     join_on = Some(parse_field_spec(input)?);
                 }
@@ -1071,11 +1076,7 @@ impl Parse for AggregateAttributeArgs {
             } else if ident_str == "join_on" {
                 if input.peek(syn::LitStr) {
                     let join_on_lit: syn::LitStr = input.parse()?;
-                    let ident = syn::Ident::new(&join_on_lit.value(), join_on_lit.span());
-                    join_on = Some(FieldSpec {
-                        ident,
-                        explicit_location: None,
-                    });
+                    join_on = Some(parse_join_on_literal(&join_on_lit)?);
                 } else {
                     join_on = Some(parse_field_spec(input)?);
                 }
