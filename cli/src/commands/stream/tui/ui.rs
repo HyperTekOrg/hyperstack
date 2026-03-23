@@ -2,13 +2,13 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
     Frame,
 };
 
 use super::app::{App, ViewMode};
 
-pub fn draw(f: &mut Frame, app: &App) {
+pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -57,7 +57,7 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(Paragraph::new(header), area);
 }
 
-fn draw_split_view(f: &mut Frame, app: &App, area: Rect) {
+fn draw_split_view(f: &mut Frame, app: &mut App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
@@ -67,7 +67,7 @@ fn draw_split_view(f: &mut Frame, app: &App, area: Rect) {
     draw_entity_detail(f, app, chunks[1]);
 }
 
-fn draw_entity_list(f: &mut Frame, app: &App, area: Rect) {
+fn draw_entity_list(f: &mut Frame, app: &mut App, area: Rect) {
     let keys = app.filtered_keys();
     let items: Vec<ListItem> = keys
         .iter()
@@ -103,10 +103,7 @@ fn draw_entity_list(f: &mut Frame, app: &App, area: Rect) {
         )
         .highlight_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
 
-    let mut list_state = ListState::default();
-    list_state.select(Some(app.selected_index));
-
-    f.render_stateful_widget(list, area, &mut list_state);
+    f.render_stateful_widget(list, area, &mut app.list_state);
 }
 
 fn draw_entity_detail(f: &mut Frame, app: &App, area: Rect) {

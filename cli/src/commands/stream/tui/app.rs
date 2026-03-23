@@ -1,4 +1,5 @@
 use hyperstack_sdk::{parse_snapshot_entities, Frame, Operation};
+use ratatui::widgets::ListState;
 use serde_json::Value;
 
 use crate::commands::stream::snapshot::SnapshotRecorder;
@@ -57,6 +58,7 @@ pub struct App {
     pub visible_rows: usize,
     pub pending_count: Option<usize>,
     pub pending_g: bool,
+    pub list_state: ListState,
     store: EntityStore,
     raw_frames: Vec<Frame>,
     recorder: Option<SnapshotRecorder>,
@@ -83,6 +85,7 @@ impl App {
             visible_rows: 30,
             pending_count: None,
             pending_g: false,
+            list_state: ListState::default().with_selected(Some(0)),
             store: EntityStore::new(),
             raw_frames: Vec::new(),
             recorder: Some(SnapshotRecorder::new(&view, &url)),
@@ -301,6 +304,7 @@ impl App {
                 self.scroll_offset = 0;
             }
         }
+        self.list_state.select(Some(self.selected_index));
     }
 
     fn clamp_selection(&mut self) {
@@ -312,6 +316,7 @@ impl App {
         }
         self.history_position = 0;
         self.scroll_offset = 0;
+        self.list_state.select(Some(self.selected_index));
     }
 
     pub fn selected_key(&self) -> Option<String> {
