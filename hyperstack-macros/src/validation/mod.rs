@@ -536,14 +536,6 @@ fn validate_source_handler_keys(
 
         let is_instruction = mappings.iter().any(|mapping| mapping.is_instruction);
 
-        // Event-derived MapAttribute values are produced later via
-        // convert_event_to_map_attributes(...), which sets is_event_source = true.
-        // Those groups are validated in validate_event_handler_keys before they
-        // are merged into sources_by_type for codegen.
-        if mappings.iter().all(|mapping| mapping.is_event_source) {
-            continue;
-        }
-
         if !is_instruction && has_explicit_key_resolver(&source_type, resolver_hooks) {
             continue;
         }
@@ -563,9 +555,7 @@ fn validate_source_handler_keys(
         }
 
         if let Some(join_field) = join_key.as_ref() {
-            if source_exposes_target_field(&mappings, join_field)
-                && source_field_can_resolve_key(join_field, primary_key_leafs, lookup_index_leafs)
-            {
+            if source_field_can_resolve_key(join_field, primary_key_leafs, lookup_index_leafs) {
                 continue;
             }
         }
@@ -1011,7 +1001,9 @@ fn validate_aggregate_conditions(
             .filter(|m| m.target_field_name == **target_field && m.is_instruction)
             .collect();
         instruction_mappings.sort_by(|a, b| {
-            path_to_string(&a.source_type_path).cmp(&path_to_string(&b.source_type_path))
+            path_to_string(&a.source_type_path)
+                .cmp(&path_to_string(&b.source_type_path))
+                .then_with(|| a.source_field_name.cmp(&b.source_field_name))
         });
 
         let mut reported: HashSet<(String, String)> = HashSet::new();
@@ -1043,7 +1035,9 @@ fn validate_aggregate_conditions(
             .filter(|m| m.target_field_name == **target_field && m.is_account_source)
             .collect();
         account_mappings.sort_by(|a, b| {
-            path_to_string(&a.source_type_path).cmp(&path_to_string(&b.source_type_path))
+            path_to_string(&a.source_type_path)
+                .cmp(&path_to_string(&b.source_type_path))
+                .then_with(|| a.source_field_name.cmp(&b.source_field_name))
         });
 
         let mut reported_account: HashSet<(String, String)> = HashSet::new();
