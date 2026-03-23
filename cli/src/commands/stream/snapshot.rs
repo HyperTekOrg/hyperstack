@@ -103,10 +103,11 @@ impl SnapshotPlayer {
             frame_count: value.get("frame_count").and_then(|v| v.as_u64()).unwrap_or(0),
         };
 
-        let frames: Vec<SnapshotFrame> = value
-            .get("frames")
-            .and_then(|v| serde_json::from_value(v.clone()).ok())
-            .unwrap_or_default();
+        let frames: Vec<SnapshotFrame> = match value.get("frames") {
+            Some(v) => serde_json::from_value(v.clone())
+                .with_context(|| format!("Failed to deserialize frames in {}", path))?,
+            None => Vec::new(),
+        };
 
         eprintln!(
             "Loaded snapshot: {} frames, {:.1}s, view={}, captured={}",
