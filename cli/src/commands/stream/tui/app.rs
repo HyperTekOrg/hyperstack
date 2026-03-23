@@ -1,6 +1,7 @@
 use hyperstack_sdk::{parse_snapshot_entities, Frame, Operation};
 use ratatui::widgets::ListState;
 use serde_json::Value;
+use std::collections::HashSet;
 
 use crate::commands::stream::snapshot::SnapshotRecorder;
 use crate::commands::stream::store::EntityStore;
@@ -44,6 +45,7 @@ pub struct App {
     pub url: String,
     pub view_mode: ViewMode,
     pub entity_keys: Vec<String>,
+    entity_key_set: HashSet<String>,
     pub selected_index: usize,
     pub history_position: usize,
     pub show_diff: bool,
@@ -71,6 +73,7 @@ impl App {
             url: url.clone(),
             view_mode: ViewMode::List,
             entity_keys: Vec::new(),
+            entity_key_set: HashSet::new(),
             selected_index: 0,
             history_position: 0,
             show_diff: false,
@@ -107,7 +110,7 @@ impl App {
                 let entities = parse_snapshot_entities(&frame.data);
                 for entity in entities {
                     self.store.upsert(&entity.key, entity.data, "snapshot", None);
-                    if !self.entity_keys.contains(&entity.key) {
+                    if self.entity_key_set.insert(entity.key.clone()) {
                         self.entity_keys.push(entity.key);
                     }
                 }
@@ -118,7 +121,7 @@ impl App {
                 let seq = frame.seq.clone();
                 self.store
                     .upsert(&key, frame.data, &frame.op, seq);
-                if !self.entity_keys.contains(&key) {
+                if self.entity_key_set.insert(key.clone()) {
                     self.entity_keys.push(key);
                 }
                 self.update_count += 1;
@@ -128,13 +131,14 @@ impl App {
                 let seq = frame.seq.clone();
                 self.store
                     .patch(&key, &frame.data, &frame.append, seq);
-                if !self.entity_keys.contains(&key) {
+                if self.entity_key_set.insert(key.clone()) {
                     self.entity_keys.push(key);
                 }
                 self.update_count += 1;
             }
             Operation::Delete => {
                 self.store.delete(&frame.key);
+                self.entity_key_set.remove(&frame.key);
                 self.entity_keys.retain(|k| k != &frame.key);
                 self.update_count += 1;
                 if self.selected_index >= self.entity_keys.len() && self.selected_index > 0 {
