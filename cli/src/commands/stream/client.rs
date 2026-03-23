@@ -10,10 +10,12 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 use super::filter::{self, Filter};
 use super::output::{self, OutputMode};
 use super::snapshot::{SnapshotPlayer, SnapshotRecorder};
+use super::store::EntityStore;
 use super::StreamArgs;
 
 struct StreamState {
     entities: HashMap<String, serde_json::Value>,
+    store: Option<EntityStore>,
     filter: Filter,
     select_fields: Option<Vec<Vec<String>>>,
     allowed_ops: Option<HashSet<String>>,
@@ -45,8 +47,16 @@ fn build_state(args: &StreamArgs, view: &str, url: &str) -> Result<StreamState> 
 
     let recorder = args.save.as_ref().map(|_| SnapshotRecorder::new(view, url));
 
+    let use_store = args.history || args.at.is_some() || args.diff;
+    let store = if use_store {
+        Some(EntityStore::new())
+    } else {
+        None
+    };
+
     Ok(StreamState {
         entities: HashMap::new(),
+        store,
         filter,
         select_fields,
         allowed_ops,
@@ -203,6 +213,9 @@ pub async fn stream(url: String, view: &str, args: &StreamArgs) -> Result<()> {
         )?;
     }
 
+    // Output history/at/diff after stream ends (for non-interactive agent use)
+    output_history_if_requested(&state, args)?;
+
     Ok(())
 }
 
@@ -224,7 +237,60 @@ pub async fn replay(player: SnapshotPlayer, view: &str, args: &StreamArgs) -> Re
         )?;
     }
 
+    output_history_if_requested(&state, args)?;
+
     eprintln!("Replay complete: {} updates processed.", state.update_count);
+    Ok(())
+}
+
+/// After the stream ends, output --history / --at / --diff results for the specified --key.
+fn output_history_if_requested(state: &StreamState, args: &StreamArgs) -> Result<()> {
+    let store = match &state.store {
+        Some(s) => s,
+        None => return Ok(()),
+    };
+
+    let key = match &args.key {
+        Some(k) => k.as_str(),
+        None => {
+            if args.history || args.at.is_some() || args.diff {
+                eprintln!("Warning: --history/--at/--diff require --key to specify which entity");
+            }
+            return Ok(());
+        }
+    };
+
+    if args.diff {
+        let index = args.at.unwrap_or(0);
+        if let Some(diff) = store.diff_at(key, index) {
+            let line = serde_json::to_string_pretty(&diff)?;
+            println!("{}", line);
+        } else {
+            eprintln!("No history entry at index {} for key '{}'", index, key);
+        }
+    } else if let Some(index) = args.at {
+        if let Some(entry) = store.at(key, index) {
+            let output = serde_json::json!({
+                "key": key,
+                "index": index,
+                "op": entry.op,
+                "seq": entry.seq,
+                "state": entry.state,
+            });
+            let line = serde_json::to_string_pretty(&output)?;
+            println!("{}", line);
+        } else {
+            eprintln!("No history entry at index {} for key '{}'", index, key);
+        }
+    } else if args.history {
+        if let Some(history) = store.history(key) {
+            let line = serde_json::to_string_pretty(&history)?;
+            println!("{}", line);
+        } else {
+            eprintln!("No history found for key '{}'", key);
+        }
+    }
+
     Ok(())
 }
 
@@ -267,6 +333,9 @@ fn process_frame(
             let snapshot_entities = parse_snapshot_entities(&frame.data);
             for entity in snapshot_entities {
                 state.entities.insert(entity.key.clone(), entity.data.clone());
+                if let Some(store) = &mut state.store {
+                    store.upsert(&entity.key, entity.data.clone(), "snapshot", None);
+                }
                 state.entity_count = state.entities.len() as u64;
                 if emit_entity(state, view, &entity.key, "snapshot", &entity.data)? {
                     return Ok(true);
@@ -275,12 +344,18 @@ fn process_frame(
         }
         Operation::Upsert | Operation::Create => {
             state.entities.insert(frame.key.clone(), frame.data.clone());
+            if let Some(store) = &mut state.store {
+                store.upsert(&frame.key, frame.data.clone(), op_str, frame.seq.clone());
+            }
             state.entity_count = state.entities.len() as u64;
             if emit_entity(state, view, &frame.key, op_str, &frame.data)? {
                 return Ok(true);
             }
         }
         Operation::Patch => {
+            if let Some(store) = &mut state.store {
+                store.patch(&frame.key, &frame.data, &frame.append, frame.seq.clone());
+            }
             let entry = state.entities
                 .entry(frame.key.clone())
                 .or_insert_with(|| serde_json::json!({}));
@@ -293,6 +368,9 @@ fn process_frame(
         }
         Operation::Delete => {
             state.entities.remove(&frame.key);
+            if let Some(store) = &mut state.store {
+                store.delete(&frame.key);
+            }
             state.entity_count = state.entities.len() as u64;
             state.update_count += 1;
             if state.count_only {

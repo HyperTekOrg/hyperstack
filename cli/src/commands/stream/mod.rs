@@ -2,6 +2,7 @@ mod client;
 mod filter;
 mod output;
 mod snapshot;
+mod store;
 
 use anyhow::{bail, Context, Result};
 use clap::Args;
@@ -80,6 +81,18 @@ pub struct StreamArgs {
     /// Replay a previously saved snapshot file instead of connecting live
     #[arg(long, conflicts_with = "url")]
     pub load: Option<String>,
+
+    /// Show update history for the specified --key entity
+    #[arg(long)]
+    pub history: bool,
+
+    /// Show entity at a specific history index (0 = latest)
+    #[arg(long)]
+    pub at: Option<usize>,
+
+    /// Show diff between consecutive updates
+    #[arg(long)]
+    pub diff: bool,
 }
 
 pub fn run(args: StreamArgs, config_path: &str) -> Result<()> {
