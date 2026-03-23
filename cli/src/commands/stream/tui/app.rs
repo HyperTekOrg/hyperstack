@@ -63,7 +63,6 @@ pub struct App {
     pub list_state: ListState,
     store: EntityStore,
     raw_frames: Vec<Frame>,
-    recorder: Option<SnapshotRecorder>,
 }
 
 impl App {
@@ -91,16 +90,10 @@ impl App {
             list_state: ListState::default().with_selected(Some(0)),
             store: EntityStore::new(),
             raw_frames: Vec::new(),
-            recorder: Some(SnapshotRecorder::new(&view, &url)),
         }
     }
 
     pub fn apply_frame(&mut self, frame: Frame) {
-        // Record for save
-        if let Some(recorder) = &mut self.recorder {
-            recorder.record(&frame);
-        }
-
         // Always collect raw frames so toggling on shows recent data
         let raw_frame = frame.clone();
         let op = frame.operation();
@@ -245,12 +238,14 @@ impl App {
                 self.filter_text.clear();
             }
             TuiAction::SaveSnapshot => {
-                if let Some(recorder) = &self.recorder {
-                    let filename = format!("hs-stream-{}.json", chrono::Utc::now().format("%Y%m%d-%H%M%S"));
-                    match recorder.save(&filename) {
-                        Ok(_) => self.set_status(&format!("Saved to {}", filename)),
-                        Err(e) => self.set_status(&format!("Save failed: {}", e)),
-                    }
+                let mut recorder = SnapshotRecorder::new(&self.view, &self.url);
+                for frame in &self.raw_frames {
+                    recorder.record(frame);
+                }
+                let filename = format!("hs-stream-{}.json", chrono::Utc::now().format("%Y%m%d-%H%M%S"));
+                match recorder.save(&filename) {
+                    Ok(_) => self.set_status(&format!("Saved to {}", filename)),
+                    Err(e) => self.set_status(&format!("Save failed: {}", e)),
                 }
             }
             TuiAction::FilterChar(c) => {
