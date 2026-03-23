@@ -215,15 +215,18 @@ fn make_not_regex(value: &str) -> Result<FilterOp> {
 
 /// Project specific fields from a JSON value.
 /// Returns a new object with only the selected dot-paths.
+/// Uses full dot-path as key to avoid collisions (e.g. "a.id" and "b.id"
+/// produce {"a.id": ..., "b.id": ...} instead of silently overwriting).
 pub fn select_fields(value: &Value, fields: &[Vec<String>]) -> Value {
     let mut result = serde_json::Map::new();
     for path in fields {
         if let Some(v) = resolve_path(value, path) {
-            // Use the leaf field name as the key in flat projection
-            let key = path.last().map(|s| s.as_str()).unwrap_or("");
-            if !key.is_empty() {
-                result.insert(key.to_string(), v.clone());
-            }
+            let key = if path.len() == 1 {
+                path[0].clone()
+            } else {
+                path.join(".")
+            };
+            result.insert(key, v.clone());
         }
     }
     Value::Object(result)
@@ -308,6 +311,14 @@ mod tests {
         let v = json!({"name": "alice", "age": 30, "nested": {"x": 1}});
         let fields = parse_select("name,nested.x");
         let result = select_fields(&v, &fields);
-        assert_eq!(result, json!({"name": "alice", "x": 1}));
+        assert_eq!(result, json!({"name": "alice", "nested.x": 1}));
+    }
+
+    #[test]
+    fn test_select_fields_no_collision() {
+        let v = json!({"a": {"id": 1}, "b": {"id": 2}});
+        let fields = parse_select("a.id,b.id");
+        let result = select_fields(&v, &fields);
+        assert_eq!(result, json!({"a.id": 1, "b.id": 2}));
     }
 }
