@@ -102,14 +102,8 @@ impl SnapshotPlayer {
         let value: serde_json::Value = serde_json::from_str(&contents)
             .with_context(|| format!("Failed to parse snapshot JSON: {}", path))?;
 
-        let header = SnapshotHeader {
-            version: value.get("version").and_then(|v| v.as_u64()).unwrap_or(1) as u32,
-            view: value.get("view").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            url: value.get("url").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            captured_at: value.get("captured_at").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            duration_ms: value.get("duration_ms").and_then(|v| v.as_u64()).unwrap_or(0),
-            frame_count: value.get("frame_count").and_then(|v| v.as_u64()).unwrap_or(0),
-        };
+        let header: SnapshotHeader = serde_json::from_value(value.clone())
+            .with_context(|| format!("Failed to deserialize snapshot header: {}", path))?;
 
         let frames: Vec<SnapshotFrame> = match value.get("frames") {
             Some(v) => serde_json::from_value(v.clone())
