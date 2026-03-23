@@ -284,6 +284,10 @@ fn output_history_if_requested(state: &StreamState, args: &StreamArgs) -> Result
         }
     };
 
+    if args.diff && args.history {
+        eprintln!("Warning: --history is ignored when --diff is specified. Remove --diff to see full history.");
+    }
+
     if args.diff {
         let index = args.at.unwrap_or(0);
         if let Some(diff) = store.diff_at(key, index) {
