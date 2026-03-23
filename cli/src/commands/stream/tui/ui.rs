@@ -210,12 +210,22 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn truncate_key(key: &str, max_len: usize) -> String {
-    if key.len() <= max_len {
+    if key.chars().count() <= max_len {
         key.to_string()
     } else if max_len > 3 {
-        format!("{}...", &key[..max_len - 3])
+        let end = key
+            .char_indices()
+            .nth(max_len - 3)
+            .map(|(i, _)| i)
+            .unwrap_or(key.len());
+        format!("{}...", &key[..end])
     } else {
-        key[..max_len].to_string()
+        let end = key
+            .char_indices()
+            .nth(max_len)
+            .map(|(i, _)| i)
+            .unwrap_or(key.len());
+        key[..end].to_string()
     }
 }
 
