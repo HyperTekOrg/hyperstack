@@ -1107,10 +1107,12 @@ fn validate_event_references(
         let mut event_mappings = events_by_instruction[instruction_key].clone();
         event_mappings.sort_by(stable_event_mapping_cmp);
 
+        let mut reported_join_ons: HashSet<String> = HashSet::new();
         for (_target_field, event_attr, _field_type) in &event_mappings {
             if let Some(join_on) = &event_attr.join_on {
                 let reference = join_on.ident.to_string();
-                if !known_fields.contains(&reference) {
+                if !known_fields.contains(&reference) && reported_join_ons.insert(reference.clone())
+                {
                     errors.push(entity_field_error(
                         entity_name,
                         &reference,
