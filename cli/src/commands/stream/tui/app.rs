@@ -25,6 +25,9 @@ pub enum TuiAction {
     SaveSnapshot,
     FilterChar(char),
     FilterBackspace,
+    // Detail pane scroll
+    ScrollDetailDown,
+    ScrollDetailUp,
     // Vim motions
     GotoTop,
     GotoBottom,
@@ -169,6 +172,14 @@ impl App {
 
         match action {
             TuiAction::Quit => {}
+            TuiAction::ScrollDetailDown => {
+                let n = self.take_count();
+                self.scroll_offset = self.scroll_offset.saturating_add(n as u16);
+            }
+            TuiAction::ScrollDetailUp => {
+                let n = self.take_count();
+                self.scroll_offset = self.scroll_offset.saturating_sub(n as u16);
+            }
             TuiAction::NextEntity => {
                 let n = self.take_count();
                 let count = self.filtered_keys().len();

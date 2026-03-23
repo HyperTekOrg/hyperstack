@@ -195,6 +195,14 @@ async fn run_loop(
                         KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                             TuiAction::HalfPageUp
                         }
+                        KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            TuiAction::ScrollDetailDown
+                        }
+                        KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            TuiAction::ScrollDetailUp
+                        }
+                        KeyCode::PageDown => TuiAction::ScrollDetailDown,
+                        KeyCode::PageUp => TuiAction::ScrollDetailUp,
                         KeyCode::Char('n') => TuiAction::NextMatch,
                         KeyCode::Enter => TuiAction::FocusDetail,
                         KeyCode::Esc => {
