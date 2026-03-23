@@ -454,6 +454,13 @@ fn resolve_mapping_source_once<'a>(
     let is_account_source = mappings.iter().any(|mapping| mapping.is_account_source);
 
     if is_instruction && is_account_source {
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "[hyperstack] warning: source type '{}' matches both instruction and account \
+             classification — skipping IDL field validation. Ensure the source type path \
+             contains exactly one of `::instructions::` or `::accounts::`.",
+            source_type
+        );
         return Ok(ResolvedMappingSource::Other);
     }
 
@@ -1007,6 +1014,7 @@ fn validate_aggregate_conditions(
             path_to_string(&a.source_type_path).cmp(&path_to_string(&b.source_type_path))
         });
 
+        let mut reported: HashSet<(String, String)> = HashSet::new();
         for mapping in instruction_mappings {
             let source_type = mapping.source_type_string();
             if let Ok(ResolvedMappingSource::Instruction {
@@ -1019,7 +1027,9 @@ fn validate_aggregate_conditions(
                         if let Err(error) =
                             validate_instruction_field_spec(idl, &instruction_name, &temp_field)
                         {
-                            errors.push(idl_error_to_syn(mapping.attr_span, error));
+                            if reported.insert((leaf.clone(), instruction_name.clone())) {
+                                errors.push(idl_error_to_syn(mapping.attr_span, error));
+                            }
                         }
                     }
                 }
@@ -1147,6 +1157,7 @@ fn validate_event_references(
         for (_target_field, event_attr, _field_type) in &event_mappings {
             let (event_idl, event_instruction_name) = if event_attr.from_instruction.is_some()
                 || event_attr.inferred_instruction.is_some()
+                || !event_attr.instruction.is_empty()
             {
                 match resolve_instruction_lookup(event_attr, instruction_key, idls) {
                     Ok(value) => value,
