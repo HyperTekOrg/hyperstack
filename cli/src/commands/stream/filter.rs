@@ -128,7 +128,10 @@ fn parse_predicate(expr: &str) -> Result<Predicate> {
         });
     }
 
-    // Two-char operators: !=, >=, <=, !~
+    // Two-char operators checked first so ">=" isn't misread as ">" with value "=...".
+    // Operator is matched at its first occurrence, so the value portion (after the operator)
+    // may contain operator characters (e.g. --where "name=a=b" → field="name", value="a=b").
+    // This is intentional: the split is on the first operator found, rest is the value.
     for (op_str, make_op) in &[
         ("!=", make_not_eq as fn(&str) -> Result<FilterOp>),
         (">=", make_gte as fn(&str) -> Result<FilterOp>),
