@@ -136,9 +136,10 @@ async fn run_loop(
 
         terminal.draw(|f| ui::draw(f, app))?;
 
-        // Drain available frames (non-blocking)
-        while let Ok(frame) = frame_rx.try_recv() {
-            if !app.paused {
+        // Drain available frames (non-blocking). When paused, leave
+        // frames in the channel so they're applied on resume.
+        if !app.paused {
+            while let Ok(frame) = frame_rx.try_recv() {
                 app.apply_frame(frame);
             }
         }
