@@ -46,6 +46,7 @@ impl SnapshotRecorder {
         });
     }
 
+    #[cfg(feature = "tui")]
     pub fn record_with_ts(&mut self, frame: &Frame, ts_ms: u64) {
         self.frames.push(SnapshotFrame {
             ts: ts_ms,
