@@ -250,6 +250,11 @@ pub async fn replay(player: SnapshotPlayer, view: &str, args: &StreamArgs) -> Re
 
     if let OutputMode::NoDna = state.output_mode {
         output::emit_no_dna_event(
+            "snapshot_complete", view,
+            &serde_json::json!({"entity_count": state.entity_count}),
+            state.update_count, state.entity_count,
+        )?;
+        output::emit_no_dna_event(
             "disconnected", view,
             &serde_json::json!(null),
             state.update_count, state.entity_count,
