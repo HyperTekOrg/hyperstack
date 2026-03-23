@@ -179,11 +179,13 @@ fn resolve_url(args: &StreamArgs, config_path: &str, view: &str) -> Result<Strin
                 return Ok(url.clone());
             }
         }
-        // Try matching against all stacks
-        for stack in &config.stacks {
-            if let Some(url) = &stack.url {
-                return Ok(url.clone());
-            }
+        // Only auto-select if there's exactly one stack with a URL (unambiguous)
+        let stacks_with_urls: Vec<_> = config.stacks.iter().filter(|s| s.url.is_some()).collect();
+        if stacks_with_urls.len() == 1 {
+            let stack = stacks_with_urls[0];
+            let name = stack.name.as_deref().unwrap_or(&stack.stack);
+            eprintln!("Using stack '{}' (only stack with a URL)", name);
+            return Ok(stack.url.clone().unwrap());
         }
     }
 
