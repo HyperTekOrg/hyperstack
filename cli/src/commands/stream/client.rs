@@ -332,9 +332,10 @@ fn process_frame(
     let op = frame.operation();
     let op_str = &frame.op;
 
-    // Filter by operation type
+    // Filter by operation type (snapshot ops are checked as "snapshot")
     if let Some(allowed) = &state.allowed_ops {
-        if op != Operation::Snapshot && !allowed.contains(op_str.to_lowercase().as_str()) {
+        let effective_op = if op == Operation::Snapshot { "snapshot" } else { &op_str.to_lowercase() };
+        if !allowed.contains(effective_op) {
             return Ok(false);
         }
     }
