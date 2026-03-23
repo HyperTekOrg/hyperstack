@@ -196,6 +196,16 @@ fn parse_value(value: &str) -> Result<serde_json::Value, String> {
 }
 
 pub fn parse_resolver_condition_expression(expr: &str) -> Result<ResolverCondition, String> {
+    let expr = expr.trim();
+
+    // Reject logical expressions - resolver conditions only support single comparisons
+    if expr.contains("&&") || expr.contains("||") {
+        return Err(format!(
+            "Invalid condition expression: '{}'. Logical operators (&& / ||) are not supported in resolver conditions. Use a single comparison expression.",
+            expr
+        ));
+    }
+
     let operators = [">=", "<=", "==", "!=", ">", "<"];
     for op_str in &operators {
         if let Some(pos) = find_top_level_operator(expr, op_str) {

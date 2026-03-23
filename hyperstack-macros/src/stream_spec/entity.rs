@@ -329,6 +329,10 @@ pub fn process_entity_struct_with_idl(
                                 attr_span: snapshot_attr.attr_span,
                                 source_type_span: acct_path.span(),
                                 source_field_span,
+                                // NOTE: is_event_source=false is correct here.
+                                // Event-derived attributes are created in handlers.rs with
+                                // is_event_source=true and validated separately via
+                                // validate_event_handler_keys before being merged.
                                 is_event_source: false,
                                 is_account_source: true,
                                 source_type_path: acct_path,
@@ -386,6 +390,10 @@ pub fn process_entity_struct_with_idl(
                                 attr_span: aggr_attr.attr_span,
                                 source_type_span: instr_path.span(),
                                 source_field_span,
+                                // NOTE: is_event_source=false is correct here.
+                                // Event-derived attributes are created in handlers.rs with
+                                // is_event_source=true and validated separately via
+                                // validate_event_handler_keys before being merged.
                                 is_event_source: false,
                                 is_account_source: false,
                                 source_type_path: instr_path.clone(),

@@ -154,6 +154,9 @@ pub fn validate_key_resolution_paths(
         input.resolver_hooks,
         errors,
     );
+    // Event-derived MapAttributes are validated here first (before being merged into
+    // sources_by_type for codegen). They have is_event_source=true and are created
+    // in handlers.rs, while other mappings in entity.rs have is_event_source=false.
     validate_event_handler_keys(
         input.entity_name,
         &primary_key_leafs,
@@ -409,12 +412,6 @@ fn source_field_can_resolve_key(
     lookup_index_leafs: &HashSet<String>,
 ) -> bool {
     primary_key_leafs.contains(field_name) || lookup_index_leafs.contains(field_name)
-}
-
-fn source_exposes_target_field(mappings: &[parse::MapAttribute], field_name: &str) -> bool {
-    mappings
-        .iter()
-        .any(|mapping| mapping.target_field_name == field_name)
 }
 
 fn has_account_address_lookup_path(
