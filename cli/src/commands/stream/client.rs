@@ -124,7 +124,9 @@ pub async fn stream(url: String, view: &str, args: &StreamArgs) -> Result<()> {
     tokio::pin!(shutdown);
 
     let mut snapshot_complete = false;
-    let mut received_snapshot = false;
+    // When --no-snapshot, treat as if snapshot was already received so
+    // snapshot_complete fires on the first live frame
+    let mut received_snapshot = args.no_snapshot;
 
     loop {
         tokio::select! {
