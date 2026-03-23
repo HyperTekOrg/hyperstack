@@ -114,7 +114,7 @@ fn main() {{}}
         "missing_instruction_gets_suggestion",
         &source,
         &[
-            "Not found: 'Initialise' in instructions",
+            "Not found: 'initialise' in instructions",
             "Did you mean: initialize?",
         ],
     );
@@ -174,7 +174,7 @@ fn main() {{}}
         "event_join_on_field_is_validated_even_when_instruction_lookup_fails",
         &source,
         &[
-            "Not found: 'Initialise' in instructions",
+            "Not found: 'initialise' in instructions",
             "unknown join_on field 'ghost' on entity 'Thing'",
             "The `join_on` field 'ghost' is neither a primary-key field nor a lookup-index-backed field.",
         ],

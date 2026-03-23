@@ -1,6 +1,6 @@
 use crate::event_type_helpers::{find_idl_for_type, IdlLookup};
 use crate::parse;
-use crate::utils::path_to_string;
+use crate::utils::{path_to_string, to_snake_case};
 use hyperstack_idl::error::IdlSearchError;
 use hyperstack_idl::search::{
     lookup_account, lookup_instruction, lookup_instruction_field, lookup_type, suggest_similar,
@@ -70,6 +70,7 @@ pub fn resolve_instruction_lookup_from_path<'a>(
         .ok_or_else(|| IdlSearchError::InvalidPath {
             path: type_str.clone(),
         })?;
+    let instruction_name = to_snake_case(&instruction_name);
     lookup_instruction(idl, &instruction_name)?;
     Ok((idl, instruction_name))
 }
