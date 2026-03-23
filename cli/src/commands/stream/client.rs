@@ -124,6 +124,7 @@ pub async fn stream(url: String, view: &str, args: &StreamArgs) -> Result<()> {
     tokio::pin!(shutdown);
 
     let mut snapshot_complete = false;
+    let mut received_snapshot = false;
 
     loop {
         tokio::select! {
@@ -137,10 +138,11 @@ pub async fn stream(url: String, view: &str, args: &StreamArgs) -> Result<()> {
                                     continue;
                                 }
                                 let was_snapshot = frame.is_snapshot();
+                                if was_snapshot { received_snapshot = true; }
                                 if process_frame(frame, view, &mut state)? {
                                     break;
                                 }
-                                if !was_snapshot && !snapshot_complete && state.update_count > 0 {
+                                if !was_snapshot && received_snapshot && !snapshot_complete {
                                     snapshot_complete = true;
                                     if let OutputMode::NoDna = state.output_mode {
                                         output::emit_no_dna_event(
@@ -152,7 +154,6 @@ pub async fn stream(url: String, view: &str, args: &StreamArgs) -> Result<()> {
                                 }
                             }
                             Err(e) => {
-                                // Check if it's a subscribed frame (different shape, no `entity` field)
                                 if try_parse_subscribed_frame(&bytes).is_some() {
                                     eprintln!("Subscribed to {}", view);
                                 } else {
@@ -171,10 +172,11 @@ pub async fn stream(url: String, view: &str, args: &StreamArgs) -> Result<()> {
                         match serde_json::from_str::<Frame>(&text) {
                             Ok(frame) => {
                                 let was_snapshot = frame.is_snapshot();
+                                if was_snapshot { received_snapshot = true; }
                                 if process_frame(frame, view, &mut state)? {
                                     break;
                                 }
-                                if !was_snapshot && !snapshot_complete && state.update_count > 0 {
+                                if !was_snapshot && received_snapshot && !snapshot_complete {
                                     snapshot_complete = true;
                                     if let OutputMode::NoDna = state.output_mode {
                                         output::emit_no_dna_event(
