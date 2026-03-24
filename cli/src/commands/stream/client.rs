@@ -48,6 +48,9 @@ fn build_state(args: &StreamArgs, view: &str, url: &str) -> Result<StreamState> 
     let recorder = args.save.as_ref().map(|_| SnapshotRecorder::new(view, url));
 
     let use_store = args.history || args.at.is_some() || args.diff;
+    if use_store && args.key.is_none() {
+        eprintln!("Warning: --history/--at/--diff require --key; history will not be output.");
+    }
     let store = if use_store {
         Some(EntityStore::new())
     } else {
