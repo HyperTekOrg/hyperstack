@@ -106,7 +106,7 @@ impl EntityStore {
         if index >= record.history.len() {
             return None;
         }
-        let actual_idx = record.history.len() - 1 - index;
+        let actual_idx = record.history.len().checked_sub(index.checked_add(1)?)?;
         record.history.get(actual_idx)
     }
 
@@ -118,7 +118,7 @@ impl EntityStore {
             return None;
         }
 
-        let actual_idx = record.history.len().checked_sub(1 + index)?;
+        let actual_idx = record.history.len().checked_sub(index.checked_add(1)?)?;
         let current = &record.history.get(actual_idx)?.state;
 
         // If this entry has a raw patch, use it directly
