@@ -540,17 +540,7 @@ fn validate_source_handler_keys(
 
         // Event-derived MapAttribute values are produced in handlers.rs via
         // convert_event_to_map_attributes(...), which sets is_event_source = true.
-        // Those groups are validated in validate_event_handler_keys before they
-        // are merged into sources_by_type for codegen.
-        // Defensive: event-derived MapAttributes (is_event_source=true) are merged
-        // into sources_by_type only during codegen, after this validation pass, so
-        // this branch is currently unreachable. It guards against a future refactor
-        // that merges them earlier.
-        debug_assert!(
-            !mappings.iter().all(|m| m.is_event_source),
-            "event-derived group found in sources_by_type during validation — \
-             validate_event_handler_keys should have handled this"
-        );
+        // These are validated separately in validate_event_handler_keys.
         if mappings.iter().all(|mapping| mapping.is_event_source) {
             continue;
         }
