@@ -125,6 +125,9 @@ pub async fn run_tui(url: String, view: &str, args: &StreamArgs) -> Result<()> {
     let _ = shutdown_tx.send(());
     let _ = tokio::time::timeout(std::time::Duration::from_secs(2), ws_handle).await;
 
+    // Restore original panic hook (ours is only needed while TUI is active)
+    let _ = std::panic::take_hook();
+
     result
 }
 
