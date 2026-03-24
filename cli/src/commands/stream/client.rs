@@ -125,9 +125,7 @@ pub async fn stream(url: String, view: &str, args: &StreamArgs) -> Result<()> {
                                 }
                                 let was_snapshot = frame.is_snapshot();
                                 if was_snapshot { received_snapshot = true; }
-                                if process_frame(frame, view, &mut state)? {
-                                    break;
-                                }
+                                // Emit snapshot_complete BEFORE the first live frame
                                 if !was_snapshot && received_snapshot && !snapshot_complete {
                                     snapshot_complete = true;
                                     if let OutputMode::NoDna = state.output_mode {
@@ -137,6 +135,9 @@ pub async fn stream(url: String, view: &str, args: &StreamArgs) -> Result<()> {
                                             state.update_count, state.entity_count,
                                         )?;
                                     }
+                                }
+                                if process_frame(frame, view, &mut state)? {
+                                    break;
                                 }
                             }
                             Err(e) => {
@@ -159,9 +160,7 @@ pub async fn stream(url: String, view: &str, args: &StreamArgs) -> Result<()> {
                             Ok(frame) => {
                                 let was_snapshot = frame.is_snapshot();
                                 if was_snapshot { received_snapshot = true; }
-                                if process_frame(frame, view, &mut state)? {
-                                    break;
-                                }
+                                // Emit snapshot_complete BEFORE the first live frame
                                 if !was_snapshot && received_snapshot && !snapshot_complete {
                                     snapshot_complete = true;
                                     if let OutputMode::NoDna = state.output_mode {
@@ -171,6 +170,9 @@ pub async fn stream(url: String, view: &str, args: &StreamArgs) -> Result<()> {
                                             state.update_count, state.entity_count,
                                         )?;
                                     }
+                                }
+                                if process_frame(frame, view, &mut state)? {
+                                    break;
                                 }
                             }
                             Err(e) => eprintln!("Warning: failed to parse text frame: {}", e),
