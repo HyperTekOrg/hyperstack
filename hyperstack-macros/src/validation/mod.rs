@@ -618,8 +618,13 @@ fn validate_source_handler_keys(
         }
 
         if let Some(join_field) = join_key {
+            let join_on_span = mappings
+                .iter()
+                .find_map(|m| m.join_on.as_ref())
+                .map(|fs| fs.ident.span())
+                .unwrap_or(first_mapping.attr_span);
             errors.push(key_resolution_error(
-                first_mapping.attr_span,
+                join_on_span,
                 if is_instruction { "instruction source" } else { "account source" },
                 &source_type,
                 entity_name,
@@ -1140,6 +1145,16 @@ fn validate_aggregate_conditions(
         // this function and cross-checking leaves against resolved IDL instruction args.
         // See: https://github.com/hypertekorg/hyperstack/issues/XXX
         if instruction_mappings.is_empty() && account_mappings.is_empty() {
+            // Defensive: if sources_by_type contains mappings for this entity but none match
+            // bare_target, that may indicate a key-format mismatch that deserves investigation.
+            debug_assert!(
+                sources_by_type
+                    .values()
+                    .flatten()
+                    .all(|m| m.is_event_source),
+                "aggregate condition has no matching IDL source mapping; \
+                 this may indicate a target_field_name mismatch in non-event sources"
+            );
             continue;
         }
     }
@@ -1206,6 +1221,7 @@ fn validate_event_references(
         event_mappings.sort_by(stable_event_mapping_cmp);
 
         let mut reported_join_ons: HashSet<String> = HashSet::new();
+        let mut reported_capture_fields: HashSet<(String, String)> = HashSet::new();
         for (_target_field, event_attr, _field_type) in &event_mappings {
             if let Some(join_on) = &event_attr.join_on {
                 let reference = join_on.ident.to_string();
@@ -1257,10 +1273,15 @@ fn validate_event_references(
             };
 
             for field_spec in &event_attr.capture_fields {
+                let field_name = field_spec.ident.to_string();
                 if let Err(error) =
                     validate_instruction_field_spec(event_idl, &event_instruction_name, field_spec)
                 {
-                    errors.push(idl_error_to_syn(field_spec.ident.span(), error));
+                    if reported_capture_fields
+                        .insert((field_name.clone(), event_instruction_name.clone()))
+                    {
+                        errors.push(idl_error_to_syn(field_spec.ident.span(), error));
+                    }
                 }
             }
 
@@ -1275,7 +1296,11 @@ fn validate_event_references(
                         &event_instruction_name,
                         &temp_field,
                     ) {
-                        errors.push(idl_error_to_syn(event_attr.attr_span, error));
+                        if reported_capture_fields
+                            .insert((field_name.clone(), event_instruction_name.clone()))
+                        {
+                            errors.push(idl_error_to_syn(event_attr.attr_span, error));
+                        }
                     }
                 }
             }
