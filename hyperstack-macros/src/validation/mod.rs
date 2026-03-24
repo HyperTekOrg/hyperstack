@@ -657,8 +657,11 @@ fn validate_event_handler_keys(
                 let name = field_spec.ident.to_string();
                 source_field_can_resolve_key(&name, primary_key_leafs, lookup_index_leafs)
                     || (name == "__account_address"
-                        && lookup_indexes.iter().any(|(idx_field, _)| {
-                            attr.capture_fields.iter().any(|cf| cf.ident == *idx_field)
+                        && attr.field_transforms.iter().any(|(source, target)| {
+                            source == "__account_address"
+                                && lookup_indexes
+                                    .iter()
+                                    .any(|(idx_field, _)| idx_field == &target.to_string())
                         }))
             }) || attr.capture_fields_legacy.iter().any(|field_name| {
                 source_field_can_resolve_key(field_name, primary_key_leafs, lookup_index_leafs)
