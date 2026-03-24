@@ -177,6 +177,16 @@ async fn run_loop(
                         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                             TuiAction::Quit
                         }
+                        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            TuiAction::FilterClear
+                        }
+                        KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            TuiAction::FilterDeleteWord
+                        }
+                        // Ignore other control/alt combos — don't insert them as text
+                        KeyCode::Char(_) if key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+                            continue
+                        }
                         KeyCode::Char(c) => TuiAction::FilterChar(c),
                         KeyCode::Backspace => TuiAction::FilterBackspace,
                         _ => continue,

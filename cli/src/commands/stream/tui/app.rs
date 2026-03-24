@@ -25,6 +25,8 @@ pub enum TuiAction {
     SaveSnapshot,
     FilterChar(char),
     FilterBackspace,
+    FilterClear,
+    FilterDeleteWord,
     // Detail pane scroll
     ScrollDetailDown,
     ScrollDetailUp,
@@ -280,6 +282,22 @@ impl App {
             }
             TuiAction::FilterBackspace => {
                 self.filter_text.pop();
+                self.invalidate_filter_cache();
+                self.clamp_selection();
+            }
+            TuiAction::FilterClear => {
+                self.filter_text.clear();
+                self.invalidate_filter_cache();
+                self.clamp_selection();
+            }
+            TuiAction::FilterDeleteWord => {
+                // Delete back to previous word boundary (or start)
+                let trimmed = self.filter_text.trim_end();
+                if let Some(pos) = trimmed.rfind(|c: char| c.is_whitespace()) {
+                    self.filter_text.truncate(pos + 1);
+                } else {
+                    self.filter_text.clear();
+                }
                 self.invalidate_filter_cache();
                 self.clamp_selection();
             }
