@@ -67,10 +67,11 @@ pub struct App {
     store: EntityStore,
     raw_frames: VecDeque<(std::time::Instant, Frame)>,
     stream_start: std::time::Instant,
+    pub dropped_frames: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl App {
-    pub fn new(view: String, url: String) -> Self {
+    pub fn new(view: String, url: String, dropped_frames: std::sync::Arc<std::sync::atomic::AtomicU64>) -> Self {
         Self {
             view: view.clone(),
             url: url.clone(),
@@ -95,6 +96,7 @@ impl App {
             store: EntityStore::new(),
             raw_frames: VecDeque::new(),
             stream_start: std::time::Instant::now(),
+            dropped_frames,
         }
     }
 

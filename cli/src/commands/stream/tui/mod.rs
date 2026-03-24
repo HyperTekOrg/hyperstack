@@ -11,6 +11,8 @@ use futures_util::{SinkExt, StreamExt};
 use hyperstack_sdk::{parse_frame, ClientMessage, Frame};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
@@ -36,6 +38,10 @@ pub async fn run_tui(url: String, view: &str, args: &StreamArgs) -> Result<()> {
     // Shutdown signal for graceful WebSocket close
     let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel::<()>();
 
+    // Dropped frame counter (shared with WS task)
+    let dropped_frames = Arc::new(AtomicU64::new(0));
+    let dropped_frames_ws = Arc::clone(&dropped_frames);
+
     // Spawn WS reader task
     let ws_handle = tokio::spawn(async move {
         let ping_period = std::time::Duration::from_secs(30);
@@ -50,13 +56,16 @@ pub async fn run_tui(url: String, view: &str, args: &StreamArgs) -> Result<()> {
                     match msg {
                         Some(Ok(Message::Binary(bytes))) => {
                             if let Ok(frame) = parse_frame(&bytes) {
-                                // Non-blocking: drop frames when receiver is paused/full
-                                let _ = frame_tx.try_send(frame);
+                                if frame_tx.try_send(frame).is_err() {
+                                    dropped_frames_ws.fetch_add(1, Ordering::Relaxed);
+                                }
                             }
                         }
                         Some(Ok(Message::Text(text))) => {
                             if let Ok(frame) = serde_json::from_str::<Frame>(&text) {
-                                let _ = frame_tx.try_send(frame);
+                                if frame_tx.try_send(frame).is_err() {
+                                    dropped_frames_ws.fetch_add(1, Ordering::Relaxed);
+                                }
                             }
                         }
                         Some(Ok(Message::Ping(payload))) => {
@@ -98,7 +107,7 @@ pub async fn run_tui(url: String, view: &str, args: &StreamArgs) -> Result<()> {
         }
     };
 
-    let mut app = App::new(view.to_string(), url.clone());
+    let mut app = App::new(view.to_string(), url.clone(), Arc::clone(&dropped_frames));
 
     // Main loop: poll terminal events + receive frames
     let tick_rate = std::time::Duration::from_millis(50);

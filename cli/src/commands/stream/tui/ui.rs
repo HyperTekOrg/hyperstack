@@ -37,7 +37,8 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         Span::styled(" LIVE ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
     };
 
-    let header = Line::from(vec![
+    let dropped = app.dropped_frames.load(std::sync::atomic::Ordering::Relaxed);
+    let mut spans = vec![
         Span::styled("hs stream ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::styled(&app.view, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
         Span::raw("  "),
@@ -47,7 +48,15 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
             format!("Updates: {}", app.update_count),
             Style::default().fg(Color::DarkGray),
         ),
-    ]);
+    ];
+    if dropped > 0 {
+        spans.push(Span::raw("  "));
+        spans.push(Span::styled(
+            format!("Dropped: {}", dropped),
+            Style::default().fg(Color::Red),
+        ));
+    }
+    let header = Line::from(spans);
 
     f.render_widget(Paragraph::new(header), area);
 }
