@@ -427,7 +427,9 @@ fn value_contains_str(value: &Value, needle: &str) -> bool {
             s.contains(needle)
         }
         Value::Object(map) => {
-            map.values().any(|v| value_contains_str(v, needle))
+            map.iter().any(|(k, v)| {
+                k.to_lowercase().contains(needle) || value_contains_str(v, needle)
+            })
         }
         Value::Array(arr) => {
             arr.iter().any(|v| value_contains_str(v, needle))
