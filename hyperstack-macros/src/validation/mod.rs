@@ -110,7 +110,6 @@ pub fn validate_semantics(input: ValidationInput<'_>) -> syn::Result<()> {
         input.entity_name,
         input.aggregate_conditions,
         input.sources_by_type,
-        &known_fields,
         input.idls,
         &mut errors,
     );
@@ -576,15 +575,8 @@ fn validate_source_handler_keys(
                 continue;
             }
 
-            // If join_on alone would satisfy key resolution, accept without error
-            let join_resolves = join_key
-                .as_ref()
-                .map(|jf| source_field_can_resolve_key(jf, primary_key_leafs, lookup_index_leafs))
-                .unwrap_or(false);
-            if join_resolves {
-                continue;
-            }
-
+            // lookup_by exists but does not resolve the key, and join_on (if any)
+            // also failed to resolve (checked above). Emit the error.
             errors.push(key_resolution_error(
                 lookup_by.ident.span(),
                 if is_instruction { "instruction source" } else { "account source" },
@@ -1000,7 +992,6 @@ fn validate_aggregate_conditions(
     _entity_name: &str,
     aggregate_conditions: &HashMap<String, crate::ast::ConditionExpr>,
     sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
-    known_fields: &HashSet<String>,
     idls: IdlLookup,
     errors: &mut ErrorCollector,
 ) {
@@ -1082,23 +1073,11 @@ fn validate_aggregate_conditions(
             }
         }
 
-        // Fallback: validate against known entity fields when no IDL sources exist
-        // (e.g., for event-backed aggregates)
+        // Fallback: no IDL source found (e.g. event-backed aggregate).
+        // Condition field validation for event sources is handled via
+        // validate_event_references; skip here to avoid false positives.
         if instruction_mappings.is_empty() && account_mappings.is_empty() {
-            let available = sorted_field_paths(known_fields);
-            if let Some(cond_expr) = aggregate_conditions.get(*target_field) {
-                for leaf in leaves {
-                    if !known_fields.contains(leaf) {
-                        errors.push(entity_field_error(
-                            _entity_name,
-                            leaf,
-                            "condition field",
-                            cond_expr.span,
-                            &available,
-                        ));
-                    }
-                }
-            }
+            continue;
         }
     }
 }
