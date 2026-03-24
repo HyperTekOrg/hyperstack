@@ -56,6 +56,7 @@ pub struct App {
     pub show_diff: bool,
     pub show_raw: bool,
     pub paused: bool,
+    pub disconnected: bool,
     pub filter_input_active: bool,
     pub filter_text: String,
     pub status_message: String,
@@ -86,6 +87,7 @@ impl App {
             show_diff: false,
             show_raw: false,
             paused: false,
+            disconnected: false,
             filter_input_active: false,
             filter_text: String::new(),
             status_message: "Connected".to_string(),
@@ -432,6 +434,11 @@ impl App {
     fn set_status(&mut self, msg: &str) {
         self.status_message = msg.to_string();
         self.status_time = std::time::Instant::now();
+    }
+
+    pub fn set_disconnected(&mut self) {
+        self.disconnected = true;
+        self.set_status("Disconnected");
     }
 
     /// Returns cached filtered keys.

@@ -142,6 +142,18 @@ pub fn run(args: StreamArgs, config_path: &str) -> Result<()> {
         if args.no_dna {
             bail!("--no-dna is incompatible with TUI mode; omit --tui to use NO_DNA output.");
         }
+        if !args.filters.is_empty() {
+            bail!("--where is not supported in TUI mode; use '/' inside the TUI to filter.");
+        }
+        if args.select.is_some() {
+            bail!("--select is not supported in TUI mode.");
+        }
+        if args.ops.is_some() {
+            bail!("--ops is not supported in TUI mode.");
+        }
+        if args.first {
+            bail!("--first is not supported in TUI mode.");
+        }
         #[cfg(feature = "tui")]
         {
             return rt.block_on(tui::run_tui(url, view, &args));

@@ -195,6 +195,7 @@ pub async fn stream(url: String, view: &str, args: &StreamArgs) -> Result<()> {
             }
             _ = &mut duration_future => {
                 eprintln!("Duration reached, stopping...");
+                let _ = ws_tx.close().await;
                 break;
             }
             _ = &mut shutdown => {

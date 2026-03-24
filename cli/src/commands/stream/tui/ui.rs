@@ -32,7 +32,9 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 }
 
 fn draw_header(f: &mut Frame, app: &App, area: Rect) {
-    let status = if app.paused {
+    let status = if app.disconnected {
+        Span::styled(" DISCONNECTED ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+    } else if app.paused {
         Span::styled(" PAUSED ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
     } else {
         Span::styled(" LIVE ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))

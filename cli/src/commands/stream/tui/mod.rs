@@ -179,8 +179,15 @@ async fn run_loop(
         // Drain available frames (non-blocking). When paused, leave
         // frames in the channel so they're applied on resume.
         if !app.paused {
-            while let Ok(frame) = frame_rx.try_recv() {
-                app.apply_frame(frame);
+            loop {
+                match frame_rx.try_recv() {
+                    Ok(frame) => app.apply_frame(frame),
+                    Err(mpsc::error::TryRecvError::Disconnected) => {
+                        app.set_disconnected();
+                        break;
+                    }
+                    Err(mpsc::error::TryRecvError::Empty) => break,
+                }
             }
         }
 

@@ -91,8 +91,9 @@ fn value_eq(value: &Value, expected: &str) -> bool {
             if n.to_string() == expected {
                 return true;
             }
+            // Fallback: exact f64 bitwise equality (string match above handles most cases)
             if let (Some(lhs), Ok(rhs)) = (n.as_f64(), expected.parse::<f64>()) {
-                (lhs - rhs).abs() < f64::EPSILON * lhs.abs().max(1.0)
+                lhs == rhs
             } else {
                 false
             }
