@@ -143,6 +143,8 @@ impl App {
                 if self.selected_index >= self.entity_keys.len() && self.selected_index > 0 {
                     self.selected_index -= 1;
                 }
+                self.history_position = 0;
+                self.scroll_offset = 0;
             }
             Operation::Subscribed => {
                 self.set_status("Subscribed");
