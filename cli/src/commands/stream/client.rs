@@ -32,7 +32,11 @@ fn build_state(args: &StreamArgs, view: &str, url: &str) -> Result<StreamState> 
     let select_fields = args.select.as_deref().map(filter::parse_select);
     let allowed_ops = args.ops.as_deref().map(|ops| {
         ops.split(',')
-            .map(|s| s.trim().to_lowercase())
+            .map(|s| {
+                let s = s.trim().to_lowercase();
+                // Normalize "create" → "upsert" to match op normalization at comparison time
+                if s == "create" { "upsert".to_string() } else { s }
+            })
             .collect::<HashSet<_>>()
     });
 
@@ -390,15 +394,14 @@ fn process_frame(
             for entity in snapshot_entities {
                 // Always populate entity state (needed for correct patch merging)
                 state.entities.insert(entity.key.clone(), entity.data.clone());
+                state.entity_count = state.entities.len() as u64;
                 if let Some(store) = &mut state.store {
                     store.upsert(&entity.key, entity.data.clone(), "snapshot", None);
                 }
                 if ops_allowed && emit_entity(state, view, &entity.key, "snapshot", &entity.data)? {
-                    state.entity_count = state.entities.len() as u64;
                     return Ok(true);
                 }
             }
-            state.entity_count = state.entities.len() as u64;
         }
         Operation::Upsert | Operation::Create => {
             state.entities.insert(frame.key.clone(), frame.data.clone());

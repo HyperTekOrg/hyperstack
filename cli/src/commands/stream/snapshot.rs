@@ -60,6 +60,9 @@ impl SnapshotRecorder {
 
     #[cfg(feature = "tui")]
     pub fn record_with_ts(&mut self, frame: &Frame, ts_ms: u64) {
+        if self.frames.len() >= Self::MAX_FRAMES {
+            return;
+        }
         self.frames.push(SnapshotFrame {
             ts: ts_ms,
             frame: frame.clone(),
@@ -93,8 +96,12 @@ impl SnapshotRecorder {
         });
 
         let json = serde_json::to_string_pretty(&output)?;
-        fs::write(path, json)
-            .with_context(|| format!("Failed to write snapshot to {}", path))?;
+        // Atomic write: write to tmp file then rename, so readers never see partial data
+        let tmp_path = format!("{}.tmp", path);
+        fs::write(&tmp_path, json)
+            .with_context(|| format!("Failed to write snapshot to {}", tmp_path))?;
+        fs::rename(&tmp_path, path)
+            .with_context(|| format!("Failed to rename snapshot to {}", path))?;
 
         eprintln!(
             "Saved {} frames ({:.1}s) to {}",
