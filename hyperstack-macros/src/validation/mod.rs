@@ -375,6 +375,7 @@ fn stable_event_mapping_cmp(
             field_spec_sort_key(a.1.join_on.as_ref())
                 .cmp(&field_spec_sort_key(b.1.join_on.as_ref()))
         })
+        .then_with(|| format!("{:?}", a.1.attr_span).cmp(&format!("{:?}", b.1.attr_span)))
 }
 
 fn primary_key_leafs(primary_keys: &[String]) -> HashSet<String> {
@@ -833,6 +834,25 @@ fn validate_mapping_references(
             continue;
         };
 
+        let mut reported_join_ons: HashSet<String> = HashSet::new();
+        let mut reported_condition_leaves: HashSet<String> = HashSet::new();
+
+        for mapping in &mappings {
+            if let Some(join_on) = &mapping.join_on {
+                let reference = join_on.ident.to_string();
+                if !known_fields.contains(&reference) && reported_join_ons.insert(reference.clone())
+                {
+                    errors.push(entity_field_error(
+                        entity_name,
+                        &reference,
+                        "join_on field",
+                        join_on.ident.span(),
+                        available_fields,
+                    ));
+                }
+            }
+        }
+
         let resolved_source = match resolve_mapping_source_once(source_type, &mappings, idls) {
             Ok(resolved_source) => resolved_source,
             Err(error) => {
@@ -840,9 +860,6 @@ fn validate_mapping_references(
                 continue;
             }
         };
-
-        let mut reported_join_ons: HashSet<String> = HashSet::new();
-        let mut reported_condition_leaves: HashSet<String> = HashSet::new();
 
         for mapping in &mappings {
             match &resolved_source {
@@ -877,20 +894,6 @@ fn validate_mapping_references(
                     }
                 }
                 ResolvedMappingSource::Other => {}
-            }
-
-            if let Some(join_on) = &mapping.join_on {
-                let reference = join_on.ident.to_string();
-                if !known_fields.contains(&reference) && reported_join_ons.insert(reference.clone())
-                {
-                    errors.push(entity_field_error(
-                        entity_name,
-                        &reference,
-                        "join_on field",
-                        join_on.ident.span(),
-                        available_fields,
-                    ));
-                }
             }
 
             if let Some(lookup_by) = &mapping.lookup_by {
