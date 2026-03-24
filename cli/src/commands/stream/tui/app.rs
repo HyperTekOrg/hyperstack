@@ -269,7 +269,7 @@ impl App {
                     let ts_ms = arrival_time.duration_since(self.stream_start).as_millis() as u64;
                     recorder.record_with_ts(frame, ts_ms);
                 }
-                let filename = format!("hs-stream-{}.json", chrono::Utc::now().format("%Y%m%d-%H%M%S"));
+                let filename = format!("hs-stream-{}.json", chrono::Utc::now().format("%Y%m%d-%H%M%S%.3f"));
                 match recorder.save(&filename) {
                     Ok(_) => self.set_status(&format!("Saved to {}", filename)),
                     Err(e) => self.set_status(&format!("Save failed: {}", e)),

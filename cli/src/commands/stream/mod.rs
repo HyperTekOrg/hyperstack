@@ -105,10 +105,8 @@ pub struct StreamArgs {
 
 pub fn run(args: StreamArgs, config_path: &str) -> Result<()> {
     // --load mode: replay from file, no WebSocket needed
+    // (--load + --tui conflict is enforced by clap at the arg level)
     if let Some(load_path) = &args.load {
-        if args.tui {
-            bail!("--tui is not yet supported with --load. Use non-interactive replay for now.");
-        }
         let player = snapshot::SnapshotPlayer::load(load_path)?;
         let default_view = player.header.view.clone();
         let view = args.view.as_deref().unwrap_or(&default_view);

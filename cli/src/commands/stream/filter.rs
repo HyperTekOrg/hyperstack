@@ -87,10 +87,14 @@ fn value_eq(value: &Value, expected: &str) -> bool {
     match value {
         Value::String(s) => s == expected,
         Value::Number(n) => {
-            if let Ok(expected_n) = expected.parse::<f64>() {
-                n.as_f64() == Some(expected_n)
+            // Try exact string match first (avoids f64 rounding for e.g. "1.1")
+            if n.to_string() == expected {
+                return true;
+            }
+            if let (Some(lhs), Ok(rhs)) = (n.as_f64(), expected.parse::<f64>()) {
+                (lhs - rhs).abs() < f64::EPSILON * lhs.abs().max(1.0)
             } else {
-                n.to_string() == expected
+                false
             }
         }
         Value::Bool(b) => {

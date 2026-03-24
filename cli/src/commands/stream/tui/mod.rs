@@ -171,7 +171,8 @@ async fn run_loop(
     loop {
         // Update visible rows from terminal size (minus header/timeline/status/borders)
         let term_size = terminal.size()?;
-        app.visible_rows = term_size.height.saturating_sub(6) as usize;
+        // 3 fixed rows (header + timeline + status) + 2 border rows = 5
+        app.visible_rows = term_size.height.saturating_sub(5) as usize;
 
         terminal.draw(|f| ui::draw(f, app))?;
 
