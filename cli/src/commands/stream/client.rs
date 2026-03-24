@@ -268,7 +268,7 @@ pub async fn replay(player: SnapshotPlayer, view: &str, args: &StreamArgs) -> Re
     }
 
     if let OutputMode::NoDna = state.output_mode {
-        if !snapshot_complete {
+        if !snapshot_complete && received_snapshot {
             output::emit_no_dna_event(&mut state.out, 
                 "snapshot_complete", view,
                 &serde_json::json!({"entity_count": state.entity_count}),
@@ -425,6 +425,8 @@ fn process_frame(
                 if let Some(store) = &mut state.store {
                     store.upsert(&entity.key, entity.data.clone(), "snapshot", None);
                 }
+                // --first: exits on the first matching entity (even within a snapshot batch).
+                // update_count will be 1 in the emitted event, which is correct.
                 if ops_allowed && emit_entity(state, view, &entity.key, "snapshot", &entity.data)? {
                     return Ok(true);
                 }

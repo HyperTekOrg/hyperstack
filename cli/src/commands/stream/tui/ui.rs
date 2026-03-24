@@ -241,6 +241,8 @@ fn truncate_key(key: &str, max_len: usize) -> String {
     }
 }
 
+/// Simple heuristic JSON syntax coloring for serde_json::to_string_pretty output.
+/// Assumes keys are always properly quoted/escaped (guaranteed by serde_json).
 fn colorize_json_line(line: &str) -> Line<'_> {
     let trimmed = line.trim();
 

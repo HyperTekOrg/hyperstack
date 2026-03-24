@@ -184,7 +184,9 @@ impl EntityStore {
     }
 }
 
-/// Compute a simple diff between two JSON values.
+/// Compute a shallow (top-level only) diff between two JSON values.
+/// For nested objects, reports the entire sub-object as changed. Patch operations
+/// use the raw patch instead of this diff, so this only affects upsert/snapshot history.
 fn compute_diff(old: &Value, new: &Value) -> Value {
     match (old, new) {
         (Value::Object(old_map), Value::Object(new_map)) => {

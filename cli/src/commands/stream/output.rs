@@ -25,12 +25,6 @@ impl StdoutWriter {
         writeln!(self.inner, "{}", line)?;
         Ok(())
     }
-
-    #[allow(dead_code)]
-    pub fn flush(&mut self) -> Result<()> {
-        self.inner.flush()?;
-        Ok(())
-    }
 }
 
 impl Drop for StdoutWriter {

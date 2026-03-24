@@ -42,7 +42,8 @@ pub struct StreamArgs {
     #[arg(long = "where", value_name = "EXPR")]
     pub filters: Vec<String>,
 
-    /// Select specific fields to output (comma-separated dot paths)
+    /// Select specific fields to output (comma-separated dot paths). Nested paths are
+    /// flattened to literal keys, e.g. --select "info.name" outputs {"info.name": "..."}
     #[arg(long)]
     pub select: Option<String>,
 
