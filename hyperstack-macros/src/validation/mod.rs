@@ -110,6 +110,7 @@ pub fn validate_semantics(input: ValidationInput<'_>) -> syn::Result<()> {
         input.entity_name,
         input.aggregate_conditions,
         input.sources_by_type,
+        &known_fields,
         input.idls,
         &mut errors,
     );
@@ -533,6 +534,14 @@ fn validate_source_handler_keys(
 
         let is_instruction = mappings.iter().any(|mapping| mapping.is_instruction);
 
+        // Event-derived MapAttribute values are produced in handlers.rs via
+        // convert_event_to_map_attributes(...), which sets is_event_source = true.
+        // Those groups are validated in validate_event_handler_keys before they
+        // are merged into sources_by_type for codegen.
+        if mappings.iter().all(|mapping| mapping.is_event_source) {
+            continue;
+        }
+
         if !is_instruction && has_explicit_key_resolver(&source_type, resolver_hooks) {
             continue;
         }
@@ -831,6 +840,7 @@ fn validate_mapping_references(
         };
 
         let mut reported_join_ons: HashSet<String> = HashSet::new();
+        let mut reported_condition_leaves: HashSet<String> = HashSet::new();
 
         for mapping in &mappings {
             match &resolved_source {
@@ -949,7 +959,10 @@ fn validate_mapping_references(
                                         instruction_name,
                                         &temp_field,
                                     ) {
-                                        errors.push(idl_error_to_syn(mapping.attr_span, error));
+                                        let key = format!("{leaf}@{instruction_name}");
+                                        if reported_condition_leaves.insert(key) {
+                                            errors.push(idl_error_to_syn(mapping.attr_span, error));
+                                        }
                                     }
                                 }
                             }
@@ -958,7 +971,10 @@ fn validate_mapping_references(
                             for leaf in &field_leaves {
                                 if let Err(error) = validate_account_field(idl, account_name, leaf)
                                 {
-                                    errors.push(idl_error_to_syn(mapping.attr_span, error));
+                                    let key = format!("{leaf}@{account_name}");
+                                    if reported_condition_leaves.insert(key) {
+                                        errors.push(idl_error_to_syn(mapping.attr_span, error));
+                                    }
                                 }
                             }
                         }
@@ -974,6 +990,7 @@ fn validate_aggregate_conditions(
     _entity_name: &str,
     aggregate_conditions: &HashMap<String, crate::ast::ConditionExpr>,
     sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    known_fields: &HashSet<String>,
     idls: IdlLookup,
     errors: &mut ErrorCollector,
 ) {
@@ -1000,7 +1017,7 @@ fn validate_aggregate_conditions(
         instruction_mappings.sort_by(|a, b| stable_map_attribute_cmp(*a, *b));
 
         let mut reported: HashSet<(String, String)> = HashSet::new();
-        for mapping in instruction_mappings {
+        for mapping in &instruction_mappings {
             let source_type = mapping.source_type_string();
             if let Ok(ResolvedMappingSource::Instruction {
                 idl,
@@ -1030,7 +1047,7 @@ fn validate_aggregate_conditions(
         account_mappings.sort_by(|a, b| stable_map_attribute_cmp(*a, *b));
 
         let mut reported_account: HashSet<(String, String)> = HashSet::new();
-        for mapping in account_mappings {
+        for mapping in &account_mappings {
             let source_type = mapping.source_type_string();
             if let Ok(ResolvedMappingSource::Account { idl, account_name }) =
                 resolve_mapping_source_once(&source_type, std::slice::from_ref(mapping), idls)
@@ -1040,6 +1057,25 @@ fn validate_aggregate_conditions(
                         if reported_account.insert((leaf.clone(), account_name.clone())) {
                             errors.push(idl_error_to_syn(mapping.attr_span, error));
                         }
+                    }
+                }
+            }
+        }
+
+        // Fallback: validate against known entity fields when no IDL sources exist
+        // (e.g., for event-backed aggregates)
+        if instruction_mappings.is_empty() && account_mappings.is_empty() {
+            let available = sorted_field_paths(known_fields);
+            if let Some(cond_expr) = aggregate_conditions.get(*target_field) {
+                for leaf in leaves {
+                    if !known_fields.contains(leaf) {
+                        errors.push(entity_field_error(
+                            _entity_name,
+                            leaf,
+                            "condition field",
+                            cond_expr.span,
+                            &available,
+                        ));
                     }
                 }
             }
