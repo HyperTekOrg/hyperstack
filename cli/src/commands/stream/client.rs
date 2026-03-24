@@ -211,6 +211,11 @@ pub async fn stream(url: String, view: &str, args: &StreamArgs) -> Result<()> {
         recorder.save(save_path)?;
     }
 
+    // Clear the overwriting count line before post-stream output
+    if state.count_only {
+        output::finalize_count();
+    }
+
     if let OutputMode::NoDna = state.output_mode {
         // Ensure snapshot_complete is emitted before disconnected if it wasn't already
         if !snapshot_complete && received_snapshot {
@@ -256,6 +261,10 @@ pub async fn replay(player: SnapshotPlayer, view: &str, args: &StreamArgs) -> Re
         if process_frame(snapshot_frame.frame.clone(), view, &mut state)? {
             break;
         }
+    }
+
+    if state.count_only {
+        output::finalize_count();
     }
 
     if let OutputMode::NoDna = state.output_mode {
@@ -407,7 +416,10 @@ fn process_frame(
         Operation::Snapshot => {
             let snapshot_entities = parse_snapshot_entities(&frame.data);
             for entity in snapshot_entities {
-                // Always populate entity state (needed for correct patch merging)
+                // Always populate entity state (needed for correct patch merging).
+                // entity_count is a running tally — NoDna entity_update events during
+                // snapshot delivery report the count at that point, not the final total.
+                // The final count is available in the snapshot_complete event.
                 state.entities.insert(entity.key.clone(), entity.data.clone());
                 state.entity_count = state.entities.len() as u64;
                 if let Some(store) = &mut state.store {
@@ -443,6 +455,8 @@ fn process_frame(
             }
         }
         Operation::Delete => {
+            // Note: if the entity was never seen (e.g. --no-snapshot), last_state is null
+            // and field-based --where filters will not match, silently dropping the delete.
             let last_state = state.entities.remove(&frame.key).unwrap_or(serde_json::json!(null));
             if let Some(store) = &mut state.store {
                 store.delete(&frame.key);

@@ -54,10 +54,14 @@ pub fn print_delete(view: &str, key: &str) -> Result<()> {
 
 /// Print a running update count to stderr (overwrites line).
 pub fn print_count(count: u64) -> Result<()> {
-    eprint!("\rUpdates: {}", count);
-    use std::io::Write;
+    eprint!("\rUpdates: {}    ", count); // trailing spaces clear leftover chars
     std::io::stderr().flush()?;
     Ok(())
+}
+
+/// Move to a new line after overwriting count display.
+pub fn finalize_count() {
+    eprintln!();
 }
 
 /// Emit a NO_DNA envelope event as a single JSON line to stdout.
