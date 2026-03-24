@@ -25,6 +25,7 @@ pub struct SnapshotRecorder {
     url: String,
     start_time: std::time::Instant,
     start_timestamp: chrono::DateTime<chrono::Utc>,
+    limit_warned: bool,
 }
 
 impl SnapshotRecorder {
@@ -35,20 +36,22 @@ impl SnapshotRecorder {
             url: url.to_string(),
             start_time: std::time::Instant::now(),
             start_timestamp: chrono::Utc::now(),
+            limit_warned: false,
         }
     }
 
     const MAX_FRAMES: usize = 100_000;
 
     pub fn record(&mut self, frame: &Frame) {
-        if self.frames.len() == Self::MAX_FRAMES {
-            eprintln!(
-                "Warning: snapshot recorder reached {} frames limit. Further frames will be dropped. \
-                 Use --duration to limit recording time.",
-                Self::MAX_FRAMES
-            );
-        }
         if self.frames.len() >= Self::MAX_FRAMES {
+            if !self.limit_warned {
+                eprintln!(
+                    "Warning: snapshot recorder reached {} frames limit. Further frames will be dropped. \
+                     Use --duration to limit recording time.",
+                    Self::MAX_FRAMES
+                );
+                self.limit_warned = true;
+            }
             return;
         }
         let ts = self.start_time.elapsed().as_millis() as u64;
