@@ -333,6 +333,7 @@ fn stable_map_attribute_cmp(a: &parse::MapAttribute, b: &parse::MapAttribute) ->
         .then_with(|| a.is_primary_key.cmp(&b.is_primary_key))
         .then_with(|| a.is_lookup_index.cmp(&b.is_lookup_index))
         .then_with(|| a.is_instruction.cmp(&b.is_instruction))
+        .then_with(|| a.is_account_source.cmp(&b.is_account_source))
         .then_with(|| a.is_event_source.cmp(&b.is_event_source))
         .then_with(|| a.is_whole_source.cmp(&b.is_whole_source))
         .then_with(|| a.emit.cmp(&b.emit))
@@ -572,6 +573,15 @@ fn validate_source_handler_keys(
         {
             let field_name = lookup_by.ident.to_string();
             if source_field_can_resolve_key(&field_name, primary_key_leafs, lookup_index_leafs) {
+                continue;
+            }
+
+            // If join_on alone would satisfy key resolution, accept without error
+            let join_resolves = join_key
+                .as_ref()
+                .map(|jf| source_field_can_resolve_key(jf, primary_key_leafs, lookup_index_leafs))
+                .unwrap_or(false);
+            if join_resolves {
                 continue;
             }
 
@@ -1013,11 +1023,15 @@ fn validate_aggregate_conditions(
             .map(|x| x.1)
             .unwrap_or(target_field);
 
+        // Collect source types in sorted order for deterministic iteration
+        let mut source_types: Vec<&String> = sources_by_type.keys().collect();
+        source_types.sort();
+
         // Collect all instruction-source mappings for this aggregate target,
         // sorted by source type for deterministic validation order.
-        let mut instruction_mappings: Vec<&parse::MapAttribute> = sources_by_type
-            .values()
-            .flatten()
+        let mut instruction_mappings: Vec<&parse::MapAttribute> = source_types
+            .iter()
+            .flat_map(|k| &sources_by_type[*k])
             .filter(|m| m.target_field_name == bare_target && m.is_instruction)
             .collect();
         instruction_mappings.sort_by(|a, b| stable_map_attribute_cmp(a, b));
@@ -1045,9 +1059,9 @@ fn validate_aggregate_conditions(
         }
 
         // Also validate against account-source mappings for the same target
-        let mut account_mappings: Vec<&parse::MapAttribute> = sources_by_type
-            .values()
-            .flatten()
+        let mut account_mappings: Vec<&parse::MapAttribute> = source_types
+            .iter()
+            .flat_map(|k| &sources_by_type[*k])
             .filter(|m| m.target_field_name == bare_target && m.is_account_source)
             .collect();
         account_mappings.sort_by(|a, b| stable_map_attribute_cmp(a, b));
