@@ -452,7 +452,6 @@ fn resolve_mapping_source_once<'a>(
     let is_account_source = mappings.iter().any(|mapping| mapping.is_account_source);
 
     if is_instruction && is_account_source {
-        #[cfg(debug_assertions)]
         eprintln!(
             "[hyperstack] warning: source type '{}' matches both instruction and account \
              classification — skipping IDL field validation. Ensure the source type path \
@@ -751,6 +750,7 @@ fn stable_derive_from_cmp(
             field_spec_sort_key(a.lookup_by.as_ref())
                 .cmp(&field_spec_sort_key(b.lookup_by.as_ref()))
         })
+        .then_with(|| format!("{:?}", a.attr_span).cmp(&format!("{:?}", b.attr_span)))
 }
 
 fn validate_instruction_hook_keys(
@@ -853,18 +853,15 @@ fn validate_mapping_references(
                     if !mapping.source_field_name.is_empty()
                         && !mapping.source_field_name.starts_with("__")
                     {
-                        let temp_field = parse::FieldSpec {
-                            ident: syn::Ident::new(
-                                &mapping.source_field_name,
-                                mapping.source_field_span,
-                            ),
-                            explicit_location: None,
-                        };
-
-                        if let Err(error) =
-                            validate_instruction_field_spec(idl, instruction_name, &temp_field)
-                        {
-                            errors.push(idl_error_to_syn(mapping.source_field_span, error));
+                        if let Some(temp_field) = try_field_spec_from_leaf(
+                            &mapping.source_field_name,
+                            mapping.source_field_span,
+                        ) {
+                            if let Err(error) =
+                                validate_instruction_field_spec(idl, instruction_name, &temp_field)
+                            {
+                                errors.push(idl_error_to_syn(mapping.source_field_span, error));
+                            }
                         }
                     }
                 }
@@ -1076,6 +1073,8 @@ fn validate_aggregate_conditions(
         // Fallback: no IDL source found (e.g. event-backed aggregate).
         // Condition field validation for event sources is handled via
         // validate_event_references; skip here to avoid false positives.
+        // TODO: validate condition leaves against event capture_fields for
+        // event-backed aggregates. For now, skip to avoid false positives.
         if instruction_mappings.is_empty() && account_mappings.is_empty() {
             continue;
         }
