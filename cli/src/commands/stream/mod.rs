@@ -51,7 +51,9 @@ pub struct StreamArgs {
     #[arg(long)]
     pub first: bool,
 
-    /// Filter by operation type (comma-separated: upsert,patch,delete)
+    /// Filter by operation type (comma-separated: snapshot,upsert,patch,delete).
+    /// "upsert" also matches "create". Snapshot entities are always tracked for
+    /// state merging but only emitted when "snapshot" is in the allowed set
     #[arg(long)]
     pub ops: Option<String>,
 

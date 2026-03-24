@@ -225,7 +225,7 @@ async fn run_loop(
                         if c != '0' || app.pending_count.is_some() {
                             let digit = c as usize - '0' as usize;
                             let current = app.pending_count.unwrap_or(0);
-                            app.pending_count = Some(current * 10 + digit);
+                            app.pending_count = Some((current.saturating_mul(10).saturating_add(digit)).min(99_999));
                             app.pending_g = false;
                             continue;
                         }

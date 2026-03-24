@@ -23,6 +23,7 @@ impl StdoutWriter {
 
     pub fn writeln(&mut self, line: &str) -> Result<()> {
         writeln!(self.inner, "{}", line)?;
+        self.inner.flush()?;
         Ok(())
     }
 }

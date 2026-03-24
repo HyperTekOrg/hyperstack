@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use hyperstack_sdk::Frame;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::{self, Write};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SnapshotHeader {
@@ -88,24 +89,38 @@ impl SnapshotRecorder {
             frame_count: self.frames.len() as u64,
         };
 
-        let output = serde_json::json!({
-            "version": header.version,
-            "view": header.view,
-            "url": header.url,
-            "captured_at": header.captured_at,
-            "duration_ms": header.duration_ms,
-            "frame_count": header.frame_count,
-            "frames": self.frames,
-        });
-
-        let json = serde_json::to_string_pretty(&output)?;
-        // Atomic write: write to tmp file in same directory then rename
+        // Stream-serialize to tmp file to avoid holding the entire JSON in memory.
         let dest = std::path::Path::new(path);
         let parent = dest.parent().unwrap_or_else(|| std::path::Path::new("."));
         let file_name = dest.file_name().unwrap_or_default();
         let tmp_path = parent.join(format!("{}.tmp", file_name.to_string_lossy())).to_string_lossy().into_owned();
-        fs::write(&tmp_path, json)
-            .with_context(|| format!("Failed to write snapshot to {}", tmp_path))?;
+        {
+            let file = fs::File::create(&tmp_path)
+                .with_context(|| format!("Failed to create snapshot file: {}", tmp_path))?;
+            let mut writer = io::BufWriter::new(file);
+
+            // Write header fields
+            writeln!(writer, "{{")?;
+            writeln!(writer, "  \"version\": {},", header.version)?;
+            writeln!(writer, "  \"view\": {},", serde_json::to_string(&header.view)?)?;
+            writeln!(writer, "  \"url\": {},", serde_json::to_string(&header.url)?)?;
+            writeln!(writer, "  \"captured_at\": {},", serde_json::to_string(&header.captured_at)?)?;
+            writeln!(writer, "  \"duration_ms\": {},", header.duration_ms)?;
+            writeln!(writer, "  \"frame_count\": {},", header.frame_count)?;
+
+            // Stream frames array one entry at a time
+            writeln!(writer, "  \"frames\": [")?;
+            for (i, frame) in self.frames.iter().enumerate() {
+                let frame_json = serde_json::to_string(frame)?;
+                if i > 0 {
+                    writeln!(writer, ",")?;
+                }
+                write!(writer, "    {}", frame_json)?;
+            }
+            writeln!(writer, "\n  ]")?;
+            writeln!(writer, "}}")?;
+            writer.flush()?;
+        }
         // Attempt remove; if it fails, let rename itself fail with a clear error
         // (don't silently swallow remove errors that may mask the true state).
         #[cfg(windows)]

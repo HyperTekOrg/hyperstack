@@ -248,7 +248,9 @@ fn colorize_json_line(line: &str) -> Line<'_> {
 
     // Key-value lines
     if trimmed.starts_with('"') {
-        if let Some(colon_pos) = trimmed.find("\":") {
+        // Use "\": " (with trailing space) to avoid matching colons inside key names.
+        // serde_json pretty-print always uses ": " as the key-value separator.
+        if let Some(colon_pos) = trimmed.find("\": ") {
             let key_end = colon_pos + 1;
             let indent = &line[..line.len() - trimmed.len()];
             let key = &trimmed[..key_end];
