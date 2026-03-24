@@ -154,7 +154,6 @@ fn parse_condition_literal(literal: &syn::LitStr) -> syn::Result<ConditionExpr> 
     Ok(ConditionExpr {
         expression,
         parsed: Some(parsed),
-        span: literal.span(),
     })
 }
 

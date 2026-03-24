@@ -583,42 +583,10 @@ pub enum HookAction {
     },
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConditionExpr {
     pub expression: String,
     pub parsed: Option<ParsedCondition>,
-    #[serde(skip)]
-    pub span: proc_macro2::Span,
-}
-
-impl Default for ConditionExpr {
-    fn default() -> Self {
-        Self {
-            expression: String::new(),
-            parsed: None,
-            span: proc_macro2::Span::call_site(),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for ConditionExpr {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct ConditionExprData {
-            expression: String,
-            parsed: Option<ParsedCondition>,
-        }
-
-        let data = ConditionExprData::deserialize(deserializer)?;
-        Ok(ConditionExpr {
-            expression: data.expression,
-            parsed: data.parsed,
-            span: proc_macro2::Span::call_site(),
-        })
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
