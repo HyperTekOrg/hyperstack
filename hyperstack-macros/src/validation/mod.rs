@@ -1007,12 +1007,18 @@ fn validate_aggregate_conditions(
     field_paths.sort_by_key(|(target, _)| *target);
 
     for (target_field, leaves) in &field_paths {
+        // Extract bare field name from "EntityName.field_name" format
+        let bare_target = target_field
+            .split_once('.')
+            .map(|x| x.1)
+            .unwrap_or(target_field);
+
         // Collect all instruction-source mappings for this aggregate target,
         // sorted by source type for deterministic validation order.
         let mut instruction_mappings: Vec<&parse::MapAttribute> = sources_by_type
             .values()
             .flatten()
-            .filter(|m| m.target_field_name == **target_field && m.is_instruction)
+            .filter(|m| m.target_field_name == bare_target && m.is_instruction)
             .collect();
         instruction_mappings.sort_by(|a, b| stable_map_attribute_cmp(a, b));
 
@@ -1042,7 +1048,7 @@ fn validate_aggregate_conditions(
         let mut account_mappings: Vec<&parse::MapAttribute> = sources_by_type
             .values()
             .flatten()
-            .filter(|m| m.target_field_name == **target_field && m.is_account_source)
+            .filter(|m| m.target_field_name == bare_target && m.is_account_source)
             .collect();
         account_mappings.sort_by(|a, b| stable_map_attribute_cmp(a, b));
 
