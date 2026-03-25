@@ -322,7 +322,8 @@ impl App {
             TuiAction::Quit => {}
             TuiAction::ScrollDetailDown => {
                 let n = self.take_count();
-                self.scroll_offset = self.scroll_offset.saturating_add(n as u16);
+                self.scroll_offset = self.scroll_offset.saturating_add(n as u16)
+                    .min(self.max_scroll_offset());
             }
             TuiAction::ScrollDetailUp => {
                 let n = self.take_count();
@@ -334,12 +335,12 @@ impl App {
             }
             TuiAction::ScrollDetailBottom => {
                 self.pending_count = None;
-                // Set to a large value; rendering will clamp naturally
-                self.scroll_offset = u16::MAX;
+                self.scroll_offset = self.max_scroll_offset();
             }
             TuiAction::ScrollDetailHalfDown => {
                 let half = (self.visible_rows / 2).max(1);
-                self.scroll_offset = self.scroll_offset.saturating_add(half as u16);
+                self.scroll_offset = self.scroll_offset.saturating_add(half as u16)
+                    .min(self.max_scroll_offset());
             }
             TuiAction::ScrollDetailHalfUp => {
                 let half = (self.visible_rows / 2).max(1);
@@ -578,6 +579,20 @@ impl App {
                 self.history_anchor = None;
         self.scroll_offset = 0;
         self.list_state.select(Some(self.selected_index));
+    }
+
+    /// Maximum scroll offset for the detail pane (total lines - visible height).
+    fn max_scroll_offset(&self) -> u16 {
+        let total_lines = self.selected_entity_data()
+            .map(|s| s.lines().count())
+            .unwrap_or(0);
+        // visible_rows approximates the detail pane height (minus borders)
+        let visible = self.visible_rows.saturating_sub(2);
+        if total_lines > visible {
+            (total_lines - visible) as u16
+        } else {
+            0
+        }
     }
 
     pub fn selected_key(&self) -> Option<String> {

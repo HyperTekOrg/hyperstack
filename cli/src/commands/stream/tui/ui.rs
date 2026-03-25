@@ -143,12 +143,29 @@ fn draw_entity_detail(f: &mut Frame, app: &App, area: Rect) {
         .map(|line| colorize_json_line(line))
         .collect();
 
+    // Count total lines for scroll indicator
+    let total_lines = content.lines().count();
+    let visible_height = area.height.saturating_sub(2) as usize; // minus borders
+    let current_line = app.scroll_offset as usize + 1;
+    let scroll_info = if total_lines > visible_height {
+        format!(" [line {}/{}]", current_line, total_lines)
+    } else {
+        String::new()
+    };
+
+    let block_title = format!("{}{}", title, scroll_info);
+    let border_color = if app.view_mode == ViewMode::Detail {
+        Color::Yellow // highlight border in detail mode
+    } else {
+        Color::Cyan
+    };
+
     let detail = Paragraph::new(lines)
         .block(
             Block::default()
-                .title(title)
+                .title(block_title)
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
+                .border_style(Style::default().fg(border_color)),
         )
         .wrap(Wrap { trim: false });
 
