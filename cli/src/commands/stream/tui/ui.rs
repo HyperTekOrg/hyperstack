@@ -230,13 +230,13 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         Span::styled("/", Style::default().fg(Color::Yellow)),
         Span::styled("filter ", Style::default().fg(Color::DarkGray)),
         Span::styled("s", Style::default().fg(Color::Yellow)),
+        Span::styled("ort ", Style::default().fg(Color::DarkGray)),
+        Span::styled("o", Style::default().fg(Color::Yellow)),
+        Span::styled("rder ", Style::default().fg(Color::DarkGray)),
+        Span::styled("S", Style::default().fg(Color::Yellow)),
         Span::styled("ave ", Style::default().fg(Color::DarkGray)),
         Span::styled("h/l", Style::default().fg(Color::Yellow)),
         Span::styled(" history ", Style::default().fg(Color::DarkGray)),
-        Span::styled("S", Style::default().fg(Color::Yellow)),
-        Span::styled("ort ", Style::default().fg(Color::DarkGray)),
-        Span::styled("O", Style::default().fg(Color::Yellow)),
-        Span::styled("rder", Style::default().fg(Color::DarkGray)),
         match &app.sort_mode {
             SortMode::Insertion => Span::raw(""),
             SortMode::Field(f) => Span::styled(

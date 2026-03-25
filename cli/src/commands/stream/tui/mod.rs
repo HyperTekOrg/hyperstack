@@ -318,9 +318,9 @@ async fn run_loop(
                         KeyCode::Char('r') => TuiAction::ToggleRaw,
                         KeyCode::Char('p') => TuiAction::TogglePause,
                         KeyCode::Char('/') => TuiAction::StartFilter,
-                        KeyCode::Char('s') => TuiAction::SaveSnapshot,
-                        KeyCode::Char('S') => TuiAction::CycleSortMode,
-                        KeyCode::Char('O') => TuiAction::ToggleSortDirection,
+                        KeyCode::Char('s') => TuiAction::CycleSortMode,
+                        KeyCode::Char('o') => TuiAction::ToggleSortDirection,
+                        KeyCode::Char('S') => TuiAction::SaveSnapshot,
                         _ => {
                             app.pending_count = None;
                             app.pending_g = false;
