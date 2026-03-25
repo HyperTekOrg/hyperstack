@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use super::app::{App, ViewMode};
+use super::app::{App, SortDirection, SortMode, ViewMode};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     app.ensure_filtered_cache();
@@ -215,7 +215,24 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         Span::styled("s", Style::default().fg(Color::Yellow)),
         Span::styled("ave ", Style::default().fg(Color::DarkGray)),
         Span::styled("h/l", Style::default().fg(Color::Yellow)),
-        Span::styled(" history", Style::default().fg(Color::DarkGray)),
+        Span::styled(" history ", Style::default().fg(Color::DarkGray)),
+        Span::styled("S", Style::default().fg(Color::Yellow)),
+        Span::styled("ort ", Style::default().fg(Color::DarkGray)),
+        Span::styled("O", Style::default().fg(Color::Yellow)),
+        Span::styled("rder", Style::default().fg(Color::DarkGray)),
+        match &app.sort_mode {
+            SortMode::Insertion => Span::raw(""),
+            SortMode::Field(f) => Span::styled(
+                format!(" [{}{}]",
+                    f,
+                    match app.sort_direction {
+                        SortDirection::Ascending => "↑",
+                        SortDirection::Descending => "↓",
+                    }
+                ),
+                Style::default().fg(Color::Cyan),
+            ),
+        },
     ]);
 
     f.render_widget(Paragraph::new(status), area);

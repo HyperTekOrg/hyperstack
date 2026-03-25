@@ -101,6 +101,9 @@ pub enum TuiAction {
     ScrollDetailBottom,
     ScrollDetailHalfDown,
     ScrollDetailHalfUp,
+    // Sorting
+    CycleSortMode,
+    ToggleSortDirection,
     // Vim motions
     GotoTop,
     GotoBottom,
@@ -113,6 +116,18 @@ pub enum TuiAction {
 pub enum ViewMode {
     List,
     Detail,
+}
+
+#[derive(Clone, PartialEq)]
+pub enum SortMode {
+    Insertion,
+    Field(String),
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum SortDirection {
+    Ascending,
+    Descending,
 }
 
 #[allow(dead_code)]
@@ -139,6 +154,8 @@ pub struct App {
     pub scroll_offset: u16,
     pub visible_rows: usize,
     pub terminal_width: u16,
+    pub sort_mode: SortMode,
+    pub sort_direction: SortDirection,
     pub pending_count: Option<usize>,
     pub pending_g: bool,
     pub list_state: ListState,
@@ -172,6 +189,8 @@ impl App {
             scroll_offset: 0,
             visible_rows: 30,
             terminal_width: 120,
+            sort_mode: SortMode::Insertion,
+            sort_direction: SortDirection::Descending,
             pending_count: None,
             pending_g: false,
             list_state: ListState::default().with_selected(Some(0)),
@@ -414,6 +433,36 @@ impl App {
                 self.show_raw = !self.show_raw;
                 self.set_status(if self.show_raw { "Raw frames ON" } else { "Raw frames OFF" });
             }
+            TuiAction::CycleSortMode => {
+                self.sort_mode = match &self.sort_mode {
+                    SortMode::Insertion => SortMode::Field("_seq".to_string()),
+                    SortMode::Field(_) => SortMode::Insertion,
+                };
+                self.invalidate_filter_cache();
+                let label = match &self.sort_mode {
+                    SortMode::Insertion => "Sort: insertion order".to_string(),
+                    SortMode::Field(f) => format!("Sort: {} {}", f, match self.sort_direction {
+                        SortDirection::Ascending => "asc",
+                        SortDirection::Descending => "desc",
+                    }),
+                };
+                self.set_status(&label);
+            }
+            TuiAction::ToggleSortDirection => {
+                self.sort_direction = match self.sort_direction {
+                    SortDirection::Ascending => SortDirection::Descending,
+                    SortDirection::Descending => SortDirection::Ascending,
+                };
+                self.invalidate_filter_cache();
+                let label = match &self.sort_mode {
+                    SortMode::Insertion => "Sort direction toggled (no effect in insertion order)".to_string(),
+                    SortMode::Field(f) => format!("Sort: {} {}", f, match self.sort_direction {
+                        SortDirection::Ascending => "asc",
+                        SortDirection::Descending => "desc",
+                    }),
+                };
+                self.set_status(&label);
+            }
             TuiAction::TogglePause => {
                 self.paused = !self.paused;
                 self.set_status(if self.paused { "PAUSED" } else { "Resumed" });
@@ -638,7 +687,7 @@ impl App {
         if self.filtered_cache.is_some() {
             return;
         }
-        let result = if self.filter_text.is_empty() {
+        let mut result = if self.filter_text.is_empty() {
             self.entity_keys.clone()
         } else {
             let lower = self.filter_text.to_lowercase();
@@ -656,7 +705,67 @@ impl App {
                 .cloned()
                 .collect()
         };
+        // Apply sort if not insertion order
+        if let SortMode::Field(ref path) = self.sort_mode {
+            let path = path.clone();
+            let dir = self.sort_direction;
+            let store = &self.store;
+            result.sort_by(|a, b| {
+                let va = store.get(a).and_then(|r| resolve_dot_path(&r.current, &path));
+                let vb = store.get(b).and_then(|r| resolve_dot_path(&r.current, &path));
+                let cmp = compare_json_values(va, vb);
+                match dir {
+                    SortDirection::Ascending => cmp,
+                    SortDirection::Descending => cmp.reverse(),
+                }
+            });
+        }
+
         self.filtered_cache = Some(result);
+    }
+}
+
+/// Resolve a dot-path like "_seq" or "info.name" into a JSON value.
+fn resolve_dot_path<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
+    let mut current = value;
+    for segment in path.split('.') {
+        current = current.get(segment)?;
+    }
+    if current.is_null() { None } else { Some(current) }
+}
+
+/// Compare two optional JSON values. Numbers compare numerically, strings
+/// lexicographically, null/missing sorts last.
+fn compare_json_values(a: Option<&Value>, b: Option<&Value>) -> std::cmp::Ordering {
+    match (a, b) {
+        (None, None) => std::cmp::Ordering::Equal,
+        (None, Some(_)) => std::cmp::Ordering::Greater, // missing sorts last
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (Some(va), Some(vb)) => {
+            // Try numeric comparison first
+            if let (Some(na), Some(nb)) = (as_f64(va), as_f64(vb)) {
+                return na.partial_cmp(&nb).unwrap_or(std::cmp::Ordering::Equal);
+            }
+            // Fall back to string comparison
+            let sa = value_to_sort_string(va);
+            let sb = value_to_sort_string(vb);
+            sa.cmp(&sb)
+        }
+    }
+}
+
+fn as_f64(v: &Value) -> Option<f64> {
+    match v {
+        Value::Number(n) => n.as_f64(),
+        Value::String(s) => s.parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+fn value_to_sort_string(v: &Value) -> String {
+    match v {
+        Value::String(s) => s.clone(),
+        _ => serde_json::to_string(v).unwrap_or_default(),
     }
 }
 
