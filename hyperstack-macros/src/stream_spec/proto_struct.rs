@@ -3,7 +3,7 @@
 //! This module handles processing of structs with proto-based mapping attributes,
 //! generating handler code and AST files for proto-based pipelines.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use quote::{format_ident, quote};
 use syn::spanned::Spanned;
@@ -39,17 +39,18 @@ pub fn process_struct_with_context(
     let mut accessor_defs = Vec::new();
     let mut accessor_names = HashSet::new();
     let mut state_fields = Vec::new();
-    let mut sources_by_type: HashMap<String, Vec<parse::MapAttribute>> = HashMap::new();
-    let mut events_by_instruction: HashMap<
+    let mut sources_by_type: BTreeMap<String, Vec<parse::MapAttribute>> = BTreeMap::new();
+    let mut events_by_instruction: BTreeMap<
         String,
         Vec<(String, parse::EventAttribute, syn::Type)>,
-    > = HashMap::new();
+    > = BTreeMap::new();
     let mut has_events = false;
     let mut computed_fields: Vec<(String, proc_macro2::TokenStream, Type)> = Vec::new();
     let mut computed_field_validations = Vec::new();
     let mut resolve_specs: Vec<parse::ResolveSpec> = Vec::new();
-    let mut derive_from_mappings: HashMap<String, Vec<parse::DeriveFromAttribute>> = HashMap::new();
-    let mut aggregate_conditions: HashMap<String, crate::ast::ConditionExpr> = HashMap::new();
+    let mut derive_from_mappings: BTreeMap<String, Vec<parse::DeriveFromAttribute>> =
+        BTreeMap::new();
+    let mut aggregate_conditions: BTreeMap<String, crate::ast::ConditionExpr> = BTreeMap::new();
 
     if let Fields::Named(fields) = &input.fields {
         for field in &fields.named {

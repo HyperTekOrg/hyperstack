@@ -13,7 +13,7 @@
 //! 3. Generate handler code via `codegen::generate_handlers_from_specs`
 //! 4. Return AST for unified stack file writing
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use quote::{format_ident, quote};
 use syn::spanned::Spanned;
@@ -143,11 +143,11 @@ pub fn process_entity_struct_with_idl(
     let mut accessor_defs = Vec::new();
     let mut accessor_names = HashSet::new();
     let mut state_fields = Vec::new();
-    let mut sources_by_type: HashMap<String, Vec<parse::MapAttribute>> = HashMap::new();
-    let mut events_by_instruction: HashMap<
+    let mut sources_by_type: BTreeMap<String, Vec<parse::MapAttribute>> = BTreeMap::new();
+    let mut events_by_instruction: BTreeMap<
         String,
         Vec<(String, parse::EventAttribute, syn::Type)>,
-    > = HashMap::new();
+    > = BTreeMap::new();
     // Derive primary IDL and program_name from the first entry (backward compat)
     let idl = idls.first().map(|(_, idl)| *idl);
     let program_name = idl.map(|idl| idl.get_name());
@@ -158,8 +158,9 @@ pub fn process_entity_struct_with_idl(
 
     // Level 1: Declarative hook macros passed from caller
     // resolver_hooks and pda_registrations are now passed as parameters
-    let mut derive_from_mappings: HashMap<String, Vec<parse::DeriveFromAttribute>> = HashMap::new();
-    let mut aggregate_conditions: HashMap<String, crate::ast::ConditionExpr> = HashMap::new();
+    let mut derive_from_mappings: BTreeMap<String, Vec<parse::DeriveFromAttribute>> =
+        BTreeMap::new();
+    let mut aggregate_conditions: BTreeMap<String, crate::ast::ConditionExpr> = BTreeMap::new();
 
     // Collect ALL section names from the entity struct FIRST
     // This is needed to properly detect cross-section references in #[computed] expressions
@@ -870,7 +871,7 @@ pub fn process_map_attribute(
     accessor_names: &mut HashSet<String>,
     primary_keys: &mut Vec<String>,
     lookup_indexes: &mut Vec<(String, Option<String>)>,
-    sources_by_type: &mut HashMap<String, Vec<parse::MapAttribute>>,
+    sources_by_type: &mut BTreeMap<String, Vec<parse::MapAttribute>>,
     field_mappings: &mut Vec<parse::MapAttribute>,
 ) {
     let target_field = &map_attr.target_field_name;

@@ -7,7 +7,7 @@
 //! The same AST is used for both inline code generation (via `codegen::generate_handlers_from_specs`)
 //! and for the `#[ast_spec]` macro, ensuring identical output.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 use crate::ast::writer::{
     convert_idl_to_snapshot, parse_population_strategy, parse_transformation,
@@ -65,12 +65,12 @@ pub fn build_ast(
     entity_name: &str,
     primary_keys: &[String],
     lookup_indexes: &[(String, Option<String>)],
-    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
-    events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
+    sources_by_type: &BTreeMap<String, Vec<parse::MapAttribute>>,
+    events_by_instruction: &BTreeMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
     resolver_hooks: &[parse::ResolveKeyAttribute],
     pda_registrations: &[parse::RegisterPdaAttribute],
-    derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
-    aggregate_conditions: &HashMap<String, ConditionExpr>,
+    derive_from_mappings: &BTreeMap<String, Vec<parse::DeriveFromAttribute>>,
+    aggregate_conditions: &BTreeMap<String, ConditionExpr>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     resolve_specs: &[parse::ResolveSpec],
     section_specs: &[EntitySection],
@@ -348,12 +348,12 @@ pub fn build_and_write_ast(
     entity_name: &str,
     primary_keys: &[String],
     lookup_indexes: &[(String, Option<String>)],
-    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
-    events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
+    sources_by_type: &BTreeMap<String, Vec<parse::MapAttribute>>,
+    events_by_instruction: &BTreeMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
     resolver_hooks: &[parse::ResolveKeyAttribute],
     pda_registrations: &[parse::RegisterPdaAttribute],
-    derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
-    aggregate_conditions: &HashMap<String, ConditionExpr>,
+    derive_from_mappings: &BTreeMap<String, Vec<parse::DeriveFromAttribute>>,
+    aggregate_conditions: &BTreeMap<String, ConditionExpr>,
     computed_fields: &[(String, proc_macro2::TokenStream, syn::Type)],
     resolve_specs: &[parse::ResolveSpec],
     section_specs: &[EntitySection],
@@ -383,11 +383,11 @@ pub fn build_and_write_ast(
 // ============================================================================
 
 fn build_handlers(
-    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
-    events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
+    sources_by_type: &BTreeMap<String, Vec<parse::MapAttribute>>,
+    events_by_instruction: &BTreeMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
     primary_keys: &[String],
     lookup_indexes: &[(String, Option<String>)],
-    aggregate_conditions: &HashMap<String, ConditionExpr>,
+    aggregate_conditions: &BTreeMap<String, ConditionExpr>,
     idls: IdlLookup,
 ) -> syn::Result<Vec<SerializableHandlerSpec>> {
     let mut handlers = Vec::new();
@@ -462,7 +462,7 @@ fn build_source_handler(
     source_type: &str,
     join_key: &Option<String>,
     mappings: &[parse::MapAttribute],
-    aggregate_conditions: &HashMap<String, ConditionExpr>,
+    aggregate_conditions: &BTreeMap<String, ConditionExpr>,
     primary_keys: &[String],
     lookup_indexes: &[(String, Option<String>)],
     idls: IdlLookup,
@@ -1171,7 +1171,7 @@ fn build_resolver_hooks_ast(
 fn auto_generate_lookup_resolvers(
     handlers: &[SerializableHandlerSpec],
     existing_resolvers: &[ResolverHook],
-    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    sources_by_type: &BTreeMap<String, Vec<parse::MapAttribute>>,
     idls: IdlLookup,
 ) -> Vec<ResolverHook> {
     let mut auto_hooks = Vec::new();
@@ -1247,9 +1247,9 @@ fn auto_generate_lookup_resolvers(
 
 fn build_instruction_hooks_ast(
     pda_registrations: &[parse::RegisterPdaAttribute],
-    derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
-    aggregate_conditions: &HashMap<String, ConditionExpr>,
-    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    derive_from_mappings: &BTreeMap<String, Vec<parse::DeriveFromAttribute>>,
+    aggregate_conditions: &BTreeMap<String, ConditionExpr>,
+    sources_by_type: &BTreeMap<String, Vec<parse::MapAttribute>>,
     idls: IdlLookup,
 ) -> Vec<InstructionHook> {
     let mut instruction_hooks_map: BTreeMap<String, InstructionHook> = BTreeMap::new();

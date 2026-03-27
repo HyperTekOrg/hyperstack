@@ -5,7 +5,7 @@
 //! - Field type analysis
 //! - Nested struct attribute processing
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 use quote::quote;
 use syn::spanned::Spanned;
@@ -295,15 +295,15 @@ pub fn process_nested_struct(
     accessor_names: &mut HashSet<String>,
     primary_keys: &mut Vec<String>,
     lookup_indexes: &mut Vec<(String, Option<String>)>,
-    sources_by_type: &mut HashMap<String, Vec<parse::MapAttribute>>,
+    sources_by_type: &mut BTreeMap<String, Vec<parse::MapAttribute>>,
     field_mappings: &mut Vec<parse::MapAttribute>,
-    events_by_instruction: &mut HashMap<String, Vec<(String, parse::EventAttribute, Type)>>,
+    events_by_instruction: &mut BTreeMap<String, Vec<(String, parse::EventAttribute, Type)>>,
     has_events: &mut bool,
     computed_fields: &mut Vec<(String, proc_macro2::TokenStream, Type)>,
     computed_field_validations: &mut Vec<crate::validation::ComputedFieldValidation>,
     resolve_specs: &mut Vec<parse::ResolveSpec>,
-    derive_from_mappings: &mut HashMap<String, Vec<parse::DeriveFromAttribute>>,
-    aggregate_conditions: &mut HashMap<String, crate::ast::ConditionExpr>,
+    derive_from_mappings: &mut BTreeMap<String, Vec<parse::DeriveFromAttribute>>,
+    aggregate_conditions: &mut BTreeMap<String, crate::ast::ConditionExpr>,
     program_name: Option<&str>,
 ) -> syn::Result<()> {
     let section_name = section_field_name.to_string();

@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::ast::{
     ComputedExpr, EntitySection, FieldPath, Predicate, PredicateValue, ViewTransform,
@@ -33,10 +33,11 @@ pub struct ValidationInput<'a> {
     pub entity_name: &'a str,
     pub primary_keys: &'a [String],
     pub lookup_indexes: &'a [(String, Option<String>)],
-    pub sources_by_type: &'a HashMap<String, Vec<parse::MapAttribute>>,
-    pub events_by_instruction: &'a HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
-    pub derive_from_mappings: &'a HashMap<String, Vec<parse::DeriveFromAttribute>>,
-    pub aggregate_conditions: &'a HashMap<String, crate::ast::ConditionExpr>,
+    pub sources_by_type: &'a BTreeMap<String, Vec<parse::MapAttribute>>,
+    pub events_by_instruction:
+        &'a BTreeMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
+    pub derive_from_mappings: &'a BTreeMap<String, Vec<parse::DeriveFromAttribute>>,
+    pub aggregate_conditions: &'a BTreeMap<String, crate::ast::ConditionExpr>,
     pub resolver_hooks: &'a [parse::ResolveKeyAttribute],
     pub computed_fields: &'a [ComputedFieldValidation],
     pub resolve_specs: &'a [parse::ResolveSpec],
@@ -49,9 +50,10 @@ pub struct KeyResolutionValidationInput<'a> {
     pub entity_name: &'a str,
     pub primary_keys: &'a [String],
     pub lookup_indexes: &'a [(String, Option<String>)],
-    pub sources_by_type: &'a HashMap<String, Vec<parse::MapAttribute>>,
-    pub events_by_instruction: &'a HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
-    pub derive_from_mappings: &'a HashMap<String, Vec<parse::DeriveFromAttribute>>,
+    pub sources_by_type: &'a BTreeMap<String, Vec<parse::MapAttribute>>,
+    pub events_by_instruction:
+        &'a BTreeMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
+    pub derive_from_mappings: &'a BTreeMap<String, Vec<parse::DeriveFromAttribute>>,
     pub resolver_hooks: &'a [parse::ResolveKeyAttribute],
 }
 
@@ -503,7 +505,7 @@ fn validate_source_handler_keys(
     primary_key_leafs: &HashSet<String>,
     lookup_index_leafs: &HashSet<String>,
     lookup_indexes: &[(String, Option<String>)],
-    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    sources_by_type: &BTreeMap<String, Vec<parse::MapAttribute>>,
     resolver_hooks: &[parse::ResolveKeyAttribute],
     errors: &mut ErrorCollector,
 ) {
@@ -655,7 +657,7 @@ fn validate_event_handler_keys(
     primary_key_leafs: &HashSet<String>,
     lookup_index_leafs: &HashSet<String>,
     lookup_indexes: &[(String, Option<String>)],
-    events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
+    events_by_instruction: &BTreeMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
     errors: &mut ErrorCollector,
 ) {
     let mut grouped: GroupedEventMappings = HashMap::new();
@@ -821,7 +823,7 @@ fn validate_instruction_hook_keys(
     entity_name: &str,
     primary_key_leafs: &HashSet<String>,
     lookup_index_leafs: &HashSet<String>,
-    derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
+    derive_from_mappings: &BTreeMap<String, Vec<parse::DeriveFromAttribute>>,
     errors: &mut ErrorCollector,
 ) {
     let mut instruction_types: Vec<&String> = derive_from_mappings.keys().collect();
@@ -880,7 +882,7 @@ fn validate_instruction_hook_keys(
 
 fn validate_mapping_references(
     entity_name: &str,
-    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    sources_by_type: &BTreeMap<String, Vec<parse::MapAttribute>>,
     known_fields: &HashSet<String>,
     available_fields: &[String],
     idls: IdlLookup,
@@ -1059,8 +1061,8 @@ fn validate_mapping_references(
 
 fn validate_aggregate_conditions(
     _entity_name: &str,
-    aggregate_conditions: &HashMap<String, crate::ast::ConditionExpr>,
-    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    aggregate_conditions: &BTreeMap<String, crate::ast::ConditionExpr>,
+    sources_by_type: &BTreeMap<String, Vec<parse::MapAttribute>>,
     idls: IdlLookup,
     errors: &mut ErrorCollector,
 ) {
@@ -1220,7 +1222,7 @@ fn collect_condition_field_leaves_recursive(
 
 fn validate_event_references(
     entity_name: &str,
-    events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
+    events_by_instruction: &BTreeMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
     known_fields: &HashSet<String>,
     available_fields: &[String],
     idls: IdlLookup,
@@ -1330,7 +1332,7 @@ fn validate_event_references(
 }
 
 fn validate_derive_from_references(
-    derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
+    derive_from_mappings: &BTreeMap<String, Vec<parse::DeriveFromAttribute>>,
     idls: IdlLookup,
     errors: &mut ErrorCollector,
 ) {

@@ -8,7 +8,7 @@
 
 #![allow(dead_code)]
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use super::types::*;
 use crate::parse;
@@ -346,9 +346,9 @@ pub fn convert_idl_type(idl_type: &idl_parser::IdlType) -> IdlTypeSnapshot {
 
 /// Build handlers from source mappings.
 pub fn build_handlers_from_sources(
-    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
-    _events_by_instruction: &HashMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
-    aggregate_conditions: &HashMap<String, ConditionExpr>,
+    sources_by_type: &BTreeMap<String, Vec<parse::MapAttribute>>,
+    _events_by_instruction: &BTreeMap<String, Vec<(String, parse::EventAttribute, syn::Type)>>,
+    aggregate_conditions: &BTreeMap<String, ConditionExpr>,
     idl: Option<&idl_parser::IdlSpec>,
 ) -> Vec<SerializableHandlerSpec> {
     let program_name = idl.map(|idl| idl.get_name());
@@ -690,9 +690,9 @@ pub fn build_resolver_hooks(
 /// Build instruction hooks from PDA registrations and derive_from mappings
 pub fn build_instruction_hooks(
     pda_registrations: &[parse::RegisterPdaAttribute],
-    derive_from_mappings: &HashMap<String, Vec<parse::DeriveFromAttribute>>,
-    aggregate_conditions: &HashMap<String, ConditionExpr>,
-    sources_by_type: &HashMap<String, Vec<parse::MapAttribute>>,
+    derive_from_mappings: &BTreeMap<String, Vec<parse::DeriveFromAttribute>>,
+    aggregate_conditions: &BTreeMap<String, ConditionExpr>,
+    sources_by_type: &BTreeMap<String, Vec<parse::MapAttribute>>,
     program_name: Option<&str>,
 ) -> Vec<InstructionHook> {
     // Use BTreeMap for deterministic ordering in the final output
