@@ -1,6 +1,6 @@
 import type { Frame } from './frame';
 import { parseFrame, parseFrameFromBlob } from './frame';
-import type { ConnectionState, Subscription, HyperStackConfig, ConnectionStateCallback } from './types';
+import type { ConnectionState, Subscription, HyperStackConfig, ConnectionStateCallback, AuthConfig } from './types';
 import { DEFAULT_CONFIG, HyperStackError } from './types';
 
 export type FrameHandler = <T>(frame: Frame<T>) => void;
@@ -20,6 +20,11 @@ export class ConnectionManager {
   private frameHandlers: Set<FrameHandler> = new Set();
   private stateHandlers: Set<ConnectionStateCallback> = new Set();
 
+  // Auth-related fields
+  private authConfig?: AuthConfig;
+  private currentToken?: string;
+  private tokenExpiry?: number;
+
   constructor(config: HyperStackConfig) {
     if (!config.websocketUrl) {
       throw new HyperStackError('websocketUrl is required', 'INVALID_CONFIG');
@@ -27,10 +32,120 @@ export class ConnectionManager {
     this.websocketUrl = config.websocketUrl;
     this.reconnectIntervals = config.reconnectIntervals ?? DEFAULT_CONFIG.reconnectIntervals;
     this.maxReconnectAttempts = config.maxReconnectAttempts ?? DEFAULT_CONFIG.maxReconnectAttempts;
+    this.authConfig = config.auth;
 
     if (config.initialSubscriptions) {
       this.subscriptionQueue.push(...config.initialSubscriptions);
     }
+  }
+
+  /**
+   * Get or refresh the authentication token
+   */
+  private async getOrRefreshToken(): Promise<string | undefined> {
+    // Return cached token if still valid
+    if (this.currentToken && !this.isTokenExpired()) {
+      return this.currentToken;
+    }
+
+    if (!this.authConfig) {
+      return undefined;
+    }
+
+    // Option 1: Static token
+    if (this.authConfig.token) {
+      this.currentToken = this.authConfig.token;
+      return this.currentToken;
+    }
+
+    // Option 2: Custom token provider
+    if (this.authConfig.getToken) {
+      try {
+        this.currentToken = await this.authConfig.getToken();
+        return this.currentToken;
+      } catch (error) {
+        throw new HyperStackError(
+          'Failed to get authentication token',
+          'AUTH_REQUIRED',
+          error
+        );
+      }
+    }
+
+    // Option 3: Token endpoint (Hyperstack Cloud)
+    if (this.authConfig.tokenEndpoint && this.authConfig.publishableKey) {
+      try {
+        this.currentToken = await this.fetchTokenFromEndpoint();
+        return this.currentToken;
+      } catch (error) {
+        throw new HyperStackError(
+          'Failed to fetch authentication token from endpoint',
+          'AUTH_REQUIRED',
+          error
+        );
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Fetch token from token endpoint
+   */
+  private async fetchTokenFromEndpoint(): Promise<string> {
+    if (!this.authConfig?.tokenEndpoint) {
+      throw new Error('Token endpoint not configured');
+    }
+
+    const response = await fetch(this.authConfig.tokenEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.authConfig.publishableKey || ''}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new HyperStackError(
+        `Token endpoint returned ${response.status}: ${errorText}`,
+        'AUTH_REQUIRED'
+      );
+    }
+
+    const data = await response.json() as { token: string; expires_at?: number };
+    
+    if (!data.token) {
+      throw new HyperStackError(
+        'Token endpoint did not return a token',
+        'AUTH_REQUIRED'
+      );
+    }
+
+    this.tokenExpiry = data.expires_at;
+    return data.token;
+  }
+
+  /**
+   * Check if the current token is expired (or about to expire)
+   */
+  private isTokenExpired(): boolean {
+    if (!this.tokenExpiry) return false;
+    // Consider token expired 60 seconds before actual expiry to allow for clock skew
+    const bufferSeconds = 60;
+    return Date.now() >= (this.tokenExpiry - bufferSeconds) * 1000;
+  }
+
+  /**
+   * Build WebSocket URL with authentication token
+   */
+  private buildAuthUrl(token: string | undefined): string {
+    if (!token) {
+      return this.websocketUrl;
+    }
+
+    const separator = this.websocketUrl.includes('?') ? '&' : '?';
+    return `${this.websocketUrl}${separator}hs_token=${encodeURIComponent(token)}`;
   }
 
   getState(): ConnectionState {
@@ -51,21 +166,31 @@ export class ConnectionManager {
     };
   }
 
-  connect(): Promise<void> {
+  async connect(): Promise<void> {
+    if (
+      this.ws?.readyState === WebSocket.OPEN ||
+      this.ws?.readyState === WebSocket.CONNECTING ||
+      this.currentState === 'connecting'
+    ) {
+      return;
+    }
+
+    this.updateState('connecting');
+
+    // Get fresh token before connecting
+    let token: string | undefined;
+    try {
+      token = await this.getOrRefreshToken();
+    } catch (error) {
+      this.updateState('error', error instanceof Error ? error.message : 'Failed to get token');
+      throw error;
+    }
+
+    const wsUrl = this.buildAuthUrl(token);
+
     return new Promise((resolve, reject) => {
-      if (
-        this.ws?.readyState === WebSocket.OPEN ||
-        this.ws?.readyState === WebSocket.CONNECTING ||
-        this.currentState === 'connecting'
-      ) {
-        resolve();
-        return;
-      }
-
-      this.updateState('connecting');
-
       try {
-        this.ws = new WebSocket(this.websocketUrl);
+        this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
           this.reconnectAttempts = 0;

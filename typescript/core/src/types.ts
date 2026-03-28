@@ -80,12 +80,28 @@ export interface HyperStackOptions<TStack extends StackDefinition> {
 
 export const DEFAULT_MAX_ENTRIES_PER_VIEW = 10_000;
 
+/**
+ * Authentication configuration for Hyperstack connections
+ */
+export interface AuthConfig {
+  /** Custom token provider function - called before each connection */
+  getToken?: () => Promise<string>;
+  /** Hyperstack Cloud token endpoint URL */
+  tokenEndpoint?: string;
+  /** Publishable key for Hyperstack Cloud */
+  publishableKey?: string;
+  /** Pre-minted static token (for server-side use) */
+  token?: string;
+}
+
 export interface HyperStackConfig {
   websocketUrl?: string;
   reconnectIntervals?: number[];
   maxReconnectAttempts?: number;
   initialSubscriptions?: Subscription[];
   maxEntriesPerView?: number | null;
+  /** Authentication configuration */
+  auth?: AuthConfig;
 }
 
 export const DEFAULT_CONFIG: Required<
@@ -96,10 +112,19 @@ export const DEFAULT_CONFIG: Required<
   maxEntriesPerView: DEFAULT_MAX_ENTRIES_PER_VIEW,
 };
 
+/**
+ * Authentication error codes
+ */
+export type AuthErrorCode =
+  | 'AUTH_REQUIRED'
+  | 'TOKEN_EXPIRED'
+  | 'TOKEN_INVALID'
+  | 'QUOTA_EXCEEDED';
+
 export class HyperStackError extends Error {
   constructor(
     message: string,
-    public code: string,
+    public code: string | AuthErrorCode,
     public details?: unknown
   ) {
     super(message);
