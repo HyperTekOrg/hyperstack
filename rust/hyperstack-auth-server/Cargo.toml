@@ -50,6 +50,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Base64
 base64 = "0.22"
 
+# URL parsing
+url = "2.5"
+
 # Random
 rand = "0.8"
 

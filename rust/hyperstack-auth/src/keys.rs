@@ -37,6 +37,11 @@ impl SigningKey {
         }
     }
 
+    /// Get a stable key identifier derived from the public key.
+    pub fn key_id(&self) -> String {
+        self.verifying_key().key_id()
+    }
+
     /// Sign a message
     pub fn sign(&self, message: &[u8]) -> Signature {
         self.inner.sign(message)
@@ -57,6 +62,15 @@ impl SigningKey {
         let key = EdSigningKey::from_keypair_bytes(bytes)
             .map_err(|e| AuthError::InvalidKeyFormat(format!("Invalid keypair: {:?}", e)))?;
         Ok(Self { inner: key })
+    }
+
+    /// Export to PKCS#8 DER format (for use with jsonwebtoken)
+    pub fn to_pkcs8_der(&self) -> Result<Vec<u8>, AuthError> {
+        use ed25519_dalek::pkcs8::EncodePrivateKey;
+        self.inner
+            .to_pkcs8_der()
+            .map(|der| der.as_bytes().to_vec())
+            .map_err(|e| AuthError::InvalidKeyFormat(format!("PKCS#8 encoding failed: {:?}", e)))
     }
 }
 
@@ -84,6 +98,25 @@ impl VerifyingKey {
     /// Get raw bytes
     pub fn to_bytes(&self) -> [u8; 32] {
         self.inner.to_bytes()
+    }
+
+    /// Get a stable key identifier derived from the public key.
+    pub fn key_id(&self) -> String {
+        let hex = self
+            .to_bytes()
+            .into_iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        hex[..16].to_string()
+    }
+
+    /// Export to SubjectPublicKeyInfo (SPKI) DER format (for use with jsonwebtoken)
+    pub fn to_spki_der(&self) -> Result<Vec<u8>, AuthError> {
+        use ed25519_dalek::pkcs8::EncodePublicKey;
+        self.inner
+            .to_public_key_der()
+            .map(|der| der.as_bytes().to_vec())
+            .map_err(|e| AuthError::InvalidKeyFormat(format!("SPKI encoding failed: {:?}", e)))
     }
 }
 

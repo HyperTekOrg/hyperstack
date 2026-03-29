@@ -19,6 +19,11 @@ pub struct AsyncVerifier {
     jwks_url: Option<String>,
     cache_duration: Duration,
     cached_jwks: Arc<RwLock<Option<CachedJwks>>>,
+    /// Issuer for JWKS-based verification
+    issuer: String,
+    /// Audience for JWKS-based verification
+    audience: String,
+    require_origin: bool,
 }
 
 enum VerifierInner {
@@ -33,11 +38,20 @@ impl AsyncVerifier {
         issuer: impl Into<String>,
         audience: impl Into<String>,
     ) -> Self {
+        let issuer_str = issuer.into();
+        let audience_str = audience.into();
         Self {
-            inner: VerifierInner::Static(TokenVerifier::new(key, issuer, audience)),
+            inner: VerifierInner::Static(TokenVerifier::new(
+                key,
+                issuer_str.clone(),
+                audience_str.clone(),
+            )),
             jwks_url: None,
             cache_duration: Duration::from_secs(3600), // 1 hour default
             cached_jwks: Arc::new(RwLock::new(None)),
+            issuer: issuer_str,
+            audience: audience_str,
+            require_origin: false,
         }
     }
 
@@ -47,11 +61,20 @@ impl AsyncVerifier {
         issuer: impl Into<String>,
         audience: impl Into<String>,
     ) -> Self {
+        let issuer_str = issuer.into();
+        let audience_str = audience.into();
         Self {
-            inner: VerifierInner::Jwks(JwksVerifier::new(jwks, issuer, audience)),
+            inner: VerifierInner::Jwks(JwksVerifier::new(
+                jwks,
+                issuer_str.clone(),
+                audience_str.clone(),
+            )),
             jwks_url: None,
             cache_duration: Duration::from_secs(3600),
             cached_jwks: Arc::new(RwLock::new(None)),
+            issuer: issuer_str,
+            audience: audience_str,
+            require_origin: false,
         }
     }
 
@@ -62,16 +85,33 @@ impl AsyncVerifier {
         issuer: impl Into<String>,
         audience: impl Into<String>,
     ) -> Self {
+        let issuer_str = issuer.into();
+        let audience_str = audience.into();
         Self {
             inner: VerifierInner::Static(TokenVerifier::new(
                 VerifyingKey::from_bytes(&[0u8; 32]).expect("zero key should be valid"),
-                issuer,
-                audience,
+                issuer_str.clone(),
+                audience_str.clone(),
             )),
             jwks_url: Some(url.into()),
+            issuer: issuer_str,
+            audience: audience_str,
             cache_duration: Duration::from_secs(3600),
             cached_jwks: Arc::new(RwLock::new(None)),
+            require_origin: false,
         }
+    }
+
+    /// Require origin validation on verified tokens.
+    pub fn with_origin_validation(mut self) -> Self {
+        self.require_origin = true;
+        self.inner = match self.inner {
+            VerifierInner::Static(verifier) => {
+                VerifierInner::Static(verifier.with_origin_validation())
+            }
+            VerifierInner::Jwks(verifier) => VerifierInner::Jwks(verifier.with_origin_validation()),
+        };
+        self
     }
 
     /// Set cache duration for JWKS
@@ -80,33 +120,103 @@ impl AsyncVerifier {
         self
     }
 
-    /// Verify a token
+    /// Verify a token with automatic JWKS fetching and caching
+    #[cfg(feature = "jwks")]
     pub async fn verify(
         &self,
         token: &str,
         expected_origin: Option<&str>,
+        expected_client_ip: Option<&str>,
     ) -> Result<AuthContext, VerifyError> {
-        // If we have a static or JWKS verifier, use it directly
+        // If using static JWKS or static key, use directly
         match &self.inner {
-            VerifierInner::Static(verifier) => {
-                verifier.verify(token, expected_origin)
-            }
-            VerifierInner::Jwks(verifier) => {
-                verifier.verify(token, expected_origin)
-            }
+            VerifierInner::Static(verifier) => verifier.verify(token, expected_origin, expected_client_ip),
+            VerifierInner::Jwks(verifier) => verifier.verify(token, expected_origin, expected_client_ip),
         }
     }
 
-    /// Refresh JWKS cache
+    /// Verify a token (non-JWKS version)
+    #[cfg(not(feature = "jwks"))]
+    pub fn verify(
+        &self,
+        token: &str,
+        expected_origin: Option<&str>,
+        expected_client_ip: Option<&str>,
+    ) -> Result<AuthContext, VerifyError> {
+        match &self.inner {
+            VerifierInner::Static(verifier) => verifier.verify(token, expected_origin, expected_client_ip),
+            VerifierInner::Jwks(verifier) => verifier.verify(token, expected_origin, expected_client_ip),
+        }
+    }
+
+    /// Refresh JWKS cache from the configured URL
     #[cfg(feature = "jwks")]
     pub async fn refresh_cache(&self) -> Result<(), VerifyError> {
-        if let Some(ref _jwks_url) = self.jwks_url {
-            // We'd need issuer/audience here to create the verifier
-            // This is a placeholder implementation
-            let _cached = self.cached_jwks.write().await;
-            // *cached = Some(CachedJwks { ... });
+        if let Some(ref jwks_url) = self.jwks_url {
+            // Fetch JWKS from URL
+            let jwks = crate::token::JwksVerifier::fetch_jwks(jwks_url)
+                .await
+                .map_err(|e| VerifyError::InvalidFormat(format!("Failed to fetch JWKS: {}", e)))?;
+
+            // Create new verifier with fetched JWKS
+            let verifier = if self.require_origin {
+                JwksVerifier::new(jwks, &self.issuer, &self.audience).with_origin_validation()
+            } else {
+                JwksVerifier::new(jwks, &self.issuer, &self.audience)
+            };
+
+            // Update cache
+            let mut cached = self.cached_jwks.write().await;
+            *cached = Some(CachedJwks {
+                verifier,
+                fetched_at: Instant::now(),
+            });
         }
         Ok(())
+    }
+
+    /// Get cached verifier if available and not expired
+    async fn get_cached_verifier(&self) -> Option<JwksVerifier> {
+        let cached = self.cached_jwks.read().await;
+        if let Some(ref cached_jwks) = *cached {
+            if cached_jwks.fetched_at.elapsed() < self.cache_duration {
+                return Some(cached_jwks.verifier.clone());
+            }
+        }
+        None
+    }
+
+    /// Verify a token with automatic JWKS caching
+    #[cfg(feature = "jwks")]
+    pub async fn verify_with_cache(
+        &self,
+        token: &str,
+        expected_origin: Option<&str>,
+        expected_client_ip: Option<&str>,
+    ) -> Result<AuthContext, VerifyError> {
+        // Try cached verifier first
+        if let Some(verifier) = self.get_cached_verifier().await {
+            match verifier.verify(token, expected_origin, expected_client_ip) {
+                Ok(ctx) => return Ok(ctx),
+                Err(VerifyError::KeyNotFound(_)) => {
+                    // Key not found in cache, refresh and retry
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        // Refresh cache and try again
+        self.refresh_cache().await?;
+
+        if let Some(verifier) = self.get_cached_verifier().await {
+            verifier.verify(token, expected_origin, expected_client_ip)
+        } else {
+            // Fallback to inner verifier if no cache available
+            match &self.inner {
+                VerifierInner::Static(verifier) => verifier.verify(token, expected_origin, expected_client_ip),
+                VerifierInner::Jwks(verifier) => verifier.verify(token, expected_origin, expected_client_ip),
+            }
+        }
     }
 }
 
@@ -124,15 +234,20 @@ impl SimpleVerifier {
     }
 
     /// Verify a token synchronously
-    pub fn verify(&self, token: &str, expected_origin: Option<&str>) -> Result<AuthContext, VerifyError> {
-        self.inner.verify(token, expected_origin)
+    pub fn verify(
+        &self,
+        token: &str,
+        expected_origin: Option<&str>,
+        expected_client_ip: Option<&str>,
+    ) -> Result<AuthContext, VerifyError> {
+        self.inner.verify(token, expected_origin, expected_client_ip)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::claims::{KeyClass, Limits, SessionClaims};
+    use crate::claims::{KeyClass, SessionClaims};
     use crate::keys::SigningKey;
     use crate::token::TokenSigner;
 
@@ -142,7 +257,8 @@ mod tests {
         let verifying_key = signing_key.verifying_key();
 
         let signer = TokenSigner::new(signing_key, "test-issuer");
-        let verifier = AsyncVerifier::with_static_key(verifying_key, "test-issuer", "test-audience");
+        let verifier =
+            AsyncVerifier::with_static_key(verifying_key, "test-issuer", "test-audience");
 
         let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
             .with_scope("read")
@@ -151,7 +267,7 @@ mod tests {
             .build();
 
         let token = signer.sign(claims).unwrap();
-        let context = verifier.verify(&token, None).await.unwrap();
+        let context = verifier.verify(&token, None, None).await.unwrap();
 
         assert_eq!(context.subject, "test-subject");
     }
@@ -171,7 +287,7 @@ mod tests {
             .build();
 
         let token = signer.sign(claims).unwrap();
-        let context = verifier.verify(&token, None).unwrap();
+        let context = verifier.verify(&token, None, None).unwrap();
 
         assert_eq!(context.subject, "test-subject");
         assert_eq!(context.metering_key, "meter-123");

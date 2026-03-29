@@ -1,15 +1,16 @@
-use std::sync::Arc;
-
 use crate::config::Config;
 use crate::error::AuthServerError;
 use crate::keys::ApiKeyStore;
-use hyperstack_auth::{SigningKey, TokenSigner, VerifyingKey};
+use crate::rate_limiter::MintRateLimiter;
+use hyperstack_auth::{TokenSigner, VerifyingKey};
+use std::time::Duration;
 
 pub struct AppState {
     pub config: Config,
     pub token_signer: TokenSigner,
     pub verifying_key: VerifyingKey,
     pub key_store: ApiKeyStore,
+    pub rate_limiter: Option<MintRateLimiter>,
 }
 
 impl AppState {
@@ -21,16 +22,20 @@ impl AppState {
         let token_signer = TokenSigner::new(signing_key, config.issuer.clone());
 
         // Create key store
-        let key_store = ApiKeyStore::new(
-            config.secret_keys.clone(),
-            config.publishable_keys.clone(),
-        );
+        let key_store =
+            ApiKeyStore::new(config.secret_keys.clone(), config.publishable_keys.clone());
+        let rate_limiter = if config.enable_rate_limit {
+            Some(MintRateLimiter::new(Duration::from_secs(60)))
+        } else {
+            None
+        };
 
         Ok(Self {
             config,
             token_signer,
             verifying_key,
             key_store,
+            rate_limiter,
         })
     }
 }

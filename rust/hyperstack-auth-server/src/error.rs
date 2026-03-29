@@ -16,6 +16,9 @@ pub enum AuthServerError {
     #[error("Key not authorized for this deployment")]
     UnauthorizedDeployment,
 
+    #[error("Origin not allowed for this key")]
+    OriginNotAllowed,
+
     #[error("Rate limit exceeded")]
     RateLimitExceeded,
 
@@ -29,12 +32,29 @@ pub enum AuthServerError {
     KeyGenerationFailed(String),
 }
 
+impl AuthServerError {
+    /// Returns the error code as a kebab-case string for machine-readable responses
+    pub fn error_code(&self) -> &'static str {
+        match self {
+            AuthServerError::InvalidApiKey => "invalid-api-key",
+            AuthServerError::MissingApiKey => "missing-authorization-header",
+            AuthServerError::UnauthorizedDeployment => "deployment-access-denied",
+            AuthServerError::OriginNotAllowed => "origin-not-allowed",
+            AuthServerError::RateLimitExceeded => "rate-limit-exceeded",
+            AuthServerError::InvalidRequest(_) => "invalid-request",
+            AuthServerError::Internal(_) => "internal-error",
+            AuthServerError::KeyGenerationFailed(_) => "internal-error",
+        }
+    }
+}
+
 impl IntoResponse for AuthServerError {
     fn into_response(self) -> Response {
         let (status, error_message) = match &self {
             AuthServerError::InvalidApiKey => (StatusCode::UNAUTHORIZED, self.to_string()),
             AuthServerError::MissingApiKey => (StatusCode::UNAUTHORIZED, self.to_string()),
             AuthServerError::UnauthorizedDeployment => (StatusCode::FORBIDDEN, self.to_string()),
+            AuthServerError::OriginNotAllowed => (StatusCode::FORBIDDEN, self.to_string()),
             AuthServerError::RateLimitExceeded => (StatusCode::TOO_MANY_REQUESTS, self.to_string()),
             AuthServerError::InvalidRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             AuthServerError::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
@@ -45,7 +65,7 @@ impl IntoResponse for AuthServerError {
 
         let body = Json(json!({
             "error": error_message,
-            "code": format!("{:?}", self),
+            "code": self.error_code(),
         }));
 
         (status, body).into_response()

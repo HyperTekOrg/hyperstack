@@ -11,8 +11,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::{
-    Router,
     routing::{get, post},
+    Router,
 };
 use tower_http::cors::CorsLayer;
 use tracing::{info, Level};
@@ -24,6 +24,7 @@ mod handlers;
 mod keys;
 mod middleware;
 mod models;
+mod rate_limiter;
 mod server;
 
 use config::Config;

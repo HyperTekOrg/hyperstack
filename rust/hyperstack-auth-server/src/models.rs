@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 /// Request to mint a new session token
 #[derive(Debug, Deserialize)]
 pub struct MintTokenRequest {
-    /// Target deployment ID (optional, defaults to default_audience)
+    /// WebSocket URL to connect to (primary input)
+    /// Used to derive the deployment ID/audience
+    pub websocket_url: String,
+    /// Target deployment ID (optional, overrides URL-derived value)
     pub deployment_id: Option<String>,
     /// Requested scope (optional, defaults to "read")
     pub scope: Option<String>,
@@ -66,6 +69,8 @@ pub struct ApiKeyInfo {
     pub metering_key: String,
     /// Allowed deployments (None = all)
     pub allowed_deployments: Option<Vec<String>>,
+    /// Allowed origins for publishable keys (None = any)
+    pub origin_allowlist: Option<Vec<String>>,
     /// Rate limit tier
     pub rate_limit_tier: RateLimitTier,
 }

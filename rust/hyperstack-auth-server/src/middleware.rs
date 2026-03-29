@@ -1,10 +1,4 @@
-use axum::{
-    body::Body,
-    http::Request,
-    middleware::Next,
-    response::Response,
-};
-use std::time::Duration;
+use axum::{body::Body, http::Request, middleware::Next, response::Response};
 
 /// Request logging middleware
 pub async fn logging_middleware(req: Request<Body>, next: Next) -> Response {
@@ -17,19 +11,13 @@ pub async fn logging_middleware(req: Request<Body>, next: Next) -> Response {
     let duration = start.elapsed();
     let status = response.status();
 
-    tracing::info!(
-        "{} {} - {} in {:?}",
-        method,
-        uri,
-        status.as_u16(),
-        duration
-    );
+    tracing::info!("{} {} - {} in {:?}", method, uri, status.as_u16(), duration);
 
     response
 }
 
 /// Rate limiting middleware (placeholder for now)
-/// 
+///
 /// In production, this would use a proper rate limiter like governor
 pub async fn rate_limit_middleware(req: Request<Body>, next: Next) -> Response {
     // For now, just pass through

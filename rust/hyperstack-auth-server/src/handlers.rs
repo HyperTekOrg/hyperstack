@@ -1,21 +1,52 @@
-use axum::{
-    Json,
-    extract::State,
-};
+use axum::{extract::State, Json};
 use chrono::Utc;
 use hyperstack_auth::{KeyClass, Limits, SessionClaims};
 use std::sync::Arc;
 
 use crate::error::AuthServerError;
-use crate::models::{
-    HealthResponse, JwksResponse, Jwk, MintTokenRequest, MintTokenResponse,
-};
+use crate::models::{HealthResponse, Jwk, JwksResponse, MintTokenRequest, MintTokenResponse};
 use crate::server::AppState;
 
 /// Extract Bearer token from Authorization header
 fn extract_bearer_token(auth_header: Option<&str>) -> Option<&str> {
-    auth_header
-        .and_then(|header| header.strip_prefix("Bearer "))
+    auth_header.and_then(|header| header.strip_prefix("Bearer "))
+}
+
+/// Extract deployment ID from websocket URL
+/// Supports formats like:
+/// - wss://demo.stack.usehyperstack.com -> "demo"
+/// - wss://example.com/my-deployment -> "my-deployment"
+fn extract_deployment_from_url(url_str: &str) -> Option<String> {
+    // Try to parse as URL
+    if let Ok(parsed) = url::Url::parse(url_str) {
+        // First, try to extract from hostname (subdomain)
+        if let Some(host) = parsed.host_str() {
+            let host_lower: String = host.to_lowercase();
+
+            // Extract subdomain before known suffixes
+            // e.g., "demo.stack.usehyperstack.com" -> "demo"
+            if let Some(first_dot) = host_lower.find('.') {
+                let subdomain: &str = &host_lower[..first_dot];
+                // Filter out common non-deployment subdomains
+                if !subdomain.is_empty()
+                    && subdomain != "www"
+                    && subdomain != "api"
+                    && subdomain != "auth"
+                {
+                    return Some(subdomain.to_string());
+                }
+            }
+        }
+
+        // Fallback: extract from path
+        let path: &str = parsed.path().trim_start_matches('/');
+        if !path.is_empty() && path != "/" {
+            // Take the first path segment
+            return path.split('/').next().map(|s: &str| s.to_string());
+        }
+    }
+
+    None
 }
 
 /// Health check endpoint
@@ -27,7 +58,9 @@ pub async fn health(State(_state): State<Arc<AppState>>) -> Json<HealthResponse>
 }
 
 /// JWKS endpoint for token verification
-pub async fn jwks(State(state): State<Arc<AppState>>) -> Result<Json<JwksResponse>, AuthServerError> {
+pub async fn jwks(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<JwksResponse>, AuthServerError> {
     let public_key_bytes = state.verifying_key.to_bytes();
     let public_key_b64 = base64::Engine::encode(
         &base64::engine::general_purpose::URL_SAFE_NO_PAD,
@@ -36,7 +69,7 @@ pub async fn jwks(State(state): State<Arc<AppState>>) -> Result<Json<JwksRespons
 
     let jwk = Jwk {
         kty: "OKP".to_string(),
-        kid: "key-1".to_string(),
+        kid: state.verifying_key.key_id(),
         use_: "sig".to_string(),
         alg: "EdDSA".to_string(),
         x: public_key_b64,
@@ -56,26 +89,65 @@ pub async fn mint_token(
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok());
 
-    let api_key = extract_bearer_token(auth_header)
-        .ok_or(AuthServerError::MissingApiKey)?;
+    let api_key = extract_bearer_token(auth_header).ok_or(AuthServerError::MissingApiKey)?;
 
     // Validate API key
     let key_info = state.key_store.validate_key(api_key)?;
 
-    // Check deployment authorization for publishable keys
-    let deployment_id = request
-        .deployment_id
-        .clone()
-        .unwrap_or_else(|| state.config.default_audience.clone());
+    // Extract origin from request headers
+    let origin_header = headers
+        .get("origin")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    // Check rate limits (if enabled)
+    if let Some(rate_limiter) = state.rate_limiter.as_ref() {
+        let client_ip = headers
+            .get("x-forwarded-for")
+            .and_then(|h| h.to_str().ok())
+            .or_else(|| headers.get("x-real-ip").and_then(|h| h.to_str().ok()))
+            .unwrap_or("unknown");
+
+        let rate_limit_key = format!("{}:{}:{}", key_info.key_id, client_ip, origin_header.as_deref().unwrap_or("none"));
+
+        // Simple in-memory rate limiting - check against configured limit
+        // This is a placeholder for a proper distributed rate limiter
+        // In production, use Redis or similar
+        check_rate_limit(
+            rate_limiter,
+            &rate_limit_key,
+            key_info
+                .rate_limit_tier
+                .requests_per_minute()
+                .min(state.config.rate_limit_per_minute),
+        )?;
+    }
+
+    // Validate origin for publishable keys
+    state.key_store.authorize_origin(&key_info, origin_header.as_deref())?;
+
+    // Parse websocket_url to extract deployment_id/audience
+    // Format: wss://{deployment_id}.{domain} or wss://{domain}/{deployment_id}
+    let deployment_id = if let Some(explicit_id) = request.deployment_id {
+        explicit_id
+    } else {
+        // Parse URL to extract deployment identifier
+        match extract_deployment_from_url(&request.websocket_url) {
+            Some(id) => id,
+            None => state.config.default_audience.clone(),
+        }
+    };
 
     state
         .key_store
         .authorize_deployment(&key_info, &deployment_id)?;
 
     // Determine TTL (capped by key class)
-    let requested_ttl = request.ttl_seconds.unwrap_or(state.config.default_ttl_seconds);
+    let requested_ttl = request
+        .ttl_seconds
+        .unwrap_or(state.config.default_ttl_seconds);
     let max_ttl = match key_info.key_class {
-        KeyClass::Secret => 3600,      // 1 hour for secret keys
+        KeyClass::Secret => 3600,     // 1 hour for secret keys
         KeyClass::Publishable => 300, // 5 minutes for publishable keys
     };
     let ttl = requested_ttl.min(max_ttl);
@@ -92,7 +164,7 @@ pub async fn mint_token(
         max_bytes_per_minute: Some(100 * 1024 * 1024), // 100 MB
     };
 
-    let claims = SessionClaims::builder(
+    let mut claims = SessionClaims::builder(
         state.config.issuer.clone(),
         key_info.subject.clone(),
         deployment_id.clone(),
@@ -103,8 +175,16 @@ pub async fn mint_token(
     .with_deployment_id(deployment_id)
     .with_limits(limits)
     .with_key_class(key_info.key_class)
-    .with_jti(format!("{}-{}", key_info.key_id, now))
-    .build();
+    .with_jti(format!("{}-{}", key_info.key_id, now));
+
+    // Use origin header if not explicitly provided in request
+    let token_origin = request.origin.or(origin_header);
+
+    if let Some(origin) = token_origin {
+        claims = claims.with_origin(origin);
+    }
+
+    let claims = claims.build();
 
     // Sign token
     let token = state
@@ -117,4 +197,20 @@ pub async fn mint_token(
         expires_at,
         token_type: "Bearer".to_string(),
     }))
+}
+
+/// Simple in-memory rate limiting check
+///
+/// Note: This is a placeholder implementation. In production, use a distributed
+/// rate limiter like Redis or a proper rate limiting service.
+fn check_rate_limit(
+    rate_limiter: &crate::rate_limiter::MintRateLimiter,
+    key: &str,
+    limit: u32,
+) -> Result<(), AuthServerError> {
+    if rate_limiter.check(key, limit) {
+        Ok(())
+    } else {
+        Err(AuthServerError::RateLimitExceeded)
+    }
 }

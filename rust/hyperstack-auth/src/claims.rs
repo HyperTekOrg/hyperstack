@@ -57,6 +57,9 @@ pub struct SessionClaims {
     /// Origin binding (optional, defense-in-depth)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
+    /// Client IP binding (optional, for high-security scenarios)
+    #[serde(skip_serializing_if = "Option::is_none", rename = "client_ip")]
+    pub client_ip: Option<String>,
     /// Resource limits
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limits: Option<Limits>,
@@ -102,6 +105,7 @@ pub struct SessionClaimsBuilder {
     metering_key: String,
     deployment_id: Option<String>,
     origin: Option<String>,
+    client_ip: Option<String>,
     limits: Option<Limits>,
     plan: Option<String>,
     key_class: KeyClass,
@@ -127,6 +131,7 @@ impl SessionClaimsBuilder {
             metering_key: String::new(),
             deployment_id: None,
             origin: None,
+            client_ip: None,
             limits: None,
             plan: None,
             key_class: KeyClass::Publishable,
@@ -155,6 +160,11 @@ impl SessionClaimsBuilder {
 
     pub fn with_origin(mut self, origin: impl Into<String>) -> Self {
         self.origin = Some(origin.into());
+        self
+    }
+
+    pub fn with_client_ip(mut self, client_ip: impl Into<String>) -> Self {
+        self.client_ip = Some(client_ip.into());
         self
     }
 
@@ -191,6 +201,7 @@ impl SessionClaimsBuilder {
             metering_key: self.metering_key,
             deployment_id: self.deployment_id,
             origin: self.origin,
+            client_ip: self.client_ip,
             limits: self.limits,
             plan: self.plan,
             key_class: self.key_class,
@@ -217,8 +228,12 @@ pub struct AuthContext {
     pub scope: String,
     /// Resource limits
     pub limits: Limits,
+    /// Plan or access tier associated with the session
+    pub plan: Option<String>,
     /// Origin binding
     pub origin: Option<String>,
+    /// Client IP binding
+    pub client_ip: Option<String>,
     /// JWT ID
     pub jti: String,
 }
@@ -235,7 +250,9 @@ impl AuthContext {
             expires_at: claims.exp,
             scope: claims.scope,
             limits: claims.limits.unwrap_or_default(),
+            plan: claims.plan,
             origin: claims.origin,
+            client_ip: claims.client_ip,
             jti: claims.jti,
         }
     }

@@ -299,6 +299,8 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
+ "hyper 1.8.1",
+ "hyper-util",
  "itoa",
  "matchit 0.7.3",
  "memchr",
@@ -307,10 +309,15 @@ dependencies = [
  "pin-project-lite",
  "rustversion",
  "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "serde_urlencoded",
  "sync_wrapper 1.0.2",
+ "tokio",
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -381,6 +388,7 @@ dependencies = [
  "sync_wrapper 1.0.2",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -2005,6 +2013,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -2103,10 +2112,13 @@ name = "hyperstack-sdk"
 version = "0.5.10"
 dependencies = [
  "anyhow",
+ "axum 0.7.9",
+ "base64 0.22.1",
  "chrono",
  "flate2",
  "futures-util",
  "pin-project-lite",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -2114,6 +2126,7 @@ dependencies = [
  "tokio-stream",
  "tokio-tungstenite 0.21.0",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -2138,6 +2151,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "smallvec",
