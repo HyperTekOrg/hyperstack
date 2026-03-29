@@ -266,9 +266,7 @@ impl MultiKeyVerifier {
         }
 
         // All keys failed
-        Err(last_error.unwrap_or_else(|| {
-            VerifyError::InvalidSignature
-        }))
+        Err(last_error.unwrap_or(VerifyError::InvalidSignature))
     }
 
     /// Verify without cleaning up (for high-throughput scenarios)

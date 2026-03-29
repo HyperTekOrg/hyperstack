@@ -4,7 +4,6 @@ use crate::keys::{SigningKey, VerifyingKey};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::sync::Arc;
 
 /// JWT Header for EdDSA (Ed25519) tokens
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,8 +45,10 @@ impl TokenSigner {
     /// Sign a session token using Ed25519
     pub fn sign(&self, claims: SessionClaims) -> Result<String, TokenError> {
         // Create header with key ID
-        let mut header = JwtHeader::default();
-        header.kid = Some(self.signing_key.key_id());
+        let header = JwtHeader {
+            kid: Some(self.signing_key.key_id()),
+            ..Default::default()
+        };
 
         // Encode header
         let header_json = serde_json::to_string(&header)?;
@@ -360,7 +361,7 @@ impl JwksVerifier {
             .keys
             .iter()
             .find(|k| k.kid == kid)
-            .ok_or_else(|| VerifyError::KeyNotFound(kid))?;
+            .ok_or(VerifyError::KeyNotFound(kid))?;
 
         // Decode the public key from hex (first 16 chars of hex = 8 bytes of key id)
         // Actually, we need to decode the full public key from the JWKS
@@ -397,9 +398,9 @@ impl JwksVerifier {
 
 /// HMAC-based verifier for development (not recommended for production)
 pub struct HmacVerifier {
-    secret: Vec<u8>,
-    issuer: String,
-    audience: String,
+    _secret: Vec<u8>,
+    _issuer: String,
+    _audience: String,
 }
 
 impl HmacVerifier {
@@ -410,9 +411,9 @@ impl HmacVerifier {
         audience: impl Into<String>,
     ) -> Self {
         Self {
-            secret: secret.into(),
-            issuer: issuer.into(),
-            audience: audience.into(),
+            _secret: secret.into(),
+            _issuer: issuer.into(),
+            _audience: audience.into(),
         }
     }
 

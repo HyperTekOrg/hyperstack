@@ -57,6 +57,7 @@ impl ApiKeyStore {
     /// # Arguments
     /// * `secret_keys` - List of secret API keys
     /// * `publishable_keys` - List of (key, origin_allowlist) tuples
+    #[allow(dead_code)]
     pub fn with_origin_allowlists(
         secret_keys: Vec<String>,
         publishable_keys: Vec<(String, Vec<String>)>,

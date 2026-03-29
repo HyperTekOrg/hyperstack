@@ -1,6 +1,7 @@
 use axum::{body::Body, http::Request, middleware::Next, response::Response};
 
 /// Request logging middleware
+#[allow(dead_code)]
 pub async fn logging_middleware(req: Request<Body>, next: Next) -> Response {
     let start = std::time::Instant::now();
     let method = req.method().clone();
@@ -19,6 +20,7 @@ pub async fn logging_middleware(req: Request<Body>, next: Next) -> Response {
 /// Rate limiting middleware (placeholder for now)
 ///
 /// In production, this would use a proper rate limiter like governor
+#[allow(dead_code)]
 pub async fn rate_limit_middleware(req: Request<Body>, next: Next) -> Response {
     // For now, just pass through
     // In production, check API key rate limits here

@@ -10,6 +10,7 @@ use tokio::sync::RwLock;
 
 /// A revoked token entry with expiration tracking
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct RevokedEntry {
     jti: String,
     expires_at: u64,

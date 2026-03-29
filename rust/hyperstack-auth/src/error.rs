@@ -86,8 +86,6 @@ impl AuthErrorCode {
 
     /// Returns the HTTP status code equivalent for this error
     pub fn http_status(&self) -> u16 {
-        use std::time::Duration;
-
         match self {
             AuthErrorCode::TokenMissing => 401,
             AuthErrorCode::TokenExpired => 401,

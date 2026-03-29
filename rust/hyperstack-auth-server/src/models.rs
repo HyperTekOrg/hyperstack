@@ -77,6 +77,7 @@ pub struct ApiKeyInfo {
 
 #[derive(Debug, Clone)]
 pub enum RateLimitTier {
+    #[allow(dead_code)]
     Low,
     Medium,
     High,

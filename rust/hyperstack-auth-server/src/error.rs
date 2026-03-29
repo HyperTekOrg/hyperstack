@@ -23,12 +23,14 @@ pub enum AuthServerError {
     RateLimitExceeded,
 
     #[error("Invalid request: {0}")]
+    #[allow(dead_code)]
     InvalidRequest(String),
 
     #[error("Internal error: {0}")]
     Internal(String),
 
     #[error("Key generation failed: {0}")]
+    #[allow(dead_code)]
     KeyGenerationFailed(String),
 }
 
