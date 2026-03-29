@@ -93,7 +93,10 @@ impl SnapshotRecorder {
         let dest = std::path::Path::new(path);
         let parent = dest.parent().unwrap_or_else(|| std::path::Path::new("."));
         let file_name = dest.file_name().unwrap_or_default();
-        let tmp_path = parent.join(format!("{}.tmp", file_name.to_string_lossy())).to_string_lossy().into_owned();
+        let tmp_path = parent
+            .join(format!("{}.tmp", file_name.to_string_lossy()))
+            .to_string_lossy()
+            .into_owned();
         {
             let file = fs::File::create(&tmp_path)
                 .with_context(|| format!("Failed to create snapshot file: {}", tmp_path))?;
@@ -102,9 +105,21 @@ impl SnapshotRecorder {
             // Write header fields
             writeln!(writer, "{{")?;
             writeln!(writer, "  \"version\": {},", header.version)?;
-            writeln!(writer, "  \"view\": {},", serde_json::to_string(&header.view)?)?;
-            writeln!(writer, "  \"url\": {},", serde_json::to_string(&header.url)?)?;
-            writeln!(writer, "  \"captured_at\": {},", serde_json::to_string(&header.captured_at)?)?;
+            writeln!(
+                writer,
+                "  \"view\": {},",
+                serde_json::to_string(&header.view)?
+            )?;
+            writeln!(
+                writer,
+                "  \"url\": {},",
+                serde_json::to_string(&header.url)?
+            )?;
+            writeln!(
+                writer,
+                "  \"captured_at\": {},",
+                serde_json::to_string(&header.captured_at)?
+            )?;
             writeln!(writer, "  \"duration_ms\": {},", header.duration_ms)?;
             writeln!(writer, "  \"frame_count\": {},", header.frame_count)?;
 
@@ -128,12 +143,11 @@ impl SnapshotRecorder {
             fs::remove_file(path)
                 .with_context(|| format!("Failed to remove existing snapshot at {}", path))?;
         }
-        fs::rename(&tmp_path, path)
-            .map_err(|e| {
-                // Best-effort cleanup of the tmp file before propagating
-                let _ = fs::remove_file(&tmp_path);
-                anyhow::anyhow!("Failed to rename snapshot to {}: {}", path, e)
-            })?;
+        fs::rename(&tmp_path, path).map_err(|e| {
+            // Best-effort cleanup of the tmp file before propagating
+            let _ = fs::remove_file(&tmp_path);
+            anyhow::anyhow!("Failed to rename snapshot to {}: {}", path, e)
+        })?;
 
         eprintln!(
             "Saved {} frames ({:.1}s) to {}",
@@ -176,7 +190,10 @@ impl SnapshotPlayer {
         }
 
         if file.frames.is_empty() {
-            eprintln!("Warning: snapshot file {} has no 'frames' key — replaying 0 frames.", path);
+            eprintln!(
+                "Warning: snapshot file {} has no 'frames' key — replaying 0 frames.",
+                path
+            );
         }
         let frames = file.frames;
 
@@ -188,6 +205,9 @@ impl SnapshotPlayer {
             file.header.captured_at,
         );
 
-        Ok(Self { header: file.header, frames })
+        Ok(Self {
+            header: file.header,
+            frames,
+        })
     }
 }

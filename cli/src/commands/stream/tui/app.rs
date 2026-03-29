@@ -167,7 +167,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(view: String, url: String, dropped_frames: std::sync::Arc<std::sync::atomic::AtomicU64>) -> Self {
+    pub fn new(
+        view: String,
+        url: String,
+        dropped_frames: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    ) -> Self {
         Self {
             view: view.clone(),
             url: url.clone(),
@@ -244,7 +248,8 @@ impl App {
                 let entities = parse_snapshot_entities(&frame.data);
                 let count = entities.len() as u64;
                 for entity in entities {
-                    self.store.upsert(&entity.key, entity.data, "snapshot", None);
+                    self.store
+                        .upsert(&entity.key, entity.data, "snapshot", None);
                     if self.entity_key_set.insert(entity.key.clone()) {
                         self.entity_keys.push(entity.key);
                     }
@@ -255,8 +260,7 @@ impl App {
                 let key = frame.key.clone();
                 let seq = frame.seq.clone();
                 let len_before = self.store.history_len(&key);
-                self.store
-                    .upsert(&key, frame.data, &frame.op, seq);
+                self.store.upsert(&key, frame.data, &frame.op, seq);
                 self.compensate_history_anchor(&key, len_before);
                 if self.entity_key_set.insert(key.clone()) {
                     self.entity_keys.push(key);
@@ -267,8 +271,7 @@ impl App {
                 let key = frame.key.clone();
                 let seq = frame.seq.clone();
                 let len_before = self.store.history_len(&key);
-                self.store
-                    .patch(&key, &frame.data, &frame.append, seq);
+                self.store.patch(&key, &frame.data, &frame.append, seq);
                 self.compensate_history_anchor(&key, len_before);
                 if self.entity_key_set.insert(key.clone()) {
                     self.entity_keys.push(key);
@@ -299,7 +302,8 @@ impl App {
             }
         }
 
-        self.raw_frames.push_back((std::time::Instant::now(), raw_frame));
+        self.raw_frames
+            .push_back((std::time::Instant::now(), raw_frame));
         while self.raw_frames.len() > 1000 {
             self.raw_frames.pop_front();
         }
@@ -322,7 +326,9 @@ impl App {
             TuiAction::Quit => {}
             TuiAction::ScrollDetailDown => {
                 let n = self.take_count();
-                self.scroll_offset = self.scroll_offset.saturating_add(n as u16)
+                self.scroll_offset = self
+                    .scroll_offset
+                    .saturating_add(n as u16)
                     .min(self.max_scroll_offset());
             }
             TuiAction::ScrollDetailUp => {
@@ -339,7 +345,9 @@ impl App {
             }
             TuiAction::ScrollDetailHalfDown => {
                 let half = (self.visible_rows / 2).max(1);
-                self.scroll_offset = self.scroll_offset.saturating_add(half as u16)
+                self.scroll_offset = self
+                    .scroll_offset
+                    .saturating_add(half as u16)
                     .min(self.max_scroll_offset());
             }
             TuiAction::ScrollDetailHalfUp => {
@@ -352,7 +360,7 @@ impl App {
                 if count > 0 {
                     self.selected_index = (self.selected_index + n).min(count - 1);
                     self.history_position = 0;
-                self.history_anchor = None;
+                    self.history_anchor = None;
                     self.scroll_offset = 0;
                 }
             }
@@ -378,8 +386,8 @@ impl App {
             TuiAction::HistoryBack => {
                 if let Some(key) = self.selected_key() {
                     let hist_len = self.store.history_len(&key);
-                    if hist_len == 0 { /* no-op */ }
-                    else if let Some(anchor) = self.history_anchor {
+                    if hist_len == 0 { /* no-op */
+                    } else if let Some(anchor) = self.history_anchor {
                         // Already browsing — move anchor backward (toward older)
                         if anchor > 0 {
                             self.history_anchor = Some(anchor - 1);
@@ -401,7 +409,7 @@ impl App {
                             // Reached latest — clear anchor
                             self.history_anchor = None;
                             self.history_position = 0;
-                self.history_anchor = None;
+                            self.history_anchor = None;
                         } else {
                             self.history_anchor = Some(anchor + 1);
                             self.history_position = self.history_position.saturating_sub(1);
@@ -428,11 +436,19 @@ impl App {
             }
             TuiAction::ToggleDiff => {
                 self.show_diff = !self.show_diff;
-                self.set_status(if self.show_diff { "Diff view ON" } else { "Diff view OFF" });
+                self.set_status(if self.show_diff {
+                    "Diff view ON"
+                } else {
+                    "Diff view OFF"
+                });
             }
             TuiAction::ToggleRaw => {
                 self.show_raw = !self.show_raw;
-                self.set_status(if self.show_raw { "Raw frames ON" } else { "Raw frames OFF" });
+                self.set_status(if self.show_raw {
+                    "Raw frames ON"
+                } else {
+                    "Raw frames OFF"
+                });
             }
             TuiAction::CycleSortMode => {
                 self.sort_mode = match &self.sort_mode {
@@ -442,10 +458,14 @@ impl App {
                 self.invalidate_filter_cache();
                 let label = match &self.sort_mode {
                     SortMode::Insertion => "Sort: insertion order".to_string(),
-                    SortMode::Field(f) => format!("Sort: {} {}", f, match self.sort_direction {
-                        SortDirection::Ascending => "asc",
-                        SortDirection::Descending => "desc",
-                    }),
+                    SortMode::Field(f) => format!(
+                        "Sort: {} {}",
+                        f,
+                        match self.sort_direction {
+                            SortDirection::Ascending => "asc",
+                            SortDirection::Descending => "desc",
+                        }
+                    ),
                 };
                 self.set_status(&label);
             }
@@ -456,11 +476,17 @@ impl App {
                 };
                 self.invalidate_filter_cache();
                 let label = match &self.sort_mode {
-                    SortMode::Insertion => "Sort direction toggled (no effect in insertion order)".to_string(),
-                    SortMode::Field(f) => format!("Sort: {} {}", f, match self.sort_direction {
-                        SortDirection::Ascending => "asc",
-                        SortDirection::Descending => "desc",
-                    }),
+                    SortMode::Insertion => {
+                        "Sort direction toggled (no effect in insertion order)".to_string()
+                    }
+                    SortMode::Field(f) => format!(
+                        "Sort: {} {}",
+                        f,
+                        match self.sort_direction {
+                            SortDirection::Ascending => "asc",
+                            SortDirection::Descending => "desc",
+                        }
+                    ),
                 };
                 self.set_status(&label);
             }
@@ -481,7 +507,10 @@ impl App {
                     let ts_ms = arrival_time.duration_since(self.stream_start).as_millis() as u64;
                     recorder.record_with_ts(frame, ts_ms);
                 }
-                let filename = format!("hs-stream-{}.json", chrono::Utc::now().format("%Y%m%d-%H%M%S%.3f"));
+                let filename = format!(
+                    "hs-stream-{}.json",
+                    chrono::Utc::now().format("%Y%m%d-%H%M%S%.3f")
+                );
                 match recorder.save(&filename) {
                     Ok(_) => self.set_status(&format!("Saved to {}", filename)),
                     Err(e) => self.set_status(&format!("Save failed: {}", e)),
@@ -576,14 +605,15 @@ impl App {
             self.selected_index = count - 1;
         }
         self.history_position = 0;
-                self.history_anchor = None;
+        self.history_anchor = None;
         self.scroll_offset = 0;
         self.list_state.select(Some(self.selected_index));
     }
 
     /// Maximum scroll offset for the detail pane (total lines - visible height).
     fn max_scroll_offset(&self) -> u16 {
-        let total_lines = self.selected_entity_data()
+        let total_lines = self
+            .selected_entity_data()
             .map(|s| s.lines().count())
             .unwrap_or(0);
         // visible_rows approximates the detail pane height (minus borders)
@@ -636,11 +666,14 @@ impl App {
                         return Some(serde_json::to_string_pretty(&diff).unwrap_or_default());
                     }
                 }
-                return Some(serde_json::to_string_pretty(&serde_json::json!({
-                    "op": entry.op,
-                    "state": entry.state,
-                    "patch": entry.patch,
-                })).unwrap_or_default());
+                return Some(
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "op": entry.op,
+                        "state": entry.state,
+                        "patch": entry.patch,
+                    }))
+                    .unwrap_or_default(),
+                );
             }
             let diff = self.store.diff_at(&key, self.history_position)?;
             return Some(serde_json::to_string_pretty(&diff).unwrap_or_default());
@@ -693,7 +726,10 @@ impl App {
     /// Returns cached filtered keys.
     /// Panics in debug builds if `ensure_filtered_cache()` was not called first.
     pub fn filtered_keys(&self) -> &[String] {
-        debug_assert!(self.filtered_cache.is_some(), "filtered_keys() called without ensure_filtered_cache()");
+        debug_assert!(
+            self.filtered_cache.is_some(),
+            "filtered_keys() called without ensure_filtered_cache()"
+        );
         self.filtered_cache.as_deref().unwrap_or(&[])
     }
 
@@ -726,8 +762,12 @@ impl App {
             let dir = self.sort_direction;
             let store = &self.store;
             result.sort_by(|a, b| {
-                let va = store.get(a).and_then(|r| resolve_dot_path(&r.current, &path));
-                let vb = store.get(b).and_then(|r| resolve_dot_path(&r.current, &path));
+                let va = store
+                    .get(a)
+                    .and_then(|r| resolve_dot_path(&r.current, &path));
+                let vb = store
+                    .get(b)
+                    .and_then(|r| resolve_dot_path(&r.current, &path));
                 let cmp = compare_json_values(va, vb);
                 match dir {
                     SortDirection::Ascending => cmp,
@@ -746,7 +786,11 @@ fn resolve_dot_path<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
     for segment in path.split('.') {
         current = current.get(segment)?;
     }
-    if current.is_null() { None } else { Some(current) }
+    if current.is_null() {
+        None
+    } else {
+        Some(current)
+    }
 }
 
 /// Compare two optional JSON values. Numbers compare numerically, strings
@@ -793,14 +837,10 @@ fn value_contains_str(value: &Value, needle: &str) -> bool {
             let s = if *b { "true" } else { "false" };
             s.contains(needle)
         }
-        Value::Object(map) => {
-            map.iter().any(|(k, v)| {
-                k.to_lowercase().contains(needle) || value_contains_str(v, needle)
-            })
-        }
-        Value::Array(arr) => {
-            arr.iter().any(|v| value_contains_str(v, needle))
-        }
+        Value::Object(map) => map
+            .iter()
+            .any(|(k, v)| k.to_lowercase().contains(needle) || value_contains_str(v, needle)),
+        Value::Array(arr) => arr.iter().any(|v| value_contains_str(v, needle)),
         Value::Null => false,
     }
 }

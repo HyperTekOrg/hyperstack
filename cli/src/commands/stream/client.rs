@@ -36,7 +36,11 @@ fn build_state(args: &StreamArgs, view: &str, url: &str) -> Result<StreamState> 
             .map(|s| {
                 let s = s.trim().to_lowercase();
                 // Normalize "create" → "upsert" to match op normalization at comparison time
-                if s == "create" { "upsert".to_string() } else { s }
+                if s == "create" {
+                    "upsert".to_string()
+                } else {
+                    s
+                }
             })
             .collect::<HashSet<_>>()
     });
@@ -89,7 +93,14 @@ pub async fn stream(url: String, view: &str, args: &StreamArgs) -> Result<()> {
 
     // Emit NoDna connected event only after successful WebSocket handshake
     if let OutputMode::NoDna = state.output_mode {
-        output::emit_no_dna_event(&mut state.out, "connected", view, &serde_json::json!({"url": url}), 0, 0)?;
+        output::emit_no_dna_event(
+            &mut state.out,
+            "connected",
+            view,
+            &serde_json::json!({"url": url}),
+            0,
+            0,
+        )?;
     }
 
     let (mut ws_tx, mut ws_rx) = ws.split();
@@ -105,7 +116,8 @@ pub async fn stream(url: String, view: &str, args: &StreamArgs) -> Result<()> {
 
     // Ping interval
     let ping_period = std::time::Duration::from_secs(30);
-    let mut ping_interval = tokio::time::interval_at(tokio::time::Instant::now() + ping_period, ping_period);
+    let mut ping_interval =
+        tokio::time::interval_at(tokio::time::Instant::now() + ping_period, ping_period);
 
     // Duration timer for --save --duration (as a select! arm for precise timing)
     let duration_future = async {
@@ -219,16 +231,22 @@ pub async fn stream(url: String, view: &str, args: &StreamArgs) -> Result<()> {
     if let OutputMode::NoDna = state.output_mode {
         // Ensure snapshot_complete is emitted before disconnected if it wasn't already
         if !snapshot_complete && received_snapshot {
-            output::emit_no_dna_event(&mut state.out, 
-                "snapshot_complete", view,
+            output::emit_no_dna_event(
+                &mut state.out,
+                "snapshot_complete",
+                view,
                 &serde_json::json!({"entity_count": state.entity_count}),
-                state.update_count, state.entity_count,
+                state.update_count,
+                state.entity_count,
             )?;
         }
-        output::emit_no_dna_event(&mut state.out, 
-            "disconnected", view,
+        output::emit_no_dna_event(
+            &mut state.out,
+            "disconnected",
+            view,
             &serde_json::json!(null),
-            state.update_count, state.entity_count,
+            state.update_count,
+            state.entity_count,
         )?;
     }
 
@@ -244,10 +262,13 @@ pub async fn replay(player: SnapshotPlayer, view: &str, args: &StreamArgs) -> Re
 
     // Emit NoDna connected event with replay source indicator
     if let OutputMode::NoDna = state.output_mode {
-        output::emit_no_dna_event(&mut state.out, 
-            "connected", view,
+        output::emit_no_dna_event(
+            &mut state.out,
+            "connected",
+            view,
             &serde_json::json!({"url": player.header.url, "source": "replay"}),
-            0, 0,
+            0,
+            0,
         )?;
     }
 
@@ -256,8 +277,16 @@ pub async fn replay(player: SnapshotPlayer, view: &str, args: &StreamArgs) -> Re
 
     for snapshot_frame in &player.frames {
         let was_snapshot = snapshot_frame.frame.is_snapshot();
-        if was_snapshot { received_snapshot = true; }
-        maybe_emit_snapshot_complete(&mut state, view, &mut snapshot_complete, received_snapshot, was_snapshot)?;
+        if was_snapshot {
+            received_snapshot = true;
+        }
+        maybe_emit_snapshot_complete(
+            &mut state,
+            view,
+            &mut snapshot_complete,
+            received_snapshot,
+            was_snapshot,
+        )?;
         if process_frame(snapshot_frame.frame.clone(), view, &mut state)? {
             break;
         }
@@ -269,16 +298,22 @@ pub async fn replay(player: SnapshotPlayer, view: &str, args: &StreamArgs) -> Re
 
     if let OutputMode::NoDna = state.output_mode {
         if !snapshot_complete && received_snapshot {
-            output::emit_no_dna_event(&mut state.out, 
-                "snapshot_complete", view,
+            output::emit_no_dna_event(
+                &mut state.out,
+                "snapshot_complete",
+                view,
                 &serde_json::json!({"entity_count": state.entity_count}),
-                state.update_count, state.entity_count,
+                state.update_count,
+                state.entity_count,
             )?;
         }
-        output::emit_no_dna_event(&mut state.out, 
-            "disconnected", view,
+        output::emit_no_dna_event(
+            &mut state.out,
+            "disconnected",
+            view,
             &serde_json::json!(null),
-            state.update_count, state.entity_count,
+            state.update_count,
+            state.entity_count,
         )?;
     }
 
@@ -354,10 +389,13 @@ fn maybe_emit_snapshot_complete(
     if !was_snapshot && received_snapshot && !*snapshot_complete {
         *snapshot_complete = true;
         if let OutputMode::NoDna = state.output_mode {
-            output::emit_no_dna_event(&mut state.out, 
-                "snapshot_complete", view,
+            output::emit_no_dna_event(
+                &mut state.out,
+                "snapshot_complete",
+                view,
                 &serde_json::json!({"entity_count": state.entity_count}),
-                state.update_count, state.entity_count,
+                state.update_count,
+                state.entity_count,
             )?;
         }
     }
@@ -365,11 +403,7 @@ fn maybe_emit_snapshot_complete(
 }
 
 /// Process a frame. Returns true if the stream should end (--first matched).
-fn process_frame(
-    frame: Frame,
-    view: &str,
-    state: &mut StreamState,
-) -> Result<bool> {
+fn process_frame(frame: Frame, view: &str, state: &mut StreamState) -> Result<bool> {
     // Record frame if --save is active
     if let Some(recorder) = &mut state.recorder {
         recorder.record(&frame);
@@ -420,7 +454,9 @@ fn process_frame(
                 // entity_count is a running tally — NoDna entity_update events during
                 // snapshot delivery report the count at that point, not the final total.
                 // The final count is available in the snapshot_complete event.
-                state.entities.insert(entity.key.clone(), entity.data.clone());
+                state
+                    .entities
+                    .insert(entity.key.clone(), entity.data.clone());
                 state.entity_count = state.entities.len() as u64;
                 if let Some(store) = &mut state.store {
                     store.upsert(&entity.key, entity.data.clone(), "snapshot", None);
@@ -446,7 +482,8 @@ fn process_frame(
             if let Some(store) = &mut state.store {
                 store.patch(&frame.key, &frame.data, &frame.append, frame.seq.clone());
             }
-            let entry = state.entities
+            let entry = state
+                .entities
                 .entry(frame.key.clone())
                 .or_insert_with(|| serde_json::json!({}));
             deep_merge_with_append(entry, &frame.data, &frame.append, "");
@@ -459,7 +496,10 @@ fn process_frame(
         Operation::Delete => {
             // Note: if the entity was never seen (e.g. --no-snapshot), last_state is null
             // and field-based --where filters will not match, silently dropping the delete.
-            let last_state = state.entities.remove(&frame.key).unwrap_or(serde_json::json!(null));
+            let last_state = state
+                .entities
+                .remove(&frame.key)
+                .unwrap_or(serde_json::json!(null));
             if let Some(store) = &mut state.store {
                 store.delete(&frame.key);
             }
@@ -477,10 +517,13 @@ fn process_frame(
                 output::print_count(state.update_count)?;
             } else {
                 match state.output_mode {
-                    OutputMode::NoDna => output::emit_no_dna_event(&mut state.out, 
-                        "entity_update", view,
+                    OutputMode::NoDna => output::emit_no_dna_event(
+                        &mut state.out,
+                        "entity_update",
+                        view,
                         &serde_json::json!({"key": frame.key, "op": "delete", "data": null}),
-                        state.update_count, state.entity_count,
+                        state.update_count,
+                        state.entity_count,
                     )?,
                     _ => output::print_delete(&mut state.out, view, &frame.key)?,
                 }
@@ -518,10 +561,13 @@ fn emit_entity(
         output::print_count(state.update_count)?;
     } else {
         match state.output_mode {
-            OutputMode::NoDna => output::emit_no_dna_event(&mut state.out, 
-                "entity_update", view,
+            OutputMode::NoDna => output::emit_no_dna_event(
+                &mut state.out,
+                "entity_update",
+                view,
                 &serde_json::json!({"key": key, "op": op, "data": output_data}),
-                state.update_count, state.entity_count,
+                state.update_count,
+                state.entity_count,
             )?,
             _ => output::print_entity_update(&mut state.out, view, key, op, &output_data)?,
         }

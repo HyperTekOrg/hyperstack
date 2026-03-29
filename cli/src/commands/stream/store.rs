@@ -41,12 +41,13 @@ impl EntityStore {
 
     /// Apply an upsert/create operation. Returns the full entity state.
     pub fn upsert(&mut self, key: &str, data: Value, op: &str, seq: Option<String>) -> &Value {
-        let record = self.entities.entry(key.to_string()).or_insert_with(|| {
-            EntityRecord {
+        let record = self
+            .entities
+            .entry(key.to_string())
+            .or_insert_with(|| EntityRecord {
                 current: Value::Null,
                 history: VecDeque::new(),
-            }
-        });
+            });
 
         record.current = data.clone();
         record.history.push_back(HistoryEntry {
@@ -71,12 +72,13 @@ impl EntityStore {
         append_paths: &[String],
         seq: Option<String>,
     ) -> &Value {
-        let record = self.entities.entry(key.to_string()).or_insert_with(|| {
-            EntityRecord {
+        let record = self
+            .entities
+            .entry(key.to_string())
+            .or_insert_with(|| EntityRecord {
                 current: serde_json::json!({}),
                 history: VecDeque::new(),
-            }
-        });
+            });
 
         let raw_patch = patch_data.clone();
         deep_merge_with_append(&mut record.current, patch_data, append_paths, "");
