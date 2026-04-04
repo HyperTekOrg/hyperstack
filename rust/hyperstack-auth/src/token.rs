@@ -254,7 +254,7 @@ impl TokenVerifier {
                     actual: actual.clone(),
                 });
             }
-        } else if self.require_origin && origin_provided {
+        } else if self.require_origin {
             // Verifier requires origin but token doesn't have one bound
             return Err(VerifyError::MissingClaim("origin".to_string()));
         }
@@ -396,13 +396,15 @@ impl JwksVerifier {
     }
 }
 
-/// HMAC-based verifier for development (not recommended for production)
+#[cfg(test)]
+/// HMAC-based verifier for tests only
 pub struct HmacVerifier {
     _secret: Vec<u8>,
     _issuer: String,
     _audience: String,
 }
 
+#[cfg(test)]
 impl HmacVerifier {
     /// Create a new HMAC verifier (dev only)
     pub fn new(
@@ -611,5 +613,29 @@ mod tests {
             .verify(&token, Some("https://allowed.example"), None)
             .unwrap();
         assert_eq!(context.origin.as_deref(), Some("https://allowed.example"));
+    }
+
+    #[test]
+    fn test_origin_validation_requires_origin_claim() {
+        let signing_key = crate::keys::SigningKey::generate();
+        let verifying_key = signing_key.verifying_key();
+
+        let signer = TokenSigner::new(signing_key, "test-issuer");
+        let verifier = TokenVerifier::new(verifying_key, "test-issuer", "test-audience")
+            .with_origin_validation();
+
+        let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
+            .with_ttl(300)
+            .with_scope("read")
+            .with_metering_key("meter-123")
+            .with_key_class(KeyClass::Publishable)
+            .build();
+        let token = signer.sign(claims).unwrap();
+
+        let result = verifier.verify(&token, None, None);
+        assert!(matches!(
+            result,
+            Err(VerifyError::MissingClaim(ref claim)) if claim == "origin"
+        ));
     }
 }

@@ -69,11 +69,14 @@ impl RateLimitBucket {
         }
     }
 
-    /// Check if a request is allowed and record it
-    fn check_and_record(&mut self, now: Instant) -> RateLimitResult {
-        // Remove expired requests outside the window
+    fn prune_expired(&mut self, now: Instant) {
         let cutoff = now - self.window.window_duration;
         self.requests.retain(|&t| t > cutoff);
+    }
+
+    /// Check if a request is allowed and record it
+    fn check_and_record(&mut self, now: Instant) -> RateLimitResult {
+        self.prune_expired(now);
 
         let limit = self.window.max_requests + self.window.burst;
         let current_count = self.requests.len() as u32;
@@ -81,7 +84,8 @@ impl RateLimitBucket {
         if current_count >= limit {
             // Calculate retry after time
             if let Some(oldest) = self.requests.first() {
-                let retry_after = (*oldest + self.window.window_duration).saturating_duration_since(now);
+                let retry_after =
+                    (*oldest + self.window.window_duration).saturating_duration_since(now);
                 RateLimitResult::Denied {
                     retry_after,
                     limit: self.window.max_requests,
@@ -97,36 +101,6 @@ impl RateLimitBucket {
             let reset_at = now + self.window.window_duration;
             RateLimitResult::Allowed {
                 remaining: limit - current_count - 1,
-                reset_at,
-            }
-        }
-    }
-
-    /// Peek at current state without recording
-    fn peek(&self, now: Instant) -> RateLimitResult {
-        let cutoff = now - self.window.window_duration;
-        let valid_requests: Vec<_> = self.requests.iter().filter(|&&t| t > cutoff).copied().collect();
-        
-        let limit = self.window.max_requests + self.window.burst;
-        let current_count = valid_requests.len() as u32;
-
-        if current_count >= limit {
-            if let Some(oldest) = valid_requests.first() {
-                let retry_after = (*oldest + self.window.window_duration).saturating_duration_since(now);
-                RateLimitResult::Denied {
-                    retry_after,
-                    limit: self.window.max_requests,
-                }
-            } else {
-                RateLimitResult::Denied {
-                    retry_after: self.window.window_duration,
-                    limit: self.window.max_requests,
-                }
-            }
-        } else {
-            let reset_at = now + self.window.window_duration;
-            RateLimitResult::Allowed {
-                remaining: limit - current_count,
                 reset_at,
             }
         }
@@ -156,11 +130,16 @@ impl Default for RateLimiterConfig {
     fn default() -> Self {
         Self {
             handshake_per_ip: RateLimitWindow::new(60, Duration::from_secs(60)).with_burst(10),
-            connections_per_subject: RateLimitWindow::new(30, Duration::from_secs(60)).with_burst(5),
-            connections_per_metering_key: RateLimitWindow::new(100, Duration::from_secs(60)).with_burst(20),
-            subscriptions_per_connection: RateLimitWindow::new(120, Duration::from_secs(60)).with_burst(10),
-            messages_per_connection: RateLimitWindow::new(1000, Duration::from_secs(60)).with_burst(100),
-            snapshots_per_connection: RateLimitWindow::new(30, Duration::from_secs(60)).with_burst(5),
+            connections_per_subject: RateLimitWindow::new(30, Duration::from_secs(60))
+                .with_burst(5),
+            connections_per_metering_key: RateLimitWindow::new(100, Duration::from_secs(60))
+                .with_burst(20),
+            subscriptions_per_connection: RateLimitWindow::new(120, Duration::from_secs(60))
+                .with_burst(10),
+            messages_per_connection: RateLimitWindow::new(1000, Duration::from_secs(60))
+                .with_burst(100),
+            snapshots_per_connection: RateLimitWindow::new(30, Duration::from_secs(60))
+                .with_burst(5),
             enabled: true,
         }
     }
@@ -187,7 +166,8 @@ impl RateLimiterConfig {
             std::env::var("HYPERSTACK_RATE_LIMIT_CONNECTIONS_PER_SUBJECT_WINDOW_SECS"),
         ) {
             if let (Ok(max), Ok(secs)) = (max.parse(), secs.parse()) {
-                config.connections_per_subject = RateLimitWindow::new(max, Duration::from_secs(secs));
+                config.connections_per_subject =
+                    RateLimitWindow::new(max, Duration::from_secs(secs));
             }
         }
 
@@ -197,7 +177,8 @@ impl RateLimiterConfig {
             std::env::var("HYPERSTACK_RATE_LIMIT_CONNECTIONS_PER_METERING_KEY_WINDOW_SECS"),
         ) {
             if let (Ok(max), Ok(secs)) = (max.parse(), secs.parse()) {
-                config.connections_per_metering_key = RateLimitWindow::new(max, Duration::from_secs(secs));
+                config.connections_per_metering_key =
+                    RateLimitWindow::new(max, Duration::from_secs(secs));
             }
         }
 
@@ -207,7 +188,8 @@ impl RateLimiterConfig {
             std::env::var("HYPERSTACK_RATE_LIMIT_SUBSCRIPTIONS_PER_CONNECTION_WINDOW_SECS"),
         ) {
             if let (Ok(max), Ok(secs)) = (max.parse(), secs.parse()) {
-                config.subscriptions_per_connection = RateLimitWindow::new(max, Duration::from_secs(secs));
+                config.subscriptions_per_connection =
+                    RateLimitWindow::new(max, Duration::from_secs(secs));
             }
         }
 
@@ -217,7 +199,8 @@ impl RateLimiterConfig {
             std::env::var("HYPERSTACK_RATE_LIMIT_MESSAGES_PER_CONNECTION_WINDOW_SECS"),
         ) {
             if let (Ok(max), Ok(secs)) = (max.parse(), secs.parse()) {
-                config.messages_per_connection = RateLimitWindow::new(max, Duration::from_secs(secs));
+                config.messages_per_connection =
+                    RateLimitWindow::new(max, Duration::from_secs(secs));
             }
         }
 
@@ -227,7 +210,8 @@ impl RateLimiterConfig {
             std::env::var("HYPERSTACK_RATE_LIMIT_SNAPSHOTS_PER_CONNECTION_WINDOW_SECS"),
         ) {
             if let (Ok(max), Ok(secs)) = (max.parse(), secs.parse()) {
-                config.snapshots_per_connection = RateLimitWindow::new(max, Duration::from_secs(secs));
+                config.snapshots_per_connection =
+                    RateLimitWindow::new(max, Duration::from_secs(secs));
             }
         }
 
@@ -294,9 +278,9 @@ impl WebSocketRateLimiter {
         let bucket = buckets
             .entry(ip.clone())
             .or_insert_with(|| RateLimitBucket::new(self.config.handshake_per_ip));
-        
+
         let result = bucket.check_and_record(Instant::now());
-        
+
         match &result {
             RateLimitResult::Denied { retry_after, limit } => {
                 warn!(
@@ -314,7 +298,7 @@ impl WebSocketRateLimiter {
                 );
             }
         }
-        
+
         result
     }
 
@@ -331,7 +315,7 @@ impl WebSocketRateLimiter {
         let bucket = buckets
             .entry(subject.to_string())
             .or_insert_with(|| RateLimitBucket::new(self.config.connections_per_subject));
-        
+
         bucket.check_and_record(Instant::now())
     }
 
@@ -348,7 +332,7 @@ impl WebSocketRateLimiter {
         let bucket = buckets
             .entry(metering_key.to_string())
             .or_insert_with(|| RateLimitBucket::new(self.config.connections_per_metering_key));
-        
+
         bucket.check_and_record(Instant::now())
     }
 
@@ -365,7 +349,7 @@ impl WebSocketRateLimiter {
         let bucket = buckets
             .entry(client_id)
             .or_insert_with(|| RateLimitBucket::new(self.config.subscriptions_per_connection));
-        
+
         bucket.check_and_record(Instant::now())
     }
 
@@ -382,7 +366,7 @@ impl WebSocketRateLimiter {
         let bucket = buckets
             .entry(client_id)
             .or_insert_with(|| RateLimitBucket::new(self.config.messages_per_connection));
-        
+
         bucket.check_and_record(Instant::now())
     }
 
@@ -399,21 +383,19 @@ impl WebSocketRateLimiter {
         let bucket = buckets
             .entry(client_id)
             .or_insert_with(|| RateLimitBucket::new(self.config.snapshots_per_connection));
-        
+
         bucket.check_and_record(Instant::now())
     }
 
     /// Clean up stale buckets to prevent memory growth
     pub async fn cleanup_stale_buckets(&self) {
         let now = Instant::now();
-        let _cutoff = now - Duration::from_secs(300); // 5 minutes
 
         // Clean up IP buckets
         {
             let mut buckets = self.ip_buckets.write().await;
             buckets.retain(|_, bucket| {
-                // Keep if any request is recent
-                bucket.peek(now);
+                bucket.prune_expired(now);
                 !bucket.requests.is_empty()
             });
         }
@@ -422,7 +404,7 @@ impl WebSocketRateLimiter {
         {
             let mut buckets = self.subject_buckets.write().await;
             buckets.retain(|_, bucket| {
-                bucket.peek(now);
+                bucket.prune_expired(now);
                 !bucket.requests.is_empty()
             });
         }
@@ -431,7 +413,7 @@ impl WebSocketRateLimiter {
         {
             let mut buckets = self.metering_key_buckets.write().await;
             buckets.retain(|_, bucket| {
-                bucket.peek(now);
+                bucket.prune_expired(now);
                 !bucket.requests.is_empty()
             });
         }
@@ -489,11 +471,16 @@ mod tests {
         RateLimiterConfig {
             enabled: true,
             handshake_per_ip: RateLimitWindow::new(60, Duration::from_secs(60)).with_burst(10),
-            connections_per_subject: RateLimitWindow::new(30, Duration::from_secs(60)).with_burst(5),
-            connections_per_metering_key: RateLimitWindow::new(100, Duration::from_secs(60)).with_burst(20),
-            subscriptions_per_connection: RateLimitWindow::new(120, Duration::from_secs(60)).with_burst(10),
-            messages_per_connection: RateLimitWindow::new(1000, Duration::from_secs(60)).with_burst(100),
-            snapshots_per_connection: RateLimitWindow::new(30, Duration::from_secs(60)).with_burst(5),
+            connections_per_subject: RateLimitWindow::new(30, Duration::from_secs(60))
+                .with_burst(5),
+            connections_per_metering_key: RateLimitWindow::new(100, Duration::from_secs(60))
+                .with_burst(20),
+            subscriptions_per_connection: RateLimitWindow::new(120, Duration::from_secs(60))
+                .with_burst(10),
+            messages_per_connection: RateLimitWindow::new(1000, Duration::from_secs(60))
+                .with_burst(100),
+            snapshots_per_connection: RateLimitWindow::new(30, Duration::from_secs(60))
+                .with_burst(5),
         }
     }
 
@@ -512,7 +499,13 @@ mod tests {
             let result = limiter.check_handshake(addr).await;
             match result {
                 RateLimitResult::Allowed { remaining, .. } => {
-                    assert_eq!(remaining, 4 - i, "Request {} should have {} remaining", i, 4 - i);
+                    assert_eq!(
+                        remaining,
+                        4 - i,
+                        "Request {} should have {} remaining",
+                        i,
+                        4 - i
+                    );
                 }
                 RateLimitResult::Denied { .. } => {
                     panic!("Request {} should be allowed", i);
@@ -618,5 +611,38 @@ mod tests {
             matches!(result, RateLimitResult::Allowed { .. }),
             "Different subject should be allowed"
         );
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_stale_buckets_removes_expired_buckets() {
+        let limiter = WebSocketRateLimiter::new(test_config());
+        let stale_request = Instant::now() - Duration::from_secs(600);
+
+        {
+            let mut buckets = limiter.ip_buckets.write().await;
+            let mut bucket = RateLimitBucket::new(limiter.config.handshake_per_ip);
+            bucket.requests.push(stale_request);
+            buckets.insert("127.0.0.1".to_string(), bucket);
+        }
+
+        {
+            let mut buckets = limiter.subject_buckets.write().await;
+            let mut bucket = RateLimitBucket::new(limiter.config.connections_per_subject);
+            bucket.requests.push(stale_request);
+            buckets.insert("user-123".to_string(), bucket);
+        }
+
+        {
+            let mut buckets = limiter.metering_key_buckets.write().await;
+            let mut bucket = RateLimitBucket::new(limiter.config.connections_per_metering_key);
+            bucket.requests.push(stale_request);
+            buckets.insert("meter-123".to_string(), bucket);
+        }
+
+        limiter.cleanup_stale_buckets().await;
+
+        assert!(limiter.ip_buckets.read().await.is_empty());
+        assert!(limiter.subject_buckets.read().await.is_empty());
+        assert!(limiter.metering_key_buckets.read().await.is_empty());
     }
 }

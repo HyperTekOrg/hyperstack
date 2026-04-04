@@ -108,7 +108,12 @@ pub async fn mint_token(
             .or_else(|| headers.get("x-real-ip").and_then(|h| h.to_str().ok()))
             .unwrap_or("unknown");
 
-        let rate_limit_key = format!("{}:{}:{}", key_info.key_id, client_ip, origin_header.as_deref().unwrap_or("none"));
+        let rate_limit_key = format!(
+            "{}:{}:{}",
+            key_info.key_id,
+            client_ip,
+            origin_header.as_deref().unwrap_or("none")
+        );
 
         // Simple in-memory rate limiting - check against configured limit
         // This is a placeholder for a proper distributed rate limiter
@@ -124,7 +129,9 @@ pub async fn mint_token(
     }
 
     // Validate origin for publishable keys
-    state.key_store.authorize_origin(&key_info, origin_header.as_deref())?;
+    state
+        .key_store
+        .authorize_origin(&key_info, origin_header.as_deref())?;
 
     // Parse websocket_url to extract deployment_id/audience
     // Format: wss://{deployment_id}.{domain} or wss://{domain}/{deployment_id}
@@ -174,8 +181,7 @@ pub async fn mint_token(
     .with_metering_key(key_info.metering_key.clone())
     .with_deployment_id(deployment_id)
     .with_limits(limits)
-    .with_key_class(key_info.key_class)
-    .with_jti(format!("{}-{}", key_info.key_id, now));
+    .with_key_class(key_info.key_class);
 
     // Use origin header if not explicitly provided in request
     let token_origin = request.origin.or(origin_header);

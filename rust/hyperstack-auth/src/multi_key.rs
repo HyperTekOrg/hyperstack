@@ -35,11 +35,7 @@ impl RotationKey {
     }
 
     /// Create a secondary (rotating out) key with expiration
-    pub fn secondary(
-        key: VerifyingKey,
-        key_id: impl Into<String>,
-        grace_period: Duration,
-    ) -> Self {
+    pub fn secondary(key: VerifyingKey, key_id: impl Into<String>, grace_period: Duration) -> Self {
         Self {
             key,
             key_id: key_id.into(),
@@ -101,10 +97,8 @@ impl MultiKeyVerifier {
         issuer: impl Into<String>,
         audience: impl Into<String>,
     ) -> Self {
-        let key_map: HashMap<String, RotationKey> = keys
-            .into_iter()
-            .map(|k| (k.key_id.clone(), k))
-            .collect();
+        let key_map: HashMap<String, RotationKey> =
+            keys.into_iter().map(|k| (k.key_id.clone(), k)).collect();
 
         Self {
             keys: Arc::new(RwLock::new(key_map)),
@@ -123,11 +117,7 @@ impl MultiKeyVerifier {
         issuer: impl Into<String>,
         audience: impl Into<String>,
     ) -> Self {
-        Self::new(
-            vec![RotationKey::primary(key, key_id)],
-            issuer,
-            audience,
-        )
+        Self::new(vec![RotationKey::primary(key, key_id)], issuer, audience)
     }
 
     /// Require origin validation
@@ -152,7 +142,8 @@ impl MultiKeyVerifier {
                 if existing.is_primary {
                     existing.is_primary = false;
                     // Set grace period for old primary
-                    existing.expires_at = Some(Instant::now() + Duration::from_secs(86400)); // 24 hours
+                    existing.expires_at = Some(Instant::now() + Duration::from_secs(86400));
+                    // 24 hours
                 }
             }
         }
@@ -356,7 +347,8 @@ impl MultiKeyVerifierBuilder {
         key_id: impl Into<String>,
         grace_period: Duration,
     ) -> Self {
-        self.keys.push(RotationKey::secondary(key, key_id, grace_period));
+        self.keys
+            .push(RotationKey::secondary(key, key_id, grace_period));
         self
     }
 
@@ -378,8 +370,7 @@ impl MultiKeyVerifierBuilder {
         if self.require_origin {
             verifier = verifier.with_origin_validation();
         }
-        verifier
-            .with_cleanup_interval(self.cleanup_interval)
+        verifier.with_cleanup_interval(self.cleanup_interval)
     }
 }
 
@@ -430,11 +421,7 @@ mod tests {
 
         // Start with old key as primary
         let old_key = RotationKey::primary(old_verifying_key.clone(), "key-old");
-        let verifier = MultiKeyVerifier::new(
-            vec![old_key],
-            "test-issuer",
-            "test-audience",
-        );
+        let verifier = MultiKeyVerifier::new(vec![old_key], "test-issuer", "test-audience");
 
         // Sign token with old key
         let old_claims = SessionClaims::builder("test-issuer", "subject-1", "test-audience")
@@ -489,11 +476,15 @@ mod tests {
         let signer = TokenSigner::new(signing_key, "test-issuer");
         let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
             .with_scope("read")
+            .with_origin("https://trusted.example.com")
             .with_key_class(KeyClass::Secret)
             .build();
 
         let token = signer.sign(claims).unwrap();
-        let ctx = verifier.verify(&token, None, None).await.unwrap();
+        let ctx = verifier
+            .verify(&token, Some("https://trusted.example.com"), None)
+            .await
+            .unwrap();
         assert_eq!(ctx.subject, "test-subject");
     }
 
@@ -530,7 +521,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_jwks_key_rotation_grace_period() {
-        use crate::token::{Jwks, Jwk};
+        use crate::token::{Jwk, Jwks};
         use base64::Engine;
 
         // Create old key pair with specific key ID
@@ -546,10 +537,10 @@ mod tests {
         let new_signer = TokenSigner::new(new_signing_key, "test-issuer");
 
         // Create JWKS with both keys using their actual key IDs
-        let old_key_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .encode(old_verifying_key.to_bytes());
-        let new_key_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .encode(new_verifying_key.to_bytes());
+        let old_key_b64 =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(old_verifying_key.to_bytes());
+        let new_key_b64 =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(new_verifying_key.to_bytes());
 
         let jwks = Jwks {
             keys: vec![
@@ -569,7 +560,8 @@ mod tests {
         };
 
         // Create verifier from JWKS
-        let verifier = crate::verifier::AsyncVerifier::with_jwks(jwks, "test-issuer", "test-audience");
+        let verifier =
+            crate::verifier::AsyncVerifier::with_jwks(jwks, "test-issuer", "test-audience");
 
         // Sign and verify token with old key
         let old_claims = SessionClaims::builder("test-issuer", "subject-old", "test-audience")
@@ -596,7 +588,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_jwks_key_not_found() {
-        use crate::token::{Jwks, Jwk};
+        use crate::token::{Jwk, Jwks};
         use base64::Engine;
 
         // Create a key pair
@@ -619,7 +611,8 @@ mod tests {
             }],
         };
 
-        let verifier = crate::verifier::AsyncVerifier::with_jwks(jwks, "test-issuer", "test-audience");
+        let verifier =
+            crate::verifier::AsyncVerifier::with_jwks(jwks, "test-issuer", "test-audience");
 
         let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
             .with_scope("read")
@@ -634,7 +627,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_jwks_with_origin_validation() {
-        use crate::token::{Jwks, Jwk};
+        use crate::token::{Jwk, Jwks};
         use base64::Engine;
 
         let signing_key = SigningKey::generate();
@@ -642,8 +635,8 @@ mod tests {
         let kid = verifying_key.key_id();
         let signer = TokenSigner::new(signing_key, "test-issuer");
 
-        let key_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .encode(verifying_key.to_bytes());
+        let key_b64 =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(verifying_key.to_bytes());
 
         let jwks = Jwks {
             keys: vec![Jwk {
@@ -655,8 +648,9 @@ mod tests {
         };
 
         // Create verifier with origin validation
-        let verifier = crate::verifier::AsyncVerifier::with_jwks(jwks, "test-issuer", "test-audience")
-            .with_origin_validation();
+        let verifier =
+            crate::verifier::AsyncVerifier::with_jwks(jwks, "test-issuer", "test-audience")
+                .with_origin_validation();
 
         // Token with matching origin
         let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
@@ -667,11 +661,16 @@ mod tests {
         let token = signer.sign(claims).unwrap();
 
         // Should succeed with matching origin
-        let ctx = verifier.verify(&token, Some("https://trusted.example.com"), None).await.unwrap();
+        let ctx = verifier
+            .verify(&token, Some("https://trusted.example.com"), None)
+            .await
+            .unwrap();
         assert_eq!(ctx.subject, "test-subject");
 
         // Should fail with wrong origin
-        let result = verifier.verify(&token, Some("https://evil.example.com"), None).await;
+        let result = verifier
+            .verify(&token, Some("https://evil.example.com"), None)
+            .await;
         assert!(matches!(result, Err(VerifyError::OriginMismatch { .. })));
     }
 }
