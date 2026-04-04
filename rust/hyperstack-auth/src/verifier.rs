@@ -218,6 +218,10 @@ impl AsyncVerifier {
 
         if let Some(verifier) = self.get_cached_verifier().await {
             verifier.verify(token, expected_origin, expected_client_ip)
+        } else if self.jwks_url.is_some() {
+            Err(VerifyError::InvalidFormat(
+                "JWKS cache unavailable after refresh".to_string(),
+            ))
         } else {
             // Fallback to inner verifier if no cache available
             match &self.inner {
@@ -263,6 +267,10 @@ mod tests {
     use crate::claims::{KeyClass, SessionClaims};
     use crate::keys::SigningKey;
     use crate::token::TokenSigner;
+    use base64::Engine;
+
+    #[cfg(feature = "jwks")]
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[tokio::test]
     async fn test_async_verifier_with_static_key() {
@@ -304,5 +312,61 @@ mod tests {
 
         assert_eq!(context.subject, "test-subject");
         assert_eq!(context.metering_key, "meter-123");
+    }
+
+    #[cfg(feature = "jwks")]
+    #[test]
+    fn test_verify_with_cache_returns_explicit_error_when_cache_stays_empty() {
+        tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let signing_key = SigningKey::generate();
+            let verifying_key = signing_key.verifying_key();
+            let signer = TokenSigner::new(signing_key, "test-issuer");
+
+            let jwks = serde_json::json!({
+                "keys": [{
+                    "kty": "OKP",
+                    "use": "sig",
+                    "kid": verifying_key.key_id(),
+                    "x": base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(verifying_key.to_bytes()),
+                }]
+            })
+            .to_string();
+
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let response_body = jwks.clone();
+            tokio::spawn(async move {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut buffer = [0u8; 1024];
+                let _ = socket.read(&mut buffer).await;
+
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                    response_body.len(),
+                    response_body
+                );
+                socket.write_all(response.as_bytes()).await.unwrap();
+            });
+
+            let verifier = AsyncVerifier::with_jwks_url(
+                format!("http://{addr}/jwks"),
+                "test-issuer",
+                "test-audience",
+            )
+            .with_cache_duration(Duration::ZERO);
+
+            let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
+                .with_scope("read")
+                .with_metering_key("meter-123")
+                .with_key_class(KeyClass::Publishable)
+                .build();
+            let token = signer.sign(claims).unwrap();
+
+            let result = verifier.verify_with_cache(&token, None, None).await;
+            assert!(matches!(
+                result,
+                Err(VerifyError::InvalidFormat(ref msg)) if msg == "JWKS cache unavailable after refresh"
+            ));
+        });
     }
 }
