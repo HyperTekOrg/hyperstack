@@ -52,6 +52,10 @@ struct Cli {
     #[arg(long, global = true)]
     verbose: bool,
 
+    /// API URL to use (overrides HYPERSTACK_API_URL env var)
+    #[arg(long, global = true, env = "HYPERSTACK_API_URL")]
+    api_url: Option<String>,
+
     /// Generate shell completions
     #[arg(long, value_name = "SHELL")]
     completions: Option<Shell>,
@@ -219,10 +223,13 @@ enum AuthCommands {
         key: Option<String>,
     },
 
-    /// Logout (remove stored credentials)
+    /// Logout (remove stored credentials for current environment)
     Logout,
 
-    /// Check authentication status (local only)
+    /// Logout from all environments (remove all stored credentials)
+    LogoutAll,
+
+    /// Check authentication status (shows current environment and all stored credentials)
     Status,
 
     /// Verify authentication and show user info
@@ -400,6 +407,12 @@ enum BuildCommands {
 fn main() {
     let cli = Cli::parse();
 
+    // Set HYPERSTACK_API_URL env var if --api-url flag is provided
+    // This ensures all ApiClient instances use the correct URL
+    if let Some(ref api_url) = cli.api_url {
+        std::env::set_var("HYPERSTACK_API_URL", api_url);
+    }
+
     if let Some(shell) = cli.completions {
         let mut cmd = Cli::command();
         generate(shell, &mut cmd, "hs", &mut io::stdout());
@@ -515,6 +528,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Commands::Auth(auth_cmd) => match auth_cmd {
             AuthCommands::Login { key } => commands::auth::login(key),
             AuthCommands::Logout => commands::auth::logout(),
+            AuthCommands::LogoutAll => commands::auth::logout_all(),
             AuthCommands::Status => commands::auth::status(),
             AuthCommands::Whoami => commands::auth::whoami(),
             AuthCommands::Keys(keys_cmd) => match keys_cmd {

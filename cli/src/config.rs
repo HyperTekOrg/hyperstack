@@ -4,6 +4,20 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[cfg(not(feature = "local"))]
+const DEFAULT_API_URL: &str = "https://api.usehyperstack.com";
+
+#[cfg(feature = "local")]
+const DEFAULT_API_URL: &str = "http://localhost:3000";
+
+/// Get the API URL from CLI override, environment variable, or use default
+pub fn get_api_url(override_url: Option<&str>) -> String {
+    override_url
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("HYPERSTACK_API_URL").ok())
+        .unwrap_or_else(|| DEFAULT_API_URL.to_string())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HyperstackConfig {
     pub project: ProjectConfig,

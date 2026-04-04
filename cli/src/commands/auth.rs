@@ -3,6 +3,7 @@ use colored::Colorize;
 use std::io::{self, Write};
 
 use crate::api_client::ApiClient;
+use crate::config;
 use crate::ui;
 
 fn credentials_path() -> String {
@@ -17,10 +18,14 @@ fn credentials_path() -> String {
 }
 
 pub fn login(api_key: Option<String>) -> Result<()> {
+    let api_url = config::get_api_url(None);
+
     let api_key = if let Some(key) = api_key {
         key
     } else {
         println!("{}", "Login to Hyperstack".bold());
+        println!();
+        println!("Target API: {}", api_url.yellow());
         println!();
         print!("API Key: ");
         io::stdout().flush()?;
@@ -34,8 +39,8 @@ pub fn login(api_key: Option<String>) -> Result<()> {
         anyhow::bail!("API key cannot be empty");
     }
 
-    // Save the key
-    ApiClient::save_api_key(&api_key)?;
+    // Save the key with URL
+    ApiClient::save_api_key(&api_key, Some(&api_url))?;
 
     // Verify the key works
     let spinner = ui::create_spinner("Verifying API key...");
@@ -53,7 +58,7 @@ pub fn login(api_key: Option<String>) -> Result<()> {
         Err(e) => {
             spinner.finish_and_clear();
             // Remove invalid key
-            let _ = ApiClient::delete_api_key();
+            let _ = ApiClient::delete_api_key_for_url(&api_url);
             anyhow::bail!("Invalid API key: {}", e);
         }
     }
@@ -62,27 +67,67 @@ pub fn login(api_key: Option<String>) -> Result<()> {
 }
 
 pub fn logout() -> Result<()> {
+    let api_url = config::get_api_url(None);
+
     let spinner = ui::create_spinner("Logging out...");
 
-    ApiClient::delete_api_key()?;
+    // Delete specific URL credentials
+    match ApiClient::delete_api_key_for_url(&api_url) {
+        Ok(_) => {
+            spinner.finish_and_clear();
+            ui::print_success(&format!("Logged out from {}", api_url));
+            println!("  Your credentials have been removed from this device.");
+        }
+        Err(_) => {
+            // Try to delete all if specific fails
+            let _ = ApiClient::delete_all_api_keys();
+            spinner.finish_and_clear();
+            ui::print_success("Logged out successfully");
+            println!("  Your credentials have been removed from this device.");
+        }
+    }
+
+    Ok(())
+}
+
+pub fn logout_all() -> Result<()> {
+    let spinner = ui::create_spinner("Logging out from all environments...");
+
+    ApiClient::delete_all_api_keys()?;
 
     spinner.finish_and_clear();
-    ui::print_success("Logged out successfully");
-    println!("  Your credentials have been removed from this device.");
+    ui::print_success("Logged out from all environments!");
+    println!("  All credentials have been removed from this device.");
 
     Ok(())
 }
 
 pub fn status() -> Result<()> {
-    match ApiClient::load_api_key() {
-        Ok(_) => {
+    let api_url = config::get_api_url(None);
+
+    println!("{}", "Authentication Status".bold());
+    println!();
+    println!("Current target API: {}", api_url.yellow());
+    println!();
+
+    // Try to load key for current URL
+    match ApiClient::load_api_key_for_url(&api_url) {
+        Ok(api_key) => {
             println!(
                 "{} {}",
                 ui::symbols::SUCCESS.green().bold(),
                 "Authenticated".green().bold()
             );
             println!();
-            println!("  You are logged in and ready to use Hyperstack.");
+            println!(
+                "  API key: {}...{}",
+                &api_key[..8.min(api_key.len())],
+                if api_key.len() > 12 {
+                    &api_key[api_key.len() - 4..]
+                } else {
+                    ""
+                }
+            );
             println!("  Credentials: {}", credentials_path().dimmed());
             println!();
             println!(
@@ -97,15 +142,42 @@ pub fn status() -> Result<()> {
                 "Not authenticated".red().bold()
             );
             println!();
-            println!("  Run {} to authenticate.", "hs auth login".cyan());
+            println!("Run 'hs auth login' to authenticate.");
         }
+    }
+
+    // List all stored credentials
+    match ApiClient::list_credentials() {
+        Ok(creds) if !creds.is_empty() => {
+            println!();
+            println!("{}", "Stored credentials:".dimmed());
+            for (url, _masked_key) in creds {
+                let is_current = url == api_url
+                    || (api_url.contains("localhost")
+                        && (url.contains("localhost") || url.contains("127.0.0.1")));
+                let marker = if is_current { "→ " } else { "  " };
+                println!(
+                    "{}{} {}",
+                    marker,
+                    url,
+                    if is_current {
+                        "(current)".green()
+                    } else {
+                        "".normal()
+                    }
+                );
+            }
+        }
+        _ => {}
     }
 
     Ok(())
 }
 
 pub fn whoami() -> Result<()> {
-    let api_key = match ApiClient::load_api_key() {
+    let api_url = config::get_api_url(None);
+
+    let api_key = match ApiClient::load_api_key_for_url(&api_url) {
         Ok(key) => key,
         Err(_) => {
             ui::print_error("Not authenticated");
@@ -133,6 +205,7 @@ pub fn whoami() -> Result<()> {
                 &api_key[api_key.len().saturating_sub(4)..]
             );
             println!("  Stacks: {}", specs.len());
+            println!("  Target API: {}", api_url.yellow());
             println!("  Credentials: {}", credentials_path().dimmed());
         }
         Err(e) => {

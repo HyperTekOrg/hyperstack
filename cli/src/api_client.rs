@@ -359,7 +359,7 @@ impl ApiClient {
         let base_url =
             std::env::var("HYPERSTACK_API_URL").unwrap_or_else(|_| DEFAULT_API_URL.to_string());
 
-        let api_key = Self::load_api_key().ok();
+        let api_key = Self::load_api_key_for_url(&base_url).ok();
 
         Ok(ApiClient {
             base_url,
@@ -770,9 +770,12 @@ impl ApiClient {
     // Helper methods
 
     fn require_api_key(&self) -> Result<&str> {
-        self.api_key
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("Not authenticated. Run 'hs auth login' first."))
+        self.api_key.as_deref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "Not authenticated for {}. Run 'hs auth login' first.",
+                self.base_url
+            )
+        })
     }
 
     fn handle_response<T: for<'de> Deserialize<'de>>(
@@ -797,7 +800,7 @@ impl ApiClient {
         Ok(home.join(".hyperstack").join("credentials.toml"))
     }
 
-    pub fn save_api_key(api_key: &str) -> Result<()> {
+    pub fn save_api_key(api_key: &str, api_url: Option<&str>) -> Result<()> {
         let path = Self::credentials_path()?;
 
         // Create directory if it doesn't exist
@@ -805,29 +808,166 @@ impl ApiClient {
             fs::create_dir_all(parent)?;
         }
 
-        let content = format!("api_key = \"{}\"\n", api_key);
+        let target_url = api_url
+            .map(|s| s.to_string())
+            .or_else(|| std::env::var("HYPERSTACK_API_URL").ok())
+            .unwrap_or_else(|| DEFAULT_API_URL.to_string());
+
+        // Read existing credentials or create new
+        let creds_content = if path.exists() {
+            fs::read_to_string(&path).unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        // Parse existing or create new
+        let mut creds: toml::Value = if creds_content.is_empty() {
+            toml::Value::Table(toml::map::Map::new())
+        } else {
+            toml::from_str(&creds_content)
+                .unwrap_or_else(|_| toml::Value::Table(toml::map::Map::new()))
+        };
+
+        // Get or create keys table
+        let keys = creds
+            .as_table_mut()
+            .ok_or_else(|| anyhow::anyhow!("Invalid credentials format"))?
+            .entry("keys")
+            .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
+            .as_table_mut()
+            .ok_or_else(|| anyhow::anyhow!("Invalid keys format"))?;
+
+        // Add or update the key for this URL
+        keys.insert(target_url.clone(), toml::Value::String(api_key.to_string()));
+
+        // Write back
+        let content = toml::to_string_pretty(&creds)?;
         fs::write(&path, content).context("Failed to save API key")?;
 
         Ok(())
     }
 
-    pub fn load_api_key() -> Result<String> {
+    /// Load API key for a specific URL (new URL-based format)
+    pub fn load_api_key_for_url(api_url: &str) -> Result<String> {
         let path = Self::credentials_path()?;
-        let content = fs::read_to_string(&path)
-            .context("Failed to read credentials file. Have you run 'hs auth login'?")?;
+        let content = fs::read_to_string(&path).context("Failed to read credentials file")?;
 
-        #[derive(Deserialize)]
-        struct Credentials {
-            api_key: String,
-        }
-
-        let creds: Credentials =
+        let creds: toml::Value =
             toml::from_str(&content).context("Failed to parse credentials file")?;
 
-        Ok(creds.api_key)
+        // Try new format first: [keys] table with URL mapping
+        if let Some(keys) = creds.get("keys").and_then(|k| k.as_table()) {
+            // Look for exact match first
+            if let Some(key) = keys.get(api_url).and_then(|v| v.as_str()) {
+                return Ok(key.to_string());
+            }
+
+            // For localhost URLs, try to match any localhost URL
+            if api_url.contains("localhost") || api_url.contains("127.0.0.1") {
+                for (url, key_value) in keys.iter() {
+                    if url.contains("localhost") || url.contains("127.0.0.1") {
+                        if let Some(key) = key_value.as_str() {
+                            return Ok(key.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fall back to legacy format: api_key = "..."
+        #[derive(Deserialize)]
+        struct LegacyCredentials {
+            api_key: Option<String>,
+        }
+
+        let legacy: LegacyCredentials =
+            toml::from_str(&content).context("Failed to parse credentials file")?;
+
+        if let Some(key) = legacy.api_key {
+            return Ok(key);
+        }
+
+        anyhow::bail!(
+            "No API key found for API URL: {}. Run 'hs auth login' first.",
+            api_url
+        )
     }
 
-    pub fn delete_api_key() -> Result<()> {
+    /// Load API key for the current configured URL
+    #[allow(dead_code)]
+    pub fn load_api_key() -> Result<String> {
+        let base_url =
+            std::env::var("HYPERSTACK_API_URL").unwrap_or_else(|_| DEFAULT_API_URL.to_string());
+        Self::load_api_key_for_url(&base_url)
+    }
+
+    pub fn list_credentials() -> Result<Vec<(String, String)>> {
+        let path = Self::credentials_path()?;
+        let content = fs::read_to_string(&path).context("Failed to read credentials file")?;
+
+        let creds: toml::Value =
+            toml::from_str(&content).context("Failed to parse credentials file")?;
+
+        // Try new format first
+        if let Some(keys) = creds.get("keys").and_then(|k| k.as_table()) {
+            let mut result = Vec::new();
+            for (url, key_value) in keys.iter() {
+                if let Some(key) = key_value.as_str() {
+                    // Mask the key for display
+                    let masked = if key.len() > 12 {
+                        format!("{}...{}", &key[..8], &key[key.len() - 4..])
+                    } else {
+                        key.to_string()
+                    };
+                    result.push((url.clone(), masked));
+                }
+            }
+            return Ok(result);
+        }
+
+        // Fall back to legacy format
+        #[derive(Deserialize)]
+        struct LegacyCredentials {
+            api_key: Option<String>,
+        }
+
+        let legacy: LegacyCredentials = toml::from_str(&content)?;
+        if let Some(key) = legacy.api_key {
+            let masked = if key.len() > 12 {
+                format!("{}...{}", &key[..8], &key[key.len() - 4..])
+            } else {
+                key.to_string()
+            };
+            return Ok(vec![(DEFAULT_API_URL.to_string(), masked)]);
+        }
+
+        Ok(Vec::new())
+    }
+
+    pub fn delete_api_key_for_url(api_url: &str) -> Result<()> {
+        let path = Self::credentials_path()?;
+        if !path.exists() {
+            anyhow::bail!("No credentials file found");
+        }
+
+        let content = fs::read_to_string(&path)?;
+        let mut creds: toml::Value = toml::from_str(&content)?;
+
+        let keys = creds
+            .get_mut("keys")
+            .and_then(|k| k.as_table_mut())
+            .ok_or_else(|| anyhow::anyhow!("No keys found in credentials file"))?;
+
+        if keys.remove(api_url).is_some() {
+            let content = toml::to_string_pretty(&creds)?;
+            fs::write(&path, content)?;
+            Ok(())
+        } else {
+            anyhow::bail!("No API key found for URL: {}", api_url)
+        }
+    }
+
+    pub fn delete_all_api_keys() -> Result<()> {
         let path = Self::credentials_path()?;
         if path.exists() {
             fs::remove_file(&path).context("Failed to delete credentials file")?;
