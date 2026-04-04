@@ -227,6 +227,32 @@ enum AuthCommands {
 
     /// Verify authentication and show user info
     Whoami,
+
+    /// Manage API keys for browser/client use
+    #[command(subcommand)]
+    Keys(KeysCommands),
+}
+
+#[derive(Subcommand)]
+enum KeysCommands {
+    /// List all your API keys
+    List,
+
+    /// Create a new publishable API key for browser/client use
+    CreatePublishable {
+        /// Name for the key (optional)
+        #[arg(short, long)]
+        name: Option<String>,
+
+        /// Allowed origins (e.g., https://example.com or http://localhost:5173)
+        /// Can specify multiple: --origin https://app.com --origin https://www.app.com
+        #[arg(short, long, required = true, num_args = 1..)]
+        origin: Vec<String>,
+
+        /// Number of days until the key expires (default: 365)
+        #[arg(short, long)]
+        expiry_days: Option<i64>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -491,6 +517,14 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             AuthCommands::Logout => commands::auth::logout(),
             AuthCommands::Status => commands::auth::status(),
             AuthCommands::Whoami => commands::auth::whoami(),
+            AuthCommands::Keys(keys_cmd) => match keys_cmd {
+                KeysCommands::List => commands::auth::list_keys(),
+                KeysCommands::CreatePublishable {
+                    name,
+                    origin,
+                    expiry_days,
+                } => commands::auth::create_publishable_key(name, origin, expiry_days),
+            },
         },
         Commands::Stack(stack_cmd) => match stack_cmd {
             StackCommands::List => commands::stack::list(cli.json),

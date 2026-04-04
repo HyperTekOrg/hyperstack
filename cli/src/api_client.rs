@@ -261,6 +261,40 @@ pub struct DeploymentResponse {
     pub last_deployed_at: Option<String>,
 }
 
+// ============================================================================
+// API Key DTOs
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiKey {
+    pub id: i32,
+    pub user_id: i32,
+    pub name: Option<String>,
+    pub last_used_at: Option<String>,
+    pub expires_at: Option<String>,
+    pub created_at: String,
+    pub key_class: String,
+    pub origin_allowlist: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreatePublishableKeyRequest {
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expiry_days: Option<i64>,
+    pub origin_allowlist: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateApiKeyResponse {
+    pub id: i32,
+    pub key: String,
+    pub name: Option<String>,
+    pub key_class: String,
+    pub expires_at: String,
+    pub message: String,
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct StopDeploymentResponse {
@@ -685,6 +719,50 @@ impl ApiClient {
             .bearer_auth(api_key)
             .send()
             .context("Failed to send stop deployment request")?;
+
+        Self::handle_response(response)
+    }
+
+    // ============================================================================
+    // API Key endpoints
+    // ============================================================================
+
+    /// List all API keys for the authenticated user
+    pub fn list_api_keys(&self) -> Result<Vec<ApiKey>> {
+        let api_key = self.require_api_key()?;
+
+        let response = self
+            .client
+            .get(format!("{}/api/auth/keys", self.base_url))
+            .bearer_auth(api_key)
+            .send()
+            .context("Failed to send list API keys request")?;
+
+        Self::handle_response(response)
+    }
+
+    /// Create a new publishable API key for browser use
+    pub fn create_publishable_key(
+        &self,
+        name: Option<String>,
+        origins: Vec<String>,
+        expiry_days: Option<i64>,
+    ) -> Result<CreateApiKeyResponse> {
+        let api_key = self.require_api_key()?;
+
+        let req = CreatePublishableKeyRequest {
+            name,
+            expiry_days,
+            origin_allowlist: origins,
+        };
+
+        let response = self
+            .client
+            .post(format!("{}/api/auth/keys/publishable", self.base_url))
+            .bearer_auth(api_key)
+            .json(&req)
+            .send()
+            .context("Failed to send create publishable key request")?;
 
         Self::handle_response(response)
     }

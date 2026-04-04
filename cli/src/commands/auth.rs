@@ -147,3 +147,152 @@ pub fn whoami() -> Result<()> {
 
     Ok(())
 }
+
+// ============================================================================
+// Publishable Key Management
+// ============================================================================
+
+pub fn list_keys() -> Result<()> {
+    let client = ApiClient::new()?;
+
+    let spinner = ui::create_spinner("Fetching API keys...");
+
+    match client.list_api_keys() {
+        Ok(keys) => {
+            spinner.finish_and_clear();
+
+            if keys.is_empty() {
+                println!("{}", "No API keys found.".yellow());
+                println!();
+                println!(
+                    "  Run {} to create a publishable key for browser use.",
+                    "hs auth keys create-publishable".cyan()
+                );
+                return Ok(());
+            }
+
+            println!("{}", "API Keys:".bold());
+            println!();
+
+            for key in keys {
+                let key_type = match key.key_class.as_str() {
+                    "publishable" => "publishable".green(),
+                    "secret" => "secret".cyan(),
+                    _ => key.key_class.normal(),
+                };
+
+                println!(
+                    "  {} {}",
+                    "•".bold(),
+                    key.name.unwrap_or_else(|| "Unnamed".to_string())
+                );
+                println!("    ID:    {}", key.id);
+                println!("    Type:  {}", key_type);
+
+                if let Some(origins) = key.origin_allowlist {
+                    if !origins.is_empty() {
+                        println!("    Origins: {}", origins.join(", "));
+                    }
+                }
+
+                if let Some(expires) = key.expires_at {
+                    println!(
+                        "    Expires: {}",
+                        expires.split('T').next().unwrap_or(&expires)
+                    );
+                }
+
+                if let Some(last_used) = key.last_used_at {
+                    println!(
+                        "    Last used: {}",
+                        last_used.split('T').next().unwrap_or(&last_used)
+                    );
+                }
+
+                println!();
+            }
+        }
+        Err(e) => {
+            spinner.finish_and_clear();
+            ui::print_error(&format!("Failed to list keys: {}", e));
+        }
+    }
+
+    Ok(())
+}
+
+pub fn create_publishable_key(
+    name: Option<String>,
+    origins: Vec<String>,
+    expiry_days: Option<i64>,
+) -> Result<()> {
+    // Validate origins
+    if origins.is_empty() {
+        anyhow::bail!("At least one origin is required for publishable keys (e.g., https://example.com or http://localhost:5173)");
+    }
+
+    for origin in &origins {
+        if !origin.starts_with("https://") && !origin.starts_with("http://") {
+            anyhow::bail!(
+                "Invalid origin '{}'. Origins must start with https:// or http://",
+                origin
+            );
+        }
+    }
+
+    let client = ApiClient::new()?;
+
+    let spinner = ui::create_spinner("Creating publishable key...");
+
+    match client.create_publishable_key(name.clone(), origins.clone(), expiry_days) {
+        Ok(response) => {
+            spinner.finish_and_clear();
+
+            println!(
+                "{}",
+                "✓ Publishable key created successfully!".green().bold()
+            );
+            println!();
+            println!(
+                "{}",
+                "⚠️  IMPORTANT: Save this key now - it won't be shown again!"
+                    .yellow()
+                    .bold()
+            );
+            println!();
+
+            if let Some(name) = &name {
+                println!("  Name:       {}", name);
+            }
+            println!("  Key ID:     {}", response.id);
+            println!("  Type:       {}", "publishable".green());
+            println!("  Origins:    {}", origins.join(", "));
+            println!(
+                "  Expires:    {}",
+                response
+                    .expires_at
+                    .split('T')
+                    .next()
+                    .unwrap_or(&response.expires_at)
+            );
+            println!();
+            println!("  {}", "Publishable Key:".bold());
+            println!("  {}", response.key.green().bold());
+            println!();
+            println!(
+                "{}",
+                "This key is safe to use in browser/client-side code.".dimmed()
+            );
+            println!(
+                "{}",
+                "It can only access WebSocket endpoints from the allowed origins.".dimmed()
+            );
+        }
+        Err(e) => {
+            spinner.finish_and_clear();
+            ui::print_error(&format!("Failed to create key: {}", e));
+        }
+    }
+
+    Ok(())
+}
