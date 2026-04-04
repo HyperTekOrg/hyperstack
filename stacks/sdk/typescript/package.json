@@ -28,8 +28,8 @@
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
-    "hyperstack-react": ">=0.5.10",
-    "hyperstack-typescript": ">=0.5.10"
+    "hyperstack-react": ">=0.6",
+    "hyperstack-typescript": ">=0.6"
   },
   "dependencies": {
     "zod": "^3.24.1"
