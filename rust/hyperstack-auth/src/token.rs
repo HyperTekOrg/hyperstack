@@ -274,6 +274,8 @@ impl TokenVerifier {
                         return Err(VerifyError::MissingClaim("client_ip".to_string()));
                     }
                 }
+            } else if claims.client_ip.is_none() {
+                return Err(VerifyError::MissingClaim("client_ip".to_string()));
             }
         }
 
@@ -636,6 +638,30 @@ mod tests {
         assert!(matches!(
             result,
             Err(VerifyError::MissingClaim(ref claim)) if claim == "origin"
+        ));
+    }
+
+    #[test]
+    fn test_client_ip_validation_requires_client_ip_claim() {
+        let signing_key = crate::keys::SigningKey::generate();
+        let verifying_key = signing_key.verifying_key();
+
+        let signer = TokenSigner::new(signing_key, "test-issuer");
+        let verifier = TokenVerifier::new(verifying_key, "test-issuer", "test-audience")
+            .with_client_ip_validation();
+
+        let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
+            .with_ttl(300)
+            .with_scope("read")
+            .with_metering_key("meter-123")
+            .with_key_class(KeyClass::Publishable)
+            .build();
+        let token = signer.sign(claims).unwrap();
+
+        let result = verifier.verify(&token, None, None);
+        assert!(matches!(
+            result,
+            Err(VerifyError::MissingClaim(ref claim)) if claim == "client_ip"
         ));
     }
 }
