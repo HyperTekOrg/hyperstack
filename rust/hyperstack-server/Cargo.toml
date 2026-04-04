@@ -34,7 +34,7 @@ yellowstone-vixen-yellowstone-grpc-source = { workspace = true }
 hyperstack-interpreter = { version = "0.5.10", path = "../../interpreter" }
 
 # Auth library
-hyperstack-auth = { version = "0.5.10", path = "../hyperstack-auth" }
+hyperstack-auth = { version = "0.1.0", path = "../hyperstack-auth" }
 
 # Async utilities
 tokio-util = "0.7"
