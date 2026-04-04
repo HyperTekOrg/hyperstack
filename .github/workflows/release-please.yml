@@ -19,6 +19,8 @@ jobs:
       releases_created: ${{ steps.release.outputs.releases_created }}
       cli_version: ${{ steps.release.outputs['cli--version'] }}
       cli_release_created: ${{ steps.release.outputs['cli--release_created'] }}
+      idl_release_created: ${{ steps.release.outputs['hyperstack-idl--release_created'] }}
+      auth_release_created: ${{ steps.release.outputs['rust/hyperstack-auth--release_created'] }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -43,6 +45,7 @@ jobs:
 
       # Publish in dependency order with waits for crates.io index propagation
       - name: Publish hyperstack-idl
+        if: needs.release-please.outputs.idl_release_created == 'true'
         run: |
           cd hyperstack-idl
           cargo publish --allow-dirty || echo "Package may already be published"
@@ -57,6 +60,13 @@ jobs:
       - name: Publish hyperstack-interpreter
         run: |
           cd interpreter
+          cargo publish --allow-dirty || echo "Package may already be published"
+          sleep 30
+
+      - name: Publish hyperstack-auth
+        if: needs.release-please.outputs.auth_release_created == 'true'
+        run: |
+          cd rust/hyperstack-auth
           cargo publish --allow-dirty || echo "Package may already be published"
           sleep 30
 
