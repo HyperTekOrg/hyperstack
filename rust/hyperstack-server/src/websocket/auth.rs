@@ -7,7 +7,6 @@ use std::time::Duration;
 use async_trait::async_trait;
 use tokio_tungstenite::tungstenite::http::Request;
 
-
 // Re-export AuthContext from hyperstack-auth for convenience
 pub use hyperstack_auth::AuthContext;
 // Re-export AuthErrorCode for convenience
@@ -126,7 +125,9 @@ impl AuthDeny {
             AuthErrorCode::TokenMissing,
             "Missing session token (expected Authorization: Bearer <token> or query token)",
         )
-        .with_suggested_action("Provide a valid session token in the Authorization header or as a query parameter")
+        .with_suggested_action(
+            "Provide a valid session token in the Authorization header or as a query parameter",
+        )
     }
 
     /// Create an AuthDeny from a VerifyError
@@ -182,11 +183,17 @@ impl AuthDeny {
         let reset_at = std::time::SystemTime::now() + retry_after;
         Self::new(
             AuthErrorCode::RateLimitExceeded,
-            format!("Rate limit exceeded for {}. Please retry after {:?}.", limit_type, retry_after),
+            format!(
+                "Rate limit exceeded for {}. Please retry after {:?}.",
+                limit_type, retry_after
+            ),
         )
         .with_retry_policy(RetryPolicy::RetryAfter(retry_after))
         .with_reset_at(reset_at)
-        .with_suggested_action(format!("Wait {:?} before retrying the request", retry_after))
+        .with_suggested_action(format!(
+            "Wait {:?} before retrying the request",
+            retry_after
+        ))
     }
 
     /// Create an AuthDeny for connection limits
@@ -198,7 +205,9 @@ impl AuthDeny {
                 limit_type, current, max
             ),
         )
-        .with_suggested_action("Disconnect existing connections or wait for other connections to close")
+        .with_suggested_action(
+            "Disconnect existing connections or wait for other connections to close",
+        )
     }
 
     /// Convert to a JSON-serializable error response
@@ -375,7 +384,7 @@ impl WebSocketAuthPlugin for StaticTokenAuthPlugin {
         } else {
             AuthDecision::Deny(AuthDeny::new(
                 AuthErrorCode::InvalidStaticToken,
-                "Invalid auth token"
+                "Invalid auth token",
             ))
         }
     }
@@ -512,14 +521,20 @@ impl WebSocketAuthPlugin for SignedSessionAuthPlugin {
         };
 
         let expected_client_ip = None; // IP validation can be added here if needed
-        
+
         let result = match &self.verifier {
-            SignedSessionVerifier::Static(verifier) => verifier.verify(token, expected_origin, expected_client_ip),
+            SignedSessionVerifier::Static(verifier) => {
+                verifier.verify(token, expected_origin, expected_client_ip)
+            }
             SignedSessionVerifier::CachedJwks(verifier) => {
-                verifier.verify_with_cache(token, expected_origin, expected_client_ip).await
+                verifier
+                    .verify_with_cache(token, expected_origin, expected_client_ip)
+                    .await
             }
             SignedSessionVerifier::MultiKey(verifier) => {
-                verifier.verify(token, expected_origin, expected_client_ip).await
+                verifier
+                    .verify(token, expected_origin, expected_client_ip)
+                    .await
             }
         };
 
@@ -647,7 +662,8 @@ mod tests {
 
         let signing_key = hyperstack_auth::SigningKey::generate();
         let verifying_key = signing_key.verifying_key();
-        let verifier = hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
+        let verifier =
+            hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
         let plugin = SignedSessionAuthPlugin::new(verifier);
 
         let request = Request::builder()
@@ -661,7 +677,7 @@ mod tests {
 
         let decision = plugin.authorize(&auth_request).await;
         assert!(!decision.is_allowed());
-        
+
         if let AuthDecision::Deny(deny) = decision {
             assert_eq!(deny.code, AuthErrorCode::TokenMissing);
         } else {
@@ -677,7 +693,8 @@ mod tests {
         let signing_key = hyperstack_auth::SigningKey::generate();
         let verifying_key = signing_key.verifying_key();
         let signer = TokenSigner::new(signing_key, "test-issuer");
-        let verifier = hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
+        let verifier =
+            hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
         let plugin = SignedSessionAuthPlugin::new(verifier);
 
         // Create a token that expired 1 hour ago
@@ -689,7 +706,7 @@ mod tests {
             .with_scope("read")
             .with_key_class(KeyClass::Secret)
             .build();
-        
+
         // Manually create expired claims
         let mut expired_claims = claims;
         expired_claims.exp = now - 3600; // Expired 1 hour ago
@@ -724,11 +741,15 @@ mod tests {
         // Create two different key pairs
         let signing_key = hyperstack_auth::SigningKey::generate();
         let wrong_key = hyperstack_auth::SigningKey::generate();
-        
+
         // Sign with one key, verify with another
         let signer = TokenSigner::new(signing_key, "test-issuer");
         let wrong_verifying_key = wrong_key.verifying_key();
-        let verifier = hyperstack_auth::TokenVerifier::new(wrong_verifying_key, "test-issuer", "test-audience");
+        let verifier = hyperstack_auth::TokenVerifier::new(
+            wrong_verifying_key,
+            "test-issuer",
+            "test-audience",
+        );
         let plugin = SignedSessionAuthPlugin::new(verifier);
 
         let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
@@ -764,9 +785,10 @@ mod tests {
         let signing_key = hyperstack_auth::SigningKey::generate();
         let verifying_key = signing_key.verifying_key();
         let signer = TokenSigner::new(signing_key, "test-issuer");
-        
+
         // Verifier expects "test-audience", token is for "wrong-audience"
-        let verifier = hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
+        let verifier =
+            hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
         let plugin = SignedSessionAuthPlugin::new(verifier);
 
         let claims = SessionClaims::builder("test-issuer", "test-subject", "wrong-audience")
@@ -802,12 +824,12 @@ mod tests {
         let signing_key = hyperstack_auth::SigningKey::generate();
         let verifying_key = signing_key.verifying_key();
         let signer = TokenSigner::new(signing_key, "test-issuer");
-        
+
         // Verifier requires origin validation
-        let verifier = hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience")
-            .with_origin_validation();
-        let plugin = SignedSessionAuthPlugin::new(verifier)
-            .with_origin_validation();
+        let verifier =
+            hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience")
+                .with_origin_validation();
+        let plugin = SignedSessionAuthPlugin::new(verifier).with_origin_validation();
 
         // Token bound to specific origin
         let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
@@ -846,7 +868,8 @@ mod tests {
         let signing_key = hyperstack_auth::SigningKey::generate();
         let verifying_key = signing_key.verifying_key();
         let signer = TokenSigner::new(signing_key, "test-issuer");
-        let verifier = hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
+        let verifier =
+            hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
         let plugin = SignedSessionAuthPlugin::new(verifier);
 
         let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
@@ -885,11 +908,11 @@ mod tests {
         let signing_key = hyperstack_auth::SigningKey::generate();
         let verifying_key = signing_key.verifying_key();
         let signer = TokenSigner::new(signing_key, "test-issuer");
-        
-        let verifier = hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience")
-            .with_origin_validation();
-        let plugin = SignedSessionAuthPlugin::new(verifier)
-            .with_origin_validation();
+
+        let verifier =
+            hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience")
+                .with_origin_validation();
+        let plugin = SignedSessionAuthPlugin::new(verifier).with_origin_validation();
 
         let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
             .with_scope("read")
@@ -946,9 +969,18 @@ mod tests {
     fn auth_error_code_string_representation() {
         assert_eq!(AuthErrorCode::TokenMissing.as_str(), "token-missing");
         assert_eq!(AuthErrorCode::TokenExpired.as_str(), "token-expired");
-        assert_eq!(AuthErrorCode::TokenInvalidSignature.as_str(), "token-invalid-signature");
-        assert_eq!(AuthErrorCode::RateLimitExceeded.as_str(), "rate-limit-exceeded");
-        assert_eq!(AuthErrorCode::ConnectionLimitExceeded.as_str(), "connection-limit-exceeded");
+        assert_eq!(
+            AuthErrorCode::TokenInvalidSignature.as_str(),
+            "token-invalid-signature"
+        );
+        assert_eq!(
+            AuthErrorCode::RateLimitExceeded.as_str(),
+            "rate-limit-exceeded"
+        );
+        assert_eq!(
+            AuthErrorCode::ConnectionLimitExceeded.as_str(),
+            "connection-limit-exceeded"
+        );
     }
 
     // Tests for AuthDeny construction
@@ -965,11 +997,29 @@ mod tests {
 
         let test_cases = vec![
             (VerifyError::Expired, AuthErrorCode::TokenExpired),
-            (VerifyError::InvalidSignature, AuthErrorCode::TokenInvalidSignature),
-            (VerifyError::InvalidIssuer, AuthErrorCode::TokenInvalidIssuer),
-            (VerifyError::InvalidAudience, AuthErrorCode::TokenInvalidAudience),
-            (VerifyError::KeyNotFound("kid123".to_string()), AuthErrorCode::TokenKeyNotFound),
-            (VerifyError::OriginMismatch { expected: "a".to_string(), actual: "b".to_string() }, AuthErrorCode::OriginMismatch),
+            (
+                VerifyError::InvalidSignature,
+                AuthErrorCode::TokenInvalidSignature,
+            ),
+            (
+                VerifyError::InvalidIssuer,
+                AuthErrorCode::TokenInvalidIssuer,
+            ),
+            (
+                VerifyError::InvalidAudience,
+                AuthErrorCode::TokenInvalidAudience,
+            ),
+            (
+                VerifyError::KeyNotFound("kid123".to_string()),
+                AuthErrorCode::TokenKeyNotFound,
+            ),
+            (
+                VerifyError::OriginMismatch {
+                    expected: "a".to_string(),
+                    actual: "b".to_string(),
+                },
+                AuthErrorCode::OriginMismatch,
+            ),
         ];
 
         for (err, expected_code) in test_cases {
@@ -986,10 +1036,10 @@ mod tests {
         let signing_key = hyperstack_auth::SigningKey::generate();
         let verifying_key = signing_key.verifying_key();
         let signer = TokenSigner::new(signing_key, "test-issuer");
-        let verifier = hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience")
-            .with_origin_validation();
-        let plugin = SignedSessionAuthPlugin::new(verifier)
-            .with_origin_validation();
+        let verifier =
+            hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience")
+                .with_origin_validation();
+        let plugin = SignedSessionAuthPlugin::new(verifier).with_origin_validation();
 
         // Test 1: Missing token
         let request = Request::builder()
@@ -1057,7 +1107,7 @@ mod tests {
     async fn auth_deney_with_rate_limit_code() {
         let deny = AuthDeny::new(
             AuthErrorCode::RateLimitExceeded,
-            "Too many requests from this IP"
+            "Too many requests from this IP",
         );
         assert_eq!(deny.code, AuthErrorCode::RateLimitExceeded);
         assert!(deny.code.should_retry());
@@ -1069,7 +1119,7 @@ mod tests {
     async fn auth_deny_with_connection_limit_code() {
         let deny = AuthDeny::new(
             AuthErrorCode::ConnectionLimitExceeded,
-            "Maximum connections exceeded for subject user-123"
+            "Maximum connections exceeded for subject user-123",
         );
         assert_eq!(deny.code, AuthErrorCode::ConnectionLimitExceeded);
         assert!(!deny.code.should_retry());
@@ -1100,9 +1150,9 @@ mod tests {
     #[test]
     fn malformed_authorization_header() {
         let test_cases = vec![
-            ("Basic dXNlcjpwYXNz", None), // Wrong scheme
-            ("Bearer", None), // Missing token (no space after Bearer)
-            ("", None), // Empty
+            ("Basic dXNlcjpwYXNz", None),                // Wrong scheme
+            ("Bearer", None),                            // Missing token (no space after Bearer)
+            ("", None),                                  // Empty
             ("Bearer token extra", Some("token extra")), // Extra parts (token includes everything after scheme)
         ];
 
@@ -1116,7 +1166,12 @@ mod tests {
                 "127.0.0.1:8877".parse().expect("socket addr should parse"),
                 &request,
             );
-            assert_eq!(auth_request.bearer_token(), expected, "Failed for header: {}", header_value);
+            assert_eq!(
+                auth_request.bearer_token(),
+                expected,
+                "Failed for header: {}",
+                header_value
+            );
         }
     }
 
@@ -1139,8 +1194,14 @@ mod tests {
         assert_eq!(response.message, "Token has expired");
         assert_eq!(response.error, "token-expired");
         assert!(response.retryable);
-        assert_eq!(response.suggested_action, Some("Refresh your authentication token".to_string()));
-        assert_eq!(response.docs_url, Some("https://docs.usehyperstack.com/auth/errors#token-expired".to_string()));
+        assert_eq!(
+            response.suggested_action,
+            Some("Refresh your authentication token".to_string())
+        );
+        assert_eq!(
+            response.docs_url,
+            Some("https://docs.usehyperstack.com/auth/errors#token-expired".to_string())
+        );
     }
 
     #[test]
@@ -1247,13 +1308,13 @@ mod tests {
         use tokio_tungstenite::tungstenite::http::StatusCode;
 
         let plugin = AllowAllAuthPlugin;
-        
+
         // Create a request without a token
         let request = Request::builder()
             .uri("/ws")
             .body(())
             .expect("request should build");
-        
+
         let auth_request = ConnectionAuthRequest::from_http_request(
             "127.0.0.1:8877".parse().expect("socket addr should parse"),
             &request,
@@ -1265,7 +1326,7 @@ mod tests {
         let decision = static_plugin.authorize(&auth_request).await;
 
         assert!(!decision.is_allowed());
-        
+
         if let AuthDecision::Deny(deny) = decision {
             assert_eq!(deny.code, AuthErrorCode::TokenMissing);
             assert_eq!(deny.http_status, 401);
@@ -1283,7 +1344,7 @@ mod tests {
         let signing_key = hyperstack_auth::SigningKey::generate();
         let verifying_key = signing_key.verifying_key();
         let signer = TokenSigner::new(signing_key, "test-issuer");
-        
+
         // Create an expired token
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1293,7 +1354,7 @@ mod tests {
             .with_scope("read")
             .with_key_class(KeyClass::Secret)
             .build();
-        
+
         let mut expired_claims = claims;
         expired_claims.exp = now - 3600;
         expired_claims.iat = now - 7200;
@@ -1302,14 +1363,15 @@ mod tests {
         let token = signer.sign(expired_claims).unwrap();
 
         // Create verifier and plugin
-        let verifier = hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
+        let verifier =
+            hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
         let plugin = SignedSessionAuthPlugin::new(verifier);
 
         let request = Request::builder()
             .uri(format!("/ws?hs_token={}", token))
             .body(())
             .expect("request should build");
-        
+
         let auth_request = ConnectionAuthRequest::from_http_request(
             "127.0.0.1:8877".parse().expect("socket addr should parse"),
             &request,
@@ -1318,7 +1380,7 @@ mod tests {
         let decision = plugin.authorize(&auth_request).await;
 
         assert!(!decision.is_allowed());
-        
+
         if let AuthDecision::Deny(deny) = decision {
             assert_eq!(deny.code, AuthErrorCode::TokenExpired);
             assert_eq!(deny.http_status, 401);
@@ -1339,11 +1401,15 @@ mod tests {
         // Create two different key pairs
         let signing_key = hyperstack_auth::SigningKey::generate();
         let wrong_key = hyperstack_auth::SigningKey::generate();
-        
+
         // Sign with one key, verify with another
         let signer = TokenSigner::new(signing_key, "test-issuer");
         let wrong_verifying_key = wrong_key.verifying_key();
-        let verifier = hyperstack_auth::TokenVerifier::new(wrong_verifying_key, "test-issuer", "test-audience");
+        let verifier = hyperstack_auth::TokenVerifier::new(
+            wrong_verifying_key,
+            "test-issuer",
+            "test-audience",
+        );
         let plugin = SignedSessionAuthPlugin::new(verifier);
 
         let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
@@ -1357,7 +1423,7 @@ mod tests {
             .uri(format!("/ws?hs_token={}", token))
             .body(())
             .expect("request should build");
-        
+
         let auth_request = ConnectionAuthRequest::from_http_request(
             "127.0.0.1:8877".parse().expect("socket addr should parse"),
             &request,
@@ -1366,7 +1432,7 @@ mod tests {
         let decision = plugin.authorize(&auth_request).await;
 
         assert!(!decision.is_allowed());
-        
+
         if let AuthDecision::Deny(deny) = decision {
             assert_eq!(deny.code, AuthErrorCode::TokenInvalidSignature);
             assert_eq!(deny.http_status, 401);
@@ -1387,11 +1453,11 @@ mod tests {
         let signing_key = hyperstack_auth::SigningKey::generate();
         let verifying_key = signing_key.verifying_key();
         let signer = TokenSigner::new(signing_key, "test-issuer");
-        
-        let verifier = hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience")
-            .with_origin_validation();
-        let plugin = SignedSessionAuthPlugin::new(verifier)
-            .with_origin_validation();
+
+        let verifier =
+            hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience")
+                .with_origin_validation();
+        let plugin = SignedSessionAuthPlugin::new(verifier).with_origin_validation();
 
         // Token bound to specific origin
         let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
@@ -1408,7 +1474,7 @@ mod tests {
             .header("Origin", "https://evil.example.com")
             .body(())
             .expect("request should build");
-        
+
         let auth_request = ConnectionAuthRequest::from_http_request(
             "127.0.0.1:8877".parse().expect("socket addr should parse"),
             &request,
@@ -1417,15 +1483,12 @@ mod tests {
         let decision = plugin.authorize(&auth_request).await;
 
         assert!(!decision.is_allowed());
-        
+
         if let AuthDecision::Deny(deny) = decision {
             assert_eq!(deny.code, AuthErrorCode::OriginMismatch);
             assert_eq!(deny.http_status, 403);
             // Should NOT suggest retrying - this is a security issue
-            assert!(matches!(
-                deny.retry_policy,
-                RetryPolicy::NoRetry
-            ));
+            assert!(matches!(deny.retry_policy, RetryPolicy::NoRetry));
         } else {
             panic!("Expected Deny decision");
         }
@@ -1457,25 +1520,27 @@ mod tests {
         let signing_key = hyperstack_auth::SigningKey::generate();
         let verifying_key = signing_key.verifying_key();
         let signer = TokenSigner::new(signing_key, "test-issuer");
-        let verifier = hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
+        let verifier =
+            hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
         let plugin = SignedSessionAuthPlugin::new(verifier);
 
         let test_cases = vec![
             ("missing_token", None, AuthErrorCode::TokenMissing),
-            ("invalid_format", Some("not-a-valid-token"), AuthErrorCode::TokenInvalidFormat),
+            (
+                "invalid_format",
+                Some("not-a-valid-token"),
+                AuthErrorCode::TokenInvalidFormat,
+            ),
         ];
 
         for (name, token, expected_code) in test_cases {
-            let uri = token.map_or_else(
-                || "/ws".to_string(),
-                |t| format!("/ws?hs_token={}", t)
-            );
+            let uri = token.map_or_else(|| "/ws".to_string(), |t| format!("/ws?hs_token={}", t));
 
             let request = Request::builder()
                 .uri(&uri)
                 .body(())
                 .expect("request should build");
-            
+
             let auth_request = ConnectionAuthRequest::from_http_request(
                 "127.0.0.1:8877".parse().expect("socket addr should parse"),
                 &request,
@@ -1484,7 +1549,7 @@ mod tests {
             let decision = plugin.authorize(&auth_request).await;
 
             assert!(!decision.is_allowed(), "{}: should deny", name);
-            
+
             if let AuthDecision::Deny(deny) = decision {
                 assert_eq!(deny.code, expected_code, "{}: wrong error code", name);
             } else {

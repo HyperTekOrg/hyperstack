@@ -15,9 +15,7 @@ pub use client_manager::{ClientInfo, ClientManager, RateLimitConfig, SendError, 
 pub use frame::{
     Frame, Mode, SnapshotEntity, SnapshotFrame, SortConfig, SortOrder, SubscribedFrame,
 };
-pub use rate_limiter::{
-    RateLimitResult, RateLimitWindow, RateLimiterConfig, WebSocketRateLimiter,
-};
+pub use rate_limiter::{RateLimitResult, RateLimitWindow, RateLimiterConfig, WebSocketRateLimiter};
 pub use server::WebSocketServer;
 pub use subscription::{
     ClientMessage, RefreshAuthRequest, RefreshAuthResponse, SocketIssueMessage, Subscription,

@@ -67,13 +67,12 @@ pub use telemetry::{init as init_telemetry, TelemetryConfig};
 pub use telemetry::{init_with_otel, TelemetryGuard};
 pub use view::{Delivery, Filters, Projection, ViewIndex, ViewSpec};
 pub use websocket::{
-    AllowAllAuthPlugin, AuthContext, AuthDecision, AuthDeny, AuthErrorDetails,
-    ChannelUsageEmitter, ClientInfo, ClientManager, ConnectionAuthRequest, ErrorResponse, Frame,
-    HttpUsageEmitter, Mode, RateLimitConfig, RateLimitResult, RateLimiterConfig, RetryPolicy,
-    RefreshAuthRequest, RefreshAuthResponse, SignedSessionAuthPlugin, SocketIssueMessage,
-    StaticTokenAuthPlugin, Subscription, WebSocketAuthPlugin, WebSocketRateLimiter,
-    WebSocketServer, WebSocketUsageBatch, WebSocketUsageEmitter, WebSocketUsageEnvelope,
-    WebSocketUsageEvent,
+    AllowAllAuthPlugin, AuthContext, AuthDecision, AuthDeny, AuthErrorDetails, ChannelUsageEmitter,
+    ClientInfo, ClientManager, ConnectionAuthRequest, ErrorResponse, Frame, HttpUsageEmitter, Mode,
+    RateLimitConfig, RateLimitResult, RateLimiterConfig, RefreshAuthRequest, RefreshAuthResponse,
+    RetryPolicy, SignedSessionAuthPlugin, SocketIssueMessage, StaticTokenAuthPlugin, Subscription,
+    WebSocketAuthPlugin, WebSocketRateLimiter, WebSocketServer, WebSocketUsageBatch,
+    WebSocketUsageEmitter, WebSocketUsageEnvelope, WebSocketUsageEvent,
 };
 
 use anyhow::Result;

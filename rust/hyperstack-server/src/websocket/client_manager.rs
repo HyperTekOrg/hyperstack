@@ -3,10 +3,10 @@ use crate::compression::CompressedPayload;
 use crate::websocket::auth::{AuthContext, AuthDeny};
 use crate::websocket::rate_limiter::{RateLimitResult, WebSocketRateLimiter};
 use bytes::Bytes;
-use hyperstack_auth::Limits;
 use dashmap::DashMap;
 use futures_util::stream::SplitSink;
 use futures_util::SinkExt;
+use hyperstack_auth::Limits;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -524,7 +524,8 @@ impl ClientManager {
         auth_context: Option<AuthContext>,
         remote_addr: SocketAddr,
     ) {
-        let (client_tx, mut client_rx) = mpsc::channel::<Message>(self.rate_limit_config.message_queue_size);
+        let (client_tx, mut client_rx) =
+            mpsc::channel::<Message>(self.rate_limit_config.message_queue_size);
         let client_info = ClientInfo::new(client_id, client_tx, auth_context, remote_addr);
 
         let clients_ref = self.clients.clone();
@@ -815,7 +816,10 @@ impl ClientManager {
                 self.rate_limit_config.message_rate_window,
                 "inbound websocket messages",
             )
-            .with_context(format!("client {} exceeded the inbound message budget", client_id)))
+            .with_context(format!(
+                "client {} exceeded the inbound message budget",
+                client_id
+            )))
         }
     }
 
@@ -913,42 +917,45 @@ impl ClientManager {
             match rate_limiter.check_handshake(remote_addr).await {
                 RateLimitResult::Allowed { .. } => {}
                 RateLimitResult::Denied { retry_after, limit } => {
-                    return Err(
-                        AuthDeny::rate_limited(retry_after, "websocket handshakes")
-                            .with_context(format!(
-                                "handshake rate limit of {} per minute exceeded for {}",
-                                limit, remote_addr
-                            )),
-                    );
+                    return Err(AuthDeny::rate_limited(retry_after, "websocket handshakes")
+                        .with_context(format!(
+                            "handshake rate limit of {} per minute exceeded for {}",
+                            limit, remote_addr
+                        )));
                 }
             }
 
             // Check connection rate limit for subject
             if let Some(ref ctx) = auth_context {
-                match rate_limiter.check_connection_for_subject(&ctx.subject).await {
+                match rate_limiter
+                    .check_connection_for_subject(&ctx.subject)
+                    .await
+                {
                     RateLimitResult::Allowed { .. } => {}
                     RateLimitResult::Denied { retry_after, limit } => {
-                        return Err(
-                            AuthDeny::rate_limited(retry_after, "websocket connections")
-                                .with_context(format!(
-                                    "connection rate limit for subject {} of {} per minute exceeded",
-                                    ctx.subject, limit
-                                )),
-                        );
+                        return Err(AuthDeny::rate_limited(retry_after, "websocket connections")
+                            .with_context(format!(
+                                "connection rate limit for subject {} of {} per minute exceeded",
+                                ctx.subject, limit
+                            )));
                     }
                 }
 
                 // Check connection rate limit for metering key
-                match rate_limiter.check_connection_for_metering_key(&ctx.metering_key).await {
+                match rate_limiter
+                    .check_connection_for_metering_key(&ctx.metering_key)
+                    .await
+                {
                     RateLimitResult::Allowed { .. } => {}
                     RateLimitResult::Denied { retry_after, limit } => {
-                        return Err(
-                            AuthDeny::rate_limited(retry_after, "metered websocket connections")
-                                .with_context(format!(
-                                    "connection rate limit for metering key {} of {} per minute exceeded",
-                                    ctx.metering_key, limit
-                                )),
-                        );
+                        return Err(AuthDeny::rate_limited(
+                            retry_after,
+                            "metered websocket connections",
+                        )
+                        .with_context(format!(
+                            "connection rate limit for metering key {} of {} per minute exceeded",
+                            ctx.metering_key, limit
+                        )));
                     }
                 }
             }
@@ -968,15 +975,12 @@ impl ClientManager {
 
         if let Some(ctx) = auth_context {
             // Check max connections per subject (use token limits, fallback to default limits)
-            let max_connections = ctx
-                .limits
-                .max_connections
-                .or_else(|| {
-                    self.rate_limit_config
-                        .default_limits
-                        .as_ref()
-                        .and_then(|l| l.max_connections)
-                });
+            let max_connections = ctx.limits.max_connections.or_else(|| {
+                self.rate_limit_config
+                    .default_limits
+                    .as_ref()
+                    .and_then(|l| l.max_connections)
+            });
             if let Some(max_connections) = max_connections {
                 let current_connections = self.count_connections_for_subject(&ctx.subject);
                 if current_connections >= max_connections as usize {
@@ -989,8 +993,11 @@ impl ClientManager {
             }
 
             // Check global max connections per metering key
-            if let Some(max_per_metering_key) = self.rate_limit_config.max_connections_per_metering_key {
-                let current_metering_connections = self.count_connections_for_metering_key(&ctx.metering_key);
+            if let Some(max_per_metering_key) =
+                self.rate_limit_config.max_connections_per_metering_key
+            {
+                let current_metering_connections =
+                    self.count_connections_for_metering_key(&ctx.metering_key);
                 if current_metering_connections >= max_per_metering_key {
                     return Err(AuthDeny::connection_limit_exceeded(
                         &format!("metering key {}", ctx.metering_key),
@@ -1081,15 +1088,12 @@ impl ClientManager {
 
             // Check max subscriptions per connection (use token limits, fallback to default limits)
             if let Some(ref ctx) = client.auth_context {
-                let max_subs = ctx
-                    .limits
-                    .max_subscriptions
-                    .or_else(|| {
-                        self.rate_limit_config
-                            .default_limits
-                            .as_ref()
-                            .and_then(|l| l.max_subscriptions)
-                    });
+                let max_subs = ctx.limits.max_subscriptions.or_else(|| {
+                    self.rate_limit_config
+                        .default_limits
+                        .as_ref()
+                        .and_then(|l| l.max_subscriptions)
+                });
                 if let Some(max_subs) = max_subs {
                     if current_subs >= max_subs as usize {
                         return Err(AuthDeny::new(
@@ -1137,15 +1141,12 @@ impl ClientManager {
     ) -> Result<(), AuthDeny> {
         if let Some(client) = self.clients.get(&client_id) {
             if let Some(ref ctx) = client.auth_context {
-                let max_rows = ctx
-                    .limits
-                    .max_snapshot_rows
-                    .or_else(|| {
-                        self.rate_limit_config
-                            .default_limits
-                            .as_ref()
-                            .and_then(|l| l.max_snapshot_rows)
-                    });
+                let max_rows = ctx.limits.max_snapshot_rows.or_else(|| {
+                    self.rate_limit_config
+                        .default_limits
+                        .as_ref()
+                        .and_then(|l| l.max_snapshot_rows)
+                });
                 if let Some(max_rows) = max_rows {
                     if requested_rows > max_rows {
                         return Err(AuthDeny::new(
@@ -1355,7 +1356,10 @@ mod tests {
 
         // Check that the configuration was applied
         assert_eq!(manager.rate_limit_config().max_connections_per_ip, Some(5));
-        assert_eq!(manager.rate_limit_config().client_timeout, Duration::from_secs(120));
+        assert_eq!(
+            manager.rate_limit_config().client_timeout,
+            Duration::from_secs(120)
+        );
         assert_eq!(manager.rate_limit_config().message_queue_size, 256);
 
         // Should allow when under limit
@@ -1371,9 +1375,15 @@ mod tests {
             .with_rate_limit_window(Duration::from_secs(90));
 
         assert_eq!(manager.rate_limit_config().max_connections_per_ip, Some(10));
-        assert_eq!(manager.rate_limit_config().client_timeout, Duration::from_secs(180));
+        assert_eq!(
+            manager.rate_limit_config().client_timeout,
+            Duration::from_secs(180)
+        );
         assert_eq!(manager.rate_limit_config().message_queue_size, 1024);
-        assert_eq!(manager.rate_limit_config().message_rate_window, Duration::from_secs(90));
+        assert_eq!(
+            manager.rate_limit_config().message_rate_window,
+            Duration::from_secs(90)
+        );
     }
 
     // Integration test: Connection limits are enforced
@@ -1385,18 +1395,27 @@ mod tests {
 
         // First connection from IP1 should succeed
         let auth1 = create_test_auth_context("user-1", Limits::default());
-        assert!(manager.check_connection_allowed(addr1, &Some(auth1.clone())).await.is_ok());
+        assert!(manager
+            .check_connection_allowed(addr1, &Some(auth1.clone()))
+            .await
+            .is_ok());
 
         // Simulate adding a client (we can't easily do this without a real WebSocket,
         // but we can verify the check logic works)
 
         // Same IP, different auth context - should still count toward IP limit
         let auth2 = create_test_auth_context("user-2", Limits::default());
-        assert!(manager.check_connection_allowed(addr1, &Some(auth2.clone())).await.is_ok());
+        assert!(manager
+            .check_connection_allowed(addr1, &Some(auth2.clone()))
+            .await
+            .is_ok());
 
         // Different IP - should succeed regardless
         let auth3 = create_test_auth_context("user-3", Limits::default());
-        assert!(manager.check_connection_allowed(addr2, &Some(auth3.clone())).await.is_ok());
+        assert!(manager
+            .check_connection_allowed(addr2, &Some(auth3.clone()))
+            .await
+            .is_ok());
     }
 
     // Test subscription limit enforcement
@@ -1415,7 +1434,10 @@ mod tests {
         );
 
         // Check should pass initially
-        assert!(manager.check_connection_allowed(addr, &Some(auth.clone())).await.is_ok());
+        assert!(manager
+            .check_connection_allowed(addr, &Some(auth.clone()))
+            .await
+            .is_ok());
 
         // Note: We can't easily test the full subscription flow without a real connection,
         // but we verify the limit configuration is properly stored
@@ -1436,7 +1458,10 @@ mod tests {
             },
         );
 
-        assert!(manager.check_connection_allowed(addr, &Some(auth.clone())).await.is_ok());
+        assert!(manager
+            .check_connection_allowed(addr, &Some(auth.clone()))
+            .await
+            .is_ok());
 
         // Note: Actual snapshot limit checking happens in check_snapshot_allowed
         // which requires a connected client
@@ -1453,6 +1478,9 @@ mod tests {
 
         // Should allow connections when rate limiter is configured
         let auth = create_test_auth_context("user-1", Limits::default());
-        assert!(manager.check_connection_allowed(addr, &Some(auth)).await.is_ok());
+        assert!(manager
+            .check_connection_allowed(addr, &Some(auth))
+            .await
+            .is_ok());
     }
 }

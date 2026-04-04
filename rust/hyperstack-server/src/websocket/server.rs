@@ -53,8 +53,8 @@ async fn handle_refresh_auth(
         // Try to downcast to SignedSessionAuthPlugin
         if let Some(signed_plugin) = auth_plugin
             .as_any()
-            .downcast_ref::<crate::websocket::auth::SignedSessionAuthPlugin>()
-        {
+            .downcast_ref::<crate::websocket::auth::SignedSessionAuthPlugin>(
+        ) {
             signed_plugin
                 .verify_refresh_token(&refresh_req.token)
                 .await
@@ -434,8 +434,12 @@ fn build_handshake_error_response(
         builder = builder.header("Retry-After", retry_after_secs.to_string());
     }
 
-    let body = serde_json::to_string(&reject.body)
-        .unwrap_or_else(|_| format!(r#"{{"error":"{}","message":"{}","code":"{}","retryable":false}}"#, reject.body.error, reject.body.message, reject.body.code));
+    let body = serde_json::to_string(&reject.body).unwrap_or_else(|_| {
+        format!(
+            r#"{{"error":"{}","message":"{}","code":"{}","retryable":false}}"#,
+            reject.body.error, reject.body.message, reject.body.code
+        )
+    });
 
     builder
         .body(Some(body))
@@ -450,7 +454,10 @@ mod tests {
 
     #[test]
     fn handshake_error_response_serializes_json_and_retry_after() {
-        let response = Response::builder().status(StatusCode::SWITCHING_PROTOCOLS).body(()).unwrap();
+        let response = Response::builder()
+            .status(StatusCode::SWITCHING_PROTOCOLS)
+            .body(())
+            .unwrap();
         let deny = AuthDeny::rate_limited(Duration::from_secs(7), "websocket handshakes");
         let reject = HandshakeReject::from_deny(&deny);
 
@@ -472,7 +479,10 @@ mod tests {
 
     #[test]
     fn handshake_error_response_preserves_non_retryable_auth_denies() {
-        let response = Response::builder().status(StatusCode::SWITCHING_PROTOCOLS).body(()).unwrap();
+        let response = Response::builder()
+            .status(StatusCode::SWITCHING_PROTOCOLS)
+            .body(())
+            .unwrap();
         let deny = AuthDeny::new(AuthErrorCode::OriginMismatch, "origin mismatch");
         let reject = HandshakeReject::from_deny(&deny);
 

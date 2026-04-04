@@ -129,10 +129,7 @@ impl Runtime {
     /// This sets global rate limits such as maximum connections per IP,
     /// timeouts, and rate windows. Per-subject limits are controlled
     /// via AuthContext.Limits from the authentication token.
-    pub fn with_websocket_rate_limit_config(
-        mut self,
-        config: RateLimitConfig,
-    ) -> Self {
+    pub fn with_websocket_rate_limit_config(mut self, config: RateLimitConfig) -> Self {
         self.websocket_rate_limit_config = Some(config);
         self
     }

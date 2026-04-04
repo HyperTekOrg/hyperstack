@@ -130,8 +130,12 @@ impl AsyncVerifier {
     ) -> Result<AuthContext, VerifyError> {
         // If using static JWKS or static key, use directly
         match &self.inner {
-            VerifierInner::Static(verifier) => verifier.verify(token, expected_origin, expected_client_ip),
-            VerifierInner::Jwks(verifier) => verifier.verify(token, expected_origin, expected_client_ip),
+            VerifierInner::Static(verifier) => {
+                verifier.verify(token, expected_origin, expected_client_ip)
+            }
+            VerifierInner::Jwks(verifier) => {
+                verifier.verify(token, expected_origin, expected_client_ip)
+            }
         }
     }
 
@@ -144,8 +148,12 @@ impl AsyncVerifier {
         expected_client_ip: Option<&str>,
     ) -> Result<AuthContext, VerifyError> {
         match &self.inner {
-            VerifierInner::Static(verifier) => verifier.verify(token, expected_origin, expected_client_ip),
-            VerifierInner::Jwks(verifier) => verifier.verify(token, expected_origin, expected_client_ip),
+            VerifierInner::Static(verifier) => {
+                verifier.verify(token, expected_origin, expected_client_ip)
+            }
+            VerifierInner::Jwks(verifier) => {
+                verifier.verify(token, expected_origin, expected_client_ip)
+            }
         }
     }
 
@@ -213,8 +221,12 @@ impl AsyncVerifier {
         } else {
             // Fallback to inner verifier if no cache available
             match &self.inner {
-                VerifierInner::Static(verifier) => verifier.verify(token, expected_origin, expected_client_ip),
-                VerifierInner::Jwks(verifier) => verifier.verify(token, expected_origin, expected_client_ip),
+                VerifierInner::Static(verifier) => {
+                    verifier.verify(token, expected_origin, expected_client_ip)
+                }
+                VerifierInner::Jwks(verifier) => {
+                    verifier.verify(token, expected_origin, expected_client_ip)
+                }
             }
         }
     }
@@ -240,7 +252,8 @@ impl SimpleVerifier {
         expected_origin: Option<&str>,
         expected_client_ip: Option<&str>,
     ) -> Result<AuthContext, VerifyError> {
-        self.inner.verify(token, expected_origin, expected_client_ip)
+        self.inner
+            .verify(token, expected_origin, expected_client_ip)
     }
 }
 

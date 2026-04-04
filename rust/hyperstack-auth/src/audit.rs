@@ -177,7 +177,10 @@ pub struct ChannelAuditLogger {
 
 impl ChannelAuditLogger {
     /// Create a new channel audit logger
-    pub fn new() -> (Self, tokio::sync::mpsc::UnboundedReceiver<SecurityAuditEvent>) {
+    pub fn new() -> (
+        Self,
+        tokio::sync::mpsc::UnboundedReceiver<SecurityAuditEvent>,
+    ) {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         (Self { sender }, receiver)
     }
@@ -191,10 +194,7 @@ impl SecurityAuditLogger for ChannelAuditLogger {
 }
 
 /// Helper function to create an auth failure audit event
-pub fn auth_failure_event(
-    error_code: &crate::AuthErrorCode,
-    reason: &str,
-) -> SecurityAuditEvent {
+pub fn auth_failure_event(error_code: &crate::AuthErrorCode, reason: &str) -> SecurityAuditEvent {
     SecurityAuditEvent::new(
         AuditSeverity::Warning,
         AuditEvent::AuthAttempt {
@@ -258,10 +258,7 @@ mod tests {
     async fn test_channel_audit_logger() {
         let (logger, mut receiver) = ChannelAuditLogger::new();
 
-        let event = auth_failure_event(
-            &crate::AuthErrorCode::TokenExpired,
-            "Token has expired",
-        );
+        let event = auth_failure_event(&crate::AuthErrorCode::TokenExpired, "Token has expired");
 
         logger.log(event.clone()).await;
 
