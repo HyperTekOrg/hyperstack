@@ -285,6 +285,7 @@ pub struct CreatePublishableKeyRequest {
     pub origin_allowlist: Vec<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct CreateApiKeyResponse {
     pub id: i32,
