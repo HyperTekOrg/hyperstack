@@ -98,9 +98,7 @@ fn value_eq(value: &Value, expected: &str) -> bool {
                 false
             }
         }
-        Value::Bool(b) => {
-            (expected == "true" && *b) || (expected == "false" && !b)
-        }
+        Value::Bool(b) => (expected == "true" && *b) || (expected == "false" && !b),
         Value::Null => expected == "null",
         _ => {
             let s = serde_json::to_string(value).unwrap_or_default();
@@ -201,22 +199,30 @@ fn make_not_eq(value: &str) -> Result<FilterOp> {
 }
 
 fn make_gt(value: &str) -> Result<FilterOp> {
-    let n: f64 = value.parse().map_err(|_| anyhow::anyhow!("Expected number after '>', got '{}'", value))?;
+    let n: f64 = value
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Expected number after '>', got '{}'", value))?;
     Ok(FilterOp::Gt(n))
 }
 
 fn make_gte(value: &str) -> Result<FilterOp> {
-    let n: f64 = value.parse().map_err(|_| anyhow::anyhow!("Expected number after '>=', got '{}'", value))?;
+    let n: f64 = value
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Expected number after '>=', got '{}'", value))?;
     Ok(FilterOp::Gte(n))
 }
 
 fn make_lt(value: &str) -> Result<FilterOp> {
-    let n: f64 = value.parse().map_err(|_| anyhow::anyhow!("Expected number after '<', got '{}'", value))?;
+    let n: f64 = value
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Expected number after '<', got '{}'", value))?;
     Ok(FilterOp::Lt(n))
 }
 
 fn make_lte(value: &str) -> Result<FilterOp> {
-    let n: f64 = value.parse().map_err(|_| anyhow::anyhow!("Expected number after '<=', got '{}'", value))?;
+    let n: f64 = value
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Expected number after '<=', got '{}'", value))?;
     Ok(FilterOp::Lte(n))
 }
 
@@ -314,10 +320,7 @@ mod tests {
 
     #[test]
     fn test_multiple_filters_and() {
-        let f = Filter::parse(&[
-            "age>18".to_string(),
-            "name=alice".to_string(),
-        ]).unwrap();
+        let f = Filter::parse(&["age>18".to_string(), "name=alice".to_string()]).unwrap();
         assert!(f.matches(&json!({"age": 25, "name": "alice"})));
         assert!(!f.matches(&json!({"age": 25, "name": "bob"})));
         assert!(!f.matches(&json!({"age": 15, "name": "alice"})));

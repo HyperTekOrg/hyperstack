@@ -86,7 +86,12 @@ pub struct StreamArgs {
     pub duration: Option<u64>,
 
     /// Replay a previously saved snapshot file instead of connecting live
-    #[arg(long, conflicts_with = "url", conflicts_with = "tui", conflicts_with = "duration")]
+    #[arg(
+        long,
+        conflicts_with = "url",
+        conflicts_with = "tui",
+        conflicts_with = "duration"
+    )]
     pub load: Option<String>,
 
     /// Show update history for the specified --key entity
@@ -197,10 +202,7 @@ pub fn build_subscription(view: &str, args: &StreamArgs) -> Subscription {
 
 fn validate_ws_url(url: &str) -> Result<()> {
     if !url.starts_with("ws://") && !url.starts_with("wss://") {
-        bail!(
-            "Invalid URL scheme. Expected ws:// or wss://, got: {}",
-            url
-        );
+        bail!("Invalid URL scheme. Expected ws:// or wss://, got: {}", url);
     }
     Ok(())
 }
@@ -274,12 +276,7 @@ fn list_stacks(config: Option<&HyperstackConfig>) -> String {
         Some(config) if !config.stacks.is_empty() => config
             .stacks
             .iter()
-            .map(|s| {
-                s.name
-                    .as_deref()
-                    .unwrap_or(&s.stack)
-                    .to_string()
-            })
+            .map(|s| s.name.as_deref().unwrap_or(&s.stack).to_string())
             .collect::<Vec<_>>()
             .join(", "),
         _ => "(none — create hyperstack.toml with [[stacks]] entries)".to_string(),

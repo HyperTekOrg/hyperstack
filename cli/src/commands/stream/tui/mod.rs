@@ -47,7 +47,8 @@ pub async fn run_tui(url: String, view: &str, args: &StreamArgs) -> Result<()> {
     // Spawn WS reader task
     let ws_handle = tokio::spawn(async move {
         let ping_period = std::time::Duration::from_secs(30);
-        let mut ping_interval = tokio::time::interval_at(tokio::time::Instant::now() + ping_period, ping_period);
+        let mut ping_interval =
+            tokio::time::interval_at(tokio::time::Instant::now() + ping_period, ping_period);
         loop {
             tokio::select! {
                 _ = &mut shutdown_rx => {
@@ -141,10 +142,7 @@ pub async fn run_tui(url: String, view: &str, args: &StreamArgs) -> Result<()> {
 
     // Restore terminal (always attempt all steps)
     let _ = disable_raw_mode();
-    let _ = execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-    );
+    let _ = execute!(terminal.backend_mut(), LeaveAlternateScreen,);
     let _ = terminal.show_cursor();
 
     // Signal graceful shutdown, then wait briefly for the task to close
@@ -212,7 +210,11 @@ async fn run_loop(
                             TuiAction::FilterDeleteWord
                         }
                         // Ignore other control/alt combos — don't insert them as text
-                        KeyCode::Char(_) if key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+                        KeyCode::Char(_)
+                            if key
+                                .modifiers
+                                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+                        {
                             continue
                         }
                         KeyCode::Char(c) => TuiAction::FilterChar(c),
@@ -226,7 +228,9 @@ async fn run_loop(
                         if c != '0' || app.pending_count.is_some() {
                             let digit = c as usize - '0' as usize;
                             let current = app.pending_count.unwrap_or(0);
-                            app.pending_count = Some((current.saturating_mul(10).saturating_add(digit)).min(99_999));
+                            app.pending_count = Some(
+                                (current.saturating_mul(10).saturating_add(digit)).min(99_999),
+                            );
                             app.pending_g = false;
                             continue;
                         }

@@ -1,9 +1,34 @@
 import typescript from '@rollup/plugin-typescript';
 import dts from 'rollup-plugin-dts';
 
+const baseConfig = {
+  plugins: [
+    typescript({
+      tsconfig: './tsconfig.json',
+      declaration: false,
+      declarationDir: undefined,
+    }),
+  ],
+  external: [],
+};
+
+const dtsConfig = {
+  plugins: [dts()],
+};
+
+// Define all SSR submodules
+const ssrModules = [
+  'index',
+  'handlers',
+  'nextjs-app',
+  'vite',
+  'tanstack-start',
+];
+
 export default [
   // Main bundle
   {
+    ...baseConfig,
     input: 'src/index.ts',
     output: [
       {
@@ -17,22 +42,41 @@ export default [
         sourcemap: true,
       },
     ],
-    plugins: [
-      typescript({
-        tsconfig: './tsconfig.json',
-        declaration: false,
-        declarationDir: undefined,
-      }),
-    ],
-    external: [],
   },
-  // Type declarations
+  // Type declarations - main
   {
+    ...dtsConfig,
     input: 'src/index.ts',
     output: {
       file: 'dist/index.d.ts',
       format: 'es',
     },
-    plugins: [dts()],
   },
+  // SSR modules
+  ...ssrModules.flatMap(name => [
+    {
+      ...baseConfig,
+      input: `src/ssr/${name}.ts`,
+      output: [
+        {
+          file: `dist/ssr/${name}.js`,
+          format: 'cjs',
+          sourcemap: true,
+        },
+        {
+          file: `dist/ssr/${name}.esm.js`,
+          format: 'esm',
+          sourcemap: true,
+        },
+      ],
+    },
+    {
+      ...dtsConfig,
+      input: `src/ssr/${name}.ts`,
+      output: {
+        file: `dist/ssr/${name}.d.ts`,
+        format: 'es',
+      },
+    },
+  ]),
 ];

@@ -7,8 +7,11 @@ use crate::materialized_view::MaterializedViewRegistry;
 use crate::mutation_batch::MutationBatch;
 use crate::projector::Projector;
 use crate::view::ViewIndex;
+use crate::websocket::client_manager::RateLimitConfig;
 use crate::websocket::WebSocketServer;
 use crate::Spec;
+use crate::WebSocketAuthPlugin;
+use crate::WebSocketUsageEmitter;
 use anyhow::Result;
 use std::sync::Arc;
 use std::time::Duration;
@@ -52,6 +55,10 @@ pub struct Runtime {
     view_index: Arc<ViewIndex>,
     spec: Option<Spec>,
     materialized_views: Option<MaterializedViewRegistry>,
+    websocket_auth_plugin: Option<Arc<dyn WebSocketAuthPlugin>>,
+    websocket_usage_emitter: Option<Arc<dyn WebSocketUsageEmitter>>,
+    websocket_max_clients: Option<usize>,
+    websocket_rate_limit_config: Option<RateLimitConfig>,
     #[cfg(feature = "otel")]
     metrics: Option<Arc<Metrics>>,
 }
@@ -64,6 +71,10 @@ impl Runtime {
             view_index: Arc::new(view_index),
             spec: None,
             materialized_views: None,
+            websocket_auth_plugin: None,
+            websocket_usage_emitter: None,
+            websocket_max_clients: None,
+            websocket_rate_limit_config: None,
             metrics,
         }
     }
@@ -75,6 +86,10 @@ impl Runtime {
             view_index: Arc::new(view_index),
             spec: None,
             materialized_views: None,
+            websocket_auth_plugin: None,
+            websocket_usage_emitter: None,
+            websocket_max_clients: None,
+            websocket_rate_limit_config: None,
         }
     }
 
@@ -85,6 +100,37 @@ impl Runtime {
 
     pub fn with_materialized_views(mut self, registry: MaterializedViewRegistry) -> Self {
         self.materialized_views = Some(registry);
+        self
+    }
+
+    pub fn with_websocket_auth_plugin(
+        mut self,
+        websocket_auth_plugin: Arc<dyn WebSocketAuthPlugin>,
+    ) -> Self {
+        self.websocket_auth_plugin = Some(websocket_auth_plugin);
+        self
+    }
+
+    pub fn with_websocket_usage_emitter(
+        mut self,
+        websocket_usage_emitter: Arc<dyn WebSocketUsageEmitter>,
+    ) -> Self {
+        self.websocket_usage_emitter = Some(websocket_usage_emitter);
+        self
+    }
+
+    pub fn with_websocket_max_clients(mut self, websocket_max_clients: usize) -> Self {
+        self.websocket_max_clients = Some(websocket_max_clients);
+        self
+    }
+
+    /// Configure rate limiting for WebSocket connections.
+    ///
+    /// This sets global rate limits such as maximum connections per IP,
+    /// timeouts, and rate windows. Per-subject limits are controlled
+    /// via AuthContext.Limits from the authentication token.
+    pub fn with_websocket_rate_limit_config(mut self, config: RateLimitConfig) -> Self {
+        self.websocket_rate_limit_config = Some(config);
         self
     }
 
@@ -130,7 +176,7 @@ impl Runtime {
 
         let ws_handle = if let Some(ws_config) = &self.config.websocket {
             #[cfg(feature = "otel")]
-            let ws_server = WebSocketServer::new(
+            let mut ws_server = WebSocketServer::new(
                 ws_config.bind_address,
                 bus_manager.clone(),
                 entity_cache.clone(),
@@ -138,12 +184,28 @@ impl Runtime {
                 self.metrics.clone(),
             );
             #[cfg(not(feature = "otel"))]
-            let ws_server = WebSocketServer::new(
+            let mut ws_server = WebSocketServer::new(
                 ws_config.bind_address,
                 bus_manager.clone(),
                 entity_cache.clone(),
                 self.view_index.clone(),
             );
+
+            if let Some(max_clients) = self.websocket_max_clients {
+                ws_server = ws_server.with_max_clients(max_clients);
+            }
+
+            if let Some(plugin) = self.websocket_auth_plugin.clone() {
+                ws_server = ws_server.with_auth_plugin(plugin);
+            }
+
+            if let Some(emitter) = self.websocket_usage_emitter.clone() {
+                ws_server = ws_server.with_usage_emitter(emitter);
+            }
+
+            if let Some(rate_limit_config) = self.websocket_rate_limit_config {
+                ws_server = ws_server.with_rate_limit_config(rate_limit_config);
+            }
 
             let bind_addr = ws_config.bind_address;
             Some(tokio::spawn(

@@ -13,7 +13,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),  // Header
+            Constraint::Length(1), // Header
             Constraint::Min(0),    // Main content
             Constraint::Length(1), // Timeline
             Constraint::Length(1), // Status bar
@@ -33,17 +33,40 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
 fn draw_header(f: &mut Frame, app: &App, area: Rect) {
     let status = if app.disconnected {
-        Span::styled(" DISCONNECTED ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+        Span::styled(
+            " DISCONNECTED ",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )
     } else if app.paused {
-        Span::styled(" PAUSED ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+        Span::styled(
+            " PAUSED ",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )
     } else {
-        Span::styled(" LIVE ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+        Span::styled(
+            " LIVE ",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )
     };
 
-    let dropped = app.dropped_frames.load(std::sync::atomic::Ordering::Relaxed);
+    let dropped = app
+        .dropped_frames
+        .load(std::sync::atomic::Ordering::Relaxed);
     let mut spans = vec![
-        Span::styled("hs stream ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(&app.view, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "hs stream ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            &app.view,
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw("  "),
         status,
         Span::raw("  "),
@@ -88,15 +111,24 @@ fn draw_entity_list(f: &mut Frame, app: &mut App, area: Rect) {
                 Style::default()
             };
             let prefix = if i == app.selected_index { "> " } else { "  " };
-            ListItem::new(format!("{}{}", prefix, truncate_key(key, area.width as usize - 3)))
-                .style(style)
+            ListItem::new(format!(
+                "{}{}",
+                prefix,
+                truncate_key(key, area.width as usize - 3)
+            ))
+            .style(style)
         })
         .collect();
 
     let title = if app.filter_input_active {
         format!("Entities [/{}]", app.filter_text)
     } else if !app.filter_text.is_empty() {
-        format!("Entities ({}/{}) [/{}]", keys.len(), app.entity_keys.len(), app.filter_text)
+        format!(
+            "Entities ({}/{}) [/{}]",
+            keys.len(),
+            app.entity_keys.len(),
+            app.filter_text
+        )
     } else {
         format!("Entities ({})", keys.len())
     };
@@ -108,7 +140,11 @@ fn draw_entity_list(f: &mut Frame, app: &mut App, area: Rect) {
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::DarkGray)),
         )
-        .highlight_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
+        .highlight_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        );
 
     f.render_stateful_widget(list, area, &mut app.list_state);
 }
@@ -180,7 +216,11 @@ fn draw_timeline(f: &mut Frame, app: &App, area: Rect) {
     let history_len = app.selected_history_len();
     let pos = app.history_position;
     let list_len = app.filtered_keys().len();
-    let list_pos = if list_len > 0 { app.selected_index + 1 } else { 0 };
+    let list_pos = if list_len > 0 {
+        app.selected_index + 1
+    } else {
+        0
+    };
 
     let mut spans = vec![
         Span::styled(
@@ -191,16 +231,49 @@ fn draw_timeline(f: &mut Frame, app: &App, area: Rect) {
     ];
 
     if history_len == 0 {
-        spans.push(Span::styled("Entity history: no data", Style::default().fg(Color::DarkGray)));
+        spans.push(Span::styled(
+            "Entity history: no data",
+            Style::default().fg(Color::DarkGray),
+        ));
     } else {
-        spans.push(Span::styled("[|<] ", Style::default().fg(if pos < history_len - 1 { Color::White } else { Color::DarkGray })));
-        spans.push(Span::styled("[<] ", Style::default().fg(if pos < history_len - 1 { Color::White } else { Color::DarkGray })));
+        spans.push(Span::styled(
+            "[|<] ",
+            Style::default().fg(if pos < history_len - 1 {
+                Color::White
+            } else {
+                Color::DarkGray
+            }),
+        ));
+        spans.push(Span::styled(
+            "[<] ",
+            Style::default().fg(if pos < history_len - 1 {
+                Color::White
+            } else {
+                Color::DarkGray
+            }),
+        ));
         spans.push(Span::styled(
             format!("version {}/{} ", history_len - pos, history_len),
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         ));
-        spans.push(Span::styled("[>] ", Style::default().fg(if pos > 0 { Color::White } else { Color::DarkGray })));
-        spans.push(Span::styled("[>|]", Style::default().fg(if pos > 0 { Color::White } else { Color::DarkGray })));
+        spans.push(Span::styled(
+            "[>] ",
+            Style::default().fg(if pos > 0 {
+                Color::White
+            } else {
+                Color::DarkGray
+            }),
+        ));
+        spans.push(Span::styled(
+            "[>|]",
+            Style::default().fg(if pos > 0 {
+                Color::White
+            } else {
+                Color::DarkGray
+            }),
+        ));
         spans.push(Span::raw("  "));
         spans.push(if app.show_diff {
             Span::styled("[d]iff ON", Style::default().fg(Color::Green))
@@ -240,7 +313,8 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         match &app.sort_mode {
             SortMode::Insertion => Span::raw(""),
             SortMode::Field(f) => Span::styled(
-                format!(" [{}{}]",
+                format!(
+                    " [{}{}]",
                     f,
                     match app.sort_direction {
                         SortDirection::Ascending => "↑",
@@ -305,8 +379,14 @@ fn colorize_json_line(line: &str) -> Line<'_> {
     }
 
     // Braces and brackets
-    if trimmed == "{" || trimmed == "}" || trimmed == "{}" || trimmed == "},"
-        || trimmed == "[" || trimmed == "]" || trimmed == "[]" || trimmed == "],"
+    if trimmed == "{"
+        || trimmed == "}"
+        || trimmed == "{}"
+        || trimmed == "},"
+        || trimmed == "["
+        || trimmed == "]"
+        || trimmed == "[]"
+        || trimmed == "],"
     {
         return Line::from(Span::styled(line, Style::default().fg(Color::DarkGray)));
     }

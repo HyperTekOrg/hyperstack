@@ -4,6 +4,7 @@ import type {
   HyperStackOptions,
   TypedViews,
   ConnectionStateCallback,
+  SocketIssueCallback,
   UnsubscribeFn,
 } from './types';
 import { HyperStackError } from './types';
@@ -28,6 +29,8 @@ export interface ConnectOptions {
   maxReconnectAttempts?: number;
   flushIntervalMs?: number;
   validateFrames?: boolean;
+  /** Authentication configuration */
+  auth?: import('./types').AuthConfig;
 }
 
 /** @deprecated Use ConnectOptions instead */
@@ -35,6 +38,7 @@ export interface HyperStackOptionsWithStorage<TStack extends StackDefinition> ex
   storage?: StorageAdapter;
   maxEntriesPerView?: number | null;
   flushIntervalMs?: number;
+  auth?: import('./types').AuthConfig;
 }
 
 export interface InstructionExecutorOptions extends Omit<ExecuteOptions, 'wallet'> {
@@ -75,6 +79,7 @@ export class HyperStack<TStack extends StackDefinition> {
       websocketUrl: url,
       reconnectIntervals: options.reconnectIntervals,
       maxReconnectAttempts: options.maxReconnectAttempts,
+      auth: options.auth,
     });
     this.subscriptionRegistry = new SubscriptionRegistry(this.connection);
 
@@ -119,6 +124,7 @@ export class HyperStack<TStack extends StackDefinition> {
       reconnectIntervals: options?.reconnectIntervals,
       maxReconnectAttempts: options?.maxReconnectAttempts,
       validateFrames: options?.validateFrames,
+      auth: options?.auth,
     };
 
     const client = new HyperStack(url, internalOptions);
@@ -156,6 +162,10 @@ export class HyperStack<TStack extends StackDefinition> {
 
   onFrame(callback: (frame: Frame) => void): UnsubscribeFn {
     return this.connection.onFrame(callback);
+  }
+
+  onSocketIssue(callback: SocketIssueCallback): UnsubscribeFn {
+    return this.connection.onSocketIssue(callback);
   }
 
   async connect(): Promise<void> {

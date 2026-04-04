@@ -52,6 +52,10 @@ struct Cli {
     #[arg(long, global = true)]
     verbose: bool,
 
+    /// API URL to use (overrides HYPERSTACK_API_URL env var)
+    #[arg(long, global = true, env = "HYPERSTACK_API_URL")]
+    api_url: Option<String>,
+
     /// Generate shell completions
     #[arg(long, value_name = "SHELL")]
     completions: Option<Shell>,
@@ -219,14 +223,43 @@ enum AuthCommands {
         key: Option<String>,
     },
 
-    /// Logout (remove stored credentials)
+    /// Logout (remove stored credentials for current environment)
     Logout,
 
-    /// Check authentication status (local only)
+    /// Logout from all environments (remove all stored credentials)
+    LogoutAll,
+
+    /// Check authentication status (shows current environment and all stored credentials)
     Status,
 
     /// Verify authentication and show user info
     Whoami,
+
+    /// Manage API keys for browser/client use
+    #[command(subcommand)]
+    Keys(KeysCommands),
+}
+
+#[derive(Subcommand)]
+enum KeysCommands {
+    /// List all your API keys
+    List,
+
+    /// Create a new publishable API key for browser/client use
+    CreatePublishable {
+        /// Name for the key (optional)
+        #[arg(short, long)]
+        name: Option<String>,
+
+        /// Allowed origins (e.g., https://example.com or http://localhost:5173)
+        /// Can specify multiple: --origin https://app.com --origin https://www.app.com
+        #[arg(short, long, required = true, num_args = 1..)]
+        origin: Vec<String>,
+
+        /// Number of days until the key expires (default: 365)
+        #[arg(short, long)]
+        expiry_days: Option<i64>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -374,6 +407,12 @@ enum BuildCommands {
 fn main() {
     let cli = Cli::parse();
 
+    // Set HYPERSTACK_API_URL env var if --api-url flag is provided
+    // This ensures all ApiClient instances use the correct URL
+    if let Some(ref api_url) = cli.api_url {
+        std::env::set_var("HYPERSTACK_API_URL", api_url);
+    }
+
     if let Some(shell) = cli.completions {
         let mut cmd = Cli::command();
         generate(shell, &mut cmd, "hs", &mut io::stdout());
@@ -489,8 +528,17 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Commands::Auth(auth_cmd) => match auth_cmd {
             AuthCommands::Login { key } => commands::auth::login(key),
             AuthCommands::Logout => commands::auth::logout(),
+            AuthCommands::LogoutAll => commands::auth::logout_all(),
             AuthCommands::Status => commands::auth::status(),
             AuthCommands::Whoami => commands::auth::whoami(),
+            AuthCommands::Keys(keys_cmd) => match keys_cmd {
+                KeysCommands::List => commands::auth::list_keys(),
+                KeysCommands::CreatePublishable {
+                    name,
+                    origin,
+                    expiry_days,
+                } => commands::auth::create_publishable_key(name, origin, expiry_days),
+            },
         },
         Commands::Stack(stack_cmd) => match stack_cmd {
             StackCommands::List => commands::stack::list(cli.json),
