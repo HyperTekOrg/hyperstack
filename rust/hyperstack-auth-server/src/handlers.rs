@@ -12,6 +12,24 @@ fn extract_bearer_token(auth_header: Option<&str>) -> Option<&str> {
     auth_header.and_then(|header| header.strip_prefix("Bearer "))
 }
 
+fn extract_client_ip(headers: &axum::http::HeaderMap) -> Option<String> {
+    headers
+        .get("x-forwarded-for")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|value| value.split(',').next())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            headers
+                .get("x-real-ip")
+                .and_then(|h| h.to_str().ok())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+        })
+}
+
 /// Extract deployment ID from websocket URL
 /// Supports formats like:
 /// - wss://demo.stack.usehyperstack.com -> "demo"
@@ -102,11 +120,7 @@ pub async fn mint_token(
 
     // Check rate limits (if enabled)
     if let Some(rate_limiter) = state.rate_limiter.as_ref() {
-        let client_ip = headers
-            .get("x-forwarded-for")
-            .and_then(|h| h.to_str().ok())
-            .or_else(|| headers.get("x-real-ip").and_then(|h| h.to_str().ok()))
-            .unwrap_or("unknown");
+        let client_ip = extract_client_ip(&headers).unwrap_or_else(|| "unknown".to_string());
 
         let rate_limit_key = format!(
             "{}:{}:{}",
@@ -218,5 +232,30 @@ fn check_rate_limit(
         Ok(())
     } else {
         Err(AuthServerError::RateLimitExceeded)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::{HeaderMap, HeaderValue};
+
+    #[test]
+    fn extract_client_ip_uses_leftmost_forwarded_ip() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-forwarded-for",
+            HeaderValue::from_static("198.51.100.7, 10.0.0.1, 10.0.0.2"),
+        );
+
+        assert_eq!(extract_client_ip(&headers).as_deref(), Some("198.51.100.7"));
+    }
+
+    #[test]
+    fn extract_client_ip_falls_back_to_x_real_ip() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-real-ip", HeaderValue::from_static("203.0.113.9"));
+
+        assert_eq!(extract_client_ip(&headers).as_deref(), Some("203.0.113.9"));
     }
 }
