@@ -5,6 +5,55 @@ on:
   workflow_dispatch:
 
 jobs:
+  check-crate-files:
+    name: Check Rust Crate LICENSE and README
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Rust crates have LICENSE and README.md
+        run: |
+          #!/bin/bash
+          set -e
+
+          # Extract Rust package paths from release-please-config.json
+          # We filter for packages with "release-type": "rust"
+          RUST_CRATES=$(jq -r '.packages | to_entries[] | select(.value."release-type" == "rust") | .key' release-please-config.json)
+
+          MISSING_FILES=0
+
+          echo "Checking Rust crates listed in release-please..."
+          echo ""
+
+          for crate_path in $RUST_CRATES; do
+            echo "Checking: $crate_path"
+
+            # Check for LICENSE file
+            if [ ! -f "$crate_path/LICENSE" ] && [ ! -f "$crate_path/LICENSE.txt" ] && [ ! -f "$crate_path/LICENSE-MIT" ] && [ ! -f "$crate_path/LICENSE-APACHE" ] && [ ! -f "$crate_path/LICENCE" ]; then
+              echo "  ❌ MISSING: LICENSE file not found"
+              MISSING_FILES=$((MISSING_FILES + 1))
+            else
+              echo "  ✓ LICENSE found"
+            fi
+
+            # Check for README.md file
+            if [ ! -f "$crate_path/README.md" ]; then
+              echo "  ❌ MISSING: README.md file not found"
+              MISSING_FILES=$((MISSING_FILES + 1))
+            else
+              echo "  ✓ README.md found"
+            fi
+
+            echo ""
+          done
+
+          if [ $MISSING_FILES -gt 0 ]; then
+            echo "::error::$MISSING_FILES required file(s) missing across Rust crates"
+            exit 1
+          fi
+
+          echo "✓ All Rust crates have required LICENSE and README.md files"
+
   rust:
     name: Rust
     runs-on: ubuntu-latest
