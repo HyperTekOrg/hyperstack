@@ -179,7 +179,7 @@ impl From<&VerifyError> for AuthErrorCode {
             VerifyError::InvalidAudience => AuthErrorCode::TokenInvalidAudience,
             VerifyError::MissingClaim(_) => AuthErrorCode::TokenMissingClaim,
             VerifyError::OriginMismatch { .. } => AuthErrorCode::OriginMismatch,
-            VerifyError::OriginRequired => AuthErrorCode::OriginRequired,
+            VerifyError::OriginRequired { .. } => AuthErrorCode::OriginRequired,
             VerifyError::DecodeError(_) => AuthErrorCode::TokenInvalidFormat,
             VerifyError::KeyNotFound(_) => AuthErrorCode::TokenKeyNotFound,
             VerifyError::InvalidFormat(_) => AuthErrorCode::TokenInvalidFormat,
@@ -228,8 +228,8 @@ pub enum VerifyError {
     #[error("origin mismatch: expected {expected}, got {actual}")]
     OriginMismatch { expected: String, actual: String },
 
-    #[error("origin required but not provided")]
-    OriginRequired,
+    #[error("origin header required but not provided (token is origin-bound to '{token_origin}')")]
+    OriginRequired { token_origin: String },
 
     #[error("decode error: {0}")]
     DecodeError(String),

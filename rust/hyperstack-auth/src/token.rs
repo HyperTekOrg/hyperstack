@@ -239,12 +239,8 @@ impl TokenVerifier {
         let token_has_origin = claims.origin.is_some();
         let origin_provided = expected_origin.is_some();
 
-        if token_has_origin {
-            // Token is origin-bound - must provide matching origin
-            if !origin_provided {
-                return Err(VerifyError::OriginRequired);
-            }
-
+        if token_has_origin && origin_provided {
+            // Token is origin-bound and origin was provided - validate they match
             let expected = expected_origin.unwrap();
             let actual = claims.origin.as_ref().unwrap();
 
@@ -254,10 +250,17 @@ impl TokenVerifier {
                     actual: actual.clone(),
                 });
             }
-        } else if self.require_origin {
+        } else if token_has_origin && self.require_origin {
+            // Token has origin but none was provided, and origin is required
+            return Err(VerifyError::OriginRequired {
+                token_origin: claims.origin.as_ref().unwrap().clone(),
+            });
+        } else if !token_has_origin && self.require_origin {
             // Verifier requires origin but token doesn't have one bound
             return Err(VerifyError::MissingClaim("origin".to_string()));
         }
+        // If token has origin but none provided, and origin is NOT required,
+        // we allow the connection (defense-in-depth is optional)
 
         // Validate client IP if required
         if self.require_client_ip {
@@ -663,5 +666,64 @@ mod tests {
             result,
             Err(VerifyError::MissingClaim(ref claim)) if claim == "client_ip"
         ));
+    }
+
+    #[test]
+    fn test_origin_bound_token_allows_no_origin_when_not_required() {
+        // This tests the non-browser client scenario (Rust, Python, etc.)
+        // where the client doesn't send an Origin header, but the JWT has
+        // an origin claim from when the token was minted via browser/API.
+        // When require_origin is false, the connection should still be allowed
+        // for defense-in-depth flexibility.
+        let signing_key = crate::keys::SigningKey::generate();
+        let verifying_key = signing_key.verifying_key();
+
+        let signer = TokenSigner::new(signing_key, "test-issuer");
+        // Verifier WITHOUT origin validation (the default for public stacks)
+        let verifier = TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
+
+        let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
+            .with_ttl(300)
+            .with_scope("read")
+            .with_metering_key("meter-123")
+            .with_origin("https://example.com") // Token has origin claim
+            .with_key_class(KeyClass::Publishable)
+            .build();
+        let token = signer.sign(claims).unwrap();
+
+        // No origin provided, but require_origin is false - should succeed
+        let context = verifier.verify(&token, None, None).unwrap();
+        assert_eq!(context.origin.as_deref(), Some("https://example.com"));
+    }
+
+    #[test]
+    fn test_origin_bound_token_validates_when_origin_provided_even_when_not_required() {
+        // When origin IS provided, it should still be validated against the token
+        // even when require_origin is false (defense-in-depth)
+        let signing_key = crate::keys::SigningKey::generate();
+        let verifying_key = signing_key.verifying_key();
+
+        let signer = TokenSigner::new(signing_key, "test-issuer");
+        // Verifier WITHOUT origin validation (the default)
+        let verifier = TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
+
+        let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
+            .with_ttl(300)
+            .with_scope("read")
+            .with_metering_key("meter-123")
+            .with_origin("https://allowed.example")
+            .with_key_class(KeyClass::Publishable)
+            .build();
+        let token = signer.sign(claims).unwrap();
+
+        // Origin provided and matches - should succeed
+        let context = verifier
+            .verify(&token, Some("https://allowed.example"), None)
+            .unwrap();
+        assert_eq!(context.origin.as_deref(), Some("https://allowed.example"));
+
+        // Origin provided but doesn't match - should fail
+        let result = verifier.verify(&token, Some("https://evil.example"), None);
+        assert!(matches!(result, Err(VerifyError::OriginMismatch { .. })));
     }
 }

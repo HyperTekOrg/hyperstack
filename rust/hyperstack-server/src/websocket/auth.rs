@@ -514,11 +514,7 @@ impl WebSocketAuthPlugin for SignedSessionAuthPlugin {
             }
         };
 
-        let expected_origin = if self.require_origin {
-            request.origin.as_deref()
-        } else {
-            None
-        };
+        let expected_origin = request.origin.as_deref();
 
         let expected_client_ip = None; // IP validation can be added here if needed
 
@@ -939,6 +935,111 @@ mod tests {
             assert_eq!(ctx.origin, Some("https://trusted.example.com".to_string()));
         } else {
             panic!("Expected Allow decision");
+        }
+    }
+
+    #[tokio::test]
+    async fn signed_session_plugin_allows_token_with_origin_when_no_origin_provided_and_not_required(
+    ) {
+        // This tests the non-browser client scenario (Rust, Python, etc.)
+        // where the client doesn't send an Origin header.
+        // The token has an origin claim from when it was minted via browser/API,
+        // but when the plugin doesn't require origin, the connection should still be allowed.
+        use hyperstack_auth::{KeyClass, SessionClaims, TokenSigner};
+
+        let signing_key = hyperstack_auth::SigningKey::generate();
+        let verifying_key = signing_key.verifying_key();
+        let signer = TokenSigner::new(signing_key, "test-issuer");
+
+        // Plugin WITHOUT origin validation (default for public stacks)
+        let verifier =
+            hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
+        let plugin = SignedSessionAuthPlugin::new(verifier);
+
+        let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
+            .with_scope("read")
+            .with_key_class(KeyClass::Publishable)
+            .with_origin("https://example.com") // Token has origin claim
+            .build();
+
+        let token = signer.sign(claims).unwrap();
+
+        // No Origin header provided (simulating non-browser client)
+        let request = Request::builder()
+            .uri(format!("/ws?hs_token={}", token))
+            .body(())
+            .expect("request should build");
+        let auth_request = ConnectionAuthRequest::from_http_request(
+            "127.0.0.1:8877".parse().expect("socket addr should parse"),
+            &request,
+        );
+
+        // Should succeed even without Origin header
+        let decision = plugin.authorize(&auth_request).await;
+        assert!(decision.is_allowed(), "Expected Allow decision for non-browser client without Origin");
+
+        if let AuthDecision::Allow(ctx) = decision {
+            assert_eq!(ctx.origin, Some("https://example.com".to_string()));
+        } else {
+            panic!("Expected Allow decision");
+        }
+    }
+
+    #[tokio::test]
+    async fn signed_session_plugin_validates_origin_when_provided_even_when_not_required() {
+        // When origin IS provided, it should still be validated against the token
+        // even when require_origin is false (defense-in-depth)
+        use hyperstack_auth::{KeyClass, SessionClaims, TokenSigner};
+
+        let signing_key = hyperstack_auth::SigningKey::generate();
+        let verifying_key = signing_key.verifying_key();
+        let signer = TokenSigner::new(signing_key, "test-issuer");
+
+        // Plugin WITHOUT origin validation (default)
+        let verifier =
+            hyperstack_auth::TokenVerifier::new(verifying_key, "test-issuer", "test-audience");
+        let plugin = SignedSessionAuthPlugin::new(verifier);
+
+        let claims = SessionClaims::builder("test-issuer", "test-subject", "test-audience")
+            .with_scope("read")
+            .with_key_class(KeyClass::Publishable)
+            .with_origin("https://allowed.example.com")
+            .build();
+
+        let token = signer.sign(claims).unwrap();
+
+        // Origin provided and matches - should succeed
+        let request = Request::builder()
+            .uri(format!("/ws?hs_token={}", token))
+            .header("Origin", "https://allowed.example.com")
+            .body(())
+            .expect("request should build");
+        let auth_request = ConnectionAuthRequest::from_http_request(
+            "127.0.0.1:8877".parse().expect("socket addr should parse"),
+            &request,
+        );
+
+        let decision = plugin.authorize(&auth_request).await;
+        assert!(decision.is_allowed());
+
+        // Origin provided but doesn't match - should fail
+        let request = Request::builder()
+            .uri(format!("/ws?hs_token={}", token))
+            .header("Origin", "https://evil.example.com")
+            .body(())
+            .expect("request should build");
+        let auth_request = ConnectionAuthRequest::from_http_request(
+            "127.0.0.1:8877".parse().expect("socket addr should parse"),
+            &request,
+        );
+
+        let decision = plugin.authorize(&auth_request).await;
+        assert!(!decision.is_allowed());
+
+        if let AuthDecision::Deny(deny) = decision {
+            assert_eq!(deny.code, AuthErrorCode::OriginMismatch);
+        } else {
+            panic!("Expected Deny decision for origin mismatch");
         }
     }
 
