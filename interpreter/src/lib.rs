@@ -31,6 +31,7 @@ pub mod event_type_helpers;
 pub mod metrics_context;
 pub mod proto_router;
 pub mod resolvers;
+pub mod runtime_resolvers;
 pub mod rust;
 pub mod scheduler;
 pub mod slot_hash_cache;
@@ -47,6 +48,11 @@ pub use canonical_log::{CanonicalLog, LogLevel};
 pub use metrics_context::{FieldAccessor, FieldRef, MetricsContext};
 pub use resolvers::{
     InstructionContext, KeyResolution, ResolveContext, ReverseLookupUpdater, TokenMetadata,
+};
+pub use runtime_resolvers::{
+    InProcessResolver, ResolverApplyFuture, ResolverBatchFuture, ResolverBatchResult,
+    RuntimeResolver, RuntimeResolverBatchRequest, RuntimeResolverBatchResponse,
+    RuntimeResolverRequest, RuntimeResolverResponse, SharedRuntimeResolver,
 };
 pub use typescript::{write_typescript_to_file, TypeScriptCompiler, TypeScriptConfig};
 pub use vm::{
