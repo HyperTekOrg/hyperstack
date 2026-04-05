@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.8](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-sdk-v0.6.7...hyperstack-sdk-v0.6.8) (2026-04-05)
+
+
+### Features
+
+* Add api_key() alias for server-side authentication in Rust and Python SDKs ([6b25f83](https://github.com/HyperTekOrg/hyperstack/commit/6b25f839b9cb9c640bc23bddbf13f0c742a88b5d))
+
 ## [0.6.7](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-sdk-v0.6.6...hyperstack-sdk-v0.6.7) (2026-04-05)
 
 
