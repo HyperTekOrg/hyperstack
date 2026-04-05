@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-auth-v0.2.0...hyperstack-auth-v0.2.1) (2026-04-05)
+
+
+### Bug Fixes
+
+* Comment ([b8b9c1e](https://github.com/HyperTekOrg/hyperstack/commit/b8b9c1e420f2647a3031b7ba0acd7e9ee3274611))
+
 ## [0.2.0](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-auth-v0.1.1...hyperstack-auth-v0.2.0) (2026-04-05)
 
 

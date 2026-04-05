@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.3](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.6.2...hyperstack-macros-v0.6.3) (2026-04-05)
+
+
+### Miscellaneous Chores
+
+* **hyperstack-macros:** Synchronize hyperstack versions
+
 ## [0.6.2](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-macros-v0.6.1...hyperstack-macros-v0.6.2) (2026-04-05)
 
 
