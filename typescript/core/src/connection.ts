@@ -182,9 +182,8 @@ export class ConnectionManager {
       return this.authConfig.tokenEndpoint;
     }
 
-    // Always use the default hosted token endpoint for hosted URLs,
-    // even without a publishableKey - some endpoints don't require auth
-    if (this.hostedHyperstackUrl) {
+    // Require publishableKey for hosted token endpoint
+    if (this.hostedHyperstackUrl && this.authConfig?.publishableKey) {
       return DEFAULT_HOSTED_TOKEN_ENDPOINT;
     }
 
@@ -244,6 +243,15 @@ export class ConnectionManager {
     }
 
     const strategy = this.getAuthStrategy();
+
+    // For hosted Hyperstack URLs, auth is required - fail early with clear message
+    if (strategy.kind === 'none' && this.hostedHyperstackUrl) {
+      throw new HyperStackError(
+        'Hyperstack authentication required. Please provide auth.publishableKey to HyperstackProvider. ' +
+        'Get your key from https://usehyperstack.com/dashboard',
+        'AUTH_REQUIRED'
+      );
+    }
 
     switch (strategy.kind) {
       case 'static-token':

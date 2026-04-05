@@ -90,14 +90,8 @@ describe('ConnectionManager auth', () => {
     vi.unstubAllGlobals();
   });
 
-  it('fails when hosted token endpoint requires auth', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 401,
-      statusText: 'Unauthorized',
-      text: async () => 'Unauthorized',
-      headers: new Headers(),
-    });
+  it('fails clearly when hosted auth metadata is missing', async () => {
+    const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
     const manager = new ConnectionManager({
@@ -107,17 +101,7 @@ describe('ConnectionManager auth', () => {
     await expect(manager.connect()).rejects.toMatchObject<Partial<HyperStackError>>({
       code: 'AUTH_REQUIRED',
     });
-    // Should try to fetch from the token endpoint even without auth
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.usehyperstack.com/ws/sessions',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({
-          'Content-Type': 'application/json',
-        }),
-      })
-    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('fetches a hosted session token when a publishable key is configured', async () => {
