@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.5](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.6.4...hyperstack-typescript-v0.6.5) (2026-04-05)
+
+
+### Bug Fixes
+
+* allow unauthenticated requests to /ws/sessions for hosted stacks ([cbb047b](https://github.com/HyperTekOrg/hyperstack/commit/cbb047b454c122ea46c8a5692275494a8955d13c))
+
 ## [0.6.4](https://github.com/HyperTekOrg/hyperstack/compare/hyperstack-typescript-v0.6.3...hyperstack-typescript-v0.6.4) (2026-04-05)
 
 
