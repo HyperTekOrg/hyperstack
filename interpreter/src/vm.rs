@@ -6,9 +6,11 @@ use crate::compiler::{MultiEntityBytecode, OpCode};
 use crate::Mutation;
 use dashmap::DashMap;
 use lru::LruCache;
+use once_cell::sync::Lazy;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::num::NonZeroUsize;
+use std::time::{Duration, Instant};
 
 #[cfg(feature = "otel")]
 use tracing::instrument;
@@ -195,7 +197,43 @@ const DEFAULT_MAX_TEMPORAL_INDEX_KEYS: usize = 2_500;
 
 const DEFAULT_MAX_PDA_REVERSE_LOOKUP_ENTRIES: usize = 2_500;
 
-const DEFAULT_MAX_RESOLVER_CACHE_ENTRIES: usize = 5_000;
+const DEFAULT_MAX_RESOLVER_CACHE_ENTRIES: usize = 20_000;
+const DEFAULT_RESOLVER_CACHE_TTL_SECS: u64 = 300;
+
+static RESOLVER_CACHE_CAPACITY: Lazy<NonZeroUsize> = Lazy::new(|| {
+    NonZeroUsize::new(
+        std::env::var("HYPERSTACK_RESOLVER_CACHE_CAPACITY")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .filter(|value| *value > 0)
+            .unwrap_or(DEFAULT_MAX_RESOLVER_CACHE_ENTRIES),
+    )
+    .expect("resolver cache capacity must be > 0")
+});
+
+static RESOLVER_CACHE_TTL: Lazy<Duration> = Lazy::new(|| {
+    Duration::from_secs(
+        std::env::var("HYPERSTACK_RESOLVER_CACHE_TTL_SECS")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .filter(|value| *value > 0)
+            .unwrap_or(DEFAULT_RESOLVER_CACHE_TTL_SECS),
+    )
+});
+
+#[derive(Debug, Clone)]
+struct ResolverCacheEntry {
+    value: Value,
+    cached_at: Instant,
+}
+
+fn resolver_cache_capacity() -> NonZeroUsize {
+    *RESOLVER_CACHE_CAPACITY
+}
+
+fn resolver_cache_ttl() -> Duration {
+    *RESOLVER_CACHE_TTL
+}
 
 /// Estimate the size of a JSON value in bytes
 fn estimate_json_size(value: &Value) -> usize {
@@ -335,7 +373,7 @@ pub struct VmContext {
     pub pending_queue_size: u64,
     resolver_requests: VecDeque<ResolverRequest>,
     resolver_pending: HashMap<String, PendingResolverEntry>,
-    resolver_cache: LruCache<String, Value>,
+    resolver_cache: LruCache<String, ResolverCacheEntry>,
     pub resolver_cache_hits: u64,
     pub resolver_cache_misses: u64,
     current_context: Option<UpdateContext>,
@@ -407,31 +445,17 @@ fn value_to_cache_key(value: &Value) -> String {
     }
 }
 
-fn resolver_type_key(resolver: &ResolverType) -> String {
+pub(crate) fn resolver_cache_key(resolver: &ResolverType, input: &Value) -> String {
     match resolver {
-        ResolverType::Token => "token".to_string(),
-        ResolverType::Url(config) => match &config.url_source {
-            ast::UrlSource::FieldPath(path) => format!("url:{}", path),
-            ast::UrlSource::Template(parts) => {
-                let key: String = parts
-                    .iter()
-                    .map(|p| match p {
-                        ast::UrlTemplatePart::Literal(s) => s.clone(),
-                        ast::UrlTemplatePart::FieldRef(f) => format!("{{{}}}", f),
-                    })
-                    .collect();
-                format!("url:{}", key)
-            }
-        },
+        ResolverType::Token => format!("token:{}", value_to_cache_key(input)),
+        ResolverType::Url(config) => {
+            let method = match config.method {
+                ast::HttpMethod::Get => "get",
+                ast::HttpMethod::Post => "post",
+            };
+            format!("url:{}:{}", method, value_to_cache_key(input))
+        }
     }
-}
-
-fn resolver_cache_key(resolver: &ResolverType, input: &Value) -> String {
-    format!(
-        "{}:{}",
-        resolver_type_key(resolver),
-        value_to_cache_key(input)
-    )
 }
 
 #[derive(Debug)]
@@ -962,10 +986,7 @@ impl VmContext {
             pending_queue_size: 0,
             resolver_requests: VecDeque::new(),
             resolver_pending: HashMap::new(),
-            resolver_cache: LruCache::new(
-                NonZeroUsize::new(DEFAULT_MAX_RESOLVER_CACHE_ENTRIES)
-                    .expect("capacity must be > 0"),
-            ),
+            resolver_cache: LruCache::new(resolver_cache_capacity()),
             resolver_cache_hits: 0,
             resolver_cache_misses: 0,
             current_context: None,
@@ -1016,10 +1037,7 @@ impl VmContext {
             pending_queue_size: 0,
             resolver_requests: VecDeque::new(),
             resolver_pending: HashMap::new(),
-            resolver_cache: LruCache::new(
-                NonZeroUsize::new(DEFAULT_MAX_RESOLVER_CACHE_ENTRIES)
-                    .expect("capacity must be > 0"),
-            ),
+            resolver_cache: LruCache::new(resolver_cache_capacity()),
             resolver_cache_hits: 0,
             resolver_cache_misses: 0,
             current_context: None,
@@ -1044,10 +1062,7 @@ impl VmContext {
             pending_queue_size: 0,
             resolver_requests: VecDeque::new(),
             resolver_pending: HashMap::new(),
-            resolver_cache: LruCache::new(
-                NonZeroUsize::new(DEFAULT_MAX_RESOLVER_CACHE_ENTRIES)
-                    .expect("capacity must be > 0"),
-            ),
+            resolver_cache: LruCache::new(resolver_cache_capacity()),
             resolver_cache_hits: 0,
             resolver_cache_misses: 0,
             current_context: None,
@@ -1104,19 +1119,46 @@ impl VmContext {
         self.resolver_requests.extend(requests);
     }
 
+    pub(crate) fn get_cached_resolver_value(&mut self, cache_key: &str) -> Option<Value> {
+        let cached = self.resolver_cache.get(cache_key).cloned();
+
+        match cached {
+            Some(entry) if entry.cached_at.elapsed() <= resolver_cache_ttl() => Some(entry.value),
+            Some(_) => {
+                self.resolver_cache.pop(cache_key);
+                None
+            }
+            None => None,
+        }
+    }
+
+    fn cache_resolver_value(
+        &mut self,
+        resolver: &ResolverType,
+        input: &Value,
+        resolved_value: &Value,
+    ) {
+        self.resolver_cache.put(
+            resolver_cache_key(resolver, input),
+            ResolverCacheEntry {
+                value: resolved_value.clone(),
+                cached_at: Instant::now(),
+            },
+        );
+    }
+
     pub fn apply_resolver_result(
         &mut self,
         bytecode: &MultiEntityBytecode,
         cache_key: &str,
         resolved_value: Value,
     ) -> Result<Vec<Mutation>> {
-        self.resolver_cache
-            .put(cache_key.to_string(), resolved_value.clone());
-
         let entry = match self.resolver_pending.remove(cache_key) {
             Some(entry) => entry,
             None => return Ok(Vec::new()),
         };
+
+        self.cache_resolver_value(&entry.resolver, &entry.input, &resolved_value);
 
         let mut mutations = Vec::new();
 
@@ -1208,11 +1250,13 @@ impl VmContext {
 
     pub fn enqueue_resolver_request(
         &mut self,
-        cache_key: String,
+        _cache_key: String,
         resolver: ResolverType,
         input: Value,
         target: ResolverTarget,
     ) {
+        let cache_key = resolver_cache_key(&resolver, &input);
+
         if let Some(entry) = self.resolver_pending.get_mut(&cache_key) {
             entry.add_target(target);
             return;
@@ -2881,8 +2925,7 @@ impl VmContext {
 
                         let cache_key = resolver_cache_key(resolver, &input);
 
-                        let cached_value = self.resolver_cache.get(&cache_key).cloned();
-                        if let Some(cached) = cached_value {
+                        if let Some(cached) = self.get_cached_resolver_value(&cache_key) {
                             self.resolver_cache_hits += 1;
                             Self::apply_resolver_extractions_to_value(
                                 &mut self.registers[*state],
@@ -5043,7 +5086,74 @@ impl crate::resolvers::ReverseLookupUpdater for VmContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{BinaryOp, ComputedExpr, ComputedFieldSpec};
+    use crate::ast::{
+        BinaryOp, ComputedExpr, ComputedFieldSpec, HttpMethod, UrlResolverConfig, UrlSource,
+    };
+
+    #[test]
+    fn test_url_resolver_cache_key_uses_method_and_resolved_url() {
+        let field_path_resolver = ResolverType::Url(UrlResolverConfig {
+            url_source: UrlSource::FieldPath("metadata_uri".to_string()),
+            method: HttpMethod::Get,
+            extract_path: None,
+        });
+        let template_resolver = ResolverType::Url(UrlResolverConfig {
+            url_source: UrlSource::Template(vec![ast::UrlTemplatePart::Literal(
+                "https://example.com/metadata".to_string(),
+            )]),
+            method: HttpMethod::Get,
+            extract_path: Some("data".to_string()),
+        });
+        let input = json!("https://cdn.example.com/token.json");
+
+        assert_eq!(
+            resolver_cache_key(&field_path_resolver, &input),
+            resolver_cache_key(&template_resolver, &input)
+        );
+    }
+
+    #[test]
+    fn test_url_resolver_cache_key_distinguishes_http_method() {
+        let get_resolver = ResolverType::Url(UrlResolverConfig {
+            url_source: UrlSource::FieldPath("metadata_uri".to_string()),
+            method: HttpMethod::Get,
+            extract_path: None,
+        });
+        let post_resolver = ResolverType::Url(UrlResolverConfig {
+            url_source: UrlSource::FieldPath("metadata_uri".to_string()),
+            method: HttpMethod::Post,
+            extract_path: None,
+        });
+        let input = json!("https://api.example.com/round");
+
+        assert_ne!(
+            resolver_cache_key(&get_resolver, &input),
+            resolver_cache_key(&post_resolver, &input)
+        );
+    }
+
+    #[test]
+    fn test_expired_resolver_cache_entry_is_dropped() {
+        let mut vm = VmContext::new();
+        let resolver = ResolverType::Url(UrlResolverConfig {
+            url_source: UrlSource::FieldPath("metadata_uri".to_string()),
+            method: HttpMethod::Get,
+            extract_path: None,
+        });
+        let input = json!("https://cdn.example.com/token.json");
+        let cache_key = resolver_cache_key(&resolver, &input);
+
+        vm.resolver_cache.put(
+            cache_key.clone(),
+            ResolverCacheEntry {
+                value: json!({ "name": "Token" }),
+                cached_at: Instant::now() - resolver_cache_ttl() - Duration::from_secs(1),
+            },
+        );
+
+        assert!(vm.get_cached_resolver_value(&cache_key).is_none());
+        assert!(vm.resolver_cache.get(&cache_key).is_none());
+    }
 
     #[test]
     fn test_computed_field_preserves_integer_type() {

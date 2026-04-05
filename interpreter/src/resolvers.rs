@@ -618,28 +618,28 @@ impl UrlResolverClient {
     }
 
     /// Batch resolve multiple URLs in parallel with deduplication.
-    /// Returns raw JSON keyed by URL. Identical URLs are only fetched once.
+    /// Returns raw JSON keyed by method+URL. Identical requests are only fetched once.
     pub async fn resolve_batch(
         &self,
         urls: &[(String, crate::ast::HttpMethod)],
-    ) -> HashMap<String, Value> {
-        let mut unique: HashMap<String, crate::ast::HttpMethod> = HashMap::new();
+    ) -> HashMap<(String, crate::ast::HttpMethod), Value> {
+        let mut unique: HashMap<(String, crate::ast::HttpMethod), ()> = HashMap::new();
         for (url, method) in urls {
             if !url.is_empty() {
-                unique.entry(url.clone()).or_insert_with(|| method.clone());
+                unique.entry((url.clone(), method.clone())).or_insert(());
             }
         }
 
-        let futures = unique.into_iter().map(|(url, method)| async move {
+        let futures = unique.into_keys().map(|(url, method)| async move {
             let result = self.resolve(&url, &method).await;
-            (url, result)
+            ((url, method), result)
         });
 
         join_all(futures)
             .await
             .into_iter()
-            .filter_map(|(url, result)| match result {
-                Ok(value) => Some((url, value)),
+            .filter_map(|((url, method), result)| match result {
+                Ok(value) => Some(((url, method), value)),
                 Err(e) => {
                     tracing::warn!(url = %url, error = %e, "Failed to resolve URL");
                     None
@@ -706,10 +706,26 @@ pub async fn resolve_url_batch(
         return Vec::new();
     }
 
-    // Build deduplicated batch input
-    let batch_input: Vec<_> = valid
+    let mut cached = Vec::new();
+    let mut uncached = Vec::new();
+
+    {
+        let mut vm = vm.lock().unwrap_or_else(|e| e.into_inner());
+        for entry in valid {
+            let canonical_cache_key =
+                crate::vm::resolver_cache_key(&entry.request.resolver, &entry.request.input);
+
+            if let Some(resolved_value) = vm.get_cached_resolver_value(&canonical_cache_key) {
+                cached.push((entry, resolved_value));
+            } else {
+                uncached.push(entry);
+            }
+        }
+    }
+
+    let batch_input: Vec<_> = uncached
         .iter()
-        .map(|v| (v.url.clone(), v.method.clone()))
+        .map(|entry| (entry.url.clone(), entry.method.clone()))
         .collect();
 
     let results = url_client.resolve_batch(&batch_input).await;
@@ -719,8 +735,17 @@ pub async fn resolve_url_batch(
     let mut mutations = Vec::new();
     let mut failed = Vec::new();
 
-    for entry in valid {
-        match results.get(&entry.url) {
+    for (entry, resolved_value) in cached {
+        match vm.apply_resolver_result(bytecode, &entry.request.cache_key, resolved_value) {
+            Ok(mut new_mutations) => mutations.append(&mut new_mutations),
+            Err(err) => {
+                tracing::warn!(url = %entry.url, "Failed to apply cached URL resolver result: {}", err);
+            }
+        }
+    }
+
+    for entry in uncached {
+        match results.get(&(entry.url.clone(), entry.method.clone())) {
             Some(resolved_value) => {
                 match vm.apply_resolver_result(
                     bytecode,

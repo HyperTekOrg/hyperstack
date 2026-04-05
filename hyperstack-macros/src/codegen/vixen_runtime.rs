@@ -52,7 +52,7 @@ fn generate_slot_scheduler_task() -> TokenStream {
             let scheduler = slot_scheduler.clone();
             let vm = vm.clone();
             let bytecode = bytecode_arc.clone();
-            let url_client = url_resolver_client.clone();
+            let runtime_resolver = runtime_resolver.clone();
             let slot_tracker = slot_tracker.clone();
             let mutations_tx = mutations_tx.clone();
 
@@ -192,7 +192,10 @@ fn generate_slot_scheduler_task() -> TokenStream {
                                 continue;
                             };
 
-                            let cache_key = format!("scheduled:{}:{}:{}", callback.entity_name, callback.primary_key, url);
+                            let cache_key = hyperstack::runtime::hyperstack_interpreter::runtime_resolvers::runtime_resolver_cache_key(
+                                &callback.resolver,
+                                &hyperstack::runtime::serde_json::Value::String(url.clone()),
+                            );
 
                             // IMPORTANT: enqueue + take must stay inside the same lock guard.
                             // Splitting them risks lost or duplicated requests during reconnects.
@@ -213,12 +216,9 @@ fn generate_slot_scheduler_task() -> TokenStream {
                                 vm_guard.take_resolver_requests()
                             };
 
-                            let url_mutations = hyperstack::runtime::hyperstack_interpreter::resolvers::resolve_url_batch(
-                                &vm,
-                                bytecode.as_ref(),
-                                &url_client,
-                                requests,
-                            ).await;
+                            let url_mutations = runtime_resolver
+                                .resolve_and_apply(&vm, bytecode.as_ref(), requests)
+                                .await;
 
                             if url_mutations.is_empty() {
                                 if callback.retry_count < MAX_RETRIES {
@@ -451,15 +451,19 @@ pub fn generate_vm_handler(
     let entity_name_lit = entity_name;
 
     quote! {
+        #[allow(dead_code)]
         const DEFAULT_DAS_BATCH_SIZE: usize = 100;
+        #[allow(dead_code)]
         const DEFAULT_DAS_TIMEOUT_SECS: u64 = 10;
 
+        #[allow(dead_code)]
         struct ResolverClient {
             endpoint: String,
             client: hyperstack::runtime::reqwest::Client,
             batch_size: usize,
         }
 
+        #[allow(dead_code)]
         impl ResolverClient {
             fn new(endpoint: String, batch_size: usize) -> hyperstack::runtime::anyhow::Result<Self> {
                 let client = hyperstack::runtime::reqwest::Client::builder()
@@ -653,8 +657,7 @@ pub fn generate_vm_handler(
             mutations_tx: hyperstack::runtime::tokio::sync::mpsc::Sender<hyperstack::runtime::hyperstack_server::MutationBatch>,
             health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
             slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
-            resolver_client: Option<std::sync::Arc<ResolverClient>>,
-            url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
+            runtime_resolver: hyperstack::runtime::hyperstack_interpreter::runtime_resolvers::SharedRuntimeResolver,
             slot_scheduler: std::sync::Arc<std::sync::Mutex<hyperstack::runtime::hyperstack_interpreter::scheduler::SlotScheduler>>,
         }
 
@@ -674,8 +677,7 @@ pub fn generate_vm_handler(
                 mutations_tx: hyperstack::runtime::tokio::sync::mpsc::Sender<hyperstack::runtime::hyperstack_server::MutationBatch>,
                 health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
                 slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
-                resolver_client: Option<std::sync::Arc<ResolverClient>>,
-                url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
+                runtime_resolver: hyperstack::runtime::hyperstack_interpreter::runtime_resolvers::SharedRuntimeResolver,
                 slot_scheduler: std::sync::Arc<std::sync::Mutex<hyperstack::runtime::hyperstack_interpreter::scheduler::SlotScheduler>>,
             ) -> Self {
                 Self {
@@ -684,8 +686,7 @@ pub fn generate_vm_handler(
                     mutations_tx,
                     health_monitor,
                     slot_tracker,
-                    resolver_client,
-                    url_resolver_client,
+                    runtime_resolver,
                     slot_scheduler,
                 }
             }
@@ -711,152 +712,13 @@ pub fn generate_vm_handler(
                 }
             }
 
-            fn extract_mint_from_input(
-                input: &hyperstack::runtime::serde_json::Value,
-            ) -> Option<String> {
-                match input {
-                    hyperstack::runtime::serde_json::Value::String(value) => Some(value.clone()),
-                    hyperstack::runtime::serde_json::Value::Object(map) => map
-                        .get("mint")
-                        .and_then(|value| value.as_str())
-                        .map(|value| value.to_string()),
-                    _ => None,
-                }
-            }
-
             async fn resolve_and_apply_resolvers(
                 &self,
                 requests: Vec<hyperstack::runtime::hyperstack_interpreter::vm::ResolverRequest>,
             ) -> Vec<hyperstack::runtime::hyperstack_interpreter::Mutation> {
-                if requests.is_empty() {
-                    return Vec::new();
-                }
-
-                let total_requests = requests.len();
-
-                let resolver_client = match self.resolver_client.as_ref() {
-                    Some(client) => client.clone(),
-                    None => {
-                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                        vm.restore_resolver_requests(requests);
-                        hyperstack::runtime::tracing::warn!(
-                            "DAS_API_ENDPOINT not set; resolver requests re-queued (count={})",
-                            total_requests
-                        );
-                        return Vec::new();
-                    }
-                };
-
-                let mut token_requests = Vec::new();
-                let mut url_requests = Vec::new();
-                let mut other_requests = Vec::new();
-
-                for request in requests {
-                    match &request.resolver {
-                        hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Token => {
-                            token_requests.push(request)
-                        }
-                        hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(_) => {
-                            url_requests.push(request)
-                        }
-                        #[allow(unreachable_patterns)]
-                        _ => other_requests.push(request),
-                    }
-                }
-
-                let mut mutations = Vec::new();
-
-                if !token_requests.is_empty() {
-                    let mints: Vec<String> = token_requests
-                        .iter()
-                        .filter_map(|request| Self::extract_mint_from_input(&request.input))
-                        .collect();
-
-                    if mints.is_empty() {
-                        let token_count = token_requests.len();
-                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                        vm.restore_resolver_requests(token_requests);
-                        hyperstack::runtime::tracing::warn!(
-                            "Resolver token requests missing mint values; re-queued (count={})",
-                            token_count
-                        );
-                    } else {
-                        match resolver_client.resolve_token_metadata(&mints).await {
-                            Ok(resolved_map) => {
-                                let mut unresolved = Vec::new();
-                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-
-                                for request in token_requests {
-                                    let Some(mint) =
-                                        Self::extract_mint_from_input(&request.input)
-                                    else {
-                                        unresolved.push(request);
-                                        continue;
-                                    };
-
-                                    let Some(resolved_value) = resolved_map.get(&mint) else {
-                                        unresolved.push(request);
-                                        continue;
-                                    };
-
-                                    match vm.apply_resolver_result(
-                                        self.bytecode.as_ref(),
-                                        &request.cache_key,
-                                        resolved_value.clone(),
-                                    ) {
-                                        Ok(mut new_mutations) => {
-                                            mutations.append(&mut new_mutations);
-                                        }
-                                        Err(err) => {
-                                            hyperstack::runtime::tracing::warn!(
-                                                "Failed to apply resolver result: {}",
-                                                err
-                                            );
-                                            unresolved.push(request);
-                                        }
-                                    }
-                                }
-
-                                if !unresolved.is_empty() {
-                                    vm.restore_resolver_requests(unresolved);
-                                }
-                            }
-                            Err(err) => {
-                                let token_count = token_requests.len();
-                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                                vm.restore_resolver_requests(token_requests);
-                                hyperstack::runtime::tracing::warn!(
-                                    "Resolver request failed (count={}): {}",
-                                    token_count,
-                                    err
-                                );
-                            }
-                        }
-                    }
-                }
-
-                // Process URL resolver requests in parallel with deduplication
-                if !url_requests.is_empty() {
-                    let mut url_mutations = hyperstack::runtime::hyperstack_interpreter::resolvers::resolve_url_batch(
-                        &self.vm,
-                        self.bytecode.as_ref(),
-                        &self.url_resolver_client,
-                        url_requests,
-                    ).await;
-                    mutations.append(&mut url_mutations);
-                }
-
-                if !other_requests.is_empty() {
-                    let other_count = other_requests.len();
-                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                    vm.restore_resolver_requests(other_requests);
-                    hyperstack::runtime::tracing::warn!(
-                        "Resolver type unsupported; requests re-queued (count={})",
-                        other_count
-                    );
-                }
-
-                mutations
+                self.runtime_resolver
+                    .resolve_and_apply(&self.vm, self.bytecode.as_ref(), requests)
+                    .await
             }
         }
 
@@ -1382,22 +1244,16 @@ pub fn generate_spec_function(
                 ))?;
             let x_token = std::env::var("YELLOWSTONE_X_TOKEN").ok();
 
-            let resolver_batch_size = std::env::var("DAS_API_BATCH_SIZE")
-                .ok()
-                .and_then(|value| value.parse::<usize>().ok())
-                .unwrap_or(DEFAULT_DAS_BATCH_SIZE);
-
-            let resolver_client = match std::env::var("DAS_API_ENDPOINT").ok() {
-                Some(endpoint) => Some(Arc::new(ResolverClient::new(endpoint, resolver_batch_size)?)),
-                None => {
-                    hyperstack::runtime::tracing::warn!(
-                        "DAS_API_ENDPOINT not set; token resolver disabled."
-                    );
-                    None
-                }
-            };
-
-            let url_resolver_client = Arc::new(hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient::new());
+            let runtime_resolver: hyperstack::runtime::hyperstack_interpreter::runtime_resolvers::SharedRuntimeResolver =
+                Arc::new(
+                    hyperstack::runtime::hyperstack_interpreter::runtime_resolvers::InProcessResolver::from_env()
+                        .map_err(|err| {
+                            hyperstack::runtime::anyhow::anyhow!(
+                                "Failed to configure in-process runtime resolver: {}",
+                                err
+                            )
+                        })?,
+                );
 
             let slot_tracker = hyperstack::runtime::hyperstack_server::SlotTracker::new();
             let slot_scheduler = Arc::new(Mutex::new(hyperstack::runtime::hyperstack_interpreter::scheduler::SlotScheduler::new()));
@@ -1446,8 +1302,7 @@ pub fn generate_spec_function(
                     mutations_tx.clone(),
                     health_monitor.clone(),
                     slot_tracker.clone(),
-                    resolver_client.clone(),
-                    url_resolver_client.clone(),
+                    runtime_resolver.clone(),
                     slot_scheduler.clone(),
                 );
 
@@ -1514,15 +1369,19 @@ pub fn generate_spec_function(
 
 pub fn generate_vm_handler_struct() -> TokenStream {
     quote! {
+        #[allow(dead_code)]
         const DEFAULT_DAS_BATCH_SIZE: usize = 100;
+        #[allow(dead_code)]
         const DEFAULT_DAS_TIMEOUT_SECS: u64 = 10;
 
+        #[allow(dead_code)]
         struct ResolverClient {
             endpoint: String,
             client: hyperstack::runtime::reqwest::Client,
             batch_size: usize,
         }
 
+        #[allow(dead_code)]
         impl ResolverClient {
             fn new(endpoint: String, batch_size: usize) -> hyperstack::runtime::anyhow::Result<Self> {
                 let client = hyperstack::runtime::reqwest::Client::builder()
@@ -1716,8 +1575,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
             mutations_tx: hyperstack::runtime::tokio::sync::mpsc::Sender<hyperstack::runtime::hyperstack_server::MutationBatch>,
             health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
             slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
-            resolver_client: Option<std::sync::Arc<ResolverClient>>,
-            url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
+            runtime_resolver: hyperstack::runtime::hyperstack_interpreter::runtime_resolvers::SharedRuntimeResolver,
             slot_scheduler: std::sync::Arc<std::sync::Mutex<hyperstack::runtime::hyperstack_interpreter::scheduler::SlotScheduler>>,
         }
 
@@ -1737,8 +1595,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                 mutations_tx: hyperstack::runtime::tokio::sync::mpsc::Sender<hyperstack::runtime::hyperstack_server::MutationBatch>,
                 health_monitor: Option<hyperstack::runtime::hyperstack_server::HealthMonitor>,
                 slot_tracker: hyperstack::runtime::hyperstack_server::SlotTracker,
-                resolver_client: Option<std::sync::Arc<ResolverClient>>,
-                url_resolver_client: std::sync::Arc<hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient>,
+                runtime_resolver: hyperstack::runtime::hyperstack_interpreter::runtime_resolvers::SharedRuntimeResolver,
                 slot_scheduler: std::sync::Arc<std::sync::Mutex<hyperstack::runtime::hyperstack_interpreter::scheduler::SlotScheduler>>,
             ) -> Self {
                 Self {
@@ -1747,8 +1604,7 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                     mutations_tx,
                     health_monitor,
                     slot_tracker,
-                    resolver_client,
-                    url_resolver_client,
+                    runtime_resolver,
                     slot_scheduler,
                 }
             }
@@ -1774,152 +1630,13 @@ pub fn generate_vm_handler_struct() -> TokenStream {
                 }
             }
 
-            fn extract_mint_from_input(
-                input: &hyperstack::runtime::serde_json::Value,
-            ) -> Option<String> {
-                match input {
-                    hyperstack::runtime::serde_json::Value::String(value) => Some(value.clone()),
-                    hyperstack::runtime::serde_json::Value::Object(map) => map
-                        .get("mint")
-                        .and_then(|value| value.as_str())
-                        .map(|value| value.to_string()),
-                    _ => None,
-                }
-            }
-
             async fn resolve_and_apply_resolvers(
                 &self,
                 requests: Vec<hyperstack::runtime::hyperstack_interpreter::vm::ResolverRequest>,
             ) -> Vec<hyperstack::runtime::hyperstack_interpreter::Mutation> {
-                if requests.is_empty() {
-                    return Vec::new();
-                }
-
-                let total_requests = requests.len();
-
-                let resolver_client = match self.resolver_client.as_ref() {
-                    Some(client) => client.clone(),
-                    None => {
-                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                        vm.restore_resolver_requests(requests);
-                        hyperstack::runtime::tracing::warn!(
-                            "DAS_API_ENDPOINT not set; resolver requests re-queued (count={})",
-                            total_requests
-                        );
-                        return Vec::new();
-                    }
-                };
-
-                let mut token_requests = Vec::new();
-                let mut url_requests = Vec::new();
-                let mut other_requests = Vec::new();
-
-                for request in requests {
-                    match &request.resolver {
-                        hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Token => {
-                            token_requests.push(request)
-                        }
-                        hyperstack::runtime::hyperstack_interpreter::ast::ResolverType::Url(_) => {
-                            url_requests.push(request)
-                        }
-                        #[allow(unreachable_patterns)]
-                        _ => other_requests.push(request),
-                    }
-                }
-
-                let mut mutations = Vec::new();
-
-                if !token_requests.is_empty() {
-                    let mints: Vec<String> = token_requests
-                        .iter()
-                        .filter_map(|request| Self::extract_mint_from_input(&request.input))
-                        .collect();
-
-                    if mints.is_empty() {
-                        let token_count = token_requests.len();
-                        let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                        vm.restore_resolver_requests(token_requests);
-                        hyperstack::runtime::tracing::warn!(
-                            "Resolver token requests missing mint values; re-queued (count={})",
-                            token_count
-                        );
-                    } else {
-                        match resolver_client.resolve_token_metadata(&mints).await {
-                            Ok(resolved_map) => {
-                                let mut unresolved = Vec::new();
-                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-
-                                for request in token_requests {
-                                    let Some(mint) =
-                                        Self::extract_mint_from_input(&request.input)
-                                    else {
-                                        unresolved.push(request);
-                                        continue;
-                                    };
-
-                                    let Some(resolved_value) = resolved_map.get(&mint) else {
-                                        unresolved.push(request);
-                                        continue;
-                                    };
-
-                                    match vm.apply_resolver_result(
-                                        self.bytecode.as_ref(),
-                                        &request.cache_key,
-                                        resolved_value.clone(),
-                                    ) {
-                                        Ok(mut new_mutations) => {
-                                            mutations.append(&mut new_mutations);
-                                        }
-                                        Err(err) => {
-                                            hyperstack::runtime::tracing::warn!(
-                                                "Failed to apply resolver result: {}",
-                                                err
-                                            );
-                                            unresolved.push(request);
-                                        }
-                                    }
-                                }
-
-                                if !unresolved.is_empty() {
-                                    vm.restore_resolver_requests(unresolved);
-                                }
-                            }
-                            Err(err) => {
-                                let token_count = token_requests.len();
-                                let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                                vm.restore_resolver_requests(token_requests);
-                                hyperstack::runtime::tracing::warn!(
-                                    "Resolver request failed (count={}): {}",
-                                    token_count,
-                                    err
-                                );
-                            }
-                        }
-                    }
-                }
-
-                // Process URL resolver requests in parallel with deduplication
-                if !url_requests.is_empty() {
-                    let mut url_mutations = hyperstack::runtime::hyperstack_interpreter::resolvers::resolve_url_batch(
-                        &self.vm,
-                        self.bytecode.as_ref(),
-                        &self.url_resolver_client,
-                        url_requests,
-                    ).await;
-                    mutations.append(&mut url_mutations);
-                }
-
-                if !other_requests.is_empty() {
-                    let other_count = other_requests.len();
-                    let mut vm = self.vm.lock().unwrap_or_else(|e| e.into_inner());
-                    vm.restore_resolver_requests(other_requests);
-                    hyperstack::runtime::tracing::warn!(
-                        "Resolver type unsupported; requests re-queued (count={})",
-                        other_count
-                    );
-                }
-
-                mutations
+                self.runtime_resolver
+                    .resolve_and_apply(&self.vm, self.bytecode.as_ref(), requests)
+                    .await
             }
         }
     }
@@ -2501,22 +2218,16 @@ pub fn generate_multi_pipeline_spec_function(
                 ))?;
             let x_token = std::env::var("YELLOWSTONE_X_TOKEN").ok();
 
-            let resolver_batch_size = std::env::var("DAS_API_BATCH_SIZE")
-                .ok()
-                .and_then(|value| value.parse::<usize>().ok())
-                .unwrap_or(DEFAULT_DAS_BATCH_SIZE);
-
-            let resolver_client = match std::env::var("DAS_API_ENDPOINT").ok() {
-                Some(endpoint) => Some(Arc::new(ResolverClient::new(endpoint, resolver_batch_size)?)),
-                None => {
-                    hyperstack::runtime::tracing::warn!(
-                        "DAS_API_ENDPOINT not set; token resolver disabled."
-                    );
-                    None
-                }
-            };
-
-            let url_resolver_client = Arc::new(hyperstack::runtime::hyperstack_interpreter::resolvers::UrlResolverClient::new());
+            let runtime_resolver: hyperstack::runtime::hyperstack_interpreter::runtime_resolvers::SharedRuntimeResolver =
+                Arc::new(
+                    hyperstack::runtime::hyperstack_interpreter::runtime_resolvers::InProcessResolver::from_env()
+                        .map_err(|err| {
+                            hyperstack::runtime::anyhow::anyhow!(
+                                "Failed to configure in-process runtime resolver: {}",
+                                err
+                            )
+                        })?,
+                );
 
             let slot_tracker = hyperstack::runtime::hyperstack_server::SlotTracker::new();
             let slot_scheduler = Arc::new(Mutex::new(hyperstack::runtime::hyperstack_interpreter::scheduler::SlotScheduler::new()));
@@ -2565,8 +2276,7 @@ pub fn generate_multi_pipeline_spec_function(
                     mutations_tx.clone(),
                     health_monitor.clone(),
                     slot_tracker.clone(),
-                    resolver_client.clone(),
-                    url_resolver_client.clone(),
+                    runtime_resolver.clone(),
                     slot_scheduler.clone(),
                 );
 
