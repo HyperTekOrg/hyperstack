@@ -58,7 +58,7 @@
     "rust/hyperstack-auth": {
       "release-type": "rust",
       "component": "hyperstack-auth",
-      "initial-version": "0.1.0"
+      "initial-version": "0.1.1"
     },
     "rust/hyperstack-server": {
       "release-type": "rust",

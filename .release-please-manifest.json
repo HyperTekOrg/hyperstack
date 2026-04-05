@@ -11,6 +11,6 @@
   "stacks/sdk/rust": "0.6.0",
   "packages/hyperstack": "0.6.0",
   "hyperstack-idl": "0.1.6",
-  "rust/hyperstack-auth": "0.1.0",
+  "rust/hyperstack-auth": "0.1.1",
   "rust/hyperstack-auth-server": "0.5.11"
 }
