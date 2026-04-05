@@ -154,6 +154,12 @@ impl<S: Stack> HyperStackBuilder<S> {
         self
     }
 
+    /// Alias for `publishable_key` - use this for server-side code where
+    /// the key could be either a secret key or a publishable key.
+    pub fn api_key(self, api_key: impl Into<String>) -> Self {
+        self.publishable_key(api_key)
+    }
+
     pub fn token_endpoint(mut self, token_endpoint: impl Into<String>) -> Self {
         let auth = self
             .config

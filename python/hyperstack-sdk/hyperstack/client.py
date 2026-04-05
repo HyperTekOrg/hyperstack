@@ -28,10 +28,15 @@ def parse_mode(view: str) -> Mode:
 class HyperStackClient:
     """HyperStack WebSocket client with real-time data synchronization.
 
-    Supports authentication via publishable keys, static tokens, or custom token providers.
+    Supports authentication via API keys (server-side), publishable keys (browser),
+    static tokens, or custom token providers.
 
-    Example:
-        # Using publishable key (for hosted Hyperstack)
+    Examples:
+        # Server-side with any API key (secret or publishable)
+        auth = AuthConfig.from_api_key("hspk_...")  # or "hssk_..."
+        client = HyperStackClient("wss://demo.stack.usehyperstack.com", auth=auth)
+
+        # Browser/client with publishable key only
         auth = AuthConfig(publishable_key="hspk_...")
         client = HyperStackClient("wss://demo.stack.usehyperstack.com", auth=auth)
 

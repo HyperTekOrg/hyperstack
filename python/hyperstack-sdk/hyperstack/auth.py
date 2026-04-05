@@ -154,17 +154,26 @@ class AuthConfig:
     Supports multiple authentication strategies:
     1. Static token - for server-side use with pre-minted tokens
     2. Token provider function - custom async function that returns tokens
-    3. Publishable key - for hosted Hyperstack Cloud (auto-fetches from token endpoint)
-    4. Custom token endpoint - for self-hosted token servers
+    3. API key - for server-side use (can be secret or publishable key)
+    4. Publishable key - for browser/client use with hosted Hyperstack Cloud
+    5. Custom token endpoint - for self-hosted token servers
 
-    Example:
-        # Using publishable key (hosted Hyperstack)
-        auth = AuthConfig(publishable_key="hspk_...")
+    For server-side code, use `from_api_key()` or pass `publishable_key=`
+    (which accepts any API key, not just publishable ones):
 
-        # Using static token
+        auth = AuthConfig.from_api_key("hspk_...")  # or "hssk_..."
+        auth = AuthConfig(publishable_key="hspk_...")  # same thing
+
+    For browser/client code, use publishable_key directly:
+
+        auth = AuthConfig(publishable_key="hspk_...")  # must be publishable
+
+    Using static token:
+
         auth = AuthConfig(token="static_token_here")
 
-        # Using custom token provider
+    Using custom token provider:
+
         async def get_token():
             return AuthToken(token="...", expires_at=1234567890)
         auth = AuthConfig(get_token=get_token)
@@ -177,6 +186,24 @@ class AuthConfig:
     token_transport: TokenTransport = TokenTransport.QUERY
     token_endpoint_headers: Dict[str, str] = field(default_factory=dict)
     token_endpoint_credentials: Optional[str] = None  # 'omit', 'same-origin', 'include'
+
+    @classmethod
+    def from_api_key(cls, api_key: str, **kwargs) -> "AuthConfig":
+        """Create AuthConfig from an API key.
+
+        Use this for server-side code where the key could be either a
+        secret key or a publishable key. For browser/client code, use
+        the constructor with publishable_key=... directly.
+
+        Args:
+            api_key: The API key (can be secret or publishable)
+            **kwargs: Additional auth config options
+
+        Example:
+            auth = AuthConfig.from_api_key("hspk_...")
+            auth = AuthConfig.from_api_key("hssk_...", token_transport=TokenTransport.BEARER)
+        """
+        return cls(publishable_key=api_key, **kwargs)
 
     def __post_init__(self):
         # Validate that at most one auth strategy is specified
@@ -336,7 +363,7 @@ class AuthState:
         if self.config is None:
             if is_hosted_hyperstack_websocket_url(self.websocket_url):
                 raise AuthError(
-                    "Hosted Hyperstack websocket connections require auth.publishable_key, "
+                    "Hosted Hyperstack websocket connections require an API key, "
                     "auth.get_token, auth.token_endpoint, or auth.token",
                     AuthErrorCode.AUTH_REQUIRED,
                 )
