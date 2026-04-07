@@ -10,6 +10,7 @@ members = [
     "rust/hyperstack-sdk",
     "rust/hyperstack-auth",
     "rust/hyperstack-auth-server",
+    "rust/hyperstack-mcp",
     "stacks/sdk/rust",
 ]
 exclude = [
