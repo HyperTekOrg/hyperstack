@@ -32,20 +32,21 @@ pub mod view;
 
 pub use auth::{AuthConfig, AuthToken, TokenTransport};
 pub use client::{HyperStack, HyperStackBuilder};
-pub use connection::ConnectionState;
+pub use config::{ConnectionConfig, HyperStackConfig};
+pub use connection::{ConnectionManager, ConnectionState};
 pub use entity::Stack;
 pub use error::{AuthErrorCode, HyperStackError, SocketIssue};
 pub use frame::{
     parse_frame, parse_snapshot_entities, try_parse_subscribed_frame, Frame, Mode, Operation,
     SnapshotEntity,
 };
-pub use store::{deep_merge_with_append, SharedStore, StoreUpdate};
+pub use store::{deep_merge_with_append, SharedStore, StoreConfig, StoreUpdate};
 pub use stream::{
     EntityStream, FilterMapStream, FilteredStream, KeyFilter, MapStream, RichEntityStream,
     RichUpdate, Update, UseStream,
 };
 
-pub use subscription::{ClientMessage, Subscription};
+pub use subscription::{ClientMessage, Subscription, Unsubscription};
 pub use view::{
     RichWatchBuilder, StateView, UseBuilder, ViewBuilder, ViewHandle, Views, WatchBuilder,
 };
