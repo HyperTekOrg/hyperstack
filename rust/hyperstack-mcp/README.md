@@ -17,9 +17,30 @@ cargo install --path rust/hyperstack-mcp
 
 This installs an `hs-mcp` binary into `~/.cargo/bin`.
 
-## Use with Claude Desktop
+## Use with an MCP client
 
-Add the following to your `claude_desktop_config.json`:
+`hs-mcp` is an stdio server — any client that speaks MCP over stdio can drive
+it. Snippets for the major ones are below. In all cases, to talk to a private
+stack the agent passes the stack URL and your publishable API key on the
+`connect` call — no environment variables required on the server process.
+
+> **PATH gotcha.** Every client below resolves `command` against the PATH its
+> process inherited at launch. GUI apps started from a desktop launcher on
+> macOS/Linux usually don't inherit shell PATH changes from `.zshrc` /
+> `.bashrc`, so if `hs-mcp` was installed after the app was last started,
+> either **fully restart** the app (not just reload the window) or hard-code
+> an absolute path like `/home/you/.cargo/bin/hs-mcp` in the snippet.
+
+> **Claude Desktop vs Claude Code.** These are two different Anthropic
+> products and they configure MCP differently. **Claude Desktop** is the
+> Mac/Windows app from claude.ai — configured via a JSON file (below).
+> **Claude Code** is the `claude` command-line tool — configured via a
+> `claude mcp add` subcommand (further down). If you use both, you need to
+> register `hs-mcp` in each one separately.
+
+### Claude Desktop
+
+Add to `claude_desktop_config.json`, then restart the app.
 
 ```json
 {
@@ -31,10 +52,117 @@ Add the following to your `claude_desktop_config.json`:
 }
 ```
 
-Restart Claude Desktop. The agent will now have access to all `hyperstack-mcp`
-tools listed below. To talk to a private stack, the agent passes the stack URL
-and your publishable API key on the `connect` call — no environment variables
-required.
+### Cursor
+
+Global config at `~/.cursor/mcp.json` or workspace-scoped at
+`.cursor/mcp.json` in the project root (commit-friendly). Restart Cursor or
+toggle the server in **Settings → MCP** after edits. The first tool call
+prompts for trust. Cursor does **not** interpolate `${env:VAR}` from the host
+shell — any `env` values must be literal.
+
+```json
+{
+  "mcpServers": {
+    "hyperstack": {
+      "command": "hs-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+### VS Code
+
+Native MCP support. Workspace-scoped config at `.vscode/mcp.json`, or open
+the user-level file via the command palette: **MCP: Open User Configuration**.
+Note the top-level key is `servers` (singular), not `mcpServers`. VS Code
+hot-reloads the file — no restart needed — and prompts for trust before first
+start. Tools surface in Copilot Chat's agent mode.
+
+```json
+{
+  "servers": {
+    "hyperstack": {
+      "command": "hs-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+### Claude Code (Anthropic CLI)
+
+Use the `claude mcp add` subcommand. The `--` separator is required so Claude
+doesn't try to parse `hs-mcp`'s own flags. Scope is one of `local` (default,
+current project, private), `project` (writes `.mcp.json` at repo root,
+shared), or `user` (all projects on your machine):
+
+```bash
+claude mcp add --transport stdio hyperstack --scope user -- hs-mcp
+```
+
+### Zed
+
+Zed calls them "context servers". Add to `settings.json` via
+`zed: open settings`. Zed reloads on save; no restart required. Status is
+visible in the Agent Panel (green dot = active).
+
+```json
+{
+  "context_servers": {
+    "hyperstack": {
+      "command": "hs-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}
+```
+
+### Windsurf (Codeium)
+
+Config file: `~/.codeium/windsurf/mcp_config.json`. Same shape as Claude
+Desktop. **Restart Windsurf after editing** — config is not hot-reloaded.
+Cascade has a hard cap of 100 total tools across all enabled MCP servers, so
+budget accordingly.
+
+```json
+{
+  "mcpServers": {
+    "hyperstack": {
+      "command": "hs-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+### Continue.dev
+
+Continue uses YAML. Either inline in `config.yaml`:
+
+```yaml
+mcpServers:
+  - name: hyperstack
+    type: stdio
+    command: hs-mcp
+    args: []
+```
+
+…or as a standalone file at `.continue/mcpServers/hyperstack.yaml`:
+
+```yaml
+name: hyperstack
+version: 0.0.1
+schema: v1
+mcpServers:
+  - name: hyperstack
+    type: stdio
+    command: hs-mcp
+    args: []
+```
+
+MCP tools in Continue are only available in **agent mode**, not chat or edit.
 
 ## Tool reference
 
