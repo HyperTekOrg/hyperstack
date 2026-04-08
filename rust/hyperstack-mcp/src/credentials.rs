@@ -175,9 +175,7 @@ fn is_hosted_websocket_url(url: &str) -> bool {
         .strip_prefix("wss://")
         .or_else(|| url.strip_prefix("ws://"))
         .unwrap_or(url);
-    let host_end = rest
-        .find(|c: char| c == '/' || c == ':' || c == '?' || c == '#')
-        .unwrap_or(rest.len());
+    let host_end = rest.find(['/', ':', '?', '#']).unwrap_or(rest.len());
     rest[..host_end].ends_with(HOSTED_WEBSOCKET_SUFFIX)
 }
 
