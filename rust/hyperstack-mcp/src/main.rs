@@ -307,8 +307,14 @@ impl HyperstackMcp {
         &self,
         Parameters(args): Parameters<DisconnectArgs>,
     ) -> Result<CallToolResult, McpError> {
-        let removed = self.connections.disconnect(&args.connection_id).await;
-        if removed {
+        // ConnectionRegistry::disconnect removes the entry from the
+        // DashMap, then acquires the per-entry write lock to wait out any
+        // in-flight `subscribe` calls holding a read guard. Only after that
+        // is it safe to sweep the SubscriptionRegistry — otherwise a
+        // subscribe that was mid-flight could insert a new entry after our
+        // sweep and leave an orphan. See connections.rs module docs.
+        let entry = self.connections.disconnect(&args.connection_id).await;
+        if entry.is_some() {
             self.subscriptions
                 .remove_for_connection(&args.connection_id);
             Ok(CallToolResult::success(vec![Content::text("disconnected")]))
@@ -360,6 +366,23 @@ impl HyperstackMcp {
             )
         })?;
 
+        // Race protection against a concurrent `disconnect`. We hold the
+        // read guard for the full insert-sub + dispatch window. Disconnect
+        // takes the write lock before sweeping subscriptions, so it will
+        // wait for us to finish; if it won the write lock first, `*alive`
+        // is now `false` and we bail without inserting anything. See
+        // `connections.rs` module docs for the full argument.
+        let alive_guard = conn.alive.read().await;
+        if !*alive_guard {
+            return Err(McpError::invalid_params(
+                format!(
+                    "connection {} was disconnected concurrently; subscription not created",
+                    args.connection_id
+                ),
+                None,
+            ));
+        }
+
         let entry =
             self.subscriptions
                 .insert(args.connection_id.clone(), args.view.clone(), args.key.clone());
@@ -369,6 +392,9 @@ impl HyperstackMcp {
             sub = sub.with_snapshot(snap);
         }
         conn.manager.subscribe(sub).await;
+        // Guard explicitly dropped at end of scope; keeping it named ensures
+        // the compiler won't reorder it before the dispatch.
+        drop(alive_guard);
 
         let info = SubscriptionInfo {
             subscription_id: entry.id.clone(),
