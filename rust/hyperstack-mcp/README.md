@@ -181,12 +181,34 @@ All tools are stateful: a typical session calls `connect` once, then
 ### Subscription management
 
 - `subscribe({ connection_id, view, key?, with_snapshot? })` — subscribe to a
-  view (e.g. `OreRound/latest`). Optional `key` narrows to a single entity.
-  Returns a `subscription_id`. The subscription is multiplexed over the
-  existing WebSocket — no extra connections are opened.
+  view (e.g. `PumpfunToken/list` or `OreRound/latest`). Optional `key` narrows
+  to a single entity. Returns a `subscription_id`. The subscription is
+  multiplexed over the existing WebSocket — no extra connections are opened.
 - `unsubscribe({ subscription_id })` — cancel.
 - `list_subscriptions({ connection_id? })` — list active subscriptions,
   optionally filtered by connection.
+
+#### View naming
+
+Views are named `<EntityName>/<mode>`. Every entity in a HyperStack stack
+auto-generates three built-in modes:
+
+| Mode     | Shape                                      | Best for                |
+|----------|--------------------------------------------|-------------------------|
+| `state`  | keyed cache of the latest state per entity | "get this specific one" |
+| `list`   | ordered recent-items list (sorted `_seq`)  | "show me recent N"      |
+| `append` | append-only stream of every write          | event-log consumers     |
+
+The `state` view can legitimately be empty on a deployment even when entities
+are streaming, because it only materializes when entities explicitly write
+state. If a `subscribe` + wait loop returns zero entities, try
+`<EntityName>/list` before assuming the stack is down.
+
+Stacks may also declare **custom views** with non-standard suffixes (for
+example `OreRound/latest` in the ore stack). Custom view names are not
+discoverable via the MCP protocol — the stack author must document them out
+of band, or the agent must be told by its user. If you're the author, list
+them in whatever README the agent has access to.
 
 ### Querying the cache
 

@@ -193,8 +193,26 @@ impl HyperstackMcp {
     }
 
     #[tool(description = "Subscribe to a HyperStack view on an existing connection. \
-                          Streamed entities are cached for query tools to read. \
-                          Returns a subscription_id.")]
+                          Streamed entities land in an in-memory cache that the query \
+                          tools (get_entity, list_entities, get_recent, query_entities) \
+                          read from.\n\n\
+                          VIEW NAMING: Views are named '<EntityName>/<mode>'. Every \
+                          entity declared in a stack auto-generates three modes:\n\
+                          - '<EntityName>/state'  — per-key current-state cache. May \
+                          be empty if entities have not written state yet.\n\
+                          - '<EntityName>/list'   — ordered recent-items list, usually \
+                          sorted by _seq desc. Best default for 'show me recent X' \
+                          queries.\n\
+                          - '<EntityName>/append' — append-only event stream of every \
+                          write.\n\
+                          Stacks may also expose custom views with non-standard \
+                          suffixes (e.g. 'OreRound/latest'). Custom view names can only \
+                          be learned from the stack's source or documentation — there \
+                          is no discovery protocol.\n\n\
+                          IF YOUR CACHE STAYS EMPTY after subscribing and waiting a \
+                          few seconds, the most likely cause is wrong mode choice — \
+                          try '<EntityName>/list' before concluding the stack is empty.\n\n\
+                          Returns { subscription_id, connection_id, view, key }.")]
     async fn subscribe(
         &self,
         Parameters(args): Parameters<SubscribeArgs>,
@@ -252,7 +270,11 @@ impl HyperstackMcp {
                           Accepts both a string-DSL `where` (CLI-compatible) and \
                           structured `filters` (LLM-friendly). Both are ANDed. \
                           `select` projects fields by dot-path. `limit` defaults \
-                          to 100 and is capped at 1000.")]
+                          to 100 and is capped at 1000.\n\n\
+                          If this returns 0 entities, the view may be empty on this \
+                          deployment — consider resubscribing with a different mode \
+                          suffix (e.g. /list instead of /state); see the `subscribe` \
+                          tool description for the mode reference.")]
     async fn query_entities(
         &self,
         Parameters(args): Parameters<QueryEntitiesArgs>,
@@ -318,7 +340,11 @@ impl HyperstackMcp {
     }
 
     #[tool(description = "List entity keys currently cached for a subscription. \
-                          Returns keys only — use get_entity for values.")]
+                          Returns keys only — use get_entity for values.\n\n\
+                          If this returns 0 keys, the view may be empty on this \
+                          deployment — consider resubscribing with a different mode \
+                          suffix (e.g. /list instead of /state); see the `subscribe` \
+                          tool description for the mode reference.")]
     async fn list_entities(
         &self,
         Parameters(args): Parameters<ListEntitiesArgs>,
