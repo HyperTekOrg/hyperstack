@@ -476,7 +476,12 @@ impl HyperstackMcp {
     }
 
     #[tool(description = "List entity keys currently cached for a subscription. \
-                          Returns keys only — use get_entity for values.\n\n\
+                          Returns keys only — use get_entity for values. \
+                          Hard-capped at 1000 keys per response to protect the \
+                          stdio transport; `total_cached` reports the true cache \
+                          size and `truncated` is true when the cap was hit. Use \
+                          query_entities with a filter if you need to page through \
+                          a larger cache.\n\n\
                           If this returns 0 keys, the view may be empty on this \
                           deployment — consider resubscribing with a different mode \
                           suffix (e.g. /list instead of /state); see the `subscribe` \
@@ -487,10 +492,14 @@ impl HyperstackMcp {
     ) -> Result<CallToolResult, McpError> {
         let (store, view) = self.resolve_subscription(&args.subscription_id)?;
         let raw = store.all_raw(&view).await;
-        let keys: Vec<String> = raw.into_keys().collect();
+        let total_cached = raw.len();
+        let keys: Vec<String> = raw.into_keys().take(QUERY_LIMIT_MAX).collect();
+        let truncated = total_cached > keys.len();
         let payload = serde_json::json!({
             "view": view,
-            "count": keys.len(),
+            "total_cached": total_cached,
+            "returned": keys.len(),
+            "truncated": truncated,
             "keys": keys,
         });
         Ok(CallToolResult::success(vec![Content::text(
