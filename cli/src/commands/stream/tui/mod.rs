@@ -1,7 +1,7 @@
 mod app;
 mod ui;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
     execute,
@@ -17,13 +17,18 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 use self::app::{App, TuiAction, ViewMode};
+use super::token;
 use super::StreamArgs;
 
 pub async fn run_tui(url: String, view: &str, args: &StreamArgs) -> Result<()> {
     // Connect WebSocket
-    let (ws, _) = connect_async(&url)
-        .await
-        .with_context(|| format!("Failed to connect to {}", url))?;
+    let (ws, _) = connect_async(&url).await.map_err(|err| {
+        anyhow::anyhow!(
+            "Failed to connect to {}: {}",
+            token::redact_hs_token_for_display(&url),
+            err
+        )
+    })?;
 
     let (mut ws_tx, mut ws_rx) = ws.split();
 
