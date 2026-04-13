@@ -372,7 +372,7 @@ function ConnectionStatus() {
 | `isConnected`     | `boolean`         | Convenience: `true` when `state === 'connected'` |
 | `isLoading`       | `boolean`         | `true` until client is ready                     |
 | `error`           | `Error \| null`   | Connection error if any                          |
-| `client`          | `Arete`      | Low-level client instance                        |
+| `client`          | `Arete`           | Low-level client instance                        |
 
 ### Connection States
 
@@ -652,8 +652,8 @@ import { Arete, ConnectionManager } from "arete-react";
 
 ## Choosing Between SDKs
 
-| Use Case                 | Recommended SDK         |
-| ------------------------ | ----------------------- |
+| Use Case                 | Recommended SDK    |
+| ------------------------ | ------------------ |
 | React/Next.js apps       | `arete-react`      |
 | Vue, Svelte, Solid, etc. | `arete-typescript` |
 | Node.js backend/scripts  | `arete-typescript` |
@@ -667,7 +667,7 @@ import { Arete, ConnectionManager } from "arete-react";
 
 | Issue                         | Solution                                                                   |
 | ----------------------------- | -------------------------------------------------------------------------- |
-| "WebSocket connection failed" | Check your connection to `wss://ore.stack.arete.run`               |
+| "WebSocket connection failed" | Check your connection to `wss://ore.stack.arete.run`                       |
 | Data not updating             | Verify the view path matches the stack entity name (e.g., `OreRound/list`) |
 | TypeScript errors             | Ensure your interface matches the stack's data shape                       |
 

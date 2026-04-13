@@ -12,7 +12,7 @@ Complete reference for the Arete CLI (`a4`).
 
 | Option                  | Description                                                      |
 | ----------------------- | ---------------------------------------------------------------- |
-| `--config, -c <path>`   | Path to arete.toml (default: `arete.toml`)             |
+| `--config, -c <path>`   | Path to arete.toml (default: `arete.toml`)                       |
 | `--json`                | Output as JSON                                                   |
 | `--verbose`             | Enable verbose output                                            |
 | `--help, -h`            | Show help                                                        |
@@ -23,17 +23,17 @@ Complete reference for the Arete CLI (`a4`).
 
 ## Quick Reference
 
-| Command                        | Description                          |
-| ------------------------------ | ------------------------------------ |
+| Command                   | Description                          |
+| ------------------------- | ------------------------------------ |
 | `arete-cli create [name]` | Scaffold a new app from a template   |
-| `a4 init`                      | Initialize a stack project           |
-| `a4 up [stack]`                | Deploy stack (push + build + deploy) |
-| `a4 push [stack]`              | Push stack to remote (alias)         |
-| `a4 status`                    | Show project overview                |
-| `a4 stack list`                | List all stacks                      |
-| `a4 stack show`                | Show stack details                   |
-| `a4 telemetry status`          | Show telemetry status                |
-| `a4 explore`                   | Discover stacks and schemas          |
+| `a4 init`                 | Initialize a stack project           |
+| `a4 up [stack]`           | Deploy stack (push + build + deploy) |
+| `a4 push [stack]`         | Push stack to remote (alias)         |
+| `a4 status`               | Show project overview                |
+| `a4 stack list`           | List all stacks                      |
+| `a4 stack show`           | Show stack details                   |
+| `a4 telemetry status`     | Show telemetry status                |
+| `a4 explore`              | Discover stacks and schemas          |
 
 :::note[npm vs Cargo]
 When installed via npm (`npm install -g arete-cli`), the command is `arete-cli`. When installed via Cargo (`cargo install a4-cli`), the command is `a4`. Both are the same CLI.
@@ -589,10 +589,10 @@ a4 telemetry disable
 
 ## Environment Variables
 
-| Variable                          | Description                             |
-| --------------------------------- | --------------------------------------- |
-| `ARETE_API_URL`              | Override API endpoint                   |
-| `DO_NOT_TRACK=1`                  | Disable telemetry (standard)            |
+| Variable                     | Description                        |
+| ---------------------------- | ---------------------------------- |
+| `ARETE_API_URL`              | Override API endpoint              |
+| `DO_NOT_TRACK=1`             | Disable telemetry (standard)       |
 | `ARETE_TELEMETRY_DISABLED=1` | Disable telemetry (Arete-specific) |
 
 ---
@@ -613,11 +613,11 @@ a4 telemetry disable
 
 After successful deployment:
 
-| Type       | Pattern                                               |
-| ---------- | ----------------------------------------------------- |
+| Type       | Pattern                                       |
+| ---------- | --------------------------------------------- |
 | Production | `wss://{stack-name}.stack.arete.run`          |
 | Branch     | `wss://{stack-name}-{branch}.stack.arete.run` |
-| Local      | `ws://localhost:8080`                                 |
+| Local      | `ws://localhost:8080`                         |
 
 Get the URL with:
 

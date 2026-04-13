@@ -94,13 +94,13 @@ rust_module = true                                     # Per-stack: generate as 
 
 ### `[sdk]` — SDK Generation Settings
 
-| Option                  | Type    | Default                            | Description                                                           |
-| ----------------------- | ------- | ---------------------------------- | --------------------------------------------------------------------- |
-| `output_dir`            | string  | `"./generated"`                    | Default output directory for all SDKs                                 |
-| `typescript_output_dir` | string  | `output_dir`                       | TypeScript SDK output directory                                       |
-| `rust_output_dir`       | string  | `output_dir`                       | Rust SDK output directory                                             |
+| Option                  | Type    | Default                       | Description                                                           |
+| ----------------------- | ------- | ----------------------------- | --------------------------------------------------------------------- |
+| `output_dir`            | string  | `"./generated"`               | Default output directory for all SDKs                                 |
+| `typescript_output_dir` | string  | `output_dir`                  | TypeScript SDK output directory                                       |
+| `rust_output_dir`       | string  | `output_dir`                  | Rust SDK output directory                                             |
 | `typescript_package`    | string  | `"arete-stacks/{stack_name}"` | NPM package name for TypeScript SDKs                                  |
-| `rust_module_mode`      | boolean | `false`                            | Generate Rust SDKs as modules (`mod.rs`) instead of standalone crates |
+| `rust_module_mode`      | boolean | `false`                       | Generate Rust SDKs as modules (`mod.rs`) instead of standalone crates |
 
 **Note:** When `rust_module_mode = true`, generated Rust SDKs are created as modules that can be embedded directly in your existing crate. When `false`, each SDK is generated as a standalone crate with its own `Cargo.toml`.
 
@@ -202,8 +202,8 @@ typescript_output_file = "./src/game.ts"
 
 Environment variables override configuration file values:
 
-| Variable             | Description                | Overrides          |
-| -------------------- | -------------------------- | ------------------ |
+| Variable        | Description                | Overrides          |
+| --------------- | -------------------------- | ------------------ |
 | `ARETE_API_URL` | Override the API endpoint  | Default API URL    |
 | `ARETE_API_KEY` | API key for authentication | (no file override) |
 
