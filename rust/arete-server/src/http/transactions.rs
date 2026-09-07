@@ -1150,15 +1150,30 @@ fn decode_bounded(value: &str, max: usize, field: &'static str) -> Result<Vec<u8
     Ok(decoded)
 }
 
+/// v1 (SIMD-0385) leads with version byte `129` and moves the signature array to the tail, with
+/// `num_required_signatures` entries and no length prefix. legacy/v0 lead with a shortvec count.
+const V1_VERSION_BYTE: u8 = 129;
+/// version, legacy header, config mask, lifetime specifier, instruction and address counts.
+const V1_MIN_BODY_BYTES: usize = 1 + 3 + 4 + 32 + 1 + 1;
+/// SIMD-0385 caps a v1 transaction at 12 signatures.
+const V1_MAX_SIGNATURES: usize = 12;
+
 fn transaction_signature(transaction: &[u8]) -> Result<String, TxError> {
-    let (count, prefix_len) = short_vec_len(transaction)?;
-    if count == 0 || count > 64 || transaction.len() < prefix_len + count * 64 + 1 {
-        return Err(TxError::request(
-            "invalid_transaction",
-            "transaction has an invalid signature section",
-        ));
-    }
-    let signatures = &transaction[prefix_len..prefix_len + count * 64];
+    let (count, offset) = if transaction.first() == Some(&V1_VERSION_BYTE) {
+        let count = usize::from(transaction.get(1).copied().unwrap_or(0));
+        let body = transaction.len().saturating_sub(count * 64);
+        if count == 0 || count > V1_MAX_SIGNATURES || body < V1_MIN_BODY_BYTES {
+            return Err(invalid_signature_section());
+        }
+        (count, body)
+    } else {
+        let (count, prefix_len) = short_vec_len(transaction)?;
+        if count == 0 || count > 64 || transaction.len() < prefix_len + count * 64 + 1 {
+            return Err(invalid_signature_section());
+        }
+        (count, prefix_len)
+    };
+    let signatures = &transaction[offset..offset + count * 64];
     if signatures
         .as_chunks::<64>()
         .0
@@ -1171,6 +1186,13 @@ fn transaction_signature(transaction: &[u8]) -> Result<String, TxError> {
         ));
     }
     Ok(bs58::encode(&signatures[..64]).into_string())
+}
+
+fn invalid_signature_section() -> TxError {
+    TxError::request(
+        "invalid_transaction",
+        "transaction has an invalid signature section",
+    )
 }
 
 fn short_vec_len(bytes: &[u8]) -> Result<(usize, usize), TxError> {
@@ -1543,6 +1565,38 @@ mod tests {
         assert_eq!(
             transaction_signature(&unsigned).unwrap_err().code,
             "unsigned_transaction"
+        );
+    }
+
+    #[test]
+    fn send_derives_the_first_signature_from_a_v1_tail() {
+        // version | header(3) | mask(4) | lifetime(32) | numIx | numAddresses | one address
+        let mut transaction = vec![V1_VERSION_BYTE, 1, 0, 0];
+        transaction.extend([0; 4]);
+        transaction.extend([7; 32]);
+        transaction.extend([0, 1]);
+        transaction.extend([9; 32]);
+        let body = transaction.len();
+        transaction.extend(1u8..=64);
+        assert_eq!(
+            transaction_signature(&transaction).unwrap(),
+            bs58::encode((1u8..=64).collect::<Vec<_>>()).into_string()
+        );
+
+        // A legacy parse of the same bytes reads a 129-signature shortvec and rejects it.
+        assert!(short_vec_len(&transaction).unwrap().0 > 64);
+
+        let mut unsigned = transaction[..body].to_vec();
+        unsigned.extend([0; 64]);
+        assert_eq!(
+            transaction_signature(&unsigned).unwrap_err().code,
+            "unsigned_transaction"
+        );
+
+        let truncated = transaction[..body].to_vec();
+        assert_eq!(
+            transaction_signature(&truncated).unwrap_err().code,
+            "invalid_transaction"
         );
     }
 
