@@ -225,6 +225,14 @@ impl TransactionTransport for UnconfiguredTransactionTransport {
     ) -> Result<u64, TransactionError> {
         Err(self.error())
     }
+
+    async fn transaction(
+        &self,
+        _signature: &str,
+        _options: crate::transactions::TransactionInspectOptions,
+    ) -> Result<Option<crate::transactions::ConfirmedTransaction>, TransactionError> {
+        Err(self.error())
+    }
 }
 
 /// Arete client with typed views access.

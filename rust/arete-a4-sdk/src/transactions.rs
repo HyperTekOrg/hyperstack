@@ -1,7 +1,7 @@
 //! Transaction relay transport (`POST <base>/transactions/v1/*`).
 //!
 //! Port of `typescript/core/src/transactions.ts`: the [`TransactionTransport`]
-//! trait with the six relay routes and [`HttpTransactionTransport`], the HTTP
+//! trait with the relay routes and [`HttpTransactionTransport`], the HTTP
 //! implementation authenticated through [`crate::http`].
 //!
 //! Scopes: every route uses `transaction:inspect` except `send`, which uses
@@ -116,6 +116,36 @@ pub struct TransactionSignatureStatus {
     pub slot: Option<u64>,
     pub confirmation_status: Option<Commitment>,
     pub err: Option<Value>,
+}
+
+/// Options for `get`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct TransactionInspectOptions {
+    pub commitment: Option<Commitment>,
+    /// Highest transaction version the cluster may encode. `None` leaves the choice to the relay,
+    /// which tracks the network; pin it only to reproduce an older client's view.
+    pub max_supported_transaction_version: Option<u8>,
+}
+
+/// One account's lamport balance either side of a transaction.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TransactionAccountBalance {
+    pub pubkey: String,
+    pub pre_balance: u64,
+    pub post_balance: u64,
+}
+
+/// Result of `get` — a confirmed transaction's effect, not its instructions.
+///
+/// `accounts` covers every account the transaction resolved, lookup-table entries included, in the
+/// cluster's own order.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConfirmedTransaction {
+    pub signature: String,
+    pub slot: u64,
+    pub block_time: Option<i64>,
+    pub err: Option<Value>,
+    pub accounts: Vec<TransactionAccountBalance>,
 }
 
 /// Submission state reported by relay error bodies.
@@ -300,6 +330,23 @@ pub trait TransactionTransport: Send + Sync {
         &self,
         options: TransactionRequestContext,
     ) -> Result<u64, TransactionError>;
+
+    /// `POST get` — a confirmed transaction's balance effect. `None` means the cluster has not
+    /// seen the signature at the requested commitment.
+    ///
+    /// Defaults to an unsupported-capability error: unlike the status batch there is no slower
+    /// path to fall back to, so a transport that cannot reach `POST /transactions/v1/get` must say
+    /// so rather than invent an answer. Keeps this addition source-compatible for out-of-crate
+    /// implementations; the one in this crate overrides it.
+    async fn transaction(
+        &self,
+        _signature: &str,
+        _options: TransactionInspectOptions,
+    ) -> Result<Option<ConfirmedTransaction>, TransactionError> {
+        Err(TransactionError::Sdk(AreteError::InvalidConfig(
+            "This transport does not implement POST /transactions/v1/get".to_string(),
+        )))
+    }
 }
 
 const SCOPE_INSPECT: &str = "transaction:inspect";
@@ -332,6 +379,71 @@ fn parse_signature_status(
         slot,
         confirmation_status,
         err,
+    }))
+}
+
+/// Parse the `transaction` field of a `get` response. `None` means the cluster has not seen it.
+fn parse_confirmed_transaction(
+    value: Option<&Value>,
+) -> Result<Option<ConfirmedTransaction>, TransactionError> {
+    let transaction = match value {
+        None | Some(Value::Null) => return Ok(None),
+        Some(transaction) => transaction,
+    };
+    let signature = transaction
+        .get("signature")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            TransactionError::InvalidResponse("Missing 'signature' in transaction response".into())
+        })?
+        .to_string();
+    let block_time = match transaction.get("blockTime") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(text)) => Some(text.parse::<i64>().map_err(|_| {
+            TransactionError::InvalidResponse(
+                "Invalid decimal i64 field 'blockTime' in transaction response".to_string(),
+            )
+        })?),
+        Some(_) => {
+            return Err(TransactionError::InvalidResponse(
+                "Invalid decimal i64 field 'blockTime' in transaction response".to_string(),
+            ))
+        }
+    };
+    let accounts = transaction
+        .get("accounts")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            TransactionError::InvalidResponse(
+                "'accounts' must be an array in transaction response".into(),
+            )
+        })?
+        .iter()
+        .map(|account| {
+            Ok(TransactionAccountBalance {
+                pubkey: account
+                    .get("pubkey")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        TransactionError::InvalidResponse(
+                            "Missing 'pubkey' in transaction response".to_string(),
+                        )
+                    })?
+                    .to_string(),
+                pre_balance: decimal_u64(account.get("preBalance"), "preBalance")?,
+                post_balance: decimal_u64(account.get("postBalance"), "postBalance")?,
+            })
+        })
+        .collect::<Result<Vec<_>, TransactionError>>()?;
+    Ok(Some(ConfirmedTransaction {
+        signature,
+        slot: decimal_u64(transaction.get("slot"), "slot")?,
+        block_time,
+        err: match transaction.get("err") {
+            None | Some(Value::Null) => None,
+            Some(err) => Some(err.clone()),
+        },
+        accounts,
     }))
 }
 
@@ -671,6 +783,23 @@ impl TransactionTransport for HttpTransactionTransport {
             .post("block-height", body, SCOPE_INSPECT, false)
             .await?;
         decimal_u64(value.get("blockHeight"), "blockHeight")
+    }
+
+    async fn transaction(
+        &self,
+        signature: &str,
+        options: TransactionInspectOptions,
+    ) -> Result<Option<ConfirmedTransaction>, TransactionError> {
+        let body = BodyBuilder::new()
+            .set("signature", signature)
+            .maybe("commitment", commitment_value(options.commitment))
+            .maybe(
+                "maxSupportedTransactionVersion",
+                options.max_supported_transaction_version,
+            )
+            .build();
+        let value = self.post("get", body, SCOPE_INSPECT, false).await?;
+        parse_confirmed_transaction(value.get("transaction"))
     }
 }
 
@@ -1352,6 +1481,77 @@ mod tests {
             matches!(
                 &error,
                 TransactionError::Sdk(AreteError::InvalidConfig(m)) if m.contains("256-signature")
+            ),
+            "unexpected error: {error:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn transaction_maps_balances_and_an_unseen_signature() {
+        let router = Router::new().route(
+            "/transactions/v1/get",
+            post(|Json(body): Json<Value>| async move {
+                if body["signature"] == Value::String("unseen".to_string()) {
+                    return Json(serde_json::json!({ "transaction": null }));
+                }
+                // A version is a number on the wire, never a decimal string.
+                assert_eq!(body["maxSupportedTransactionVersion"], serde_json::json!(1));
+                Json(serde_json::json!({ "transaction": {
+                    "signature": "sig",
+                    "slot": "319482771",
+                    "blockTime": "1757222400",
+                    "err": null,
+                    "accounts": [
+                        { "pubkey": "vault", "preBalance": "5000", "postBalance": "3995" },
+                        { "pubkey": "winner", "preBalance": "10", "postBalance": "1010" }
+                    ]
+                }}))
+            }),
+        );
+        let base = spawn(router).await;
+        let (transport, _) = transport(&base);
+
+        let confirmed = transport
+            .transaction(
+                "sig",
+                TransactionInspectOptions {
+                    commitment: Some(Commitment::Finalized),
+                    max_supported_transaction_version: Some(1),
+                },
+            )
+            .await
+            .expect("the relay answers")
+            .expect("the cluster has seen it");
+        assert_eq!(confirmed.slot, 319_482_771);
+        assert_eq!(confirmed.block_time, Some(1_757_222_400));
+        assert_eq!(confirmed.err, None);
+        assert_eq!(
+            confirmed.accounts[1],
+            TransactionAccountBalance {
+                pubkey: "winner".to_string(),
+                pre_balance: 10,
+                post_balance: 1010,
+            }
+        );
+
+        assert!(transport
+            .transaction("unseen", TransactionInspectOptions::default())
+            .await
+            .expect("the relay answers")
+            .is_none());
+    }
+
+    /// No slower path exists to fall back to, so a transport without the route must say so.
+    #[tokio::test]
+    async fn the_default_transaction_reports_an_unsupported_transport() {
+        let error = SingleOnlyTransport
+            .transaction("sig", TransactionInspectOptions::default())
+            .await
+            .expect_err("no default implementation");
+        assert!(
+            matches!(
+                &error,
+                TransactionError::Sdk(AreteError::InvalidConfig(m)) if m.contains("/transactions/v1/get")
             ),
             "unexpected error: {error:?}"
         );
