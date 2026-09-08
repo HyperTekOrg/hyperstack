@@ -96,6 +96,8 @@ was present in the scoped paths.
 | `cargo check --manifest-path examples/ore-server/Cargo.toml --locked` | Passed |
 | `bash scripts/check-generated-rust-crates.sh --mode local` | Passed |
 | `bash scripts/check-generated-ingestion-runtime.sh --mode local` | Passed |
+| `bash scripts/generate-example-sdks.sh` (twice) | Passed; identical output across runs, refreshed compiler/SDK-definition hashes only |
+| Local TypeScript SDK build and ORE TypeScript strict compile | Passed |
 | `cargo clippy --workspace -- -D warnings` | Passed |
 | `git diff --check` | Passed |
 
