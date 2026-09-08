@@ -232,7 +232,7 @@ HTTP relay failures are exposed as `TransactionTransportError` with `status`, `c
 | `transaction-relay-disabled`  | Check cloud and deployment rollout gates                                   |
 | `transaction-origin-required` | Use an origin-bound publishable key from its allowlisted origin            |
 | `request_too_large`           | Compare the JSON body with the relay body limit and token claim            |
-| `transaction_too_large`       | Compare decoded wire bytes with the 1232-byte default                      |
+| `transaction_too_large`       | Compare decoded wire bytes with the 4096-byte default                      |
 | `rate_limit_exceeded`         | Check session claims, trusted proxy configuration, and per-route limits    |
 | `submission_unknown`          | Query the returned signature; never resend blindly                         |
 | Confirmation timeout          | Check status/block-height RPC health or increase `confirmationTimeoutMs`   |

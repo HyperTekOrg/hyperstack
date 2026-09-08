@@ -88,7 +88,7 @@ When running behind a trusted proxy, configure `ARETE_TRUSTED_PROXY_CIDRS`. Forw
 | `ARETE_TRANSACTION_RPC_URL`                     | unset   | Preferred upstream transaction RPC        |
 | `SOLANA_RPC_URL` / `RPC_URL`                    | unset   | Legacy transaction RPC fallback           |
 | `ARETE_TRANSACTION_MAX_BODY_BYTES`              | `32768` | Maximum JSON request body                 |
-| `ARETE_TRANSACTION_MAX_BYTES`                   | `1232`  | Maximum decoded message/transaction bytes |
+| `ARETE_TRANSACTION_MAX_BYTES`                   | `4096`  | Maximum decoded message/transaction bytes |
 | `ARETE_TRANSACTION_INSPECT_TIMEOUT_MS`          | `10000` | Inspection upstream timeout               |
 | `ARETE_TRANSACTION_SEND_TIMEOUT_MS`             | `15000` | Submission upstream timeout               |
 | `ARETE_TRANSACTION_STATUS_TIMEOUT_MS`           | `10000` | Status/block-height timeout               |
@@ -111,7 +111,7 @@ The send route:
 
 - accepts only bounded base64 wire transactions
 - requires nonzero signatures
-- derives the first transaction signature before contacting upstream
+- derives the first transaction signature before contacting upstream, from the leading shortvec for legacy and v0 and from the tail signature array for v1 (SIMD-0385, version byte `129`)
 - calls upstream `sendTransaction` once
 - forces provider `maxRetries: 0`
 - verifies that the provider returns the expected signature

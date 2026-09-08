@@ -88,11 +88,13 @@ impl Default for TransactionConfig {
             rpc_url: None,
             allow_unauthenticated: false,
             // Envelope for any relay body, not the transaction itself — `max_transaction_bytes`
-            // below still bounds a submit at Solana's 1232-byte packet. Sized for the largest
+            // below still bounds a submit at Solana's packet limit. Sized for the largest
             // legitimate body, which is a 256-signature status batch at roughly 23 KiB; 4 KiB
             // admitted only about 44 signatures and made the advertised batch unreachable.
             max_body_bytes: 32 * 1024,
-            max_transaction_bytes: 1232,
+            // SIMD-0296 raised the packet limit to 4096 bytes for v1 transactions. legacy and v0
+            // stay at 1232, enforced by the cluster; lower this to cap submits below the network.
+            max_transaction_bytes: 4096,
             inspect_timeout: Duration::from_secs(10),
             send_timeout: Duration::from_secs(15),
             status_timeout: Duration::from_secs(10),
