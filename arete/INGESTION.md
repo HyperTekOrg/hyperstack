@@ -114,6 +114,8 @@ exact Arete package version and rejects path/Git dependencies throughout the
 resolved graph. CI runs local mode; the release workflow runs registry mode
 after publishing Arete.
 
+**Implementation PR:** [AreteA4/arete#195](https://github.com/AreteA4/arete/pull/195).
+
 **Release status:** unpublished. The post-publication registry gate has not
 run for this change. After merge/publication, record the actual release version
 and run:
