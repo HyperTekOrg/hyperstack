@@ -454,12 +454,19 @@ fn parse_signature_entry(entry: &Value) -> Result<SignaturePageEntry, Transactio
     })
 }
 
-/// Parse the `transaction` field of a `get` response. `None` means the cluster has not seen it.
+/// Parse the `transaction` field of a `get` response. `None` means the cluster has not seen it —
+/// only an explicit JSON `null` says that. An absent field is a malformed response, not an unseen
+/// signature: a caller acting on "unseen" waits for a transaction that may already be final.
 fn parse_confirmed_transaction(
     value: Option<&Value>,
 ) -> Result<Option<ConfirmedTransaction>, TransactionError> {
     let transaction = match value {
-        None | Some(Value::Null) => return Ok(None),
+        None => {
+            return Err(TransactionError::InvalidResponse(
+                "Missing 'transaction' in transaction response".into(),
+            ))
+        }
+        Some(Value::Null) => return Ok(None),
         Some(transaction) => transaction,
     };
     let signature = transaction
@@ -1625,6 +1632,27 @@ mod tests {
             .await
             .expect("the relay answers")
             .is_none());
+    }
+
+    /// Only an explicit `null` means unseen. A body without the field is malformed, and reading it
+    /// as unseen would tell a caller to keep waiting for a transaction that may already be final.
+    #[tokio::test]
+    async fn a_transaction_body_without_the_field_is_not_an_unseen_signature() {
+        let router = Router::new().route(
+            "/transactions/v1/get",
+            post(|| async { Json(serde_json::json!({})) }),
+        );
+        let base = spawn(router).await;
+        let (transport, _) = transport(&base);
+
+        let error = transport
+            .transaction("sig", TransactionInspectOptions::default())
+            .await
+            .expect_err("a missing field is not an answer");
+        assert!(
+            matches!(&error, TransactionError::InvalidResponse(m) if m.contains("transaction")),
+            "unexpected error: {error:?}"
+        );
     }
 
     /// No slower path exists to fall back to, so a transport without the route must say so.
