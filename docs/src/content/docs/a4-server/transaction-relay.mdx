@@ -54,17 +54,17 @@ Server::builder()
 
 ## Routes and scopes
 
-| Route                                      | Required scope        | Solana RPC method      |
-| ------------------------------------------ | --------------------- | ---------------------- |
-| `POST /transactions/v1/latest-blockhash`   | `transaction:inspect` | `getLatestBlockhash`   |
-| `POST /transactions/v1/fee`                | `transaction:inspect` | `getFeeForMessage`     |
-| `POST /transactions/v1/simulate`           | `transaction:inspect` | `simulateTransaction`  |
-| `POST /transactions/v1/signature-status`   | `transaction:inspect` | `getSignatureStatuses` |
-| `POST /transactions/v1/signature-statuses` | `transaction:inspect` | `getSignatureStatuses` |
-| `POST /transactions/v1/block-height`       | `transaction:inspect` | `getBlockHeight`       |
-| `POST /transactions/v1/get`                | `transaction:inspect` | `getTransaction`       |
+| Route                                      | Required scope        | Solana RPC method         |
+| ------------------------------------------ | --------------------- | ------------------------- |
+| `POST /transactions/v1/latest-blockhash`   | `transaction:inspect` | `getLatestBlockhash`      |
+| `POST /transactions/v1/fee`                | `transaction:inspect` | `getFeeForMessage`        |
+| `POST /transactions/v1/simulate`           | `transaction:inspect` | `simulateTransaction`     |
+| `POST /transactions/v1/signature-status`   | `transaction:inspect` | `getSignatureStatuses`    |
+| `POST /transactions/v1/signature-statuses` | `transaction:inspect` | `getSignatureStatuses`    |
+| `POST /transactions/v1/block-height`       | `transaction:inspect` | `getBlockHeight`          |
+| `POST /transactions/v1/get`                | `transaction:inspect` | `getTransaction`          |
 | `POST /transactions/v1/signatures`         | `transaction:inspect` | `getSignaturesForAddress` |
-| `POST /transactions/v1/send`               | `transaction:send`    | `sendTransaction`      |
+| `POST /transactions/v1/send`               | `transaction:send`    | `sendTransaction`         |
 
 Routes accept validated JSON schemas and reject unknown fields. Solana `u64` values are decimal strings over HTTP.
 
