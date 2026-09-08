@@ -113,6 +113,7 @@ enum Operation {
     SignatureStatuses,
     BlockHeight,
     Get,
+    Signatures,
 }
 
 #[derive(Debug, Serialize)]
@@ -146,6 +147,7 @@ impl Operation {
             "/transactions/v1/signature-statuses" => Some(Self::SignatureStatuses),
             "/transactions/v1/block-height" => Some(Self::BlockHeight),
             "/transactions/v1/get" => Some(Self::Get),
+            "/transactions/v1/signatures" => Some(Self::Signatures),
             _ => None,
         }
     }
@@ -168,6 +170,7 @@ impl Operation {
             Self::SignatureStatuses => "signature_statuses",
             Self::BlockHeight => "block_height",
             Self::Get => "get",
+            Self::Signatures => "signatures",
         }
     }
 }
@@ -332,6 +335,25 @@ struct GetTransactionRequest {
     /// Numeric, not a decimal string: a version is not a u64 quantity.
     #[serde(default)]
     max_supported_transaction_version: Option<u8>,
+}
+
+/// Solana's `getSignaturesForAddress` ceiling, mirrored so an oversized page fails here rather
+/// than as a remote 400.
+const MAX_SIGNATURE_PAGE: u16 = 1_000;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SignaturesRequest {
+    address: String,
+    /// A count, not a lamport quantity, so it stays a JSON number.
+    #[serde(default)]
+    limit: Option<u16>,
+    #[serde(default)]
+    before: Option<String>,
+    #[serde(default)]
+    until: Option<String>,
+    #[serde(default)]
+    commitment: Option<Commitment>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -1167,6 +1189,65 @@ async fn dispatch(
                 "transaction": confirmed_transaction_json(&request.signature, &value)?
             }))
         }
+        Operation::Signatures => {
+            let request: SignaturesRequest = parse_json(body)?;
+            if !valid_address(&request.address) {
+                return Err(TxError::request(
+                    "invalid_address",
+                    "address must be a base58-encoded 32-byte value",
+                ));
+            }
+            for (field, cursor) in [("before", &request.before), ("until", &request.until)] {
+                if cursor
+                    .as_deref()
+                    .is_some_and(|value| !valid_signature(value))
+                {
+                    return Err(TxError::request(
+                        "invalid_signature",
+                        format!("{field} must be a base58-encoded 64-byte value"),
+                    ));
+                }
+            }
+            let limit = request.limit.unwrap_or(MAX_SIGNATURE_PAGE);
+            if limit == 0 || limit > MAX_SIGNATURE_PAGE {
+                return Err(TxError::request(
+                    "invalid_limit",
+                    format!("limit must be between 1 and {MAX_SIGNATURE_PAGE}"),
+                ));
+            }
+            let commitment = request.commitment.unwrap_or(Commitment::Finalized);
+            if matches!(commitment, Commitment::Processed) {
+                return Err(TxError::request(
+                    "invalid_commitment",
+                    "getSignaturesForAddress accepts confirmed or finalized, not processed",
+                ));
+            }
+            let mut config = json!({ "limit": limit, "commitment": commitment.as_str() });
+            if let Some(before) = &request.before {
+                config["before"] = json!(before);
+            }
+            if let Some(until) = &request.until {
+                config["until"] = json!(until);
+            }
+            let value = rpc_call(
+                state,
+                "getSignaturesForAddress",
+                json!([request.address, config]),
+                operation,
+                None,
+                upstream_attempted,
+            )
+            .await?;
+            let entries = value.as_array().ok_or_else(|| {
+                upstream_malformed("Malformed signatures response", operation, None)
+            })?;
+            Ok(json!({
+                "signatures": entries
+                    .iter()
+                    .map(signature_entry_json)
+                    .collect::<Result<Vec<_>, _>>()?
+            }))
+        }
     }
 }
 
@@ -1297,6 +1378,20 @@ fn status_json(status: &Value) -> Result<Value, TxError> {
             .map(|value| value.to_string()),
         "confirmationStatus": status.get("confirmationStatus"),
         "err": status.get("err")
+    }))
+}
+
+/// Reshape one `getSignaturesForAddress` entry. `memo` and `confirmationStatus` are dropped: the
+/// page is a cursor over history, and a caller that wants detail asks `get` for the signature.
+fn signature_entry_json(entry: &Value) -> Result<Value, TxError> {
+    Ok(json!({
+        "signature": required_str(entry, "/signature")?,
+        "slot": required_u64(entry, "/slot")?.to_string(),
+        "blockTime": entry
+            .pointer("/blockTime")
+            .and_then(Value::as_i64)
+            .map(|seconds| seconds.to_string()),
+        "err": entry.pointer("/err").cloned().unwrap_or(Value::Null),
     }))
 }
 
@@ -1670,12 +1765,85 @@ mod tests {
             Operation::from_path("/transactions/v1/get"),
             Some(Operation::Get)
         );
+        assert_eq!(
+            Operation::from_path("/transactions/v1/signatures"),
+            Some(Operation::Signatures)
+        );
+        assert_eq!(Operation::Signatures.scope(), "transaction:inspect");
         // A history read, never the send scope.
         assert_eq!(Operation::Get.scope(), "transaction:inspect");
         // The batch reads chain state, so it must not require the send scope.
         assert_eq!(Operation::SignatureStatuses.scope(), "transaction:inspect");
         assert_eq!(Operation::Send.scope(), "transaction:send");
         assert_eq!(Operation::Simulate.scope(), "transaction:inspect");
+    }
+
+    #[tokio::test]
+    async fn signatures_pages_history_in_the_cluster_order() {
+        let address = bs58::encode([3u8; 32]).into_string();
+        let body = json!({ "address": address, "limit": 2, "before": sig(4) }).to_string();
+        let state = state_for(json!([
+            { "signature": "newer", "slot": 12, "blockTime": 1_757_222_400i64, "err": null,
+              "memo": null, "confirmationStatus": "finalized" },
+            { "signature": "older", "slot": 11, "blockTime": null,
+              "err": { "InstructionError": [0, "Custom"] } }
+        ]))
+        .await;
+
+        let value = dispatch(
+            Operation::Signatures,
+            body.as_bytes(),
+            None,
+            &state,
+            &mut false,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            value,
+            json!({ "signatures": [
+                { "signature": "newer", "slot": "12", "blockTime": "1757222400", "err": null },
+                { "signature": "older", "slot": "11", "blockTime": null,
+                  "err": { "InstructionError": [0, "Custom"] } }
+            ]})
+        );
+    }
+
+    /// Bad input must fail here, not as a remote 400 the caller cannot read.
+    #[tokio::test]
+    async fn signatures_rejects_a_bad_address_cursor_or_page_size() {
+        let state = state_for(json!([])).await;
+        let address = bs58::encode([3u8; 32]).into_string();
+        let cases = [
+            (json!({ "address": "not-base58!" }), "invalid_address"),
+            (
+                json!({ "address": address, "before": "nope" }),
+                "invalid_signature",
+            ),
+            (json!({ "address": address, "limit": 0 }), "invalid_limit"),
+            (
+                json!({ "address": address, "limit": 1001 }),
+                "invalid_limit",
+            ),
+            (
+                json!({ "address": address, "commitment": "processed" }),
+                "invalid_commitment",
+            ),
+        ];
+        for (body, expected) in cases {
+            let error = dispatch(
+                Operation::Signatures,
+                body.to_string().as_bytes(),
+                None,
+                &state,
+                &mut false,
+            )
+            .await
+            .expect_err("rejected before the cluster");
+            assert_eq!(error.code, expected);
+            assert!(!error.upstream_attempted);
+        }
     }
 
     /// `jsonParsed` appends lookup-table accounts to `accountKeys` and the balance arrays cover

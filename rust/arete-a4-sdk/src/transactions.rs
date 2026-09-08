@@ -148,6 +148,25 @@ pub struct ConfirmedTransaction {
     pub accounts: Vec<TransactionAccountBalance>,
 }
 
+/// Options for `signatures`. `before`/`until` are signatures, exclusive on both ends, and page
+/// backwards through history the way `getSignaturesForAddress` does.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SignaturePageOptions {
+    pub limit: Option<u16>,
+    pub before: Option<String>,
+    pub until: Option<String>,
+    pub commitment: Option<Commitment>,
+}
+
+/// One entry of `signatures` — enough to decide what to fetch, not the transaction itself.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SignaturePageEntry {
+    pub signature: String,
+    pub slot: u64,
+    pub block_time: Option<i64>,
+    pub err: Option<Value>,
+}
+
 /// Submission state reported by relay error bodies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SubmissionState {
@@ -347,6 +366,20 @@ pub trait TransactionTransport: Send + Sync {
             "This transport does not implement POST /transactions/v1/get".to_string(),
         )))
     }
+
+    /// `POST signatures` — a page of an address's transaction history, newest first.
+    ///
+    /// Defaults to an unsupported-capability error for the same reason as
+    /// [`transaction`](Self::transaction): no other route can enumerate history.
+    async fn signatures(
+        &self,
+        _address: &str,
+        _options: SignaturePageOptions,
+    ) -> Result<Vec<SignaturePageEntry>, TransactionError> {
+        Err(TransactionError::Sdk(AreteError::InvalidConfig(
+            "This transport does not implement POST /transactions/v1/signatures".to_string(),
+        )))
+    }
 }
 
 const SCOPE_INSPECT: &str = "transaction:inspect";
@@ -382,6 +415,45 @@ fn parse_signature_status(
     }))
 }
 
+/// Nullable decimal `i64` on the wire — `blockTime` is the only one, and it predates the epoch
+/// for no cluster anyone runs, but the RPC type is signed so the parse is too.
+fn optional_decimal_i64(
+    value: Option<&Value>,
+    field: &str,
+) -> Result<Option<i64>, TransactionError> {
+    let invalid = || {
+        TransactionError::InvalidResponse(format!(
+            "Invalid decimal i64 field '{field}' in transaction response"
+        ))
+    };
+    match value {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(text)) => text.parse::<i64>().map(Some).map_err(|_| invalid()),
+        Some(_) => Err(invalid()),
+    }
+}
+
+/// Parse one wire entry of a `signatures` page.
+fn parse_signature_entry(entry: &Value) -> Result<SignaturePageEntry, TransactionError> {
+    Ok(SignaturePageEntry {
+        signature: entry
+            .get("signature")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                TransactionError::InvalidResponse(
+                    "Missing 'signature' in transaction response".to_string(),
+                )
+            })?
+            .to_string(),
+        slot: decimal_u64(entry.get("slot"), "slot")?,
+        block_time: optional_decimal_i64(entry.get("blockTime"), "blockTime")?,
+        err: match entry.get("err") {
+            None | Some(Value::Null) => None,
+            Some(err) => Some(err.clone()),
+        },
+    })
+}
+
 /// Parse the `transaction` field of a `get` response. `None` means the cluster has not seen it.
 fn parse_confirmed_transaction(
     value: Option<&Value>,
@@ -397,19 +469,7 @@ fn parse_confirmed_transaction(
             TransactionError::InvalidResponse("Missing 'signature' in transaction response".into())
         })?
         .to_string();
-    let block_time = match transaction.get("blockTime") {
-        None | Some(Value::Null) => None,
-        Some(Value::String(text)) => Some(text.parse::<i64>().map_err(|_| {
-            TransactionError::InvalidResponse(
-                "Invalid decimal i64 field 'blockTime' in transaction response".to_string(),
-            )
-        })?),
-        Some(_) => {
-            return Err(TransactionError::InvalidResponse(
-                "Invalid decimal i64 field 'blockTime' in transaction response".to_string(),
-            ))
-        }
-    };
+    let block_time = optional_decimal_i64(transaction.get("blockTime"), "blockTime")?;
     let accounts = transaction
         .get("accounts")
         .and_then(Value::as_array)
@@ -800,6 +860,32 @@ impl TransactionTransport for HttpTransactionTransport {
             .build();
         let value = self.post("get", body, SCOPE_INSPECT, false).await?;
         parse_confirmed_transaction(value.get("transaction"))
+    }
+
+    async fn signatures(
+        &self,
+        address: &str,
+        options: SignaturePageOptions,
+    ) -> Result<Vec<SignaturePageEntry>, TransactionError> {
+        let body = BodyBuilder::new()
+            .set("address", address)
+            .maybe("limit", options.limit)
+            .maybe("before", options.before)
+            .maybe("until", options.until)
+            .maybe("commitment", commitment_value(options.commitment))
+            .build();
+        let value = self.post("signatures", body, SCOPE_INSPECT, false).await?;
+        value
+            .get("signatures")
+            .and_then(Value::as_array)
+            .ok_or_else(|| {
+                TransactionError::InvalidResponse(
+                    "signatures: signatures must be an array".to_string(),
+                )
+            })?
+            .iter()
+            .map(parse_signature_entry)
+            .collect()
     }
 }
 
@@ -1552,6 +1638,69 @@ mod tests {
             matches!(
                 &error,
                 TransactionError::Sdk(AreteError::InvalidConfig(m)) if m.contains("/transactions/v1/get")
+            ),
+            "unexpected error: {error:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn signatures_forwards_the_cursor_and_maps_every_entry() {
+        let router = Router::new().route(
+            "/transactions/v1/signatures",
+            post(|Json(body): Json<Value>| async move {
+                assert_eq!(body["address"], serde_json::json!("addr"));
+                assert_eq!(body["limit"], serde_json::json!(2));
+                assert_eq!(body["before"], serde_json::json!("cursor"));
+                Json(serde_json::json!({ "signatures": [
+                    { "signature": "newer", "slot": "12", "blockTime": "1757222400", "err": null },
+                    { "signature": "older", "slot": "11", "blockTime": null, "err": { "X": 1 } }
+                ]}))
+            }),
+        );
+        let base = spawn(router).await;
+        let (transport, _) = transport(&base);
+
+        let page = transport
+            .signatures(
+                "addr",
+                SignaturePageOptions {
+                    limit: Some(2),
+                    before: Some("cursor".to_string()),
+                    ..SignaturePageOptions::default()
+                },
+            )
+            .await
+            .expect("the relay answers");
+
+        assert_eq!(
+            page,
+            vec![
+                SignaturePageEntry {
+                    signature: "newer".to_string(),
+                    slot: 12,
+                    block_time: Some(1_757_222_400),
+                    err: None,
+                },
+                SignaturePageEntry {
+                    signature: "older".to_string(),
+                    slot: 11,
+                    block_time: None,
+                    err: Some(serde_json::json!({ "X": 1 })),
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_default_signatures_reports_an_unsupported_transport() {
+        let error = SingleOnlyTransport
+            .signatures("addr", SignaturePageOptions::default())
+            .await
+            .expect_err("no default implementation");
+        assert!(
+            matches!(
+                &error,
+                TransactionError::Sdk(AreteError::InvalidConfig(m)) if m.contains("/transactions/v1/signatures")
             ),
             "unexpected error: {error:?}"
         );

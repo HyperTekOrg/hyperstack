@@ -233,6 +233,14 @@ impl TransactionTransport for UnconfiguredTransactionTransport {
     ) -> Result<Option<crate::transactions::ConfirmedTransaction>, TransactionError> {
         Err(self.error())
     }
+
+    async fn signatures(
+        &self,
+        _address: &str,
+        _options: crate::transactions::SignaturePageOptions,
+    ) -> Result<Vec<crate::transactions::SignaturePageEntry>, TransactionError> {
+        Err(self.error())
+    }
 }
 
 /// Arete client with typed views access.

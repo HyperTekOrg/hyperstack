@@ -63,6 +63,7 @@ Server::builder()
 | `POST /transactions/v1/signature-statuses` | `transaction:inspect` | `getSignatureStatuses` |
 | `POST /transactions/v1/block-height`       | `transaction:inspect` | `getBlockHeight`       |
 | `POST /transactions/v1/get`                | `transaction:inspect` | `getTransaction`       |
+| `POST /transactions/v1/signatures`         | `transaction:inspect` | `getSignaturesForAddress` |
 | `POST /transactions/v1/send`               | `transaction:send`    | `sendTransaction`      |
 
 Routes accept validated JSON schemas and reject unknown fields. Solana `u64` values are decimal strings over HTTP.
@@ -80,6 +81,12 @@ is the cluster's own resolved order, lookup-table entries included, so it lines 
 balances position by position. An unseen signature is `null` with 200, not an error.
 `maxSupportedTransactionVersion` defaults to the highest version the relay can describe (1) and is
 a JSON number, not a decimal string; `commitment` accepts `confirmed` or `finalized`.
+
+`signatures` pages an address's history, newest first: `{address, limit, before, until,
+commitment}` in, `[{signature, slot, blockTime, err}]` out. `before`/`until` are signatures and
+exclusive at both ends, `limit` is a JSON number capped at Solana's own 1000, and an address with
+no history is an empty array rather than an error. Memos and confirmation status are dropped — the
+page is a cursor, and a caller that wants detail asks `get` for the signature.
 
 ## Authentication
 
