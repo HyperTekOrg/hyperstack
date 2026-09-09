@@ -1374,6 +1374,42 @@ describe('transaction version capability', () => {
     }), expect.anything());
   });
 
+  // The two fee fields are one slot. Inheriting a v0 default fee alongside a V1
+  // per-call fee left the call permanently rejected as mutually exclusive, so a
+  // configured fee model could never be replaced per call.
+  it('v1_contract replaces the inherited fee model when a per-call fee overrides it', async () => {
+    // Dynamic import matches every other test here: each one re-imports the
+    // module so client state cannot leak between cases.
+    const { Arete, createPreparedInstruction } = await import('./index');
+    const signAndSend = vi.fn(async () => ({ signature: 'sig' }));
+    const client = await Arete.connect(stack, {
+      transport: 'http',
+      wallet: {
+        publicKey: 'wallet',
+        signAndSend,
+        supportedTransactionVersions: [0, 1],
+      },
+      execution: {
+        send: {
+          resources: { computeUnitLimit: 200_000, computeUnitPriceMicroLamports: 1_000n },
+        },
+      },
+    });
+
+    await client.execute(
+      createPreparedInstruction({ name: 'budgeted', instruction, artifacts: undefined }),
+      { send: { transactionVersion: 1, resources: { priorityFeeLamports: 50_000n } } }
+    );
+
+    expect(signAndSend).toHaveBeenCalledWith([instruction], expect.objectContaining({
+      transactionVersion: 1,
+      resources: {
+        computeUnitLimit: 200_000,
+        priorityFeeLamports: 50_000n,
+      },
+    }), expect.anything());
+  });
+
   it('rejects a V1 inspection before the adapter is asked to simulate', async () => {
     const { Arete, createPreparedInstruction, TransactionOptionsError } = await import('./index');
     const inspectTransaction = vi.fn(async () => ({ feeLamports: 1 }));

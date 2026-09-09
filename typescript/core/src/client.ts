@@ -1082,8 +1082,21 @@ export class Arete<TStack extends StackDefinition> {
     // `resources` merges key by key: a per-call fee must not discard a
     // configured compute budget. The merged result is validated in
     // transaction(), so an incompatible combination still fails loudly.
+    //
+    // The two fee fields are one slot, not two keys. Overriding either one
+    // clears the other, so a v0 default fee model can be replaced by a V1
+    // per-call fee; keeping both would leave every such call permanently
+    // rejected as mutually exclusive. Matches Python's `merged()`.
+    const inherited = { ...defaults?.send?.resources };
+    if (
+      options?.send?.resources?.priorityFeeLamports !== undefined ||
+      options?.send?.resources?.computeUnitPriceMicroLamports !== undefined
+    ) {
+      delete inherited.priorityFeeLamports;
+      delete inherited.computeUnitPriceMicroLamports;
+    }
     const resources = defaults?.send?.resources || options?.send?.resources
-      ? { ...defaults?.send?.resources, ...options?.send?.resources }
+      ? { ...inherited, ...options?.send?.resources }
       : undefined;
     return executePreparedOperation(this, prepared, {
       wallet: options?.wallet ?? defaults?.wallet,
