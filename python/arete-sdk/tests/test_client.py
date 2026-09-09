@@ -33,7 +33,13 @@ from arete.operations import (
 from arete.stack import ProgramDef, StackDef, StackEndpoints
 from arete.transactions import HttpTransactionTransport
 from arete.views import ViewDef
-from arete.wallet import SendResult, TransactionFailureOutcome, WalletError
+from arete.wallet import (
+    SendResult,
+    TransactionFailureOutcome,
+    TransactionResourceOptions,
+    UnsupportedTransactionVersionError,
+    WalletError,
+)
 
 TIMEOUT = 3.0
 PROGRAM_ID = encode_base58(bytes([7] * 32))
@@ -378,6 +384,37 @@ class TestExecution:
         assert call["context"].transaction_transport is a4.transactions
         assert call["options"].signers == ("extra",)
         assert call["options"].skip_preflight is True
+
+    async def test_v1_contract_send_rejects_undeclared_version_without_signing(self):
+        wallet = FakeWallet()
+        a4 = await self.make_client(wallet=wallet)
+        with pytest.raises(UnsupportedTransactionVersionError) as info:
+            await a4.transaction([], send={"transactionVersion": 1})
+        assert info.value.outcome.phase == "build"
+        assert wallet.calls == []
+
+    async def test_v1_contract_send_forwards_typed_version_and_resources(self):
+        class V1Wallet(FakeWallet):
+            supported_transaction_versions = (0, 1)
+
+        wallet = V1Wallet()
+        a4 = await self.make_client(wallet=wallet)
+        await a4.transaction(
+            [],
+            send={
+                "transactionVersion": 1,
+                "resources": {
+                    "priorityFeeLamports": "10000000000000000001",
+                    "computeUnitLimit": 200_000,
+                },
+            },
+        )
+        options = wallet.calls[0]["options"]
+        assert options.transaction_version == 1
+        assert options.resources == TransactionResourceOptions(
+            compute_unit_limit=200_000,
+            priority_fee_lamports=10_000_000_000_000_000_001,
+        )
 
     async def test_transaction_resolves_chain_failure_against_stack_errors(self):
         failure = WalletError.from_outcome(

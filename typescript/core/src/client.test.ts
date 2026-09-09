@@ -1290,3 +1290,110 @@ describe('Arete transport: http', () => {
     warn.mockRestore();
   });
 });
+
+describe('transaction version capability', () => {
+  const stack = {
+    name: 'v1-capability',
+    endpoints: { ws: '', http: 'https://stack.example' },
+    views: {},
+  } as const;
+  const instruction = { programId: 'program', keys: [], data: new Uint8Array() };
+
+  it('transaction_v1 request is rejected before any adapter call', async () => {
+    const { Arete, TransactionOptionsError } = await import('./index');
+    const signAndSend = vi.fn(async () => ({ signature: 'never' }));
+    const inspectTransaction = vi.fn(async () => ({ feeLamports: 1 }));
+    const client = await Arete.connect(stack, {
+      transport: 'http',
+      wallet: { publicKey: 'wallet', signAndSend, inspectTransaction },
+    });
+
+    const error = await client.transaction([instruction], {
+      send: { transactionVersion: 1 },
+    }).catch((cause) => cause);
+
+    expect(error).toBeInstanceOf(TransactionOptionsError);
+    expect(error).toMatchObject({
+      code: 'unsupported_transaction_version',
+      requestedVersion: 1,
+      supportedVersions: undefined,
+    });
+    expect(signAndSend).not.toHaveBeenCalled();
+  });
+
+  it('lets an adapter with no declared capability keep serving ordinary sends', async () => {
+    const signAndSend = vi.fn(async () => ({ signature: 'sig' }));
+    const { Arete } = await import('./index');
+    const client = await Arete.connect(stack, {
+      transport: 'http',
+      wallet: { publicKey: 'wallet', signAndSend },
+    });
+
+    await expect(client.transaction([instruction], {
+      send: { transactionVersion: 0, resources: { computeUnitLimit: 200_000 } },
+    })).resolves.toEqual({ signature: 'sig', slot: undefined });
+    await expect(client.transaction([instruction], {
+      send: { transactionVersion: 'legacy' },
+    })).resolves.toMatchObject({ signature: 'sig' });
+  });
+
+  it('merges execution defaults into per-call resources key by key', async () => {
+    const { Arete, createPreparedInstruction } = await import('./index');
+    const signAndSend = vi.fn(async () => ({ signature: 'sig' }));
+    const client = await Arete.connect(stack, {
+      transport: 'http',
+      wallet: { publicKey: 'wallet', signAndSend },
+      execution: {
+        send: {
+          confirmationLevel: 'finalized',
+          resources: { computeUnitLimit: 200_000, computeUnitPriceMicroLamports: 1_000n },
+        },
+      },
+    });
+
+    await client.execute(
+      createPreparedInstruction({ name: 'budgeted', instruction, artifacts: undefined }),
+      {
+        send: {
+          resources: {
+            computeUnitPriceMicroLamports: 9_000_000_000_000_000_001n,
+            heapSize: '262144',
+          },
+        },
+      }
+    );
+
+    // A per-call fee override must not discard the configured compute budget.
+    expect(signAndSend).toHaveBeenCalledWith([instruction], expect.objectContaining({
+      confirmationLevel: 'finalized',
+      resources: {
+        computeUnitLimit: 200_000,
+        computeUnitPriceMicroLamports: 9_000_000_000_000_000_001n,
+        heapSize: '262144',
+      },
+    }), expect.anything());
+  });
+
+  it('rejects a V1 inspection before the adapter is asked to simulate', async () => {
+    const { Arete, createPreparedInstruction, TransactionOptionsError } = await import('./index');
+    const inspectTransaction = vi.fn(async () => ({ feeLamports: 1 }));
+    const signAndSend = vi.fn();
+    const client = await Arete.connect(stack, {
+      transport: 'http',
+      wallet: {
+        publicKey: 'wallet',
+        signAndSend,
+        inspectTransaction,
+        supportedTransactionVersions: [0],
+      },
+    });
+    const prepared = createPreparedInstruction({
+      name: 'inspect-v1', instruction, artifacts: undefined,
+    });
+
+    await expect(client.inspectOperation(prepared, { inspect: { transactionVersion: 1 } }))
+      .rejects.toBeInstanceOf(TransactionOptionsError);
+    expect(inspectTransaction).not.toHaveBeenCalled();
+    expect(signAndSend).not.toHaveBeenCalled();
+  });
+});
