@@ -1269,13 +1269,24 @@ pub enum OperationInspectionError {
     #[error(transparent)]
     Operation(#[from] OperationError),
     /// The wallet refused or failed the inspection.
+    ///
+    /// Boxed because `WalletError` carries a whole failure outcome: unboxed it
+    /// makes every `Result` in this module 160 bytes wide, which is what
+    /// `clippy::result_large_err` objects to. Same treatment the crate already
+    /// gives `TransactionError::Transport`.
     #[error(transparent)]
-    Wallet(#[from] WalletError),
+    Wallet(Box<WalletError>),
+}
+
+impl From<WalletError> for OperationInspectionError {
+    fn from(error: WalletError) -> Self {
+        Self::Wallet(Box::new(error))
+    }
 }
 
 impl From<TransactionCapabilityError> for OperationInspectionError {
     fn from(error: TransactionCapabilityError) -> Self {
-        OperationInspectionError::Wallet(error.into())
+        Self::from(WalletError::from(error))
     }
 }
 
