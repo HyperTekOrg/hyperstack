@@ -30,6 +30,7 @@ import { SubscriptionRegistry } from './subscription';
 import { QueryStore } from './query-store';
 import { createTypedViews } from './views';
 import type { Frame } from './frame';
+import { resolveTransactionBuildOptions } from './wallet/types';
 import type { WalletAdapter, BuiltInstruction, SendOptions } from './wallet/types';
 import { createChainClient, type ChainClient } from './chain';
 import { createHostedSolanaGatewayTransports } from './solana-gateway';
@@ -1053,13 +1054,17 @@ export class Arete<TStack extends StackDefinition> {
         cause,
       });
     }
+    const sendOptions: SendOptions = {
+      ...(options?.send ?? {}),
+    };
+    if (options?.signers !== undefined) {
+      sendOptions.signers = options.signers;
+    }
+    // Version/resource options are validated before anything reaches the
+    // adapter, so an unsupported request throws the typed options error rather
+    // than a wrapped execution failure.
+    resolveTransactionBuildOptions(sendOptions, wallet);
     try {
-      const sendOptions: SendOptions = {
-        ...(options?.send ?? {}),
-      };
-      if (options?.signers !== undefined) {
-        sendOptions.signers = options.signers;
-      }
       const result = await wallet.signAndSend(instructions, sendOptions, {
         transactionTransport: options?.transactionTransport ?? this._transactions,
       });
@@ -1074,10 +1079,29 @@ export class Arete<TStack extends StackDefinition> {
     options?: OperationExecutionOptions<TSigner, TPrepared>
   ): Promise<OperationReceiptFor<TPrepared>> {
     const defaults = this.executionDefaults as OperationExecutionOptions<TSigner, TPrepared> | undefined;
+    // `resources` merges key by key: a per-call fee must not discard a
+    // configured compute budget. The merged result is validated in
+    // transaction(), so an incompatible combination still fails loudly.
+    //
+    // The two fee fields are one slot, not two keys. Overriding either one
+    // clears the other, so a v0 default fee model can be replaced by a V1
+    // per-call fee; keeping both would leave every such call permanently
+    // rejected as mutually exclusive. Matches Python's `merged()`.
+    const inherited = { ...defaults?.send?.resources };
+    if (
+      options?.send?.resources?.priorityFeeLamports !== undefined ||
+      options?.send?.resources?.computeUnitPriceMicroLamports !== undefined
+    ) {
+      delete inherited.priorityFeeLamports;
+      delete inherited.computeUnitPriceMicroLamports;
+    }
+    const resources = defaults?.send?.resources || options?.send?.resources
+      ? { ...inherited, ...options?.send?.resources }
+      : undefined;
     return executePreparedOperation(this, prepared, {
       wallet: options?.wallet ?? defaults?.wallet,
       send: defaults?.send || options?.send
-        ? { ...(defaults?.send ?? {}), ...(options?.send ?? {}) }
+        ? { ...defaults?.send, ...options?.send, ...(resources ? { resources } : {}) }
         : undefined,
       signers: options?.signers ?? defaults?.signers,
       transactionTransport: options?.transactionTransport ?? defaults?.transactionTransport,
